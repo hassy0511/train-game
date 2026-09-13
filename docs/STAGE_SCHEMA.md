@@ -1,7 +1,7 @@
 # ステージJSON スキーマ v1
 
 最終更新: 2026-09-13
-状態: 提案（Phase 0 の GO で確定）
+状態: v1 確定（2026-09-13）。型の実体は `src/stage/types.ts`、検証は `src/stage/validate.ts`
 
 1ステージ = 1ファイル。`src/stages/<chapter>-<n>.json`。
 単位はすべて m、Y が上、右手系。線路上の位置は **始点からの距離 `at`（m）** で書く。

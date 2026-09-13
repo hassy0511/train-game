@@ -1,6 +1,6 @@
 # 0002 Three.js: シーン表示（線路メッシュ・車両・環境・運転席カメラ）
 
-- 状態: 下書き（GO待ち）
+- 状態: **発注中**（着手条件: Phase 0 基盤の PR が main にマージ済みで、`src/view/SceneView.ts` が存在すること）
 - 担当: Codex
 - 依存: **Phase 0 基盤（Claude Code 担当）が main にマージ済みであること**、0001 のモデル
 - 関連: `docs/PHASE0_DESIGN.md` §1・§2・§4、`docs/STAGE_SCHEMA.md`、`docs/TECH_SPEC.md` §2・§6、`AGENTS.md`
@@ -46,7 +46,7 @@ export interface TrainPose {
 // src/train/params.ts
 export const TRAIN = {
   length: 12, width: 3, height: 3.6, bogieOffset: 4,
-  cabCameraOffset: new Vector3(0, 2.6, 5.0), cabFovDeg: 60,
+  cabCameraOffset: new Vector3(0, 2.4, 4.6), cabFovDeg: 60,
 };
 
 // src/stage/types.ts（ローダーが位置を解決済み）
@@ -98,18 +98,19 @@ export interface StageData {
 - 1 フレームのアロケーションを避ける（`update()` で `new Vector3` を作らない）
 
 ## 確認方法
-- `npm run dev` で `http://localhost:5173/?stage=0-0` を開く（キーボード: ↑↓ で速度段、Space で汽笛、←→ で分岐）
-- `npm run build` と `npm run smoke`。`tests/smoke/output/` に 0 秒と 5 秒のスクショが出る
+- `npm run dev` で `http://localhost:5173/?stage=0-0` を開く（キーボード: ↑↓ で速度段、Space で汽笛、←→ で分岐、V でスプライン表示、R でやり直し）
+- `npm run smoke`（ビルドしてから Playwright を実行）。`tests/smoke/output/` に 4 枚のスクショが出る: 00-start / 01-after-5s / 02-junction / 03-end-of-line
+- Chromium を別に用意している環境では `PW_CHROMIUM_PATH=<chrome のパス> npm run smoke`
 
 ## 受け入れ条件
-- [ ] `npm run build` と `npm run smoke` が通る
+- [ ] `npm run smoke` が通る（2 テスト）
 - [ ] 0 秒のスクショ: 画面下にダッシュボードと窓枠、正面に 2 本のレールと枕木がまっすぐ奥へ、両側に木、上は空のグラデーション、遠くが霧で薄くなっている
 - [ ] 5 秒のスクショ: 木の位置が変わっている（電車が 20 m 以上進んでいる）
 - [ ] 分岐後の main の丘（6 %）でカメラが傾き、branch では車止めまで走って止まる（手動確認。だいさんが iPad で見る）
 - [ ] `getStats()` がドローコール 60 以下
 - [ ] コンソールにエラー・警告なし
 - [ ] `base` が `/train-game/` のビルド（CI）でもモデルがロードできる
-- [ ] PR にスクショ 2 枚と `getStats()` の値を貼る
+- [ ] PR にスクショ 4 枚と `getStats()` の値を貼る
 
 ## 備考
 - 見た目の色や太さは仕様の値から始めて、明らかに変なら PR で提案する。数値を変えた場合は理由を書く

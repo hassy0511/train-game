@@ -25,9 +25,11 @@
 - デバッグ: キーボード操作、スプライン可視化
 
 決めること（この段階で確定）:
-- 線路ゲージ・車両寸法・1unit=1m の基準
-- 性能予算の初期値、動作保証最低端末
-- ステージJSONスキーマ v1
+- [x] 線路ゲージ・車両寸法・1unit=1m の基準 → `docs/TECH_SPEC.md` §9
+- [x] 性能予算の初期値、動作保証最低端末 → `docs/TECH_SPEC.md` §6（目標端末: iPad Pro 2018）
+- [x] ステージJSONスキーマ v1 → `docs/STAGE_SCHEMA.md`
+
+設計案と分担: `docs/PHASE0_DESIGN.md`。Codex への発注: `docs/tickets/0001`, `0002`
 
 確認: iPad Safari で 60fps 近く出るか。タッチ操作が親指で扱えるか。
 

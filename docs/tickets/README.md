@@ -19,5 +19,30 @@
 ## 一覧
 | 番号 | 内容 | 担当 | 状態 | 依存 |
 |---|---|---|---|---|
-| [0001](0001-blender-proto-models.md) | Blender: Phase 0 の仮モデル一式 | Codex | 下書き | なし |
-| [0002](0002-three-scene-view.md) | Three.js: シーン表示（線路メッシュ・車両・環境・運転席カメラ） | Codex | 下書き | Phase 0 基盤、0001 |
+| [0001](0001-blender-proto-models.md) | Blender: Phase 0 の仮モデル一式 | Codex | 発注中 | なし |
+| [0002](0002-three-scene-view.md) | Three.js: シーン表示（線路メッシュ・車両・環境・運転席カメラ） | Codex | 発注中（基盤マージ後に着手） | Phase 0 基盤 PR、0001 |
+
+## 発注の順番（Phase 0）
+1. **0001** を先に。基盤とは独立しているので、すぐ始められる
+2. **0002** は Phase 0 基盤の PR が main に入ってから。0001 のモデルも main に入っている方がよい（なければ仮の箱で進め、後で差し替え可）
+3. どちらも PR を Claude Code がレビューし、main にマージしたら GitHub Pages に出る
+
+## Codex への渡し方（だいさん用・コピペ）
+0001 を頼むとき:
+
+```
+リポジトリ hassy0511/train-game の main を開いて、AGENTS.md と docs/tickets/README.md を読んでください。
+その上で docs/tickets/0001-blender-proto-models.md を実装してください。
+ブランチは codex/0001-proto-models、PR は main 宛て、タイトルは「[#0001] Phase 0 の仮モデル一式」。
+受け入れ条件を全部満たしてから PR を出し、迷った点は PR に書いてください。
+```
+
+0002 を頼むとき（基盤の PR がマージされた後）:
+
+```
+リポジトリ hassy0511/train-game の main を開いて、AGENTS.md と docs/tickets/README.md を読んでください。
+その上で docs/tickets/0002-three-scene-view.md を実装してください。
+ブランチは codex/0002-three-scene-view、PR は main 宛て、タイトルは「[#0002] Three.js シーン表示」。
+src/view/three/ 配下だけを作り、他のモジュールは変更しないでください。
+npm run smoke を通し、tests/smoke/output のスクショ 4 枚と getStats() の値を PR に貼ってください。
+```
