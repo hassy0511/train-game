@@ -42,6 +42,38 @@ function checkPlacement(p: unknown, where: string, railIds: Set<string>): void {
     }
   }
   if (p.rotationY !== undefined && !isNumber(p.rotationY)) fail(`${where}: "rotationY" must be a number`);
+  if (p.rotation !== undefined && !isVec3(p.rotation)) fail(`${where}: "rotation" must be [x, y, z] degrees`);
+}
+
+function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): void {
+  if (!isObject(st)) fail(`${where}: must be an object`);
+  const onRailOk = (r: unknown): boolean =>
+    isObject(r) && isString(r.railId) && railIds.has(r.railId) && isNumber(r.at);
+  if ('say' in st) {
+    if (!isString(st.say)) fail(`${where}: "say" must be text`);
+  } else if ('spawn' in st) {
+    if (!isString(st.spawn) || !isString(st.model) || !MODEL_NAME.test(st.model) || !onRailOk(st.onRail)) {
+      fail(`${where}: spawn needs id, model and onRail`);
+    }
+  } else if ('move' in st) {
+    if (!isString(st.move) || !onRailOk(st.onRail) || !isNumber(st.seconds)) fail(`${where}: move needs id, onRail, seconds`);
+  } else if ('remove' in st) {
+    if (!isString(st.remove)) fail(`${where}: "remove" must be an actor id`);
+  } else if ('wait' in st) {
+    if (!isNumber(st.wait)) fail(`${where}: "wait" must be seconds`);
+  } else if ('cutRail' in st) {
+    const c = st.cutRail;
+    if (!isObject(c) || !isString(c.railId) || !railIds.has(c.railId) || !isNumber(c.from) || !isNumber(c.to)) {
+      fail(`${where}: cutRail needs railId, from, to`);
+    }
+  } else if ('card' in st) {
+    const c = st.card;
+    if (!isObject(c) || !isString(c.title) || !isString(c.button)) fail(`${where}: card needs title and button`);
+  } else if ('emote' in st) {
+    if (!['jump', 'tilt', 'cheer'].includes(String(st.emote))) fail(`${where}: emote`);
+  } else {
+    fail(`${where}: unknown step`);
+  }
 }
 
 /** Structural validation of a stage file. Range checks that need rail lengths happen in the loader. */
@@ -138,11 +170,44 @@ export function validateStageFile(raw: unknown): StageFile {
     checkPlacement(r, `record "${r.id}"`, railIds);
   }
 
+  const cutsceneIds = new Set<string>();
+  if (raw.cutscenes !== undefined) {
+    if (!isObject(raw.cutscenes)) fail('"cutscenes" must be an object');
+    for (const [id, steps] of Object.entries(raw.cutscenes)) {
+      if (!Array.isArray(steps)) fail(`cutscene "${id}" must be an array of steps`);
+      steps.forEach((st, i) => checkCutsceneStep(st, `cutscene "${id}" step ${i}`, railIds));
+      cutsceneIds.add(id);
+    }
+  }
+  for (const key of ['opening', 'ending'] as const) {
+    const id = raw[key];
+    if (id !== undefined && (!isString(id) || !cutsceneIds.has(id))) fail(`"${key}" must name a cutscene`);
+  }
+
   for (const m of requireArray(raw, 'missions')) {
     if (!isObject(m) || !isString(m.id)) fail('each mission needs an "id"');
     if (!['deliver', 'pickup', 'repair', 'timed'].includes(String(m.type))) fail(`mission "${m.id}": type`);
-    if (!stationIds.has(String(m.from)) || !stationIds.has(String(m.to))) fail(`mission "${m.id}": from/to must be station ids`);
-    if (!Array.isArray(m.checkpoints)) fail(`mission "${m.id}": "checkpoints" must be an array`);
+    if (!isString(m.title)) fail(`mission "${m.id}": "title" is required`);
+    if (!Array.isArray(m.steps) || m.steps.length === 0) fail(`mission "${m.id}": "steps" must be a non-empty array`);
+    for (const st of m.steps as unknown[]) {
+      if (!isObject(st) || !stationIds.has(String(st.stationId))) fail(`mission "${m.id}": step needs a known stationId`);
+      for (const k of ['board', 'alight'] as const) {
+        if (st[k] !== undefined && (!isNumber(st[k]) || (st[k] as number) < 0)) fail(`mission "${m.id}": "${k}" must be >= 0`);
+      }
+      if (st.parcel !== undefined && st.parcel !== 'load' && st.parcel !== 'unload') fail(`mission "${m.id}": "parcel"`);
+    }
+    if (m.lines !== undefined && !isObject(m.lines)) fail(`mission "${m.id}": "lines" must be an object`);
+    if (m.hints !== undefined) {
+      if (!Array.isArray(m.hints)) fail(`mission "${m.id}": "hints" must be an array`);
+      for (const h of m.hints as unknown[]) {
+        if (!isObject(h) || !isString(h.railId) || !railIds.has(h.railId) || !isNumber(h.at) || !isString(h.text)) {
+          fail(`mission "${m.id}": hint needs railId, at, text`);
+        }
+      }
+    }
+    if (m.onComplete !== undefined && (!isString(m.onComplete) || !cutsceneIds.has(m.onComplete))) {
+      fail(`mission "${m.id}": "onComplete" must name a cutscene`);
+    }
   }
 
   requireArray(raw, 'gimmicks').forEach((g, i) => {

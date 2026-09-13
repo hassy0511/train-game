@@ -17,6 +17,8 @@ export interface Rail {
   readonly end: RailEndDef;
   /** `s` is the distance from the rail start in meters. Outside [0, length] the end tangent is extrapolated. */
   frameAt(s: number): RailFrame;
+  inGap(s: number): boolean;
+  addGap(from: number, to: number): void;
 }
 
 export interface RailNetwork {

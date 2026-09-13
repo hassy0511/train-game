@@ -38,6 +38,17 @@ export interface JunctionDef {
   signReversed?: boolean;
 }
 
+export interface StopRule {
+  /** |offset| within this many meters counts as a perfect stop. */
+  perfect: number;
+  /** |offset| within this many meters counts as an acceptable stop. */
+  ok: number;
+  /** Distance before the stop mark where the station zone begins. */
+  zone: number;
+  /** Entering the zone faster than this (m/s) fails immediately. */
+  maxSpeed: number;
+}
+
 export interface StationDef {
   id: string;
   name: string;
@@ -45,16 +56,21 @@ export interface StationDef {
   at: number;
   tolerance?: number;
   platformSide: 'left' | 'right';
+  /** Overrides for the global stop rule (all fields optional). */
+  stop?: Partial<StopRule>;
 }
 
 export interface WorldPlacement {
   position: Vec3;
   rotationY?: number;
+  /** Full euler rotation in degrees (XYZ). Takes precedence over rotationY. */
+  rotation?: Vec3;
 }
 
 export interface RailPlacement {
   onRail: { railId: string; at: number; lateral?: number; heightFromRail?: number };
   rotationY?: number;
+  rotation?: Vec3;
 }
 
 export type Placement = WorldPlacement | RailPlacement;
@@ -84,16 +100,77 @@ export type RecordDef = Placement & {
   requires: AbilityId | null;
 };
 
+export interface MissionStep {
+  stationId: string;
+  /** Passengers boarding here. */
+  board?: number;
+  /** Passengers alighting here. */
+  alight?: number;
+  /** Parcel handling at this station. */
+  parcel?: 'load' | 'unload';
+  /** A passenger says this while alighting/boarding (story hook). */
+  say?: string;
+  /** The partner's reply to `say`. */
+  reply?: string;
+}
+
+/** A partner line said once when the train front passes `at` on `railId`. */
+export interface HintDef {
+  railId: string;
+  at: number;
+  text: string;
+}
+
+/** Partner lines keyed by situation. Missing keys mean the partner stays quiet. */
+export type MissionLines = Partial<
+  Record<
+    | 'start'
+    | 'moving'
+    | 'stationNear'
+    | 'tooFast'
+    | 'overshoot'
+    | 'short'
+    | 'perfect'
+    | 'ok'
+    | 'doorOpen'
+    | 'doorClosed'
+    | 'doorsOpenLever'
+    | 'catNear'
+    | 'catWoke'
+    | 'catDanger'
+    | 'catDangerAfter'
+    | 'signReversed'
+    | 'complete',
+    string
+  >
+>;
+
 export interface MissionDef {
   id: string;
   type: 'deliver' | 'pickup' | 'repair' | 'timed';
   title: string;
-  from: string;
-  to: string;
+  /** Stations visited in order; the last one is the goal. */
+  steps: MissionStep[];
+  lines?: MissionLines;
+  hints?: HintDef[];
   timeLimit?: number;
-  checkpoints: { railId: string; at: number }[];
+  /** Cutscene id to play after completion. */
+  onComplete?: string;
   params?: Record<string, unknown>;
 }
+
+export type Speaker = 'partner' | 'amanojaku' | 'passenger';
+export type Emote = 'jump' | 'tilt' | 'cheer';
+
+export type CutsceneStep =
+  | { say: string; who?: Speaker; emote?: Emote }
+  | { spawn: string; model: string; onRail: { railId: string; at: number; lateral?: number; heightFromRail?: number } }
+  | { move: string; onRail: { railId: string; at: number; lateral?: number; heightFromRail?: number }; seconds: number }
+  | { remove: string }
+  | { wait: number }
+  | { cutRail: { railId: string; from: number; to: number } }
+  | { card: { title: string; button: string } }
+  | { emote: Emote };
 
 export interface GimmickDef {
   type: string;
@@ -127,6 +204,12 @@ export interface StageFile {
   records: RecordDef[];
   missions: MissionDef[];
   gimmicks: GimmickDef[];
+  /** v1.1: cutscene id played before the first mission. */
+  opening?: string;
+  /** v1.1: cutscene id played after the last mission. */
+  ending?: string;
+  /** v1.1: cutscenes by id. */
+  cutscenes?: Record<string, CutsceneStep[]>;
 }
 
 /** A prop with its placement resolved to a world transform. */
@@ -144,6 +227,8 @@ export interface ResolvedActor {
   type: string;
   position: Vector3;
   quaternion: Quaternion;
+  /** Present when the actor was placed on a rail (distance checks use it). */
+  onRail?: { railId: string; at: number };
   size: Vector3;
   reactsTo: ReactsTo;
   reversed: boolean;
@@ -151,9 +236,17 @@ export interface ResolvedActor {
 }
 
 /** What the loader hands to the rest of the game. */
+/** A station with its world frame resolved (for the view). */
+export interface ResolvedStation {
+  def: StationDef;
+  position: Vector3;
+  quaternion: Quaternion;
+}
+
 export interface StageData {
   file: StageFile;
   network: RailNetwork;
   props: ResolvedProp[];
   actors: ResolvedActor[];
+  stations: ResolvedStation[];
 }

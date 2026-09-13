@@ -6,6 +6,7 @@ import {
   ACCELERATION,
   BRAKING,
   BUFFER_MARGIN,
+  EMERGENCY_STOP_SECONDS,
   JUNCTION_ARROW_DISTANCE,
   JUNCTION_LOCK_DISTANCE,
   SPEED_NOTCHES,
@@ -40,6 +41,8 @@ export class Train {
   private locked = false;
   private choice: JunctionSide | null = null;
   private ended = false;
+  private lockReason: string | null = null;
+  private emergency = false;
 
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
@@ -76,9 +79,82 @@ export class Train {
     return this.ended;
   }
 
-  setNotch(notch: number): void {
-    if (this.ended) return;
+  /** Distance from the car front to the car center (m). */
+  get frontS(): number {
+    return this.state.s + TRAIN.length / 2;
+  }
+
+  /** Why the controls are locked (doors open, cutscene), or null when the player may drive. */
+  get inputLock(): string | null {
+    return this.lockReason;
+  }
+
+  lockInput(reason: string): void {
+    this.lockReason = reason;
+  }
+
+  unlockInput(): void {
+    this.lockReason = null;
+  }
+
+  /** Returns false when the controls are locked (the caller should tell the player why). */
+  setNotch(notch: number): boolean {
+    if (this.ended || this.lockReason !== null || this.emergency) return false;
     this.state.notch = Math.min(Math.max(Math.round(notch), 0), SPEED_NOTCHES.length - 1);
+    return true;
+  }
+
+  /** Brakes hard to a stop regardless of the lever (danger ahead). Cleared by rewindTo(). */
+  emergencyStop(): void {
+    this.emergency = true;
+    this.state.notch = 0;
+  }
+
+  /** Puts the train back at `s` on the current rail, stopped, lever at "stop". */
+  rewindTo(s: number): void {
+    const st = this.state;
+    st.s = this.wrap(s);
+    st.speed = 0;
+    st.notch = 0;
+    this.emergency = false;
+    this.ended = false;
+    this.refreshPending();
+    this.computePose();
+  }
+
+  /** True when the current rail loops back into itself. */
+  get onLoop(): boolean {
+    const end = this.currentRail.end;
+    return end.type === 'merge' && end.railId === this.state.railId;
+  }
+
+  /** Signed distance along the current rail from the car front to `at` (loop-aware). Null on another rail. */
+  distanceAhead(railId: string, at: number): number | null {
+    if (railId !== this.state.railId) return null;
+    let d = at - this.frontS;
+    if (this.onLoop) {
+      const L = this.currentRail.length;
+      while (d < -L / 2) d += L;
+      while (d > L / 2) d -= L;
+    }
+    return d;
+  }
+
+  /** Signed distance from the car center to `at` on the current rail (loop-aware). */
+  offsetTo(at: number): number {
+    let d = at - this.state.s;
+    if (this.onLoop) {
+      const L = this.currentRail.length;
+      while (d < -L / 2) d += L;
+      while (d > L / 2) d -= L;
+    }
+    return d;
+  }
+
+  private wrap(s: number): number {
+    if (!this.onLoop) return Math.max(0, s);
+    const L = this.currentRail.length;
+    return ((s % L) + L) % L;
   }
 
   chooseJunction(side: JunctionSide): void {
@@ -99,7 +175,11 @@ export class Train {
       if (remaining <= brakeDistance + 1) target = 0;
     }
 
-    if (st.speed < target) st.speed = Math.min(target, st.speed + ACCELERATION * dt);
+    if (this.emergency) {
+      target = 0;
+      const rate = Math.max(BRAKING, SPEED_NOTCHES[SPEED_NOTCHES.length - 1] / EMERGENCY_STOP_SECONDS);
+      st.speed = Math.max(0, st.speed - rate * dt);
+    } else if (st.speed < target) st.speed = Math.min(target, st.speed + ACCELERATION * dt);
     else if (st.speed > target) st.speed = Math.max(target, st.speed - BRAKING * dt);
 
     st.s += st.speed * dt * st.direction;

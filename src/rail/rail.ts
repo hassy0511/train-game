@@ -81,4 +81,9 @@ export class Rail implements RailApi {
   inGap(s: number): boolean {
     return this.gaps.some((g) => s >= g.from && s <= g.to);
   }
+
+  /** Removes a piece of rail at runtime (the amanojaku's doing). */
+  addGap(from: number, to: number): void {
+    this.gaps.push({ from, to });
+  }
 }

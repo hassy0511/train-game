@@ -46,4 +46,43 @@ export class AudioEngine {
       vibrato.stop(now + 1.0);
     }
   }
+
+  /** Short helper for one-shot tones. */
+  private tone(freq: number, seconds: number, type: OscillatorType, gain = 0.2, endFreq = freq): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, now);
+    if (endFreq !== freq) osc.frequency.exponentialRampToValueAtTime(endFreq, now + seconds);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(gain, now + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + seconds + 0.05);
+  }
+
+  /** Stop grade: a rising two-note chime for perfect, one note for ok. */
+  playStop(kind: 'perfect' | 'ok'): void {
+    this.tone(660, 0.18, 'sine', 0.2);
+    if (kind === 'perfect') window.setTimeout(() => this.tone(990, 0.3, 'sine', 0.2), 140);
+  }
+
+  playDoor(open: boolean): void {
+    this.tone(open ? 300 : 420, 0.25, 'triangle', 0.15, open ? 420 : 300);
+  }
+
+  /** Comical "boing" for a fail. */
+  playBoing(): void {
+    this.tone(220, 0.45, 'square', 0.12, 110);
+  }
+
+  playCard(): void {
+    this.tone(523, 0.12, 'triangle', 0.15);
+    window.setTimeout(() => this.tone(784, 0.2, 'triangle', 0.15), 110);
+  }
 }

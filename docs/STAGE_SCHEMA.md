@@ -221,3 +221,64 @@ Phase 0 の仮ステージ。実装時に `src/stages/0-0.json` として置く�
 座標の読み方: 始点で電車は +Z を向いている。このとき **右は −X、左は +X**（Three.js の右手系）。
 main は分岐で +X 側（左）へ半径 60 m で曲がり、branch は −X 側（右）へ曲がる。
 車止めは `end.type: "buffer"` の線路の終端に表示側が自動で置く（props に書かない）。
+
+---
+
+## 4. v1.1 の追加（Phase 1、2026-09-13）
+
+`schemaVersion` は 1 のまま。追加フィールドはすべて省略可で、v1 のファイルはそのまま読める。
+
+```ts
+interface StationDef {
+  // ...v1...
+  stop?: Partial<{ perfect: number; ok: number; zone: number; maxSpeed: number }>;  // 停車判定の上書き（既定 1 / 6 / 30 m、13 m/s）
+}
+
+type Placement = /* v1 */ & { rotation?: Vec3 };   // 度、XYZ 順。rotationY より優先。逆さ標識は [0, 0, 180]
+
+interface MissionStep {
+  stationId: string;
+  board?: number;      // ここで乗る人数
+  alight?: number;     // ここで降りる人数
+  parcel?: 'load' | 'unload';
+  say?: string;        // 乗客の一言（乗り降りのとき）
+  reply?: string;      // それへの相棒の返事
+}
+
+interface MissionDef {
+  id: string; type: 'deliver' | 'pickup' | 'repair' | 'timed'; title: string;
+  steps: MissionStep[];               // 順に回る。最後の駅がゴール
+  lines?: Partial<Record<LineKey, string>>;   // 場面ごとの相棒の台詞。無い場面は黙る
+  hints?: { railId: string; at: number; text: string }[];   // 電車の先頭が at を過ぎたら 1 回だけ言う
+  onComplete?: string;                // 達成後に流す寸劇 id
+}
+type LineKey = 'start' | 'moving' | 'stationNear' | 'tooFast' | 'overshoot' | 'short' | 'perfect' | 'ok'
+  | 'doorOpen' | 'doorClosed' | 'doorsOpenLever' | 'catNear' | 'catWoke' | 'catDanger' | 'catDangerAfter' | 'complete';
+// 'start' は改行で区切ると順番に複数の吹き出しになる
+
+interface StageFile {
+  // ...v1...
+  opening?: string;                          // 最初に流す寸劇 id
+  ending?: string;                           // 最後に流す寸劇 id
+  cutscenes?: Record<string, CutsceneStep[]>;
+}
+
+type CutsceneStep =
+  | { say: string; who?: 'partner' | 'amanojaku' | 'passenger'; emote?: 'jump' | 'tilt' | 'cheer' }
+  | { spawn: string; model: string; onRail: { railId; at; lateral?; heightFromRail? } }   // spawn = アクター id
+  | { move: string; onRail: {...}; seconds: number }
+  | { remove: string }
+  | { wait: number }
+  | { cutRail: { railId: string; from: number; to: number } }   // 線路に切れ目を作る
+  | { card: { title: string; button: string } }                 // 札を出してタップを待つ
+  | { emote: 'jump' | 'tilt' | 'cheer' };
+```
+
+アクターの型（`actors[].type`）:
+| type | 動き | params |
+|---|---|---|
+| `trigger` | 通過でログ（Phase 0） | — |
+| `cat` | 線路で寝ている。`wakeDistance` 以内で汽笛 → 起きて `fleeLateral` m 右へ歩く。`dangerDistance` まで近づくと急停止→やり直し | `{ wakeDistance: 60, dangerDistance: 8, fleeLateral: 6, fleeSeconds: 2 }` |
+
+駅停車の判定（`src/mission/station-stop.ts`）: 停止位置とのずれが ±perfect で「ぴったり」、±ok で「とまれた」、ok を超えていきすぎたら失敗。ゾーン（`zone` m 手前）に `maxSpeed` より速く入ったら即失敗。
+実例は `src/stages/1-1.json`。

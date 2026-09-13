@@ -9,4 +9,4 @@ export function createSceneView(_params: URLSearchParams): SceneView {
   return new WireSceneView();
 }
 
-export type { SceneView };
+export type { CameraFx, SceneView } from './SceneView';
