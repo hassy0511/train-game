@@ -1,6 +1,6 @@
 # 0002 Three.js: シーン表示（線路メッシュ・車両・環境・運転席カメラ）
 
-- 状態: **発注中**（着手条件: Phase 0 基盤の PR が main にマージ済みで、`src/view/SceneView.ts` が存在すること）
+- 状態: **発注中**（着手してよい。基盤と 0001 のモデルは main にある）
 - 担当: Codex
 - 依存: **Phase 0 基盤（Claude Code 担当）が main にマージ済みであること**、0001 のモデル
 - 関連: `docs/PHASE0_DESIGN.md` §1・§2・§4、`docs/STAGE_SCHEMA.md`、`docs/TECH_SPEC.md` §2・§6、`AGENTS.md`
@@ -16,12 +16,15 @@
 ## 基盤が提供するインターフェース
 
 ```ts
-// src/view/SceneView.ts
+// src/view/SceneView.ts（main にある実物を正とする）
+export interface CameraFx { dip: number; shake: number }   // 0..1。dip = カメラを最大 0.35 m 下げる（急停止）、shake = 小さくゆらす
 export interface SceneView {
   init(container: HTMLElement, stage: StageData, network: RailNetwork): Promise<void>;
-  update(dt: number, pose: TrainPose): void;   // 毎フレーム呼ばれる。描画もここで行う
+  update(dt: number, pose: TrainPose, fx: CameraFx): void;   // 毎フレーム呼ばれる。描画もここで行う
+  onStageEvent(event: StageEvent): void;   // ゲーム内の出来事（src/core/stage-events.ts）。Phase 0 では空実装でよい。0004 で使う
   resize(width: number, height: number, devicePixelRatio: number): void;
   getStats(): { drawCalls: number; triangles: number } | null;   // 性能ログ用
+  getScene(): Scene | null;                // 開発用ヘルパー（スプライン表示）が線を足すために使う
   dispose(): void;
 }
 
@@ -52,8 +55,10 @@ export const TRAIN = {
 // src/stage/types.ts（ローダーが位置を解決済み）
 export interface StageData {
   file: StageFile;                                   // 元の JSON
+  network: RailNetwork;
   props: { model: string; position: Vector3; quaternion: Quaternion; scale: number }[];
   actors: { id: string; type: string; position: Vector3; quaternion: Quaternion; size: Vector3 }[];
+  stations: { def: StationDef; position: Vector3; quaternion: Quaternion }[];   // 駅の位置（0004 でホームを置く）
 }
 ```
 
@@ -64,7 +69,7 @@ export interface StageData {
 ### レンダラ・カメラ（`ThreeSceneView.ts`）
 - `WebGLRenderer({ antialias: true })`。`setPixelRatio(Math.min(dpr, 2))`。`outputColorSpace = SRGBColorSpace`。影なし、トーンマッピングなし
 - `PerspectiveCamera(TRAIN.cabFovDeg, aspect, 0.1, 600)`。電車オブジェクトの子にして `TRAIN.cabCameraOffset` に置き、**+Z を向ける**（Three.js のカメラは既定で −Z を向くので Y 軸に 180° 回す）
-- `update()` で電車オブジェクトの `position`・`quaternion` を `pose` からコピーし、`renderer.render()`
+- `update()` で電車オブジェクトの `position`・`quaternion` を `pose` からコピーし、`renderer.render()`。カメラのローカル位置は `TRAIN.cabCameraOffset` から `fx.dip × 0.35` だけ下げ、`fx.shake` に応じて ±0.06 m の乱れを足す（`src/view/wire/WireSceneView.ts` の `update()` が参考実装）
 - `getStats()` は `renderer.info.render.calls` と `.triangles` を返す
 - `resize()` で `renderer.setSize(w, h, false)` と `camera.aspect` 更新
 - `dispose()` でジオメトリ・マテリアル・レンダラを解放
@@ -87,7 +92,7 @@ export interface StageData {
 - `GLTFLoader` でロード。URL は `${import.meta.env.BASE_URL}models/${name}.glb`（Pages のサブパス対応）。同じ名前は 1 回だけロードしてキャッシュ
 - `stage.props` を配置。同じモデルが 2 個以上なら `InstancedMesh`（glb 内のメッシュごとに 1 つ）。1 個ならそのまま `scene.add`
 - 電車: `train-proto` をロードして電車オブジェクトにする
-- `stage.actors` は描画しない（デバッグ表示は基盤側）
+- `stage.actors` は Phase 0 では描画しない（`onStageEvent` も空でよい）。猫や乗客などの表示は 0004 で足す
 
 ### 切り替え（`src/view/index.ts`）
 - `createSceneView()` の既定を `ThreeSceneView` にする。開発ビルドで `?view=wire` のときだけ基盤のワイヤーフレーム表示を返す（本番ビルドには含めない）

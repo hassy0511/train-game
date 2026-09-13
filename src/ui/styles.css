@@ -314,3 +314,131 @@ body {
   white-space: pre;
   pointer-events: none;
 }
+
+/* ---- Phase 1: title, bubbles, cards, door, cargo, toast, fade ---- */
+.title-screen {
+  background: linear-gradient(#4f9dff, #d9f1ff);
+  color: #fff;
+}
+
+.title-text {
+  font-size: 48px;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
+}
+
+.card h1 {
+  line-height: 1.4;
+}
+
+.bubble {
+  position: absolute;
+  right: calc(var(--safe-right) + 130px);
+  bottom: calc(var(--safe-bottom) + 40px);
+  max-width: min(60vw, 520px);
+  padding: 14px 20px;
+  border: none;
+  border-radius: 22px;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: left;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bubble::after {
+  content: '';
+  position: absolute;
+  right: -14px;
+  bottom: 26px;
+  border: 10px solid transparent;
+  border-left-color: var(--panel);
+}
+
+.bubble-name {
+  display: block;
+  font-size: 14px;
+  color: #6b7a8a;
+}
+
+.bubble.is-amanojaku {
+  background: #e8dcf5;
+}
+
+.bubble.is-amanojaku::after {
+  border-left-color: #e8dcf5;
+}
+
+.bubble.is-passenger {
+  background: #fff4d6;
+}
+
+.bubble.is-passenger::after {
+  border-left-color: #fff4d6;
+}
+
+.round-button .ring.is-static {
+  background: #4fb06b;
+}
+
+.cargo-strip {
+  position: absolute;
+  top: calc(var(--safe-top) + 12px);
+  left: calc(var(--safe-left) + 16px);
+  display: flex;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--panel);
+  pointer-events: none;
+}
+
+.cargo-strip svg {
+  width: 26px;
+  height: 26px;
+}
+
+.toast {
+  position: absolute;
+  top: 28%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 36px;
+  border-radius: 999px;
+  font-size: 34px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(79, 176, 107, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.toast.is-perfect {
+  background: rgba(255, 159, 28, 0.95);
+}
+
+.fade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none;
+}
+
+/* Display-only elements must never take the pointer (more specific than "#ui > *"). */
+#ui > .fade,
+#ui > .toast,
+#ui > .cargo-strip,
+#ui > .hud-speed,
+#ui > .debug-panel {
+  pointer-events: none;
+}
+
+#ui > .fade.is-black {
+  pointer-events: auto;
+}

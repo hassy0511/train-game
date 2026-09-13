@@ -1,7 +1,7 @@
-import { MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
+import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
 import { buildRailNetwork } from '../rail/network';
 import type { RailNetwork } from '../rail/types';
-import type { Placement, ResolvedActor, ResolvedProp, StageData, StageFile, Vec3 } from './types';
+import type { Placement, ResolvedActor, ResolvedProp, ResolvedStation, StageData, StageFile, Vec3 } from './types';
 import { validateStageFile } from './validate';
 
 // One chunk per stage file; stages load lazily.
@@ -35,6 +35,7 @@ export async function loadStage(id: string): Promise<StageData> {
       type: a.type,
       position: t.position,
       quaternion: t.quaternion,
+      onRail: 'onRail' in a ? { railId: a.onRail.railId, at: a.onRail.at } : undefined,
       size: new Vector3(size[0], size[1], size[2]),
       reactsTo: a.reactsTo,
       reversed: a.reversed ?? false,
@@ -42,7 +43,12 @@ export async function loadStage(id: string): Promise<StageData> {
     };
   });
 
-  return { file, network, props, actors };
+  const stations: ResolvedStation[] = file.stations.map((def) => {
+    const t = resolvePlacement({ onRail: { railId: def.railId, at: def.at, heightFromRail: 0 } }, network, groundY);
+    return { def, position: t.position, quaternion: t.quaternion };
+  });
+
+  return { file, network, props, actors, stations };
 }
 
 function checkRanges(file: StageFile, network: RailNetwork): void {
@@ -81,13 +87,14 @@ export function resolvePlacement(
   network: RailNetwork,
   groundY: number | null,
 ): { position: Vector3; quaternion: Quaternion } {
-  const yaw = MathUtils.degToRad(p.rotationY ?? 0);
+  const local = p.rotation
+    ? new Quaternion().setFromEuler(
+        new Euler(MathUtils.degToRad(p.rotation[0]), MathUtils.degToRad(p.rotation[1]), MathUtils.degToRad(p.rotation[2]), 'XYZ'),
+      )
+    : new Quaternion().setFromAxisAngle(Y_AXIS, MathUtils.degToRad(p.rotationY ?? 0));
   if ('position' in p) {
     const v = p.position as Vec3;
-    return {
-      position: new Vector3(v[0], v[1], v[2]),
-      quaternion: new Quaternion().setFromAxisAngle(Y_AXIS, yaw),
-    };
+    return { position: new Vector3(v[0], v[1], v[2]), quaternion: local };
   }
   const rail = network.getRail(p.onRail.railId);
   const frame = rail.frameAt(p.onRail.at);
@@ -97,6 +104,6 @@ export function resolvePlacement(
   const xAxis = new Vector3().crossVectors(frame.up, frame.tangent).normalize();
   const basis = new Matrix4().makeBasis(xAxis, frame.up, frame.tangent);
   const quaternion = new Quaternion().setFromRotationMatrix(basis);
-  quaternion.multiply(new Quaternion().setFromAxisAngle(Y_AXIS, yaw));
+  quaternion.multiply(local);
   return { position, quaternion };
 }

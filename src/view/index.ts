@@ -8,4 +8,4 @@ export function createSceneView(params: URLSearchParams): SceneView {
   return new ThreeSceneView();
 }
 
-export type { SceneView };
+export type { CameraFx, SceneView } from './SceneView';
