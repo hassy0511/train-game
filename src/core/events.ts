@@ -1,7 +1,7 @@
 /** Minimal typed event emitter. Events with a `void` payload are emitted without an argument. */
 export type Listener<T> = (payload: T) => void;
 
-type Args<T> = T extends void ? [] : [payload: T];
+type Args<T> = [T] extends [void] ? [] : [payload: T];
 
 export class Emitter<Events extends Record<string, unknown>> {
   private readonly listeners = new Map<keyof Events, Set<Listener<never>>>();

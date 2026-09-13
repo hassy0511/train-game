@@ -28,3 +28,18 @@ export const JUNCTION_LOCK_DISTANCE = 5;
 
 /** Stop this far before the end of a buffer-ended rail (car front just short of the buffer stop). */
 export const BUFFER_MARGIN = TRAIN.length / 2 + 0.5;
+
+/** Station stop rule (overridable per station in the stage JSON). Distances in meters, speed in m/s. */
+export const STOP_RULE = { perfect: 1.0, ok: 6.0, zone: 30, maxSpeed: 13 } as const;
+
+/** How far before the failed target the train is put back after a fail. */
+export const REWIND_DISTANCE = 80;
+
+/** Seconds per passenger boarding or alighting. */
+export const PASSENGER_SECONDS = 1.5;
+
+/** Seconds a speech bubble stays unless tapped. */
+export const BUBBLE_SECONDS = 3.5;
+
+/** Emergency stop: seconds to reach 0 from any speed. */
+export const EMERGENCY_STOP_SECONDS = 0.5;

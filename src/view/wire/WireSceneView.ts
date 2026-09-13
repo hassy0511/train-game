@@ -14,11 +14,12 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
+import type { StageEvent } from '../../core/stage-events';
 import type { Rail, RailNetwork } from '../../rail/types';
 import type { StageData } from '../../stage/types';
 import { TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
-import type { SceneView } from '../SceneView';
+import type { CameraFx, SceneView } from '../SceneView';
 
 const RAIL_HALF_GAUGE = 0.75;
 const SAMPLE_STEP = 1;
@@ -29,7 +30,26 @@ const BOX_SIZES: Record<string, [number, number, number]> = {
   'tree-b': [3.6, 4.6, 3.6],
   rock: [2, 1.2, 1.6],
   'buffer-stop': [3.2, 1.2, 1],
+  'house-a': [8, 7, 7],
+  'house-b': [10, 8, 8],
+  'house-c': [7, 9, 7],
+  shop: [12, 6, 8],
+  tower: [6, 18, 6],
+  hq: [20, 12, 14],
+  'crossing-sign': [1.2, 3, 0.2],
+  'crossing-gate': [4.5, 3.2, 0.6],
+  cat: [0.7, 0.4, 0.5],
+  amanojaku: [0.9, 1.4, 0.6],
+  passenger: [0.6, 1.6, 0.4],
 };
+
+interface MovingBox {
+  mesh: Mesh;
+  from: Vector3;
+  to: Vector3;
+  t: number;
+  seconds: number;
+}
 
 function boxFor(model: string): [number, number, number] {
   const key = Object.keys(BOX_SIZES).find((k) => model.startsWith(k));
@@ -42,6 +62,14 @@ export class WireSceneView implements SceneView {
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(TRAIN.cabFovDeg, 1, 0.1, 600);
   private readonly train = new Group();
+  private network: RailNetwork | null = null;
+  private stage: StageData | null = null;
+  private readonly railGroups = new Map<string, Group>();
+  private readonly actorBoxes = new Map<string, Mesh>();
+  private readonly moving: MovingBox[] = [];
+  private goal: Mesh | null = null;
+  private goalSpin = 0;
+  private readonly actorMaterial = new MeshBasicMaterial({ color: 0xd08a20, wireframe: true });
 
   async init(container: HTMLElement, stage: StageData, network: RailNetwork): Promise<void> {
     const renderer = new WebGLRenderer({ antialias: true });
@@ -58,7 +86,13 @@ export class WireSceneView implements SceneView {
       this.scene.add(grid);
     }
 
-    for (const rail of network.rails.values()) this.scene.add(this.buildRailLines(rail));
+    this.network = network;
+    this.stage = stage;
+    for (const rail of network.rails.values()) {
+      const g = this.buildRailLines(rail);
+      this.railGroups.set(rail.id, g);
+      this.scene.add(g);
+    }
 
     const propMaterial = new MeshBasicMaterial({ color: 0x2f6f3f, wireframe: true });
     for (const prop of stage.props) {
@@ -71,9 +105,23 @@ export class WireSceneView implements SceneView {
 
     const sensorMaterial = new MeshBasicMaterial({ color: 0xd040c0, wireframe: true });
     for (const actor of stage.actors) {
-      const mesh = new Mesh(new BoxGeometry(actor.size.x, actor.size.y, actor.size.z), sensorMaterial);
-      mesh.position.copy(actor.position).y += actor.size.y / 2;
-      mesh.quaternion.copy(actor.quaternion);
+      if (actor.type === 'trigger') {
+        const mesh = new Mesh(new BoxGeometry(actor.size.x, actor.size.y, actor.size.z), sensorMaterial);
+        mesh.position.copy(actor.position).y += actor.size.y / 2;
+        mesh.quaternion.copy(actor.quaternion);
+        this.scene.add(mesh);
+      } else {
+        this.addActorBox(actor.id, actor.type, actor.position);
+      }
+    }
+
+    const platformMaterial = new MeshBasicMaterial({ color: 0xbfb8aa, wireframe: true });
+    for (const st of stage.stations) {
+      const side = st.def.platformSide === 'right' ? 1 : -1;
+      const frame = network.getRail(st.def.railId).frameAt(st.def.at);
+      const mesh = new Mesh(new BoxGeometry(4, 1, 30), platformMaterial);
+      mesh.position.copy(frame.position).addScaledVector(frame.right, side * (1.7 + 2)).addScaledVector(frame.up, 0.5);
+      mesh.quaternion.copy(st.quaternion);
       this.scene.add(mesh);
     }
 
@@ -131,10 +179,93 @@ export class WireSceneView implements SceneView {
     return group;
   }
 
-  update(_dt: number, pose: TrainPose): void {
+  private addActorBox(id: string, model: string, position: Vector3): Mesh {
+    const [w, h, d] = boxFor(model);
+    const mesh = new Mesh(new BoxGeometry(w, h, d), this.actorMaterial);
+    mesh.position.copy(position).y += h / 2;
+    this.scene.add(mesh);
+    this.actorBoxes.set(id, mesh);
+    return mesh;
+  }
+
+  private moveActor(id: string, to: Vector3, seconds: number): void {
+    const mesh = this.actorBoxes.get(id);
+    if (!mesh) return;
+    const half = (mesh.geometry as BoxGeometry).parameters.height / 2;
+    const target = to.clone();
+    target.y += half;
+    if (seconds <= 0) {
+      mesh.position.copy(target);
+      return;
+    }
+    this.moving.push({ mesh, from: mesh.position.clone(), to: target, t: 0, seconds });
+  }
+
+  onStageEvent(event: StageEvent): void {
+    switch (event.type) {
+      case 'actor:spawn':
+        this.actorBoxes.get(event.id)?.removeFromParent();
+        this.addActorBox(event.id, event.model, event.position);
+        break;
+      case 'actor:move':
+        this.moveActor(event.id, event.position, event.seconds);
+        break;
+      case 'actor:state':
+        if (event.position) this.moveActor(event.id, event.position, event.seconds ?? 0);
+        break;
+      case 'actor:remove':
+        this.actorBoxes.get(event.id)?.removeFromParent();
+        this.actorBoxes.delete(event.id);
+        break;
+      case 'rail:cut': {
+        const rail = this.network?.getRail(event.railId);
+        const old = this.railGroups.get(event.railId);
+        if (rail && old) {
+          old.removeFromParent();
+          const g = this.buildRailLines(rail);
+          this.railGroups.set(rail.id, g);
+          this.scene.add(g);
+        }
+        break;
+      }
+      case 'goal': {
+        this.goal?.removeFromParent();
+        this.goal = null;
+        if (event.stationId && this.stage) {
+          const st = this.stage.stations.find((s) => s.def.id === event.stationId);
+          if (st) {
+            this.goal = new Mesh(new BoxGeometry(1.6, 2.4, 0.2), new MeshBasicMaterial({ color: 0xe9573f, wireframe: true }));
+            this.goal.position.copy(st.position).y += 8;
+            this.scene.add(this.goal);
+          }
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  update(dt: number, pose: TrainPose, fx: CameraFx): void {
     if (!this.renderer) return;
     this.train.position.copy(pose.position);
     this.train.quaternion.copy(pose.quaternion);
+    this.camera.position.copy(TRAIN.cabCameraOffset);
+    this.camera.position.y -= 0.35 * fx.dip;
+    if (fx.shake > 0) {
+      this.camera.position.x += (Math.random() - 0.5) * 0.12 * fx.shake;
+      this.camera.position.y += (Math.random() - 0.5) * 0.12 * fx.shake;
+    }
+    for (let i = this.moving.length - 1; i >= 0; i--) {
+      const m = this.moving[i];
+      m.t = Math.min(m.t + dt / m.seconds, 1);
+      m.mesh.position.lerpVectors(m.from, m.to, m.t);
+      if (m.t >= 1) this.moving.splice(i, 1);
+    }
+    if (this.goal) {
+      this.goalSpin += dt * 2;
+      this.goal.rotation.y = this.goalSpin;
+    }
     this.renderer.render(this.scene, this.camera);
   }
 

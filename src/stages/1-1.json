@@ -1,0 +1,643 @@
+{
+  "schemaVersion": 1,
+  "id": "1-1",
+  "title": "はじまりの まち",
+  "chapter": 1,
+  "unlock": {
+    "requires": [],
+    "purchase": null
+  },
+  "unlocks": [
+    "whistle"
+  ],
+  "environment": {
+    "sky": {
+      "top": "#4f9dff",
+      "bottom": "#d9f1ff"
+    },
+    "fog": {
+      "color": "#d9f1ff",
+      "near": 150,
+      "far": 420
+    },
+    "lighting": "day",
+    "ground": {
+      "y": -0.6,
+      "size": 900,
+      "color": "#7fc96f"
+    },
+    "bgm": null
+  },
+  "start": {
+    "railId": "loop",
+    "at": 20,
+    "direction": 1
+  },
+  "rails": [
+    {
+      "id": "loop",
+      "points": [
+        [
+          -80,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          80,
+          0,
+          0
+        ],
+        [
+          99.13,
+          0,
+          3.81
+        ],
+        [
+          115.36,
+          0,
+          14.64
+        ],
+        [
+          126.19,
+          0,
+          30.87
+        ],
+        [
+          130.0,
+          0,
+          50.0
+        ],
+        [
+          130,
+          0,
+          90
+        ],
+        [
+          126.19,
+          0,
+          109.13
+        ],
+        [
+          115.36,
+          0,
+          125.36
+        ],
+        [
+          99.13,
+          0,
+          136.19
+        ],
+        [
+          80.0,
+          0,
+          140.0
+        ],
+        [
+          0,
+          0,
+          140
+        ],
+        [
+          -80,
+          0,
+          140
+        ],
+        [
+          -99.13,
+          0,
+          136.19
+        ],
+        [
+          -115.36,
+          0,
+          125.36
+        ],
+        [
+          -126.19,
+          0,
+          109.13
+        ],
+        [
+          -130.0,
+          0,
+          90.0
+        ],
+        [
+          -130,
+          0,
+          50
+        ],
+        [
+          -126.19,
+          0,
+          30.87
+        ],
+        [
+          -115.36,
+          0,
+          14.64
+        ],
+        [
+          -99.13,
+          0,
+          3.81
+        ],
+        [
+          -80.0,
+          0,
+          0.0
+        ]
+      ],
+      "end": {
+        "type": "merge",
+        "railId": "loop",
+        "at": 0
+      }
+    }
+  ],
+  "junctions": [],
+  "stations": [
+    {
+      "id": "hq",
+      "name": "たんけんたい ほんぶ",
+      "railId": "loop",
+      "at": 20,
+      "platformSide": "left"
+    },
+    {
+      "id": "sakura",
+      "name": "さくらえき",
+      "railId": "loop",
+      "at": 130,
+      "platformSide": "left"
+    },
+    {
+      "id": "minato",
+      "name": "みなとえき",
+      "railId": "loop",
+      "at": 400,
+      "platformSide": "left"
+    },
+    {
+      "id": "oka",
+      "name": "おかのえき",
+      "railId": "loop",
+      "at": 500,
+      "platformSide": "left"
+    }
+  ],
+  "props": [
+    {
+      "model": "hq",
+      "onRail": {
+        "railId": "loop",
+        "at": 20,
+        "lateral": -24
+      },
+      "rotationY": -90
+    },
+    {
+      "model": "house-a",
+      "onRail": {
+        "railId": "loop",
+        "at": 45,
+        "lateral": 18
+      },
+      "rotationY": 90
+    },
+    {
+      "model": "shop",
+      "onRail": {
+        "railId": "loop",
+        "at": 75,
+        "lateral": 18
+      },
+      "rotationY": 90
+    },
+    {
+      "model": "house-b",
+      "onRail": {
+        "railId": "loop",
+        "at": 105,
+        "lateral": 18
+      },
+      "rotationY": 90
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "loop",
+        "at": 125,
+        "lateral": 12
+      }
+    },
+    {
+      "model": "house-c",
+      "onRail": {
+        "railId": "loop",
+        "at": 145,
+        "lateral": 18
+      },
+      "rotationY": 90
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "loop",
+        "at": 60,
+        "lateral": -20
+      }
+    },
+    {
+      "model": "house-a",
+      "onRail": {
+        "railId": "loop",
+        "at": 95,
+        "lateral": -20
+      },
+      "rotationY": -90
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "loop",
+        "at": 150,
+        "lateral": -20
+      }
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "loop",
+        "at": 250,
+        "lateral": 14
+      }
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "loop",
+        "at": 268,
+        "lateral": -12
+      }
+    },
+    {
+      "model": "house-b",
+      "onRail": {
+        "railId": "loop",
+        "at": 258,
+        "lateral": -22
+      },
+      "rotationY": -90
+    },
+    {
+      "model": "house-b",
+      "onRail": {
+        "railId": "loop",
+        "at": 375,
+        "lateral": 18
+      },
+      "rotationY": 90
+    },
+    {
+      "model": "tower",
+      "onRail": {
+        "railId": "loop",
+        "at": 415,
+        "lateral": 18
+      },
+      "rotationY": 90
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "loop",
+        "at": 440,
+        "lateral": 12
+      }
+    },
+    {
+      "model": "house-a",
+      "onRail": {
+        "railId": "loop",
+        "at": 455,
+        "lateral": 18
+      },
+      "rotationY": 90
+    },
+    {
+      "model": "shop",
+      "onRail": {
+        "railId": "loop",
+        "at": 485,
+        "lateral": 18
+      },
+      "rotationY": 90
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "loop",
+        "at": 510,
+        "lateral": 12
+      }
+    },
+    {
+      "model": "house-c",
+      "onRail": {
+        "railId": "loop",
+        "at": 370,
+        "lateral": -22
+      },
+      "rotationY": -90
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "loop",
+        "at": 430,
+        "lateral": -22
+      }
+    },
+    {
+      "model": "house-a",
+      "onRail": {
+        "railId": "loop",
+        "at": 460,
+        "lateral": -22
+      },
+      "rotationY": -90
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "loop",
+        "at": 520,
+        "lateral": -22
+      }
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "loop",
+        "at": 600,
+        "lateral": -12
+      }
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "loop",
+        "at": 630,
+        "lateral": 14
+      }
+    },
+    {
+      "model": "house-c",
+      "onRail": {
+        "railId": "loop",
+        "at": 625,
+        "lateral": -20
+      },
+      "rotationY": -90
+    },
+    {
+      "model": "crossing-sign",
+      "onRail": {
+        "railId": "loop",
+        "at": 600,
+        "lateral": 3.5,
+        "heightFromRail": 0
+      },
+      "rotation": [
+        0,
+        0,
+        180
+      ]
+    },
+    {
+      "model": "tree-a",
+      "position": [
+        -40,
+        -0.6,
+        70
+      ]
+    },
+    {
+      "model": "tree-a",
+      "position": [
+        0,
+        -0.6,
+        60
+      ]
+    },
+    {
+      "model": "tree-a",
+      "position": [
+        40,
+        -0.6,
+        80
+      ]
+    },
+    {
+      "model": "tree-a",
+      "position": [
+        -20,
+        -0.6,
+        100
+      ]
+    },
+    {
+      "model": "tree-a",
+      "position": [
+        60,
+        -0.6,
+        40
+      ]
+    }
+  ],
+  "actors": [
+    {
+      "id": "cat-1",
+      "type": "cat",
+      "onRail": {
+        "railId": "loop",
+        "at": 615,
+        "heightFromRail": 0
+      },
+      "reactsTo": "whistle",
+      "params": {
+        "wakeDistance": 60,
+        "dangerDistance": 8,
+        "fleeLateral": 6,
+        "fleeSeconds": 2
+      }
+    }
+  ],
+  "records": [],
+  "opening": "opening",
+  "ending": "ending",
+  "missions": [
+    {
+      "id": "m1",
+      "type": "deliver",
+      "title": "はじめての うんてん",
+      "steps": [
+        {
+          "stationId": "sakura"
+        }
+      ],
+      "lines": {
+        "moving": "そうそう、その ちょうし！",
+        "stationNear": "えきが みえたら、ゆっくり！",
+        "tooFast": "わわっ、はやすぎた〜！ もういっかい！",
+        "overshoot": "いきすぎた〜！ もういっかい！",
+        "short": "もうちょっと まえ！",
+        "perfect": "ぴったり！ すごい、じょうずだね！",
+        "ok": "とまれた！ じょうずだね！",
+        "complete": "さくらえきに つきました！"
+      }
+    },
+    {
+      "id": "m2",
+      "type": "pickup",
+      "title": "おきゃくを のせて",
+      "steps": [
+        {
+          "stationId": "sakura",
+          "board": 2
+        },
+        {
+          "stationId": "minato",
+          "alight": 1,
+          "board": 2,
+          "say": "さっき、ぐるぐる ぼうしの こが はしってたよ",
+          "reply": "ぐるぐる ぼうし？ だれだろう？"
+        },
+        {
+          "stationId": "oka",
+          "alight": 3
+        }
+      ],
+      "lines": {
+        "start": "きょうは おきゃくさんも のせるよ。\nとまったら ドアを あけよう！",
+        "stationNear": "つぎの えきだ。ゆっくり！",
+        "doorOpen": "いらっしゃい！",
+        "doorClosed": "しゅっぱつ しんこう！",
+        "complete": "みんな とどけた！"
+      }
+    },
+    {
+      "id": "m3",
+      "type": "deliver",
+      "title": "おとどけもの",
+      "steps": [
+        {
+          "stationId": "oka",
+          "parcel": "load"
+        },
+        {
+          "stationId": "hq",
+          "parcel": "unload"
+        }
+      ],
+      "hints": [
+        {
+          "railId": "loop",
+          "at": 515,
+          "text": "あれ？ ひょうしきが さかさま…"
+        }
+      ],
+      "lines": {
+        "start": "けいじばんに おねがいが きてる。\nこの にもつを ほんぶまで はこぼう！",
+        "doorOpen": "よいしょ、にもつ！",
+        "doorClosed": "しゅっぱつ しんこう！",
+        "catNear": "ねこが せんろで ねてる！ きてきで おこそう",
+        "catWoke": "おきた！ よかった〜",
+        "catDanger": "あぶない！",
+        "catDangerAfter": "びっくりした〜。もういっかい！",
+        "stationNear": "ほんぶが みえてきた。ゆっくり！",
+        "complete": "とどいた！ ……あれ？"
+      }
+    }
+  ],
+  "gimmicks": [],
+  "cutscenes": {
+    "opening": [
+      {
+        "say": "やあ！ きみが あたらしい うんてんし だね！",
+        "emote": "jump"
+      },
+      {
+        "say": "ぼくは ピコ。たんけんたいの あんないがかり！"
+      },
+      {
+        "say": "せかいは せんろで みんな つながってるんだ。"
+      },
+      {
+        "say": "まずは れんしゅう。さくらえきまで いこう！",
+        "emote": "cheer"
+      }
+    ],
+    "ending": [
+      {
+        "say": "なんか おかしい。せんろが ぐらぐら してる…",
+        "emote": "tilt"
+      },
+      {
+        "spawn": "sakasa",
+        "model": "amanojaku",
+        "onRail": {
+          "railId": "loop",
+          "at": 60
+        }
+      },
+      {
+        "say": "さようなら！ おれは サカサだ！",
+        "who": "amanojaku"
+      },
+      {
+        "say": "さ、さようなら？ いま きたのに？"
+      },
+      {
+        "say": "せんろが つながってるなんて つまらないのだ！",
+        "who": "amanojaku"
+      },
+      {
+        "cutRail": {
+          "railId": "loop",
+          "from": 70,
+          "to": 90
+        }
+      },
+      {
+        "say": "ばらばら、さいこう！ こんにちは〜！",
+        "who": "amanojaku"
+      },
+      {
+        "move": "sakasa",
+        "onRail": {
+          "railId": "loop",
+          "at": 140,
+          "lateral": 10
+        },
+        "seconds": 2.5
+      },
+      {
+        "remove": "sakasa"
+      },
+      {
+        "say": "せんろが きれちゃった…！"
+      },
+      {
+        "say": "…よし、いこう！ なおしながら おいかけよう！",
+        "emote": "cheer"
+      }
+    ]
+  }
+}

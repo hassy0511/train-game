@@ -1,6 +1,6 @@
 # 0001 Blender発注: Phase 0 の仮モデル一式
 
-- 状態: **発注中**（着手してよい）
+- 状態: **完了**（PR #2 で main にマージ。レビュー結果は PR #2 参照）
 - 担当: Codex
 - 依存: なし（GO 後すぐ着手できる）
 - 関連: `docs/PHASE0_DESIGN.md` §1、`docs/TECH_SPEC.md` §4、`AGENTS.md`
