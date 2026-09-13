@@ -16,6 +16,7 @@ Phase 1 の基盤（ミッション・駅・ドア・猫・寸劇のロジック
 - `SceneView.onStageEvent(event)` に下の表のイベントが届く。`SceneView.update(dt, pose, fx)` の `fx` に急停止の沈み（`dip`）とゆれ（`shake`）が入る
 - `StageData` に `stations[]`（駅の位置・向き・ホーム側）と `actors[]`（型・位置。`onRail` に線路上の位置）が解決済みで入る
 - 参考実装: `src/view/wire/WireSceneView.ts`（箱と線で同じイベントを扱っている）
+- **仮実装がすでにある**: `src/view/three/actors.ts`（アクター・ホーム・ゴール旗の最小表示。猫は `cat-sleep`/`cat-stand` の差し替えと位置補間だけ）。このチケットではこれを本実装に置き換える／広げる。`src/view/three/models.ts` は未作成の .glb を箱で代用する（ビルド時に `public/models` を見て判定）ので、モデルが揃う前でも動く
 
 | イベント（`type`） | 意味 | 3D 側でやること |
 |---|---|---|

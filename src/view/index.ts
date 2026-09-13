@@ -1,12 +1,11 @@
 import type { SceneView } from './SceneView';
+import { ThreeSceneView } from './three/ThreeSceneView';
 import { WireSceneView } from './wire/WireSceneView';
 
-/**
- * Picks the scene view. The wireframe view is the placeholder until the Three.js scene
- * (ticket 0002) lands; after that it stays reachable in dev builds via `?view=wire`.
- */
-export function createSceneView(_params: URLSearchParams): SceneView {
-  return new WireSceneView();
+/** Picks the production scene, retaining the wireframe helper in development only. */
+export function createSceneView(params: URLSearchParams): SceneView {
+  if (import.meta.env.DEV && params.get('view') === 'wire') return new WireSceneView();
+  return new ThreeSceneView();
 }
 
 export type { CameraFx, SceneView } from './SceneView';
