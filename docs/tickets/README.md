@@ -19,8 +19,8 @@
 ## 一覧
 | 番号 | 内容 | 担当 | 状態 | 依存 |
 |---|---|---|---|---|
-| [0001](0001-blender-proto-models.md) | Blender: Phase 0 の仮モデル一式 | Codex | 発注中 | なし |
-| [0002](0002-three-scene-view.md) | Three.js: シーン表示（線路メッシュ・車両・環境・運転席カメラ） | Codex | 発注中（基盤マージ後に着手） | Phase 0 基盤 PR、0001 |
+| [0001](0001-blender-proto-models.md) | Blender: Phase 0 の仮モデル一式 | Codex | 完了（PR #2） | なし |
+| [0002](0002-three-scene-view.md) | Three.js: シーン表示（線路メッシュ・車両・環境・運転席カメラ） | Codex | 発注中（着手可） | なし（基盤 PR #1 と 0001 は main に入った） |
 
 ## 発注の順番（Phase 0）
 1. **0001** を先に。基盤とは独立しているので、すぐ始められる

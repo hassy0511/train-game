@@ -1,6 +1,6 @@
 # 0002 Three.js: シーン表示（線路メッシュ・車両・環境・運転席カメラ）
 
-- 状態: **発注中**（着手条件: Phase 0 基盤の PR が main にマージ済みで、`src/view/SceneView.ts` が存在すること）
+- 状態: **発注中**（着手してよい。基盤と 0001 のモデルは main にある）
 - 担当: Codex
 - 依存: **Phase 0 基盤（Claude Code 担当）が main にマージ済みであること**、0001 のモデル
 - 関連: `docs/PHASE0_DESIGN.md` §1・§2・§4、`docs/STAGE_SCHEMA.md`、`docs/TECH_SPEC.md` §2・§6、`AGENTS.md`
