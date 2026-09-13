@@ -1,0 +1,7 @@
+node_modules/
+dist/
+tests/smoke/output/*
+!tests/smoke/output/.gitkeep
+tests/smoke/test-results/
+playwright-report/
+.DS_Store
