@@ -442,3 +442,11 @@ body {
 #ui > .fade.is-black {
   pointer-events: auto;
 }
+
+.build-stamp {
+  position: absolute;
+  right: calc(var(--safe-right) + 12px);
+  bottom: calc(var(--safe-bottom) + 8px);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+}

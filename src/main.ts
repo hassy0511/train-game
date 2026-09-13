@@ -94,6 +94,8 @@ async function boot(): Promise<void> {
 
   document.title = GAME_TITLE;
   app.dataset.stage = stage.file.id;
+  app.dataset.build = __BUILD_ID__;
+  console.info(`build ${__BUILD_ID__}`);
   app.dataset.ready = '1';
 
   let last = performance.now();
