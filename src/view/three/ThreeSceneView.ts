@@ -11,11 +11,13 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
+import type { StageEvent } from '../../core/stage-events';
 import type { RailNetwork } from '../../rail/types';
 import type { StageData } from '../../stage/types';
 import { TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
-import type { SceneView } from '../SceneView';
+import type { CameraFx, SceneView } from '../SceneView';
+import { ActorLayer } from './actors';
 import { addEnvironment } from './environment';
 import { ModelLibrary } from './models';
 import { addModelPlacements, addProps } from './props';
@@ -30,6 +32,9 @@ export class ThreeSceneView implements SceneView {
   private readonly models = new ModelLibrary();
   private readonly cameraPosition = new Vector3();
   private sky: Mesh | null = null;
+  private network: RailNetwork | null = null;
+  private rails: Group | null = null;
+  private actors: ActorLayer | null = null;
 
   async init(container: HTMLElement, stage: StageData, network: RailNetwork): Promise<void> {
     const renderer = new WebGLRenderer({ antialias: true });
@@ -42,7 +47,9 @@ export class ThreeSceneView implements SceneView {
 
     this.sky = addEnvironment(this.scene, stage.file.environment);
 
+    this.network = network;
     const rails = buildRailScene(network);
+    this.rails = rails.group;
     this.scene.add(rails.group);
 
     this.train.name = 'train';
@@ -59,10 +66,14 @@ export class ThreeSceneView implements SceneView {
     bufferStops.name = 'buffer-stops';
     this.scene.add(bufferStops);
 
+    this.actors = new ActorLayer(this.models, stage.stations);
+    this.scene.add(this.actors.group);
+
     const [trainModel] = await Promise.all([
       this.models.load('train-proto'),
       addProps(props, stage.props, this.models),
       addModelPlacements(bufferStops, rails.bufferStops, this.models),
+      this.actors.init(stage.actors),
     ]);
     const trainInstance = trainModel.clone(true);
     trainInstance.name = 'train-proto';
@@ -71,10 +82,29 @@ export class ThreeSceneView implements SceneView {
     this.resize(container.clientWidth, container.clientHeight, window.devicePixelRatio);
   }
 
-  update(_dt: number, pose: TrainPose): void {
+  onStageEvent(event: StageEvent): void {
+    if (event.type === 'rail:cut' && this.network && this.rails) {
+      // Gaps were added to the rail; rebuild the track meshes without the cut piece.
+      this.rails.removeFromParent();
+      const rebuilt = buildRailScene(this.network);
+      this.rails = rebuilt.group;
+      this.scene.add(rebuilt.group);
+      return;
+    }
+    void this.actors?.onStageEvent(event);
+  }
+
+  update(dt: number, pose: TrainPose, fx: CameraFx): void {
     if (!this.renderer) return;
     this.train.position.copy(pose.position);
     this.train.quaternion.copy(pose.quaternion);
+    this.camera.position.copy(TRAIN.cabCameraOffset);
+    this.camera.position.y -= 0.35 * fx.dip;
+    if (fx.shake > 0) {
+      this.camera.position.x += (Math.random() - 0.5) * 0.12 * fx.shake;
+      this.camera.position.y += (Math.random() - 0.5) * 0.12 * fx.shake;
+    }
+    this.actors?.update(dt);
     this.train.updateMatrixWorld(true);
     this.camera.getWorldPosition(this.cameraPosition);
     this.sky?.position.copy(this.cameraPosition);
