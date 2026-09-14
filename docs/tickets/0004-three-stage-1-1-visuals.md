@@ -35,8 +35,12 @@ Phase 1 の基盤（ミッション・駅・ドア・猫・寸劇のロジック
 | `fail { reason }` | 失敗 | 何もしなくてよい（カメラは `fx` で沈む） |
 | `rewind` | 巻き戻し直後 | 動かしていた乗客・演出をすべて消す |
 
+## カメラ（実装済み・変更不要）
+- 4 視点（うんてんせき／うしろから／よこから／うえから）は `src/view/camera-rig.ts` の計算を `ThreeSceneView.update()` が使っている。ドアが開くと自動で「よこから」、寸劇は「うしろから」になる
+- 「よこから」「うしろから」では電車の外側と客車 2 両（`car-proto`）が見えるので、ドアの開閉・乗客の乗り降りはその視点で見えるように作る（乗客はホームと電車の間を歩く）
+
 ## 自動配置
-- `stations[]` ごとに `platform`（+ `platform-roof` + `station-sign`）を、ホーム側（`platformSide`）に、レール中心から 1.7 m 離して置く。ホームの長さ 30 m は駅の `at` を中心に
+- `stations[]` ごとに `platform`（+ `platform-roof` + `station-sign`）を、ホーム側（`platformSide`）に、レール中心から 1.7 m 離して置く。`at` は**停止線（先頭が止まる位置）**で、ホーム 45 m は停止線の 3 m 先から手前 42 m に広がる。`stop-line` と `stop-board` も停止線に置く（`src/view/three/actors.ts` の仮実装が同じ配置をしている）
 - `actors[]` の `type: 'cat'` は `cat-sleep` を線路中央に。`crossing-gate` を右側（進行方向右、レール中心から 3 m）に自動で添える。標識は逆さ（`rotation: [0,0,180]`）でステージ JSON の `props` に置いてあるので自動では置かない
 - 待っている乗客は `missions[].steps[].board` の人数分、ホームに 1.2 m 間隔で並べる（色は 3 色を順番に）
 - 相棒 `partner` は運転席の右席 (−0.9, 1.6, 4.6)（車体原点基準）に置き、電車の子にする

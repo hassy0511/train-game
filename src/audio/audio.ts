@@ -81,6 +81,11 @@ export class AudioEngine {
     this.tone(220, 0.45, 'square', 0.12, 110);
   }
 
+  /** Brake squeal for the hard brake. */
+  playSqueal(): void {
+    this.tone(1800, 0.5, 'sawtooth', 0.05, 900);
+  }
+
   playCard(): void {
     this.tone(523, 0.12, 'triangle', 0.15);
     window.setTimeout(() => this.tone(784, 0.2, 'triangle', 0.15), 110);

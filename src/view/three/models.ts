@@ -9,6 +9,9 @@ const PLACEHOLDER_COLORS: Record<string, number> = {
   passenger: 0x4f7fb0,
   amanojaku: 0xb4a7d6,
   platform: 0xbfb8aa,
+  'stop-line': 0xffffff,
+  'stop-board': 0xd64545,
+  'car-proto': 0x3fa7d6,
 };
 
 function placeholderColor(name: string): number {

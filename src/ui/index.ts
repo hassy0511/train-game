@@ -7,6 +7,7 @@ import { createWhistleButton, type WhistleButton } from './whistle-button';
 
 export interface UiOptions {
   speedLabels: readonly string[];
+  initialNotch: number;
   onNotch(notch: number): void;
   onWhistle(): void;
   onJunction(side: JunctionSide): void;
@@ -23,7 +24,7 @@ export interface Ui {
 /** Builds the DOM overlay. Always-visible action buttons: whistle only (limit is 4). */
 export function createUi(root: HTMLElement, opts: UiOptions): Ui {
   const hud = createHud(root);
-  const lever = createLever(root, { labels: opts.speedLabels, onChange: opts.onNotch });
+  const lever = createLever(root, { labels: opts.speedLabels, initial: opts.initialNotch, onChange: opts.onNotch });
   const actions = document.createElement('div');
   actions.className = 'action-buttons';
   root.appendChild(actions);

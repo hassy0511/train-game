@@ -1,5 +1,7 @@
 export interface LeverOptions {
   labels: readonly string[];
+  /** Notch the lever starts on. */
+  initial?: number;
   onChange(notch: number): void;
 }
 
@@ -38,10 +40,10 @@ export function createLever(root: HTMLElement, opts: LeverOptions): Lever {
   track.appendChild(knob);
   root.appendChild(lever);
 
-  let notch = 0;
-  let fraction = 0;
+  let notch = opts.initial ?? 0;
+  let fraction = notch / max;
   let dragging = false;
-  const KNOB_HALF = 26;
+  const KNOB_HALF = 22;
 
   const centerY = (f: number): number => {
     const h = track.clientHeight;
@@ -94,7 +96,7 @@ export function createLever(root: HTMLElement, opts: LeverOptions): Lever {
   lever.addEventListener('pointerup', release);
   lever.addEventListener('pointercancel', release);
 
-  detents[0].classList.add('is-active');
+  detents[notch].classList.add('is-active');
   requestAnimationFrame(relayout);
 
   return {
