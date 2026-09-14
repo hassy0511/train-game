@@ -15,6 +15,7 @@ async function tapUntil(page: Page, selector: string, timeoutMs = 90_000): Promi
   while (Date.now() < deadline) {
     if (await target.isVisible()) return;
     if (await bubble.isVisible()) await bubble.dispatchEvent('pointerdown');
+    if (await page.locator('#caption').isVisible()) await page.locator('#caption').dispatchEvent('click');
     await page.waitForTimeout(150);
   }
   throw new Error(`timed out waiting for ${selector}`);
@@ -84,7 +85,9 @@ test('stage 1-1 full run: all three missions and the ending', async ({ page }) =
   const app = page.locator('#app');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
   await page.locator('#title-start').click();
-  await tapUntil(page, '#card');
+  await tapUntil(page, '#card'); // badge card
+  await page.locator('#card-button').click();
+  await tapUntil(page, '#card'); // mission 1 card
   await page.locator('#card-button').click();
 
   // M1: hq(45) -> sakura(155)
@@ -95,7 +98,7 @@ test('stage 1-1 full run: all three missions and the ending', async ({ page }) =
 
   // M2: board at sakura (already there), minato(425), oka(525)
   await tapUntil(page, '#card');
-  await expect(page.locator('#card')).toContainText('おきゃくを のせて');
+  await expect(page.locator('#card')).toContainText('なかまを のせて');
   await page.locator('#card-button').click();
   await doors(page);
   await expect(page.locator('#cargo')).toHaveAttribute('data-passengers', '2');

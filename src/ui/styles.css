@@ -592,3 +592,26 @@ body {
   border-color: var(--accent);
   background: #fff4dc;
 }
+
+/* ---- story caption ---- */
+.caption {
+  border: none;
+  background: #101826;
+  color: #fff;
+  font-family: inherit;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.6;
+  opacity: 1;
+  transition: opacity 0.4s;
+}
+
+.caption.is-out {
+  opacity: 0;
+}
+
+.card-icon {
+  width: 140px;
+  height: 140px;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35));
+}
