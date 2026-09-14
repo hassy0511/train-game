@@ -552,8 +552,8 @@ body {
 
 .camera-menu {
   position: absolute;
-  right: calc(var(--safe-right) + 130px);
-  bottom: calc(var(--safe-bottom) + 26px);
+  right: calc(var(--safe-right) + 22px);
+  bottom: calc(var(--safe-bottom) + 260px);
   display: flex;
   gap: 10px;
   padding: 10px;
@@ -563,14 +563,15 @@ body {
 }
 
 .camera-tile {
-  width: 84px;
-  height: 84px;
+  width: 104px;
+  height: 92px;
   border: 3px solid transparent;
   border-radius: 18px;
   padding: 6px 4px 4px;
   background: #fff;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
+  white-space: nowrap;
   font-weight: 700;
   color: var(--ink);
   display: flex;
