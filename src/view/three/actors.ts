@@ -1,4 +1,4 @@
-import { Group, Object3D, Quaternion, Vector3 } from 'three';
+import { Box3, Group, Object3D, Quaternion, Vector3 } from 'three';
 import type { StageEvent } from '../../core/stage-events';
 import type { ResolvedActor, ResolvedStation } from '../../stage/types';
 import type { ModelLibrary } from './models';
@@ -9,8 +9,7 @@ import type { ModelLibrary } from './models';
  */
 const ACTOR_MODELS: Record<string, string> = { cat: 'cat-sleep', amanojaku: 'amanojaku', passenger: 'passenger' };
 const PLATFORM_CLEARANCE = 1.7;
-/** Platform length (m). The stop line is 3 m before its far end. */
-const PLATFORM_LENGTH = 45;
+/** The stop line sits this far before the platform's far end (m). */
 const PLATFORM_OVERHANG = 3;
 
 interface Moving {
@@ -51,10 +50,13 @@ export class ActorLayer {
         const platform = (await this.models.load('platform')).clone(true);
         // The platform model's origin is the center of its rail-side edge; the placeholder box is centered, so push it 2 m further.
         const clearance = PLATFORM_CLEARANCE + (this.models.has('platform') ? 0 : 2);
+        // Use the model's real length so a 30 m or 45 m platform both end 3 m past the stop line.
+        const bounds = new Box3().setFromObject(platform);
+        const length = bounds.max.z - bounds.min.z;
         platform.position
           .copy(st.position)
           .addScaledVector(sideDir, clearance)
-          .addScaledVector(forward, PLATFORM_OVERHANG - PLATFORM_LENGTH / 2);
+          .addScaledVector(forward, PLATFORM_OVERHANG - length / 2);
         platform.quaternion.copy(st.quaternion);
         this.group.add(platform);
 
