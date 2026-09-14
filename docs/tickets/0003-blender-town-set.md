@@ -1,6 +1,6 @@
 # 0003 Blender発注: 1-1 はじまりの街 のモデル一式
 
-- 状態: **第 1 弾完了（PR #11）／第 2 弾実装完了（Claudeレビュー待ち）**
+- 状態: **完了（第 1 弾 PR #11、第 2 弾 PR #12）**
 - 担当: Codex
 - 依存: なし（GO 後すぐ着手できる）
 - 関連: `docs/PHASE1_DESIGN.md`、`docs/tickets/0001-blender-proto-models.md`（共通仕様はこれと同じ）
