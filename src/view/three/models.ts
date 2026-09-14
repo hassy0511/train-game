@@ -14,6 +14,12 @@ const PLACEHOLDER_COLORS: Record<string, number> = {
   'car-proto': 0x3fa7d6,
 };
 
+/** Stage-facing names retained from the schema before the prototype GLBs were named. */
+const MODEL_ALIASES: Record<string, string> = {
+  'tree-a': 'tree-a-proto',
+  'tree-b': 'tree-b-proto',
+};
+
 function placeholderColor(name: string): number {
   const key = Object.keys(PLACEHOLDER_COLORS).find((k) => name.startsWith(k));
   return key ? PLACEHOLDER_COLORS[key] : 0xbbbbbb;
@@ -27,7 +33,7 @@ export class ModelLibrary {
 
   /** True when a .glb for this name exists in the build. */
   has(name: string): boolean {
-    return this.available.has(name);
+    return this.available.has(MODEL_ALIASES[name] ?? name);
   }
 
   load(name: string): Promise<Group> {
@@ -36,14 +42,15 @@ export class ModelLibrary {
 
     // Models that are not built yet (pending Blender tickets) get a flat box of the right size,
     // so stages stay playable and no 404 requests are made.
-    if (!this.has(name)) {
+    const assetName = MODEL_ALIASES[name] ?? name;
+    if (!this.available.has(assetName)) {
       console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(makePlaceholder(name));
       this.cache.set(name, placeholder);
       return placeholder;
     }
 
-    const url = `${import.meta.env.BASE_URL}models/${name}.glb`;
+    const url = `${import.meta.env.BASE_URL}models/${assetName}.glb`;
     const loading = this.loader.loadAsync(url).then((gltf) => gltf.scene);
     this.cache.set(name, loading);
     return loading;

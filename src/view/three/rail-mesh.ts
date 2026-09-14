@@ -33,6 +33,45 @@ export interface RailScene {
   bufferStops: ModelPlacement[];
 }
 
+/** Builds the short piece that is thrown clear while a rail gap is created. */
+export function buildDetachedRailPiece(network: RailNetwork, railId: string, from: number, to: number): Group | null {
+  const rail = network.rails.get(railId);
+  if (!rail) return null;
+
+  const center = Math.max(0, Math.min(rail.length, (from + to) / 2));
+  const length = Math.max(0.9, Math.min(2.4, Math.abs(to - from)));
+  const frame = rail.frameAt(center);
+  const matrix = frameMatrix(frame, 0);
+  const piece = new Group();
+  piece.name = 'detached-rail-piece';
+  matrix.decompose(piece.position, piece.quaternion, piece.scale);
+
+  const railMaterial = new MeshLambertMaterial({ color: '#6E6E6E', transparent: true });
+  const ballastMaterial = new MeshLambertMaterial({ color: '#A89F91', transparent: true });
+  const sleeperMaterial = new MeshLambertMaterial({ color: '#6B4E2E', transparent: true });
+
+  const ballast = new Mesh(new BoxGeometry(4.2, 0.3, length), ballastMaterial);
+  ballast.name = 'detached-ballast';
+  ballast.position.y = -0.45;
+  piece.add(ballast);
+
+  for (const lateral of [-RAIL_HALF_GAUGE, RAIL_HALF_GAUGE]) {
+    const railMesh = new Mesh(new BoxGeometry(RAIL_HALF_WIDTH * 2, RAIL_HEIGHT, length), railMaterial);
+    railMesh.name = 'detached-rail';
+    railMesh.position.set(lateral, -RAIL_HEIGHT / 2, 0);
+    piece.add(railMesh);
+  }
+
+  const sleeperCount = 3;
+  for (let index = 0; index < sleeperCount; index += 1) {
+    const sleeper = new Mesh(new BoxGeometry(2.4, 0.15, 0.25), sleeperMaterial);
+    sleeper.name = 'detached-sleeper';
+    sleeper.position.set(0, -0.225, (index - 1) * Math.min(0.75, length / 3));
+    piece.add(sleeper);
+  }
+  return piece;
+}
+
 function addQuad(data: GeometryData, a: Vector3, b: Vector3, c: Vector3, d: Vector3): void {
   const base = data.positions.length / 3;
   for (const point of [a, b, c, d]) data.positions.push(point.x, point.y, point.z);

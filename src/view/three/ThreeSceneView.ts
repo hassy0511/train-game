@@ -1,8 +1,10 @@
 import {
+  BoxGeometry,
   BufferGeometry,
   Group,
   Material,
   Mesh,
+  MeshBasicMaterial,
   NoToneMapping,
   Object3D,
   PerspectiveCamera,
@@ -22,7 +24,18 @@ import { ActorLayer } from './actors';
 import { addEnvironment } from './environment';
 import { ModelLibrary } from './models';
 import { addModelPlacements, addProps } from './props';
-import { buildRailScene } from './rail-mesh';
+import { buildDetachedRailPiece, buildRailScene } from './rail-mesh';
+
+interface DoorVisual {
+  group: Group;
+  panel: Mesh;
+}
+
+interface RailCutEffect {
+  group: Group;
+  materials: Material[];
+  elapsed: number;
+}
 
 /** Production Three.js view for the first-person train scene. */
 export class ThreeSceneView implements SceneView {
@@ -39,10 +52,17 @@ export class ThreeSceneView implements SceneView {
   private readonly camTarget = makeCameraTarget();
   private readonly camCurrent = makeCameraTarget();
   private network: RailNetwork | null = null;
+  private stage: StageData | null = null;
   private rails: Group | null = null;
   private actors: ActorLayer | null = null;
+  private readonly doors: DoorVisual[] = [];
+  private doorProgress = 0;
+  private doorTarget = 0;
+  private doorSide = 1;
+  private readonly railCutEffects: RailCutEffect[] = [];
 
   async init(container: HTMLElement, stage: StageData, network: RailNetwork): Promise<void> {
+    this.stage = stage;
     const renderer = new WebGLRenderer({ antialias: true });
     renderer.outputColorSpace = SRGBColorSpace;
     renderer.shadowMap.enabled = false;
@@ -76,12 +96,14 @@ export class ThreeSceneView implements SceneView {
     bufferStops.name = 'buffer-stops';
     this.scene.add(bufferStops);
 
-    this.actors = new ActorLayer(this.models, stage.stations);
+    this.actors = new ActorLayer(this.models, stage.stations, stage.file.missions);
+    this.actors.setTrain(this.train);
     this.scene.add(this.actors.group);
 
-    const [trainModel, carModel] = await Promise.all([
+    const [trainModel, carModel, partnerModel] = await Promise.all([
       this.models.load('train-proto'),
       this.models.load('car-proto'),
+      this.models.load('partner'),
       addProps(props, stage.props, this.models),
       addModelPlacements(bufferStops, rails.bufferStops, this.models),
       this.actors.init(stage.actors),
@@ -91,19 +113,112 @@ export class ThreeSceneView implements SceneView {
     this.train.add(trainInstance);
     for (const car of this.cars) car.add(carModel.clone(true));
 
+    const partner = partnerModel.clone(true);
+    partner.name = 'partner';
+    partner.position.set(-0.9, 1.6, 4.6);
+    this.train.add(partner);
+    this.actors.setPartner(partner);
+    this.addDoorVisuals();
+
     this.resize(container.clientWidth, container.clientHeight, window.devicePixelRatio);
+  }
+
+  private addDoorVisuals(): void {
+    const panelGeometry = new BoxGeometry(0.055, 2.15, 1.42);
+    const panelMaterial = new MeshBasicMaterial({ color: '#173746', transparent: true, opacity: 0.88 });
+    for (const car of [this.train, ...this.cars]) {
+      const group = new Group();
+      group.name = 'door-opening-band';
+      group.visible = false;
+      const panel = new Mesh(panelGeometry, panelMaterial);
+      group.add(panel);
+      car.add(group);
+      this.doors.push({ group, panel });
+    }
+  }
+
+  private setDoor(open: boolean, stationId: string): void {
+    this.doorTarget = open ? 1 : 0;
+    const side = this.stageStationSide(stationId);
+    if (side !== null) this.doorSide = side;
+  }
+
+  private stageStationSide(stationId: string): number | null {
+    const station = this.stage?.stations.find((candidate) => candidate.def.id === stationId);
+    return station ? (station.def.platformSide === 'left' ? 1 : -1) : null;
   }
 
   onStageEvent(event: StageEvent): void {
     if (event.type === 'rail:cut' && this.network && this.rails) {
+      const detached = buildDetachedRailPiece(this.network, event.railId, event.from, event.to);
+      if (detached) {
+        const materials = new Set<Material>();
+        detached.traverse((object) => {
+          if (!(object instanceof Mesh)) return;
+          if (Array.isArray(object.material)) object.material.forEach((material) => materials.add(material));
+          else materials.add(object.material);
+        });
+        this.scene.add(detached);
+        this.railCutEffects.push({ group: detached, materials: [...materials], elapsed: 0 });
+      }
       // Gaps were added to the rail; rebuild the track meshes without the cut piece.
-      this.rails.removeFromParent();
+      const oldRails = this.rails;
+      oldRails.removeFromParent();
       const rebuilt = buildRailScene(this.network);
       this.rails = rebuilt.group;
       this.scene.add(rebuilt.group);
+      this.disposeDetachedObject(oldRails);
       return;
     }
+    if (event.type === 'door') this.setDoor(event.open, event.stationId);
+    if (event.type === 'rewind') {
+      this.doorProgress = 0;
+      this.doorTarget = 0;
+      for (const door of this.doors) door.group.visible = false;
+      for (const effect of this.railCutEffects) this.disposeDetachedObject(effect.group);
+      this.railCutEffects.length = 0;
+    }
     void this.actors?.onStageEvent(event);
+  }
+
+  private disposeDetachedObject(root: Object3D): void {
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    root.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      geometries.add(object.geometry);
+      if (Array.isArray(object.material)) object.material.forEach((material) => materials.add(material));
+      else materials.add(object.material);
+    });
+    root.removeFromParent();
+    geometries.forEach((geometry) => geometry.dispose());
+    materials.forEach((material) => material.dispose());
+  }
+
+  private updateDoorVisuals(dt: number): void {
+    const step = dt / 0.3;
+    if (this.doorProgress < this.doorTarget) this.doorProgress = Math.min(this.doorProgress + step, this.doorTarget);
+    if (this.doorProgress > this.doorTarget) this.doorProgress = Math.max(this.doorProgress - step, this.doorTarget);
+    for (const door of this.doors) {
+      door.group.visible = this.doorProgress > 0.01;
+      door.group.position.set(this.doorSide * (TRAIN.width / 2 + 0.035), 1.65, 0);
+      door.panel.scale.z = Math.max(0.025, this.doorProgress);
+    }
+  }
+
+  private updateRailCutEffects(dt: number): void {
+    for (let index = this.railCutEffects.length - 1; index >= 0; index -= 1) {
+      const effect = this.railCutEffects[index];
+      effect.elapsed = Math.min(effect.elapsed + dt, 1);
+      effect.group.position.y += dt * (2.5 + effect.elapsed * 2.5);
+      effect.group.rotateX(dt * 2.4);
+      effect.group.rotateZ(dt * 1.4);
+      for (const material of effect.materials) material.opacity = 1 - effect.elapsed;
+      if (effect.elapsed >= 1) {
+        this.disposeDetachedObject(effect.group);
+        this.railCutEffects.splice(index, 1);
+      }
+    }
   }
 
   setCamera(mode: CameraMode, snap = false): void {
@@ -137,6 +252,8 @@ export class ThreeSceneView implements SceneView {
       }
     }
 
+    this.updateDoorVisuals(dt);
+    this.updateRailCutEffects(dt);
     this.actors?.update(dt);
     this.cameraPosition.copy(this.camera.position);
     this.sky?.position.copy(this.cameraPosition);
@@ -183,6 +300,7 @@ export class ThreeSceneView implements SceneView {
     this.renderer?.domElement.remove();
     this.renderer = null;
     this.sky = null;
+    this.stage = null;
     this.scene.clear();
   }
 }
