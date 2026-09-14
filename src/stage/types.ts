@@ -140,6 +140,8 @@ export type MissionLines = Partial<
     | 'catDanger'
     | 'catDangerAfter'
     | 'signReversed'
+    | 'gauge'
+    | 'hardBrake'
     | 'complete',
     string
   >

@@ -30,7 +30,7 @@
   },
   "start": {
     "railId": "loop",
-    "at": 20,
+    "at": 45,
     "direction": 1
   },
   "rails": [
@@ -166,28 +166,28 @@
       "id": "hq",
       "name": "たんけんたい ほんぶ",
       "railId": "loop",
-      "at": 20,
+      "at": 45,
       "platformSide": "left"
     },
     {
       "id": "sakura",
       "name": "さくらえき",
       "railId": "loop",
-      "at": 130,
+      "at": 155,
       "platformSide": "left"
     },
     {
       "id": "minato",
       "name": "みなとえき",
       "railId": "loop",
-      "at": 400,
+      "at": 425,
       "platformSide": "left"
     },
     {
       "id": "oka",
       "name": "おかのえき",
       "railId": "loop",
-      "at": 500,
+      "at": 525,
       "platformSide": "left"
     }
   ],
@@ -500,7 +500,9 @@
         "short": "もうちょっと まえ！",
         "perfect": "ぴったり！ すごい、じょうずだね！",
         "ok": "とまれた！ じょうずだね！",
-        "complete": "さくらえきに つきました！"
+        "complete": "さくらえきに つきました！",
+        "gauge": "うえの ゲージを みて！ しろい せんで とまろう",
+        "hardBrake": "わわっ！ きゅうブレーキ！"
       }
     },
     {
@@ -594,7 +596,7 @@
         "model": "amanojaku",
         "onRail": {
           "railId": "loop",
-          "at": 60
+          "at": 85
         }
       },
       {
@@ -611,8 +613,8 @@
       {
         "cutRail": {
           "railId": "loop",
-          "from": 70,
-          "to": 90
+          "from": 95,
+          "to": 115
         }
       },
       {
@@ -623,7 +625,7 @@
         "move": "sakasa",
         "onRail": {
           "railId": "loop",
-          "at": 140,
+          "at": 165,
           "lateral": 10
         },
         "seconds": 2.5

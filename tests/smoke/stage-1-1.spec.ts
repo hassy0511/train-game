@@ -52,10 +52,23 @@ test('stage 1-1: title, opening, and a graded stop at the first station', async 
   await page.locator('#card-button').click();
   await expect(app).toHaveAttribute('data-phase', 'driving');
 
-  // Drive slowly and stop just before the mark: station "sakura" is at 130 m.
+  // The stop gauge appears 150 m before the line; the camera button cycles views.
+  await setNotch(page, 2);
+  await expect(page.locator('#stop-gauge')).toBeVisible({ timeout: 60_000 });
+  await page.locator('#camera').dispatchEvent('pointerdown');
+  await expect(app).toHaveAttribute('data-camera', 'chase');
+  await page.screenshot({ path: resolve(OUT, '11b-chase-gauge.png') });
+  await page.locator('#camera').dispatchEvent('pointerdown');
+  await page.locator('#camera').dispatchEvent('pointerdown');
+  await page.locator('#camera').dispatchEvent('pointerdown');
+  await expect(app).toHaveAttribute('data-camera', 'cab');
+
+  // Stop with the train front on the line: station "sakura" stop line is at 155 m (front);
+  // data-s is the lead car center (front - 6). Braking from 5 m/s takes ~4.2 m.
+  await page.waitForFunction(() => Number(document.getElementById('app')?.dataset.s) >= 155 - 6 - 4.5, null, {
+    timeout: 90_000,
+  });
   await setNotch(page, 1);
-  await page.waitForFunction(() => Number(document.getElementById('app')?.dataset.s) >= 125, null, { timeout: 90_000 });
-  await setNotch(page, 0);
 
   const toast = page.locator('#toast');
   await expect(toast).toBeVisible({ timeout: 20_000 });

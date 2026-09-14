@@ -9,6 +9,9 @@ import type { ModelLibrary } from './models';
  */
 const ACTOR_MODELS: Record<string, string> = { cat: 'cat-sleep', amanojaku: 'amanojaku', passenger: 'passenger' };
 const PLATFORM_CLEARANCE = 1.7;
+/** Platform length (m). The stop line is 3 m before its far end. */
+const PLATFORM_LENGTH = 45;
+const PLATFORM_OVERHANG = 3;
 
 interface Moving {
   object: Object3D;
@@ -40,15 +43,30 @@ export class ActorLayer {
     );
     await Promise.all(
       this.stations.map(async (st) => {
-        const model = await this.models.load('platform');
-        const instance = model.clone(true);
         // Station frame: local +X is the train's left side, +Z is the travel direction.
+        // `st.position` is the stop line (where the train front stops).
         const sideDir = new Vector3(st.def.platformSide === 'right' ? -1 : 1, 0, 0).applyQuaternion(st.quaternion);
-        // The platform model's origin is its rail-side edge; the placeholder box is centered, so push it 2 m further.
+        const forward = new Vector3(0, 0, 1).applyQuaternion(st.quaternion);
+
+        const platform = (await this.models.load('platform')).clone(true);
+        // The platform model's origin is the center of its rail-side edge; the placeholder box is centered, so push it 2 m further.
         const clearance = PLATFORM_CLEARANCE + (this.models.has('platform') ? 0 : 2);
-        instance.position.copy(st.position).addScaledVector(sideDir, clearance);
-        instance.quaternion.copy(st.quaternion);
-        this.group.add(instance);
+        platform.position
+          .copy(st.position)
+          .addScaledVector(sideDir, clearance)
+          .addScaledVector(forward, PLATFORM_OVERHANG - PLATFORM_LENGTH / 2);
+        platform.quaternion.copy(st.quaternion);
+        this.group.add(platform);
+
+        // White stop line across the track and a striped "とまれ" board on the platform side.
+        const line = (await this.models.load('stop-line')).clone(true);
+        line.position.copy(st.position);
+        line.quaternion.copy(st.quaternion);
+        this.group.add(line);
+        const board = (await this.models.load('stop-board')).clone(true);
+        board.position.copy(st.position).addScaledVector(sideDir, PLATFORM_CLEARANCE + 0.6);
+        board.quaternion.copy(st.quaternion);
+        this.group.add(board);
       }),
     );
   }

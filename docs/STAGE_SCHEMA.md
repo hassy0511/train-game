@@ -26,7 +26,7 @@ interface StageFile {
   };
   unlocks: AbilityId[];       // このステージで解放する能力
   environment: Environment;
-  start: { railId: string; at: number; direction: 1 | -1 };
+  start: { railId: string; at: number; direction: 1 | -1 };   // at は先頭の位置。3 両分（約 31 m）が線路に乗るよう 40 以上にする
   rails: Rail[];
   junctions: Junction[];
   stations: Station[];
@@ -68,7 +68,7 @@ interface Junction {
 
 interface Station {
   id: string; name: string;
-  railId: string; at: number;   // 停車位置（車体中心）
+  railId: string; at: number;   // 停止線の位置 = 電車の「先頭」が止まる位置（2026-09-14 に車体中心から変更）。ホームはこの手前に広がる
   tolerance?: number;           // 停車判定の幅。既定 4
   platformSide: "left" | "right";
 }
@@ -122,7 +122,7 @@ interface Gimmick {
 
 - 分岐先の線路の始点は分岐点に置く。始点の接線はローダーが親線路の向きに自動でそろえる（作り手が点を工夫しなくてよい）
 - `merge` の終点も同様に、合流先の点と一致させる。接線は自動
-- 電車の向きは前後 ±4 m の台車位置から決める。始点 `start.at` は 6 以上にして車体が線路に収まるようにする
+- 電車の向きは前後 ±4 m の台車位置から決める。`start.at` は先頭の位置。3 両（約 31 m）が線路に収まるよう 40 以上にする（周回線路なら 0 でもよい）
 - ローダーの検証で落ちるもの: `schemaVersion` 不一致、必須フィールド欠落、存在しない `railId`／`stationId`、範囲外の `at`、分岐点・合流点の不一致（0.5 m 超）、モデル名が `[a-z0-9-]+` でない
 - 速度・加速度・クールダウン・矢印を出す距離などはグローバル設定（`src/train/params.ts`）。ステージには書かない
 - 「ステージ固有の値」はここに書く。コードに埋めない
@@ -147,7 +147,7 @@ Phase 0 の仮ステージ。実装時に `src/stages/0-0.json` として置く�
     "ground": { "y": -0.6, "size": 800, "color": "#7fc96f" },
     "bgm": null
   },
-  "start": { "railId": "main", "at": 6, "direction": 1 },
+  "start": { "railId": "main", "at": 40, "direction": 1 },
   "rails": [
     {
       "id": "main",
@@ -172,7 +172,7 @@ Phase 0 の仮ステージ。実装時に `src/stages/0-0.json` として置く�
     { "id": "j1", "railId": "main", "at": 120, "left": "main", "right": "branch", "default": "left" }
   ],
   "stations": [
-    { "id": "st-start", "name": "はじまりえき", "railId": "main", "at": 6, "tolerance": 4, "platformSide": "left" }
+    { "id": "st-start", "name": "はじまりえき", "railId": "main", "at": 40, "tolerance": 4, "platformSide": "left" }
   ],
   "props": [
     { "model": "tree-a-proto", "onRail": { "railId": "main", "at": 20, "lateral": -9 } },
@@ -209,7 +209,7 @@ Phase 0 の仮ステージ。実装時に `src/stages/0-0.json` として置く�
     { "model": "rock-proto",   "position": [45, -0.6, 90] }
   ],
   "actors": [
-    { "id": "sensor-1", "type": "trigger", "onRail": { "railId": "main", "at": 25, "heightFromRail": 0 },
+    { "id": "sensor-1", "type": "trigger", "onRail": { "railId": "main", "at": 70, "heightFromRail": 0 },
       "size": [6, 4, 4], "reactsTo": "none" }
   ],
   "records": [],

@@ -10,15 +10,34 @@ export const TRAIN = {
   /** Driver's eye position relative to the car origin (bottom center). */
   cabCameraOffset: new Vector3(0, 2.4, 4.6),
   cabFovDeg: 60,
+  /** Cars in the consist (visual only; the lead car carries the collider). */
+  carCount: 3,
+  /** Center-to-center spacing between cars (m). */
+  carSpacing: 12.5,
 } as const;
 
-/** Speed for each notch of the master controller (m/s). Index 0 is "stop". */
-export const SPEED_NOTCHES = [0, 5, 12, 20] as const;
-/** Kid-facing labels for the notches (hiragana). */
-export const SPEED_LABELS = ['とまる', 'ゆっくり', 'ふつう', 'はやい'] as const;
+/**
+ * Master controller notches, bottom to top. `speed` is the target (m/s); `brake` is the
+ * deceleration used while the lever sits on that notch and the train is faster than the target.
+ */
+export const LEVER_NOTCHES = [
+  { label: 'きゅうブレーキ', speed: 0, brake: 8 },
+  { label: 'とまる', speed: 0, brake: 3 },
+  { label: 'ゆっくり', speed: 5, brake: 3 },
+  { label: 'ふつう', speed: 10, brake: 3 },
+  { label: 'はやい', speed: 15, brake: 3 },
+  { label: 'びゅーん', speed: 22, brake: 3 },
+] as const;
+/** Index of the ordinary "stop" notch (the lever rests here after a rewind). */
+export const STOP_NOTCH = 1;
+/** Index of the hard brake notch. */
+export const HARD_BRAKE_NOTCH = 0;
+export const SPEED_NOTCHES = LEVER_NOTCHES.map((n) => n.speed);
+export const SPEED_LABELS = LEVER_NOTCHES.map((n) => n.label);
 
 export const ACCELERATION = 2; // m/s²
-export const BRAKING = 3; // m/s²
+/** Default deceleration (m/s²) used for auto-stops at buffers. */
+export const BRAKING = 3;
 
 export const WHISTLE_COOLDOWN = 2.0; // s
 
@@ -29,8 +48,14 @@ export const JUNCTION_LOCK_DISTANCE = 5;
 /** Stop this far before the end of a buffer-ended rail (car front just short of the buffer stop). */
 export const BUFFER_MARGIN = TRAIN.length / 2 + 0.5;
 
-/** Station stop rule (overridable per station in the stage JSON). Distances in meters, speed in m/s. */
+/**
+ * Station stop rule (overridable per station in the stage JSON). Distances in meters, speed in m/s.
+ * A station's `at` is where the train FRONT must stop; `zone` is measured from that line.
+ */
 export const STOP_RULE = { perfect: 1.0, ok: 6.0, zone: 30, maxSpeed: 13 } as const;
+
+/** The stop gauge appears this far before the stop line. */
+export const GAUGE_DISTANCE = 150;
 
 /** How far before the failed target the train is put back after a fail. */
 export const REWIND_DISTANCE = 80;

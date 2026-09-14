@@ -20,6 +20,7 @@ import type { StageData } from '../../stage/types';
 import { TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
 import type { CameraFx, SceneView } from '../SceneView';
+import { cameraTarget, makeCameraTarget, smoothCamera, type CameraMode } from '../camera-rig';
 
 const RAIL_HALF_GAUGE = 0.75;
 const SAMPLE_STEP = 1;
@@ -40,6 +41,11 @@ export class WireSceneView implements SceneView {
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(TRAIN.cabFovDeg, 1, 0.1, 600);
   private readonly train = new Group();
+  private readonly cars: Mesh[] = [];
+  private cameraMode: CameraMode = 'cab';
+  private cameraSnap = true;
+  private readonly camTarget = makeCameraTarget();
+  private readonly camCurrent = makeCameraTarget();
   private network: RailNetwork | null = null;
   private stage: StageData | null = null;
   private readonly railGroups = new Map<string, Group>();
@@ -97,8 +103,12 @@ export class WireSceneView implements SceneView {
     for (const st of stage.stations) {
       const side = st.def.platformSide === 'right' ? 1 : -1;
       const frame = network.getRail(st.def.railId).frameAt(st.def.at);
-      const mesh = new Mesh(new BoxGeometry(4, 1, 30), platformMaterial);
-      mesh.position.copy(frame.position).addScaledVector(frame.right, side * (1.7 + 2)).addScaledVector(frame.up, 0.5);
+      const mesh = new Mesh(new BoxGeometry(4, 1, 45), platformMaterial);
+      mesh.position
+        .copy(frame.position)
+        .addScaledVector(frame.right, side * (1.7 + 2))
+        .addScaledVector(frame.up, 0.5)
+        .addScaledVector(frame.tangent, 3 - 22.5);
       mesh.quaternion.copy(st.quaternion);
       this.scene.add(mesh);
     }
@@ -112,10 +122,16 @@ export class WireSceneView implements SceneView {
     const dash = new Mesh(new BoxGeometry(2.8, 0.3, 0.6), new MeshBasicMaterial({ color: 0x23272b }));
     dash.position.set(0, 1.85, 5.6);
     this.train.add(dash);
-    this.camera.position.copy(TRAIN.cabCameraOffset);
-    this.camera.rotation.y = Math.PI;
-    this.train.add(this.camera);
+    this.scene.add(this.camera);
     this.scene.add(this.train);
+    for (let i = 1; i < TRAIN.carCount; i++) {
+      const car = new Mesh(
+        new BoxGeometry(TRAIN.width, TRAIN.height, TRAIN.length),
+        new MeshBasicMaterial({ color: 0x3fa7d6, wireframe: true }),
+      );
+      this.cars.push(car);
+      this.scene.add(car);
+    }
 
     this.resize(container.clientWidth, container.clientHeight, window.devicePixelRatio);
   }
@@ -224,15 +240,33 @@ export class WireSceneView implements SceneView {
     }
   }
 
+  setCamera(mode: CameraMode, snap = false): void {
+    this.cameraMode = mode;
+    this.cameraSnap = this.cameraSnap || snap;
+  }
+
   update(dt: number, pose: TrainPose, fx: CameraFx): void {
     if (!this.renderer) return;
     this.train.position.copy(pose.position);
     this.train.quaternion.copy(pose.quaternion);
-    this.camera.position.copy(TRAIN.cabCameraOffset);
-    this.camera.position.y -= 0.35 * fx.dip;
-    if (fx.shake > 0) {
-      this.camera.position.x += (Math.random() - 0.5) * 0.12 * fx.shake;
-      this.camera.position.y += (Math.random() - 0.5) * 0.12 * fx.shake;
+    this.cars.forEach((car, i) => {
+      const cp = pose.cars[i];
+      if (!cp) return;
+      car.position.copy(cp.position).addScaledVector(new Vector3(0, 1, 0).applyQuaternion(cp.quaternion), TRAIN.height / 2);
+      car.quaternion.copy(cp.quaternion);
+    });
+    cameraTarget(this.cameraMode, pose, this.camTarget);
+    smoothCamera(this.camCurrent, this.camTarget, dt, this.cameraSnap || this.cameraMode === 'cab');
+    this.cameraSnap = false;
+    this.camera.position.copy(this.camCurrent.position);
+    this.camera.up.copy(this.camCurrent.up);
+    this.camera.lookAt(this.camCurrent.lookAt);
+    if (this.cameraMode === 'cab') {
+      this.camera.position.y -= 0.35 * fx.dip;
+      if (fx.shake > 0) {
+        this.camera.position.x += (Math.random() - 0.5) * 0.12 * fx.shake;
+        this.camera.position.y += (Math.random() - 0.5) * 0.12 * fx.shake;
+      }
     }
     for (let i = this.moving.length - 1; i >= 0; i--) {
       const m = this.moving[i];

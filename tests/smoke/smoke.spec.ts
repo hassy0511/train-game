@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), 'output');
 mkdirSync(OUT, { recursive: true });
 
-const START_AT = 6; // stage 0-0 start.at
+const START_CENTER = 40 - 6; // stage 0-0 start.at is the train front; data-s is the lead car center
 
 test('boots stage 0-0, drives for 5 s, passes the sensor, whistle cools down', async ({ page }) => {
   const logs: string[] = [];
@@ -28,7 +28,7 @@ test('boots stage 0-0, drives for 5 s, passes the sensor, whistle cools down', a
 
   // Drag the lever knob up to the "ふつう" detent, the way a thumb would.
   const knob = page.locator('#lever-knob');
-  const detent = page.locator('.lever-detent[data-notch="2"]');
+  const detent = page.locator('.lever-detent[data-notch="3"]');
   const kb = await knob.boundingBox();
   const db = await detent.boundingBox();
   if (!kb || !db) throw new Error('lever not laid out');
@@ -36,7 +36,7 @@ test('boots stage 0-0, drives for 5 s, passes the sensor, whistle cools down', a
   await page.mouse.down();
   await page.mouse.move(kb.x + kb.width / 2, db.y, { steps: 12 });
   await page.mouse.up();
-  await expect(app).toHaveAttribute('data-notch', '2');
+  await expect(app).toHaveAttribute('data-notch', '3');
   await expect(page.locator('#hud-speed')).toHaveText('ふつう');
   const t0 = Number(await app.getAttribute('data-time'));
 
@@ -45,7 +45,7 @@ test('boots stage 0-0, drives for 5 s, passes the sensor, whistle cools down', a
     timeout: 60_000,
   });
   const s = Number(await app.getAttribute('data-s'));
-  expect(s - START_AT).toBeGreaterThanOrEqual(20);
+  expect(s - START_CENTER).toBeGreaterThanOrEqual(20);
   expect(logs.some((l) => l.includes('sensor: sensor-1 enter'))).toBe(true);
 
   const whistle = page.locator('#whistle');
@@ -67,11 +67,11 @@ test('junction: tapping the right arrow switches to the branch and the train sto
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
 
   // Tap the "はやい" detent label directly (the lever also accepts taps).
-  const detent = page.locator('.lever-detent[data-notch="3"]');
+  const detent = page.locator('.lever-detent[data-notch="4"]');
   const db = await detent.boundingBox();
   if (!db) throw new Error('lever not laid out');
   await page.mouse.click(db.x + 30, db.y);
-  await expect(app).toHaveAttribute('data-notch', '3');
+  await expect(app).toHaveAttribute('data-notch', '4');
 
   const junction = page.locator('#junction');
   await expect(junction).toBeVisible({ timeout: 60_000 });
