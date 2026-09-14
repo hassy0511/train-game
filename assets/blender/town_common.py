@@ -27,11 +27,13 @@ ASSET_SPECS = {
     "station-sign": ((2.4, 3.0, 0.3), 60),
     "crossing-gate": ((4.5, 3.2, 0.6), 120),
     "crossing-sign": ((1.2, 3.0, 0.2), 60),
-    "cat-sleep": ((0.7, 0.35, 0.5), 160),
-    "cat-stand": ((0.7, 0.6, 0.4), 200),
-    "partner": ((0.6, 0.7, 0.5), 240),
-    "amanojaku": ((0.9, 1.4, 0.6), 320),
-    "passenger": ((0.6, 1.6, 0.4), 120),
+    # Revised for the user-approved Variant C style. These remain tiny against
+    # the 100k on-screen budget while allowing controlled rounded transitions.
+    "cat-sleep": ((0.7, 0.35, 0.5), 480),
+    "cat-stand": ((0.7, 0.6, 0.4), 640),
+    "partner": ((0.6, 0.7, 0.5), 720),
+    "amanojaku": ((0.9, 1.4, 0.6), 960),
+    "passenger": ((0.6, 1.6, 0.4), 640),
     "parcel": ((0.6, 0.5, 0.6), 40),
     "goal-flag": ((1.6, 2.4, 0.2), 60),
 }
@@ -91,6 +93,26 @@ def add_box(
     obj.dimensions = (width, depth, height)
     finish_primitive(obj, mat)
     parts.append(obj)
+    return obj
+
+
+def add_beveled_box(
+    parts: list[bpy.types.Object],
+    name: str,
+    size: tuple[float, float, float],
+    center: tuple[float, float, float],
+    mat: bpy.types.Material,
+    bevel: float,
+    smooth: bool = False,
+) -> bpy.types.Object:
+    obj = add_box(parts, name, size, center, mat)
+    modifier = obj.modifiers.new(name="Controlled bevel", type="BEVEL")
+    modifier.width = bevel
+    modifier.segments = 1
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.modifier_apply(modifier=modifier.name)
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = smooth
     return obj
 
 
@@ -217,6 +239,61 @@ def add_tapered_segment(
     obj.name = name
     obj.rotation_euler = direction.to_track_quat("Z", "Y").to_euler()
     finish_primitive(obj, mat, smooth)
+    parts.append(obj)
+    return obj
+
+
+def add_bent_tube(
+    parts: list[bpy.types.Object],
+    name: str,
+    points: list[tuple[float, float, float]],
+    radii: list[float],
+    segment_materials: list[bpy.types.Material],
+    sides: int = 5,
+    smooth: bool = True,
+) -> bpy.types.Object:
+    """Create one continuous low-resolution tube with one material per path segment."""
+    if len(points) != len(radii) or len(segment_materials) != len(points) - 1:
+        raise ValueError(f"{name}: point, radius, and material counts do not match")
+    vertices: list[tuple[float, float, float]] = []
+    for index, point in enumerate(points):
+        previous = Vector(points[max(0, index - 1)])
+        following = Vector(points[min(len(points) - 1, index + 1)])
+        tangent = following - previous
+        tangent.z = 0
+        tangent.normalize()
+        normal = Vector((-tangent.y, tangent.x, 0))
+        center = Vector(point)
+        for side in range(sides):
+            angle = 2 * math.pi * side / sides
+            offset = normal * (math.cos(angle) * radii[index])
+            offset.z += math.sin(angle) * radii[index]
+            value = center + offset
+            vertices.append((value.x, value.y, value.z))
+
+    faces: list[tuple[int, ...]] = [tuple(range(sides - 1, -1, -1))]
+    for segment in range(len(points) - 1):
+        first = segment * sides
+        second = (segment + 1) * sides
+        for side in range(sides):
+            nxt = (side + 1) % sides
+            faces.append((first + side, first + nxt, second + nxt, second + side))
+    final = (len(points) - 1) * sides
+    faces.append(tuple(final + side for side in range(sides)))
+
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata([to_blender(point) for point in vertices], [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    for mat in segment_materials:
+        mesh.materials.append(mat)
+    mesh.polygons[0].material_index = 0
+    for segment in range(len(segment_materials)):
+        for polygon_index in range(1 + segment * sides, 1 + (segment + 1) * sides):
+            mesh.polygons[polygon_index].material_index = segment
+            mesh.polygons[polygon_index].use_smooth = smooth
+    mesh.polygons[-1].material_index = len(segment_materials) - 1
     parts.append(obj)
     return obj
 
@@ -580,154 +657,197 @@ def cat_ear(parts: list[bpy.types.Object], name: str, x: float, y0: float, y1: f
 
 def build_cat_sleep(parts: list[bpy.types.Object]) -> None:
     orange = material("Cat orange", "#F4A261")
-    tail = material("Cat tail shading", "#D98245")
+    stripe = material("Cat broad stripes", "#D98245")
     inner = material("Cat ear inner", "#F6C1A0")
     cream = material("Cat muzzle", "#FFE3C2")
     dark = material("Cat face", "#74452F")
-    add_sphere(parts, "curled-body", (0.70, 0.30, 0.50), (0, 0.15, 0), orange,
-               segments=9, rings=4, smooth=True)
-    add_sphere(parts, "resting-head", (0.34, 0.24, 0.32), (0.17, 0.21, 0.08), orange,
-               segments=8, rings=4, smooth=True)
-    cat_ear(parts, "left-ear", 0.08, 0.27, 0.35, 0.17, orange, inner, width=0.12, depth=0.09)
-    cat_ear(parts, "right-ear", 0.25, 0.27, 0.35, 0.17, orange, inner, width=0.12, depth=0.09)
-    add_face_ellipse(parts, "soft-muzzle", (0.17, 0.175, 0.245), 0.105, 0.050, cream, 6)
+    add_sphere(parts, "faceted-curled-body", (0.70, 0.27, 0.48), (0, 0.135, 0), orange,
+               segments=10, rings=5, smooth=True)
+    add_sphere(parts, "wedge-resting-head", (0.30, 0.22, 0.28), (0.19, 0.22, 0.10), orange,
+               segments=10, rings=5, smooth=True)
+    cat_ear(parts, "left-ear", 0.12, 0.25, 0.35, 0.10, orange, inner, width=0.09, depth=0.08)
+    cat_ear(parts, "right-ear", 0.25, 0.25, 0.35, 0.10, orange, inner, width=0.09, depth=0.08)
+    add_sphere(parts, "left-front-paw", (0.12, 0.06, 0.14), (0.10, 0.03, 0.19), cream,
+               segments=6, rings=3, smooth=True)
+    add_sphere(parts, "right-front-paw", (0.12, 0.06, 0.14), (0.23, 0.03, 0.19), cream,
+               segments=6, rings=3, smooth=True)
+    add_face_ellipse(parts, "left-muzzle", (0.145, 0.205, 0.242), 0.065, 0.038, cream, 8)
+    add_face_ellipse(parts, "right-muzzle", (0.225, 0.205, 0.242), 0.065, 0.038, cream, 8)
     add_mesh(parts, "closed-eye-left",
-             [(0.070, 0.235, 0.248), (0.140, 0.230, 0.248),
-              (0.140, 0.220, 0.248), (0.070, 0.225, 0.248)], [(0, 1, 2, 3)], dark)
+             [(0.105, 0.245, 0.244), (0.155, 0.238, 0.244), (0.150, 0.228, 0.244)],
+             [(0, 1, 2)], dark)
     add_mesh(parts, "closed-eye-right",
-             [(0.200, 0.230, 0.248), (0.270, 0.235, 0.248),
-              (0.270, 0.225, 0.248), (0.200, 0.220, 0.248)], [(0, 1, 2, 3)], dark)
-    add_mesh(parts, "nose", [(0.155, 0.195, 0.250), (0.185, 0.195, 0.250),
-                              (0.170, 0.176, 0.250)], [(0, 1, 2)], dark)
-    add_tapered_segment(parts, "curled-tail-base", (-0.20, 0.15, -0.12), (-0.31, 0.13, 0.02),
-                        0.050, 0.045, tail, 5)
-    add_tapered_segment(parts, "curled-tail-tip", (-0.31, 0.13, 0.02), (-0.24, 0.07, 0.18),
-                        0.045, 0.030, tail, 5)
+             [(0.215, 0.238, 0.244), (0.265, 0.245, 0.244), (0.220, 0.228, 0.244)],
+             [(0, 1, 2)], dark)
+    add_mesh(parts, "nose", [(0.170, 0.208, 0.245), (0.200, 0.208, 0.245),
+                              (0.185, 0.188, 0.245)], [(0, 1, 2)], dark)
+    add_tapered_segment(parts, "curled-tail-base", (-0.23, 0.13, -0.12), (-0.31, 0.10, 0.00),
+                        0.055, 0.050, stripe, 6, smooth=True)
+    add_tapered_segment(parts, "curled-tail-middle", (-0.31, 0.10, 0.00), (-0.25, 0.075, 0.15),
+                        0.050, 0.042, orange, 6, smooth=True)
+    add_tapered_segment(parts, "curled-tail-tip", (-0.25, 0.075, 0.15), (-0.10, 0.065, 0.22),
+                        0.042, 0.025, stripe, 6, smooth=True)
+    add_mesh(parts, "body-stripe-left",
+             [(-0.18, 0.20, 0.225), (-0.08, 0.245, 0.225), (-0.10, 0.13, 0.245)],
+             [(0, 1, 2)], stripe)
+    add_mesh(parts, "body-stripe-right",
+             [(0.00, 0.255, 0.225), (0.10, 0.235, 0.225), (0.06, 0.14, 0.245)],
+             [(0, 1, 2)], stripe)
 
 
 def build_cat_stand(parts: list[bpy.types.Object]) -> None:
     orange = material("Cat orange", "#F4A261")
-    tail = material("Cat tail shading", "#D98245")
+    stripe = material("Cat broad stripes", "#D98245")
     inner = material("Cat ear inner", "#F6C1A0")
     cream = material("Cat muzzle", "#FFE3C2")
     dark = material("Cat face", "#74452F")
     eye = material("Cat eyes", "#3F5F48")
-    shine = material("Cat eye shine", "#FFFFFF")
-    add_sphere(parts, "pear-body", (0.42, 0.42, 0.32), (-0.02, 0.23, -0.02), orange,
-               segments=8, rings=4, smooth=True)
-    add_sphere(parts, "round-head", (0.50, 0.32, 0.40), (0.10, 0.43, 0), orange,
-               segments=8, rings=4, smooth=True)
-    for x in (-0.11, 0.12):
-        add_tapered_segment(parts, f"front-leg-{x}", (x, 0.0, 0.08), (x, 0.21, 0.04),
-                            0.055, 0.070, orange, 5)
-    cat_ear(parts, "left-ear", -0.01, 0.52, 0.60, 0.04, orange, inner, width=0.13, depth=0.10)
-    cat_ear(parts, "right-ear", 0.21, 0.52, 0.60, 0.04, orange, inner, width=0.13, depth=0.10)
-    add_tapered_segment(parts, "upright-tail-base", (-0.18, 0.20, -0.08), (-0.31, 0.33, -0.05),
-                        0.055, 0.045, tail, 5)
-    add_tapered_segment(parts, "upright-tail-tip", (-0.31, 0.33, -0.05), (-0.29, 0.50, 0),
-                        0.045, 0.032, tail, 5)
-    add_face_ellipse(parts, "soft-muzzle", (0.10, 0.405, 0.203), 0.115, 0.060, cream, 5)
-    add_face_ellipse(parts, "chest-fur", (0.02, 0.245, 0.143), 0.10, 0.13, cream, 6)
-    add_face_ellipse(parts, "eye-left", (0.025, 0.468, 0.205), 0.024, 0.032, eye, 5)
-    add_face_ellipse(parts, "eye-right", (0.175, 0.468, 0.205), 0.024, 0.032, eye, 5)
-    add_mesh(parts, "eye-glint-left", [(0.018, 0.485, 0.208), (0.030, 0.487, 0.208),
-                                        (0.021, 0.475, 0.208)], [(0, 1, 2)], shine)
-    add_mesh(parts, "eye-glint-right", [(0.168, 0.485, 0.208), (0.180, 0.487, 0.208),
-                                         (0.171, 0.475, 0.208)], [(0, 1, 2)], shine)
-    add_mesh(parts, "nose", [(0.083, 0.425, 0.208), (0.117, 0.425, 0.208),
-                              (0.100, 0.401, 0.208)], [(0, 1, 2)], dark)
-    add_arc_band(parts, "smile", (0.10, 0.410, 0.209), 0.047, 0.010,
+    add_sphere(parts, "faceted-torso", (0.46, 0.30, 0.34), (0, 0.29, -0.06), orange,
+               segments=10, rings=5, smooth=True)
+    add_sphere(parts, "faceted-wedge-head", (0.46, 0.28, 0.32), (0, 0.45, 0.10), orange,
+               segments=10, rings=5, smooth=True)
+    for x in (-0.14, 0.14):
+        add_tapered_segment(parts, f"front-leg-{x}", (x, 0.0, 0.13), (x, 0.23, 0.11),
+                            0.055, 0.043, orange, 6, smooth=True)
+        add_tapered_segment(parts, f"hind-leg-{x}", (x, 0.0, -0.13), (x, 0.20, -0.12),
+                            0.060, 0.045, orange, 6, smooth=True)
+        add_sphere(parts, f"front-paw-{x}", (0.13, 0.06, 0.14), (x, 0.03, 0.15), cream,
+                   segments=6, rings=3, smooth=True)
+        add_sphere(parts, f"hind-paw-{x}", (0.13, 0.06, 0.14), (x, 0.03, -0.14), orange,
+                   segments=6, rings=3, smooth=True)
+    cat_ear(parts, "left-ear", -0.12, 0.50, 0.60, 0.04, orange, inner, width=0.15, depth=0.10)
+    cat_ear(parts, "right-ear", 0.12, 0.50, 0.60, 0.04, orange, inner, width=0.15, depth=0.10)
+    add_tapered_segment(parts, "upright-tail-base", (-0.18, 0.28, -0.12), (-0.38, 0.39, -0.10),
+                        0.055, 0.050, stripe, 6, smooth=True)
+    add_tapered_segment(parts, "upright-tail-middle", (-0.38, 0.39, -0.10), (-0.38, 0.53, -0.04),
+                        0.050, 0.043, orange, 6, smooth=True)
+    add_tapered_segment(parts, "upright-tail-tip", (-0.38, 0.53, -0.04), (-0.31, 0.58, 0.02),
+                        0.043, 0.025, stripe, 6, smooth=True)
+    add_face_ellipse(parts, "left-muzzle", (-0.055, 0.430, 0.264), 0.070, 0.045, cream, 8)
+    add_face_ellipse(parts, "right-muzzle", (0.055, 0.430, 0.264), 0.070, 0.045, cream, 8)
+    add_face_ellipse(parts, "chest-plane", (0, 0.285, 0.113), 0.095, 0.115, cream, 8)
+    add_face_ellipse(parts, "eye-white-left", (-0.095, 0.485, 0.264), 0.045, 0.055, cream, 8)
+    add_face_ellipse(parts, "eye-white-right", (0.095, 0.485, 0.264), 0.045, 0.055, cream, 8)
+    add_face_ellipse(parts, "eye-left", (-0.095, 0.485, 0.267), 0.020, 0.032, eye, 6)
+    add_face_ellipse(parts, "eye-right", (0.095, 0.485, 0.267), 0.020, 0.032, eye, 6)
+    add_mesh(parts, "nose", [(-0.018, 0.438, 0.269), (0.018, 0.438, 0.269),
+                              (0, 0.414, 0.269)], [(0, 1, 2)], dark)
+    add_arc_band(parts, "smile", (0, 0.422, 0.270), 0.047, 0.010,
                  math.pi, 2 * math.pi, dark, 3)
-    add_mesh(parts, "left-toes", [(-0.135, 0.030, 0.138), (-0.085, 0.030, 0.138),
-                                   (-0.085, 0.020, 0.138), (-0.135, 0.020, 0.138)],
-             [(0, 1, 2, 3)], dark)
-    add_mesh(parts, "right-toes", [(0.095, 0.030, 0.138), (0.145, 0.030, 0.138),
-                                    (0.145, 0.020, 0.138), (0.095, 0.020, 0.138)],
-             [(0, 1, 2, 3)], dark)
+    add_mesh(parts, "body-stripe-left",
+             [(-0.20, 0.37, 0.145), (-0.08, 0.42, 0.145), (-0.12, 0.29, 0.155)],
+             [(0, 1, 2)], stripe)
+    add_mesh(parts, "body-stripe-right",
+             [(0.20, 0.37, 0.145), (0.08, 0.42, 0.145), (0.12, 0.29, 0.155)],
+             [(0, 1, 2)], stripe)
 
 
 def build_partner(parts: list[bpy.types.Object]) -> None:
     blue = material("Piko blue", "#8BD3DD")
     white = material("Piko belly", "#F7FCFC")
     dark = material("Piko eyes", "#23272B")
-    cheek = material("Piko cheeks", "#F3A6B5")
     yellow = material("Piko lamp", "#FFD166")
-    add_sphere(parts, "soft-body", (0.54, 0.52, 0.50), (0, 0.31, 0), blue,
-               segments=12, rings=4, smooth=True)
-    patch_vertices = [(0, 0.205, 0.231)]
-    patch_count = 12
-    for index in range(patch_count):
-        angle = 2 * math.pi * index / patch_count
-        x = math.cos(angle) * 0.145
-        y = 0.205 + math.sin(angle) * 0.105
-        normalized = (x / 0.27) ** 2 + ((y - 0.31) / 0.26) ** 2
-        z = 0.25 * math.sqrt(max(0.0, 1.0 - normalized)) + 0.003
-        patch_vertices.append((x, y, z))
-    patch = add_mesh(parts, "belly-patch", patch_vertices,
-                     [(0, index + 1, (index + 1) % patch_count + 1)
-                      for index in range(patch_count)], white)
-    for polygon in patch.data.polygons:
-        polygon.use_smooth = True
-    for x in (-0.105, 0.105):
-        add_face_ellipse(parts, f"eye-{x}", (x, 0.430, 0.255), 0.036, 0.048, dark, 6)
-        add_mesh(parts, f"eye-glint-{x}",
-                 [(x - 0.010, 0.455, 0.258), (x + 0.004, 0.458, 0.258),
-                  (x - 0.006, 0.442, 0.258)], [(0, 1, 2)], white)
-    for x in (-0.18, 0.18):
-        add_face_ellipse(parts, f"cheek-{x}", (x, 0.345, 0.256), 0.031, 0.020, cheek, 5)
-    add_arc_band(parts, "friendly-smile", (0, 0.355, 0.258), 0.050, 0.012,
-                 math.pi, 2 * math.pi, dark, 3)
-    add_tapered_segment(parts, "left-arm", (-0.22, 0.36, 0), (-0.27, 0.23, 0.03),
-                        0.052, 0.035, blue, 6)
-    add_tapered_segment(parts, "right-arm", (0.22, 0.36, 0), (0.27, 0.23, 0.03),
-                        0.052, 0.035, blue, 6)
-    for x in (-0.15, 0.15):
-        add_vertical_elliptic_cylinder(parts, f"foot-{x}", 0.18, 0.20, 0.10,
-                                       (x, 0.05, 0.06), blue, 6, smooth=True)
-    add_box(parts, "lamp-stem", (0.040, 0.080, 0.040), (0, 0.600, 0), yellow)
-    add_sphere(parts, "lamp", (0.12, 0.12, 0.12), (0, 0.64, 0), yellow,
+    add_profiled_body(parts, "tapered-torso",
+                      [(0.12, 0.11, 0.11), (0.30, 0.16, 0.14), (0.42, 0.10, 0.10)],
+                      blue, segments=8, smooth=True)
+    add_sphere(parts, "faceted-head", (0.44, 0.26, 0.44), (0, 0.51, 0.03), blue,
+               segments=10, rings=5, smooth=True)
+    for x in (-0.10, 0.10):
+        add_tapered_segment(parts, f"leg-{x}", (x, 0.08, 0), (x, 0.25, 0),
+                            0.052, 0.042, blue, 6, smooth=True)
+    add_tapered_segment(parts, "left-arm", (-0.13, 0.38, 0), (-0.27, 0.21, 0.04),
+                        0.050, 0.038, blue, 6, smooth=True)
+    add_tapered_segment(parts, "right-arm", (0.13, 0.38, 0), (0.27, 0.21, 0.04),
+                        0.050, 0.038, blue, 6, smooth=True)
+    add_sphere(parts, "left-hand", (0.10, 0.12, 0.12), (-0.28, 0.18, 0.05), blue,
                segments=6, rings=3, smooth=True)
+    add_sphere(parts, "right-hand", (0.10, 0.12, 0.12), (0.28, 0.18, 0.05), blue,
+               segments=6, rings=3, smooth=True)
+    add_beveled_box(parts, "left-foot", (0.18, 0.08, 0.24), (-0.12, 0.04, 0.04),
+                    blue, bevel=0.025, smooth=True)
+    add_beveled_box(parts, "right-foot", (0.18, 0.08, 0.24), (0.12, 0.04, 0.04),
+                    blue, bevel=0.025, smooth=True)
+    add_face_ellipse(parts, "belly-panel", (0, 0.285, 0.145), 0.095, 0.13, white, 10)
+    for x in (-0.090, 0.090):
+        add_face_ellipse(parts, f"eye-white-{x}", (x, 0.535, 0.253), 0.043, 0.055, white, 10)
+        add_face_ellipse(parts, f"eye-{x}", (x, 0.535, 0.256), 0.018, 0.030, dark, 8)
+    add_arc_band(parts, "friendly-smile", (0, 0.470, 0.256), 0.045, 0.010,
+                 math.pi, 2 * math.pi, dark, 1)
+    add_tapered_segment(parts, "lamp-stalk-base", (0, 0.60, 0), (0.02, 0.635, 0.01),
+                        0.030, 0.027, blue, 6, smooth=True)
+    add_tapered_segment(parts, "lamp-stalk-tip", (0.02, 0.635, 0.01), (0.05, 0.645, 0.04),
+                        0.027, 0.022, blue, 6, smooth=True)
+    add_disc_xy(parts, "exploration-lamp", (0.05, 0.645, 0.06), 0.050, 0.035,
+                yellow, vertices_count=10)
+    add_face_ellipse(parts, "lamp-glow", (0.05, 0.645, 0.079), 0.025, 0.025, white, 8)
 
 
 def build_amanojaku(parts: list[bpy.types.Object]) -> None:
     body = material("Amanojaku body", "#B4A7D6")
-    body_shadow = material("Amanojaku accents", "#8272B2")
     purple = material("Spiral hat purple", "#8E5A9E")
     yellow = material("Spiral hat yellow", "#FFD166")
-    cheek = material("Amanojaku cheeks", "#E5A6C6")
-    white = material("Amanojaku eye glint", "#FFFFFF")
+    white = material("Amanojaku eyes", "#FFF3D4")
     dark = material("Friendly face", "#3A3F47")
-    add_sphere(parts, "slender-body", (0.58, 0.84, 0.50), (0, 0.51, 0), body,
-               segments=8, rings=4, smooth=True)
-    add_sphere(parts, "round-face", (0.56, 0.40, 0.52), (0, 0.86, 0.02), body,
-               segments=8, rings=4, smooth=True)
-    for x in (-0.17, 0.17):
-        add_vertical_elliptic_cylinder(parts, f"shoe-{x}", 0.24, 0.30, 0.14,
-                                       (x, 0.07, 0.06), body_shadow, 6, smooth=True)
-    add_tapered_segment(parts, "left-arm", (-0.27, 0.72, 0), (-0.34, 0.38, 0.04),
-                        0.070, 0.052, body, 6)
-    add_tapered_segment(parts, "right-arm", (0.27, 0.72, 0), (0.34, 0.38, 0.04),
-                        0.070, 0.052, body, 6)
-    add_vertical_elliptic_cylinder(parts, "soft-hat-brim", 0.90, 0.60, 0.07,
-                                   (0, 1.075, 0), purple, 8, smooth=True)
-    add_vertical_cone(parts, "soft-hat", 0.30, 0.045, 0.31, (0, 1.25, 0), purple, 8, smooth=True)
-    add_sphere(parts, "hat-tip", (0.10, 0.10, 0.10), (0.07, 1.35, 0), purple,
+    add_profiled_body(parts, "tapered-body",
+                      [(0.38, 0.11, 0.11), (0.56, 0.17, 0.14),
+                       (0.74, 0.16, 0.14), (0.84, 0.12, 0.11)],
+                      body, segments=8, smooth=True)
+    add_sphere(parts, "faceted-face", (0.46, 0.32, 0.42), (0, 0.94, 0.01), body,
+               segments=10, rings=5, smooth=True)
+    for x in (-0.11, 0.11):
+        add_tapered_segment(parts, f"leg-{x}", (x, 0.14, 0), (x, 0.53, 0),
+                            0.052, 0.043, body, 6, smooth=True)
+    add_tapered_segment(parts, "left-arm", (-0.16, 0.75, 0), (-0.35, 0.40, 0.04),
+                        0.052, 0.038, body, 6, smooth=True)
+    add_tapered_segment(parts, "right-arm", (0.16, 0.75, 0), (0.35, 0.40, 0.04),
+                        0.052, 0.038, body, 6, smooth=True)
+    add_sphere(parts, "left-hand", (0.12, 0.14, 0.14), (-0.38, 0.35, 0.05), body,
                segments=6, rings=3, smooth=True)
-    for index, (start, end, z) in enumerate((
-        ((-0.25, 1.16), (0.22, 1.20), 0.235),
-        ((0.17, 1.25), (-0.17, 1.29), 0.170),
-        ((-0.09, 1.34), (0.09, 1.365), 0.105),
-    )):
-        add_beam_xy(parts, f"hat-spiral-{index}", start, end, 0.035, z, 0.010, yellow)
-    for x in (-0.105, 0.105):
-        add_face_ellipse(parts, f"eye-{x}", (x, 0.895, 0.283), 0.035, 0.046, dark, 6)
-        add_mesh(parts, f"eye-glint-{x}",
-                 [(x - 0.010, 0.919, 0.286), (x + 0.004, 0.921, 0.286),
-                  (x - 0.006, 0.906, 0.286)], [(0, 1, 2)], white)
-    for x in (-0.17, 0.17):
-        add_face_ellipse(parts, f"cheek-{x}", (x, 0.805, 0.284), 0.038, 0.022, cheek, 5)
-    add_arc_band(parts, "mischievous-smile", (0, 0.825, 0.286), 0.105, 0.018,
-                 math.pi, 2 * math.pi, dark, 4)
+    add_sphere(parts, "right-hand", (0.12, 0.14, 0.14), (0.38, 0.35, 0.05), body,
+               segments=6, rings=3, smooth=True)
+    add_beveled_box(parts, "left-shoe", (0.24, 0.14, 0.34), (-0.15, 0.07, 0.06),
+                    purple, bevel=0.035, smooth=True)
+    add_beveled_box(parts, "right-shoe", (0.24, 0.14, 0.34), (0.15, 0.07, 0.06),
+                    purple, bevel=0.035, smooth=True)
+    for x in (-0.13, 0.13):
+        add_vertical_cylinder(parts, f"ankle-cuff-{x}", 0.085, 0.07, (x, 0.17, 0),
+                              purple, vertices=8, smooth=True)
+    add_box(parts, "left-wrist-cuff", (0.11, 0.08, 0.12), (-0.35, 0.43, 0.04), purple)
+    add_box(parts, "right-wrist-cuff", (0.11, 0.08, 0.12), (0.35, 0.43, 0.04), purple)
+    add_extruded_profile(parts, "rigid-cape",
+                         [(-0.28, 0.88), (-0.20, 0.56), (0.20, 0.56), (0.28, 0.88)],
+                         -0.30, -0.10, purple)
+    add_vertical_elliptic_cylinder(parts, "thick-collar", 0.50, 0.44, 0.09,
+                                   (0, 0.84, 0), purple, 8, smooth=True)
+    hat_points = [
+        (0, 1.055, 0), (-0.08, 1.22, 0), (0.00, 1.34, 0),
+        (0.13, 1.33, 0), (0.24, 1.25, 0),
+    ]
+    hat_radii = [0.20, 0.16, 0.12, 0.08, 0.045]
+    hat_materials = [purple, yellow, purple, yellow]
+    add_bent_tube(parts, "continuous-striped-hat", hat_points, hat_radii,
+                  hat_materials, sides=8, smooth=True)
+    add_sphere(parts, "hat-end-ball", (0.10, 0.10, 0.10), (0.25, 1.24, 0), yellow,
+               segments=8, rings=4, smooth=True)
+    add_extruded_profile(parts, "left-hair-lock",
+                         [(-0.25, 0.78), (-0.18, 1.04), (-0.05, 0.82)],
+                         -0.10, 0.10, purple)
+    add_extruded_profile(parts, "right-hair-lock",
+                         [(0.25, 0.78), (0.18, 1.04), (0.05, 0.82)],
+                         -0.10, 0.10, purple)
+    for x in (-0.095, 0.095):
+        add_face_ellipse(parts, f"eye-white-{x}", (x, 0.965, 0.222), 0.040, 0.052, white, 10)
+        add_face_ellipse(parts, f"eye-{x}", (x, 0.965, 0.225), 0.017, 0.030, dark, 8)
+    add_arc_band(parts, "mischievous-smile", (0, 0.895, 0.225), 0.075, 0.012,
+                 math.pi, 2 * math.pi, dark, 3)
+    add_face_ellipse(parts, "gold-clasp", (0, 0.835, 0.225), 0.060, 0.060, yellow, 10)
+    add_face_ellipse(parts, "clasp-center", (0, 0.835, 0.228), 0.030, 0.030, purple, 8)
+    add_mesh(parts, "left-shoe-stripe",
+             [(-0.18, 0.02, 0.262), (-0.11, 0.02, 0.262), (-0.12, 0.13, 0.262)],
+             [(0, 1, 2)], yellow)
+    add_mesh(parts, "right-shoe-stripe",
+             [(0.18, 0.02, 0.262), (0.11, 0.02, 0.262), (0.12, 0.13, 0.262)],
+             [(0, 1, 2)], yellow)
 
 
 def build_passenger(parts: list[bpy.types.Object]) -> None:
@@ -736,24 +856,42 @@ def build_passenger(parts: list[bpy.types.Object]) -> None:
     dark = material("Passenger face", "#3A3F47")
     hair = material("Passenger hair", "#6B4E2E")
     white = material("Passenger collar", "#F7F5EE")
-    add_profiled_body(parts, "rounded-coat",
-                      [(0.00, 0.20, 0.15), (0.18, 0.24, 0.17),
-                       (0.84, 0.28, 0.18), (1.04, 0.18, 0.14)],
-                      blue, segments=6, smooth=True)
-    add_sphere(parts, "head", (0.60, 0.56, 0.40), (0, 1.32, 0), skin,
+    brown = material("Passenger shoes", "#6B4E2E")
+    gold = material("Passenger cap badge", "#FFD166")
+    add_profiled_body(parts, "angular-coat",
+                      [(0.18, 0.23, 0.14), (0.78, 0.27, 0.16), (1.12, 0.22, 0.14)],
+                      blue, segments=8, smooth=True)
+    add_sphere(parts, "hair-shell", (0.48, 0.30, 0.38), (0, 1.33, -0.02), hair,
                segments=8, rings=4, smooth=True)
-    add_profiled_body(parts, "hair-cap", [(1.47, 0.26, 0.16), (1.60, 0.12, 0.08)],
-                      hair, segments=5, smooth=True)
-    for x in (-0.095, 0.095):
-        add_face_ellipse(parts, f"eye-{x}", (x, 1.335, 0.203), 0.022, 0.030, dark, 4)
-    add_mesh(parts, "nose", [(-0.012, 1.290, 0.205), (0.012, 1.290, 0.205),
-                              (0, 1.272, 0.205)], [(0, 1, 2)], dark)
-    add_arc_band(parts, "smile", (0, 1.285, 0.207), 0.052, 0.010,
-                 math.pi, 2 * math.pi, dark, 2)
-    add_mesh(parts, "collar-left", [(-0.16, 1.04, 0.145), (0, 0.91, 0.183),
-                                     (0, 1.04, 0.145)], [(0, 1, 2)], white)
-    add_mesh(parts, "collar-right", [(0, 1.04, 0.145), (0, 0.91, 0.183),
-                                      (0.16, 1.04, 0.145)], [(0, 1, 2)], white)
+    add_sphere(parts, "faceted-head", (0.44, 0.38, 0.36), (0, 1.32, 0.04), skin,
+               segments=10, rings=5, smooth=True)
+    add_tapered_segment(parts, "left-sleeve", (-0.20, 1.04, 0), (-0.29, 0.47, 0.04),
+                        0.050, 0.040, blue, 6, smooth=True)
+    add_tapered_segment(parts, "right-sleeve", (0.20, 1.04, 0), (0.29, 0.47, 0.04),
+                        0.050, 0.040, blue, 6, smooth=True)
+    add_sphere(parts, "left-hand", (0.10, 0.13, 0.12), (-0.30, 0.43, 0.08), skin,
+               segments=6, rings=3, smooth=True)
+    add_sphere(parts, "right-hand", (0.10, 0.13, 0.12), (0.30, 0.43, 0.08), skin,
+               segments=6, rings=3, smooth=True)
+    add_box(parts, "left-trouser", (0.12, 0.25, 0.16), (-0.12, 0.22, 0), dark)
+    add_box(parts, "right-trouser", (0.12, 0.25, 0.16), (0.12, 0.22, 0), dark)
+    add_beveled_box(parts, "left-shoe", (0.22, 0.16, 0.30), (-0.13, 0.08, 0.05),
+                    brown, bevel=0.025, smooth=True)
+    add_beveled_box(parts, "right-shoe", (0.22, 0.16, 0.30), (0.13, 0.08, 0.05),
+                    brown, bevel=0.025, smooth=True)
+    add_sphere(parts, "cap-crown", (0.50, 0.18, 0.38), (0, 1.51, -0.01), blue,
+               segments=8, rings=4, smooth=True)
+    add_beveled_box(parts, "cap-brim", (0.46, 0.045, 0.30), (0, 1.455, 0.09),
+                    blue, bevel=0.015, smooth=True)
+    for x in (-0.085, 0.085):
+        add_face_ellipse(parts, f"eye-{x}", (x, 1.335, 0.223), 0.027, 0.040, dark, 10)
+    add_arc_band(parts, "smile", (0, 1.270, 0.225), 0.045, 0.010,
+                 math.pi, 2 * math.pi, dark, 3)
+    add_mesh(parts, "collar-left", [(-0.15, 1.10, 0.145), (0, 0.98, 0.165),
+                                     (0, 1.10, 0.145)], [(0, 1, 2)], white)
+    add_mesh(parts, "collar-right", [(0, 1.10, 0.145), (0, 0.98, 0.165),
+                                      (0.15, 1.10, 0.145)], [(0, 1, 2)], white)
+    add_face_ellipse(parts, "cap-badge", (0.18, 1.53, 0.185), 0.032, 0.032, gold, 8)
 
 
 def build_parcel(parts: list[bpy.types.Object]) -> None:
@@ -816,9 +954,9 @@ def setup_preview(model: bpy.types.Object, model_name: str, minimum: list[float]
     scene.world = world
     world.use_nodes = True
     world.node_tree.nodes["Background"].inputs["Color"].default_value = (
-        (0.20, 0.22, 0.24, 1.0) if is_character else (0.72, 0.72, 0.72, 1.0)
+        (0.72, 0.68, 0.61, 1.0) if is_character else (0.72, 0.72, 0.72, 1.0)
     )
-    world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.40 if is_character else 0.45
+    world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.48 if is_character else 0.45
 
     width = maximum[0] - minimum[0]
     height = maximum[1] - minimum[1]
@@ -827,7 +965,7 @@ def setup_preview(model: bpy.types.Object, model_name: str, minimum: list[float]
               (minimum[2] + maximum[2]) / 2)
     span = max(width, height, depth)
     ground_size = max(width, depth, 1.0) * 2.8
-    ground_mat = material("Preview ground", "#C6CCCF" if is_character else "#D8D8D4")
+    ground_mat = material("Preview ground", "#DED5C8" if is_character else "#D8D8D4")
     bpy.ops.mesh.primitive_plane_add(size=ground_size, location=(center[0], -center[2], -0.012))
     bpy.context.object.data.materials.append(ground_mat)
 
