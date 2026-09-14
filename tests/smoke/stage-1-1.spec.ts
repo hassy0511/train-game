@@ -56,11 +56,14 @@ test('stage 1-1: title, opening, and a graded stop at the first station', async 
   await setNotch(page, 2);
   await expect(page.locator('#stop-gauge')).toBeVisible({ timeout: 60_000 });
   await page.locator('#camera').dispatchEvent('pointerdown');
+  await expect(page.locator('#camera-menu')).toBeVisible();
+  await page.screenshot({ path: resolve(OUT, '11a-camera-menu.png') });
+  await page.locator('.camera-tile[data-mode="chase"]').dispatchEvent('pointerdown');
   await expect(app).toHaveAttribute('data-camera', 'chase');
+  await expect(page.locator('#camera-menu')).toBeHidden();
   await page.screenshot({ path: resolve(OUT, '11b-chase-gauge.png') });
   await page.locator('#camera').dispatchEvent('pointerdown');
-  await page.locator('#camera').dispatchEvent('pointerdown');
-  await page.locator('#camera').dispatchEvent('pointerdown');
+  await page.locator('.camera-tile[data-mode="cab"]').dispatchEvent('pointerdown');
   await expect(app).toHaveAttribute('data-camera', 'cab');
 
   // Stop with the train front on the line: station "sakura" stop line is at 155 m (front);

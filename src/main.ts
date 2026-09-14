@@ -82,13 +82,17 @@ async function boot(): Promise<void> {
     const mode = cameraOverride ?? userCamera;
     view.setCamera(mode, snap);
     app.dataset.camera = mode;
-    cameraButton.setLabel(CAMERA_LABELS[mode]);
+    cameraButton.setMode(mode);
   };
-  const cameraButton = createCameraButton(actionButtons, () => {
-    userCamera = CAMERA_MODES[(CAMERA_MODES.indexOf(userCamera) + 1) % CAMERA_MODES.length];
-    cameraOverride = null;
-    applyCamera();
-  });
+  const cameraButton = createCameraButton(
+    actionButtons,
+    CAMERA_MODES.map((mode) => ({ mode, label: CAMERA_LABELS[mode] })),
+    (mode) => {
+      userCamera = mode;
+      cameraOverride = null;
+      applyCamera();
+    },
+  );
   applyCamera(true);
 
   train.events.on('hardBrake', () => {

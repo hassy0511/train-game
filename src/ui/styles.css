@@ -544,3 +544,50 @@ body {
 .round-button .ring.is-camera {
   background: #4f7fb0;
 }
+
+/* ---- camera picker ---- */
+.round-button.is-open .face {
+  background: #dbe9f7;
+}
+
+.camera-menu {
+  position: absolute;
+  right: calc(var(--safe-right) + 130px);
+  bottom: calc(var(--safe-bottom) + 26px);
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 22px;
+  background: var(--panel);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.camera-tile {
+  width: 84px;
+  height: 84px;
+  border: 3px solid transparent;
+  border-radius: 18px;
+  padding: 6px 4px 4px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.camera-tile svg {
+  width: 44px;
+  height: 44px;
+}
+
+.camera-tile.is-active {
+  border-color: var(--accent);
+  background: #fff4dc;
+}
