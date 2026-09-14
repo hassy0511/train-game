@@ -15,18 +15,18 @@ PREVIEW_DIR = ROOT / "assets" / "previews"
 # Sizes are exported glTF X/Y/Z extents.  The platform entries follow the
 # runtime contract in src/view/placeholder-sizes.ts: +Z is travel direction.
 ASSET_SPECS = {
-    "house-a": ((8.0, 7.0, 7.0), 200),
-    "house-b": ((10.0, 8.0, 8.0), 240),
-    "house-c": ((7.0, 9.0, 7.0), 240),
-    "shop": ((12.0, 6.0, 8.0), 260),
-    "tower": ((6.0, 18.0, 6.0), 200),
+    "house-a": ((8.0, 7.0, 7.0), 1200),
+    "house-b": ((10.0, 8.0, 8.0), 2000),
+    "house-c": ((7.0, 9.0, 7.0), 1800),
+    "shop": ((12.0, 6.0, 8.0), 2500),
+    "tower": ((6.0, 18.0, 6.0), 1700),
     # The building is 12 m high; the ticket explicitly requires a 16 m pole.
-    "hq": ((20.0, 16.0, 14.0), 400),
-    "platform": ((4.0, 1.0, 30.0), 80),
-    "platform-roof": ((4.0, 4.2, 12.0), 160),
-    "station-sign": ((2.4, 3.0, 0.3), 60),
-    "crossing-gate": ((4.5, 3.2, 0.6), 120),
-    "crossing-sign": ((1.2, 3.0, 0.2), 60),
+    "hq": ((20.0, 16.0, 14.0), 3000),
+    "platform": ((4.0, 1.0, 30.0), 700),
+    "platform-roof": ((4.0, 4.2, 12.0), 1200),
+    "station-sign": ((2.4, 3.0, 0.3), 600),
+    "crossing-gate": ((4.5, 3.2, 0.6), 900),
+    "crossing-sign": ((1.2, 3.0, 0.2), 500),
     # Revised for the user-approved Variant C style. These remain tiny against
     # the 100k on-screen budget while allowing controlled rounded transitions.
     "cat-sleep": ((0.7, 0.35, 0.5), 3500),
@@ -34,8 +34,8 @@ ASSET_SPECS = {
     "partner": ((0.6, 0.7, 0.5), 5600),
     "amanojaku": ((0.9, 1.4, 0.6), 8200),
     "passenger": ((0.6, 1.6, 0.4), 8200),
-    "parcel": ((0.6, 0.5, 0.6), 40),
-    "goal-flag": ((1.6, 2.4, 0.2), 60),
+    "parcel": ((0.6, 0.5, 0.6), 600),
+    "goal-flag": ((1.6, 2.4, 0.2), 400),
 }
 
 _materials: dict[tuple[str, str], bpy.types.Material] = {}
@@ -46,7 +46,7 @@ def srgb_channel(value: int) -> float:
     return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
 
 
-def material(name: str, hex_color: str) -> bpy.types.Material:
+def material(name: str, hex_color: str, roughness: float = 0.74) -> bpy.types.Material:
     key = (name, hex_color)
     if key in _materials:
         return _materials[key]
@@ -55,7 +55,7 @@ def material(name: str, hex_color: str) -> bpy.types.Material:
     value.use_nodes = True
     value.use_backface_culling = True
     value.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (*rgb, 1.0)
-    value.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.82
+    value.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = roughness
     value.diffuse_color = (*rgb, 1.0)
     _materials[key] = value
     return value
@@ -104,16 +104,130 @@ def add_beveled_box(
     mat: bpy.types.Material,
     bevel: float,
     smooth: bool = False,
+    segments: int = 2,
 ) -> bpy.types.Object:
     obj = add_box(parts, name, size, center, mat)
     modifier = obj.modifiers.new(name="Controlled bevel", type="BEVEL")
     modifier.width = bevel
-    modifier.segments = 1
+    modifier.segments = segments
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.modifier_apply(modifier=modifier.name)
     for polygon in obj.data.polygons:
         polygon.use_smooth = smooth
     return obj
+
+
+def add_front_window(
+    parts: list[bpy.types.Object],
+    name: str,
+    center: tuple[float, float],
+    size: tuple[float, float],
+    front_z: float,
+    frame_mat: bpy.types.Material,
+    glass_mat: bpy.types.Material,
+    frame_width: float,
+    depth: float = 0.16,
+) -> None:
+    """Recessed front-facing window with a structural four-sided frame."""
+    x, y = center
+    width, height = size
+    glass_width = max(width - frame_width * 1.5, frame_width)
+    glass_height = max(height - frame_width * 1.5, frame_width)
+    add_beveled_box(parts, f"{name}-glass", (glass_width, glass_height, depth * 0.35),
+                    (x, y, front_z - depth * 0.78), glass_mat,
+                    bevel=min(frame_width * 0.18, 0.06), smooth=True, segments=1)
+    for suffix, box_size, box_center in (
+        ("top", (width, frame_width, depth), (x, y + height / 2 - frame_width / 2, front_z - depth / 2)),
+        ("bottom", (width, frame_width, depth), (x, y - height / 2 + frame_width / 2, front_z - depth / 2)),
+        ("left", (frame_width, height - frame_width * 2, depth),
+         (x - width / 2 + frame_width / 2, y, front_z - depth / 2)),
+        ("right", (frame_width, height - frame_width * 2, depth),
+         (x + width / 2 - frame_width / 2, y, front_z - depth / 2)),
+    ):
+        add_beveled_box(parts, f"{name}-frame-{suffix}", box_size, box_center,
+                        frame_mat, bevel=min(frame_width * 0.22, 0.07), smooth=True, segments=1)
+    add_beveled_box(parts, f"{name}-sill", (width * 1.08, frame_width * 0.65, depth * 1.28),
+                    (x, y - height / 2 - frame_width * 0.18,
+                     front_z - depth * 0.48), frame_mat,
+                    bevel=min(frame_width * 0.18, 0.05), smooth=True, segments=1)
+
+
+def add_front_door(
+    parts: list[bpy.types.Object],
+    name: str,
+    center_x: float,
+    width: float,
+    height: float,
+    front_z: float,
+    door_mat: bpy.types.Material,
+    trim_mat: bpy.types.Material,
+    depth: float = 0.20,
+) -> None:
+    trim = min(width * 0.12, 0.22)
+    add_beveled_box(parts, f"{name}-slab", (width - trim, height - trim, depth * 0.55),
+                    (center_x, (height - trim) / 2, front_z - depth * 0.76),
+                    door_mat, bevel=min(trim * 0.18, 0.05), smooth=True, segments=1)
+    side_height = height - trim
+    add_beveled_box(parts, f"{name}-left-trim", (trim, side_height, depth),
+                    (center_x - width / 2 + trim / 2, side_height / 2, front_z - depth / 2),
+                    trim_mat, bevel=min(trim * 0.2, 0.06), smooth=True, segments=1)
+    add_beveled_box(parts, f"{name}-right-trim", (trim, side_height, depth),
+                    (center_x + width / 2 - trim / 2, side_height / 2, front_z - depth / 2),
+                    trim_mat, bevel=min(trim * 0.2, 0.06), smooth=True, segments=1)
+    add_beveled_box(parts, f"{name}-top-trim", (width, trim, depth),
+                    (center_x, height - trim / 2, front_z - depth / 2),
+                    trim_mat, bevel=min(trim * 0.2, 0.06), smooth=True, segments=1)
+    add_sphere(parts, f"{name}-handle", (trim * 0.38, trim * 0.38, trim * 0.25),
+               (center_x + width * 0.25, height * 0.50, front_z + 0.01),
+               trim_mat, segments=10, rings=5, smooth=True)
+
+
+def add_sloped_panel(
+    parts: list[bpy.types.Object],
+    name: str,
+    x_min: float,
+    x_max: float,
+    back: tuple[float, float],
+    front: tuple[float, float],
+    thickness: float,
+    mat: bpy.types.Material,
+) -> bpy.types.Object:
+    """Solid panel sloped in exported Y/Z, used for awnings and roof fascia."""
+    back_y, back_z = back
+    front_y, front_z = front
+    vertices = [
+        (x_min, back_y + thickness / 2, back_z), (x_max, back_y + thickness / 2, back_z),
+        (x_max, front_y + thickness / 2, front_z), (x_min, front_y + thickness / 2, front_z),
+        (x_min, back_y - thickness / 2, back_z), (x_max, back_y - thickness / 2, back_z),
+        (x_max, front_y - thickness / 2, front_z), (x_min, front_y - thickness / 2, front_z),
+    ]
+    obj = add_mesh(parts, name, vertices,
+                   [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4),
+                    (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)], mat)
+    return bevel_object(obj, min(thickness * 0.35, 0.06), 2)
+
+
+def add_hipped_roof(
+    parts: list[bpy.types.Object],
+    name: str,
+    width: float,
+    depth: float,
+    base_y: float,
+    top_y: float,
+    ridge_length: float,
+    mat: bpy.types.Material,
+    bevel: float,
+) -> bpy.types.Object:
+    half_w = width / 2
+    half_d = depth / 2
+    half_ridge = ridge_length / 2
+    vertices = [
+        (-half_w, base_y, -half_d), (half_w, base_y, -half_d),
+        (half_w, base_y, half_d), (-half_w, base_y, half_d),
+        (0, top_y, -half_ridge), (0, top_y, half_ridge),
+    ]
+    faces = [(0, 1, 4), (1, 2, 5, 4), (2, 3, 5), (3, 0, 4, 5), (0, 3, 2, 1)]
+    return bevel_object(add_mesh(parts, name, vertices, faces, mat), bevel, 2)
 
 
 def add_vertical_cylinder(
@@ -507,67 +621,124 @@ def build_house_a(parts: list[bpy.types.Object]) -> None:
     wall = material("Warm cream wall", "#F6E7C9")
     roof = material("Coral roof", "#D9694F")
     wood = material("Wood door", "#6B4E2E")
-    glass = material("Soft blue window", "#4F7FB0")
-    add_box(parts, "walls", (8, 5.2, 7), (0, 2.6, 0), wall)
-    add_extruded_profile(parts, "gable-roof", [(-4, 5.2), (0, 7), (4, 5.2)], -3.5, 3.5, roof)
-    add_box(parts, "door", (1.4, 2.4, 0.08), (0, 1.2, 3.50), wood)
+    trim = material("House A warm trim", "#E8CFA4")
+    glass = material("Deep blue glass", "#173E5C", 0.46)
+    add_beveled_box(parts, "foundation", (7.8, 0.45, 6.8), (0, 0.225, 0), trim,
+                    bevel=0.12, smooth=True)
+    add_beveled_box(parts, "walls", (7.6, 4.95, 6.6), (0, 2.675, 0), wall,
+                    bevel=0.16, smooth=True)
+    gable = add_extruded_profile(parts, "gable-roof",
+                                 [(-4.02, 5.15), (0, 7), (4.02, 5.15)], -3.5, 3.5, roof)
+    bevel_object(gable, 0.10, 2)
+    add_front_door(parts, "front-door", 0, 1.55, 2.55, 3.5, wood, trim)
     for x in (-2.5, 2.5):
-        add_box(parts, f"window-{x}", (1.2, 1.2, 0.06), (x, 3.0, 3.50), glass)
+        add_front_window(parts, f"window-{x}", (x, 3.05), (1.35, 1.35),
+                         3.5, trim, glass, 0.16)
+    add_sloped_panel(parts, "door-canopy", -1.05, 1.05,
+                     (2.85, 3.28), (2.58, 3.50), 0.12, roof)
 
 
 def build_house_b(parts: list[bpy.types.Object]) -> None:
     wall = material("Blue white wall", "#DCE9F5")
     roof = material("Blue roof", "#4F7FB0")
-    glass = material("Navy window", "#1F2A44")
+    roof_dark = material("Blue roof shadow", "#2D567F")
+    glass = material("Navy window", "#13263F", 0.43)
     door = material("Blue door", "#3FA7D6")
-    add_box(parts, "walls", (10, 6.8, 8), (0, 3.4, 0), wall)
-    add_box(parts, "square-roof", (10, 1.2, 8), (0, 7.4, 0), roof)
-    add_box(parts, "door", (1.6, 2.6, 0.08), (0, 1.3, 4.00), door)
+    trim = material("House B pale trim", "#B9D1E5")
+    add_beveled_box(parts, "foundation", (9.8, 0.50, 7.8), (0, 0.25, 0), trim,
+                    bevel=0.14, smooth=True)
+    add_beveled_box(parts, "walls", (9.5, 6.45, 7.5), (0, 3.475, 0), wall,
+                    bevel=0.18, smooth=True)
+    add_beveled_box(parts, "square-roof", (10, 1.00, 8), (0, 7.30, 0), roof,
+                    bevel=0.22, smooth=True)
+    add_beveled_box(parts, "roof-cap", (9.2, 0.25, 7.2), (0, 7.875, 0), roof_dark,
+                    bevel=0.10, smooth=True)
+    add_front_door(parts, "front-door", 0, 1.7, 2.75, 4.0, door, trim)
     for x in (-3.2, 3.2):
         for y in (2.0, 4.6):
-            add_box(parts, f"window-{x}-{y}", (1.5, 1.15, 0.06), (x, y, 4.00), glass)
+            add_front_window(parts, f"window-{x}-{y}", (x, y), (1.55, 1.20),
+                             4.0, trim, glass, 0.16)
+    add_sloped_panel(parts, "entrance-canopy", -1.25, 1.25,
+                     (3.15, 3.72), (2.82, 4.0), 0.14, roof)
 
 
 def build_house_c(parts: list[bpy.types.Object]) -> None:
     wall = material("Pink wall", "#F4D6E4")
     roof = material("Purple roof", "#8E5A9E")
-    glass = material("Warm window", "#FFD166")
+    glass = material("Warm window", "#E8A93A", 0.48)
     door = material("Purple door", "#6B4E7A")
-    add_box(parts, "walls", (7, 8.2, 7), (0, 4.1, 0), wall)
-    add_box(parts, "roof", (7, 0.8, 7), (0, 8.6, 0), roof)
-    add_box(parts, "floor-band", (7, 0.18, 0.08), (0, 4.2, 3.50), roof)
-    add_box(parts, "door", (1.2, 2.2, 0.08), (0, 1.1, 3.50), door)
+    trim = material("House C lilac trim", "#B88BC4")
+    add_beveled_box(parts, "foundation", (6.8, 0.48, 6.8), (0, 0.24, 0), trim,
+                    bevel=0.13, smooth=True)
+    add_beveled_box(parts, "walls", (6.5, 7.35, 6.5), (0, 4.125, 0), wall,
+                    bevel=0.17, smooth=True)
+    add_hipped_roof(parts, "hipped-roof", 7.03, 7, 7.65, 9.0, 2.4, roof, 0.10)
+    add_beveled_box(parts, "floor-band", (6.7, 0.24, 0.20), (0, 4.35, 3.40),
+                    trim, bevel=0.06, smooth=True, segments=1)
+    add_front_door(parts, "front-door", 0, 1.35, 2.45, 3.5, door, trim)
     for x in (-2.1, 2.1):
         for y in (2.8, 6.1):
-            add_box(parts, f"window-{x}-{y}", (1.2, 1.25, 0.06), (x, y, 3.50), glass)
+            add_front_window(parts, f"window-{x}-{y}", (x, y), (1.15, 1.38),
+                             3.5, trim, glass, 0.14)
 
 
 def build_shop(parts: list[bpy.types.Object]) -> None:
     wall = material("Butter wall", "#FFF1B8")
     coral = material("Coral awning", "#E9573F")
-    white = material("White awning", "#FFFFFF")
-    glass = material("Shop window", "#4F7FB0")
-    add_box(parts, "shop-body", (12, 5.4, 6.5), (0, 2.7, -0.75), wall)
-    add_box(parts, "flat-roof", (12, 0.6, 6.5), (0, 5.7, -0.75), coral)
+    white = material("White awning", "#F7EEDB")
+    glass = material("Shop window", "#15577A", 0.40)
+    trim = material("Shop gold trim", "#E3B74F")
+    add_beveled_box(parts, "shop-foundation", (11.8, 0.42, 7.7), (0, 0.21, -0.10),
+                    trim, bevel=0.13, smooth=True)
+    add_beveled_box(parts, "shop-body", (11.6, 5.15, 7.4), (0, 2.78, -0.30), wall,
+                    bevel=0.18, smooth=True)
+    add_beveled_box(parts, "flat-roof", (12, 0.65, 8), (0, 5.675, 0), coral,
+                    bevel=0.18, smooth=True)
+    add_beveled_box(parts, "shop-sign-band", (7.5, 0.78, 0.22), (0, 4.65, 3.48),
+                    trim, bevel=0.12, smooth=True)
     for index in range(10):
-        x = -4.5 + index
-        add_box(parts, f"awning-{index}", (1.0, 0.22, 1.5), (x, 3.5, 3.25), coral if index % 2 == 0 else white)
-    add_box(parts, "shop-door", (1.5, 2.7, 0.08), (0, 1.35, 2.50), coral)
+        x0 = -5.0 + index
+        add_sloped_panel(parts, f"awning-{index}", x0, x0 + 1.0,
+                         (3.72, 3.24), (3.30, 4.0), 0.14,
+                         coral if index % 2 == 0 else white)
+    add_front_door(parts, "shop-door", 0, 1.6, 2.75, 3.54, coral, trim)
     for x in (-3.7, 3.7):
-        add_box(parts, f"shop-window-{x}", (2.8, 2.2, 0.06), (x, 1.8, 2.50), glass)
+        add_front_window(parts, f"shop-window-{x}", (x, 1.75), (2.75, 2.20),
+                         3.54, trim, glass, 0.18)
 
 
 def build_tower(parts: list[bpy.types.Object]) -> None:
-    wall = material("Stone wall", "#E8E4D8")
-    roof = material("Green roof", "#5B8C5A")
+    wall = material("Stone wall", "#DCCBAA")
+    roof = material("Green roof", "#426E50")
     clock = material("Clock face", "#FFF1B8")
-    frame = material("Clock frame", "#6B6B6B")
-    door = material("Tower door", "#6B4E2E")
-    add_box(parts, "tower-body", (4.8, 15, 4.8), (0, 7.5, 0), wall)
-    add_extruded_profile(parts, "tower-roof", [(-3, 15), (0, 18), (3, 15)], -3, 3, roof)
-    add_disc_xy(parts, "clock", (0, 12.5, 2.42), 1.25, 0.12, clock, 12)
-    add_disc_xy(parts, "clock-center", (0, 12.5, 2.49), 0.15, 0.02, frame, 8)
-    add_box(parts, "tower-door", (1.4, 2.7, 0.08), (0, 1.35, 2.40), door)
+    frame = material("Clock frame", "#48565A")
+    door = material("Tower door", "#28556A")
+    trim = material("Tower stone trim", "#B89E78")
+    glass = material("Tower dark window", "#19394A", 0.42)
+    add_beveled_box(parts, "tower-base", (6, 0.85, 6), (0, 0.425, 0), trim,
+                    bevel=0.18, smooth=True)
+    add_beveled_box(parts, "tower-body", (4.8, 14.35, 4.8), (0, 7.825, 0), wall,
+                    bevel=0.16, smooth=True)
+    add_beveled_box(parts, "tower-crown", (5.25, 0.55, 5.25), (0, 14.725, 0), trim,
+                    bevel=0.14, smooth=True)
+    add_hipped_roof(parts, "tower-roof", 6, 6, 15, 18, 1.2, roof, 0.10)
+    for x in (-2.15, 2.15):
+        add_beveled_box(parts, f"corner-pilaster-{x}", (0.34, 13.2, 0.24),
+                        (x, 7.35, 2.40), trim, bevel=0.07, smooth=True, segments=1)
+    add_disc_xy(parts, "clock-frame", (0, 12.35, 2.49), 1.45, 0.20, frame, 20)
+    add_disc_xy(parts, "clock", (0, 12.35, 2.60), 1.18, 0.04, clock, 20)
+    add_disc_xy(parts, "clock-center", (0, 12.35, 2.64), 0.13, 0.03, frame, 12)
+    add_beam_xy(parts, "clock-hour-hand", (0, 12.35), (-0.52, 12.78),
+                0.13, 2.665, 0.035, frame)
+    add_beam_xy(parts, "clock-minute-hand", (0, 12.35), (0.68, 12.92),
+                0.10, 2.67, 0.035, frame)
+    for y in (4.15, 9.35):
+        add_beveled_box(parts, f"tower-belt-{y}", (4.7, 0.16, 0.20),
+                        (0, y, 2.43), trim, bevel=0.04, smooth=True, segments=1)
+    add_front_door(parts, "tower-door", 0, 1.45, 2.8, 2.4, door, trim)
+    for y in (5.3, 8.3):
+        add_front_window(parts, f"tower-window-{y}", (0, y), (0.95, 1.35),
+                         2.4, trim, glass, 0.14)
 
 
 def build_hq(parts: list[bpy.types.Object]) -> None:
@@ -577,23 +748,46 @@ def build_hq(parts: list[bpy.types.Object]) -> None:
     dark = material("HQ entrance", "#1F2A44")
     pole = material("Flag pole", "#6B6B6B")
     flag = material("Expedition flag", "#E9573F")
-    add_box(parts, "hq-body", (20, 9, 14), (0, 4.5, 0), wall)
+    trim = material("HQ pale blue trim", "#9FD6E7")
+    glass = material("HQ deep glass", "#12364D", 0.40)
+    roof_dark = material("HQ roof ribs", "#167EA9")
+    add_beveled_box(parts, "hq-foundation", (20, 0.55, 14), (0, 0.275, 0), gold,
+                    bevel=0.18, smooth=True)
+    add_beveled_box(parts, "hq-body", (19.3, 8.6, 13.3), (0, 4.80, 0), wall,
+                    bevel=0.24, smooth=True)
     profile = []
-    for index in range(9):
-        x = -10 + index * 2.5
+    for index in range(13):
+        x = -10 + index * (20 / 12)
         y = 9 + 3 * (1 - (x / 10) ** 2)
         profile.append((x, y))
-    add_extruded_profile(parts, "barrel-roof", profile, -7, 7, roof)
-    add_box(parts, "entrance", (5.5, 5.7, 0.08), (0, 2.85, 7.00), dark)
-    add_box(parts, "arch-left", (0.32, 3.0, 0.12), (-2.85, 1.5, 7.00), gold)
-    add_box(parts, "arch-right", (0.32, 3.0, 0.12), (2.85, 1.5, 7.00), gold)
+    barrel = add_extruded_profile(parts, "barrel-roof", profile, -7, 7, roof)
+    bevel_object(barrel, 0.10, 2)
+    for rib_z in (-5.0, 0.0, 5.0):
+        for index in range(len(profile) - 1):
+            add_beam_xy(parts, f"roof-rib-{rib_z}-{index}", profile[index],
+                        profile[index + 1], 0.18, rib_z, 0.18, roof_dark)
+    add_beveled_box(parts, "entrance-recess", (5.5, 5.7, 0.20), (0, 2.85, 6.88),
+                    dark, bevel=0.20, smooth=True)
+    add_beveled_box(parts, "arch-left", (0.36, 3.0, 0.24), (-2.85, 1.5, 6.88),
+                    gold, bevel=0.08, smooth=True, segments=1)
+    add_beveled_box(parts, "arch-right", (0.36, 3.0, 0.24), (2.85, 1.5, 6.88),
+                    gold, bevel=0.08, smooth=True, segments=1)
     arc_points = []
     for index in range(7):
         angle = math.pi - index * math.pi / 6
         arc_points.append((math.cos(angle) * 2.85, 3.0 + math.sin(angle) * 2.85))
     for index in range(len(arc_points) - 1):
-        add_beam_xy(parts, f"arch-{index}", arc_points[index], arc_points[index + 1], 0.32, 7.00, 0.12, gold)
-    add_vertical_cylinder(parts, "flag-pole", 0.08, 16, (7.5, 8, 0), pole, 8)
+        add_beam_xy(parts, f"arch-{index}", arc_points[index], arc_points[index + 1],
+                    0.36, 6.88, 0.24, gold)
+    for x in (-7.0, 7.0):
+        for y in (3.0, 6.4):
+            add_front_window(parts, f"hq-window-{x}-{y}", (x, y), (2.2, 1.6),
+                             7.0, trim, glass, 0.20, 0.18)
+    add_disc_xy(parts, "hq-emblem-rim", (0, 7.1, 6.94), 0.80, 0.12, gold, 20)
+    add_disc_xy(parts, "hq-emblem", (0, 7.1, 7.0), 0.58, 0.03, roof_dark, 20)
+    add_vertical_cylinder(parts, "flag-pole", 0.09, 7.0, (7.5, 12.5, 0), pole, 10, True)
+    add_sphere(parts, "flag-pole-cap", (0.28, 0.28, 0.28), (7.5, 15.86, 0),
+               gold, segments=12, rings=6, smooth=True)
     add_mesh(parts, "flag", [(7.5, 15.8, 0), (9.2, 15.2, 0), (7.5, 14.6, 0),
                              (7.5, 15.8, 0.08), (9.2, 15.2, 0.08), (7.5, 14.6, 0.08)],
              [(0, 2, 1), (3, 4, 5), (0, 1, 4, 3), (1, 2, 5, 4), (2, 0, 3, 5)], flag)
@@ -602,53 +796,107 @@ def build_hq(parts: list[bpy.types.Object]) -> None:
 def build_platform(parts: list[bpy.types.Object]) -> None:
     body = material("Platform", "#BFB8AA")
     yellow = material("Safety strip", "#FFD166")
+    side = material("Platform side", "#958E83")
+    inset = material("Platform inset", "#77736D")
     # X=0 is the rail-side edge; the platform extends away in +X.
-    add_box(parts, "platform-body", (4, 1, 30), (2, 0.5, 0), body)
-    add_box(parts, "safety-strip", (0.3, 0.04, 30), (0.15, 1.0, 0), yellow)
+    add_beveled_box(parts, "platform-body", (4, 0.84, 30), (2, 0.42, 0), side,
+                    bevel=0.08, smooth=True, segments=1)
+    add_beveled_box(parts, "platform-top", (3.96, 0.18, 29.92), (2.02, 0.91, 0), body,
+                    bevel=0.07, smooth=True, segments=1)
+    add_beveled_box(parts, "safety-strip", (0.30, 0.06, 29.9), (0.15, 0.97, 0),
+                    yellow, bevel=0.025, smooth=True, segments=1)
+    for z in (-12.0, -8.0, -4.0, 0.0, 4.0, 8.0, 12.0):
+        add_beveled_box(parts, f"side-panel-{z}", (0.08, 0.46, 2.9),
+                        (0.04, 0.40, z), inset, bevel=0.025, smooth=True, segments=1)
 
 
 def build_platform_roof(parts: list[bpy.types.Object]) -> None:
     column = material("Roof columns", "#6B6B6B")
     roof = material("Station blue roof", "#4F7FB0")
+    roof_dark = material("Station roof fascia", "#2C577F")
+    gold = material("Station bracket accent", "#D8A93A")
     for x in (0.4, 3.6):
         for z in (-5.2, 5.2):
-            add_box(parts, f"column-{x}-{z}", (0.3, 3.6, 0.3), (x, 1.8, z), column)
-    add_mesh(parts, "lean-to-roof",
-             [(0, 3.6, -6), (4, 3.6, -6), (4, 4.2, -6), (0, 4.0, -6),
-              (0, 3.6, 6), (4, 3.6, 6), (4, 4.2, 6), (0, 4.0, 6)],
-             [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5),
-              (2, 3, 7, 6), (3, 0, 4, 7)], roof)
+            add_beveled_box(parts, f"column-{x}-{z}", (0.28, 3.45, 0.28),
+                            (x, 1.725, z), column, bevel=0.055, smooth=True, segments=1)
+            add_beveled_box(parts, f"column-base-{x}-{z}", (0.50, 0.20, 0.50),
+                            (x, 0.10, z), roof_dark, bevel=0.07, smooth=True, segments=1)
+            add_beveled_box(parts, f"column-cap-{x}-{z}", (0.52, 0.22, 0.52),
+                            (x, 3.43, z), gold, bevel=0.07, smooth=True, segments=1)
+    for x in (0.4, 3.6):
+        add_beveled_box(parts, f"long-beam-{x}", (0.34, 0.30, 11.5),
+                        (x, 3.58, 0), roof_dark, bevel=0.07, smooth=True, segments=1)
+    roof_mesh = add_mesh(parts, "lean-to-roof",
+                         [(0, 3.76, -6), (4, 3.96, -6), (4, 4.2, -6), (0, 4.0, -6),
+                          (0, 3.76, 6), (4, 3.96, 6), (4, 4.2, 6), (0, 4.0, 6)],
+                         [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5),
+                          (2, 3, 7, 6), (3, 0, 4, 7)], roof)
+    bevel_object(roof_mesh, 0.06, 2)
+    for x in (0.12, 3.88):
+        add_beveled_box(parts, f"roof-fascia-{x}", (0.20, 0.30, 12),
+                        (x, 3.78 + x * 0.05, 0), roof_dark,
+                        bevel=0.055, smooth=True, segments=1)
 
 
 def build_station_sign(parts: list[bpy.types.Object]) -> None:
     blue = material("Sign frame", "#3FA7D6")
-    white = material("Sign face", "#FFFFFF")
+    blue_dark = material("Sign frame shadow", "#236C93")
+    white = material("Sign face", "#F7F0DE")
     grey = material("Sign post", "#6B6B6B")
-    add_box(parts, "sign-post", (0.18, 2.0, 0.18), (0, 1.0, 0), grey)
-    add_box(parts, "sign-frame", (2.4, 1.0, 0.3), (0, 2.5, 0), blue)
-    add_box(parts, "sign-face", (2.1, 0.72, 0.03), (0, 2.5, 0.155), white)
+    add_beveled_box(parts, "sign-base", (0.65, 0.18, 0.30), (0, 0.09, 0),
+                    blue_dark, bevel=0.07, smooth=True, segments=1)
+    add_beveled_box(parts, "sign-post", (0.20, 2.10, 0.20), (0, 1.05, 0), grey,
+                    bevel=0.045, smooth=True, segments=1)
+    add_beveled_box(parts, "sign-post-cap", (0.38, 0.18, 0.28), (0, 2.02, 0),
+                    blue_dark, bevel=0.055, smooth=True, segments=1)
+    add_beveled_box(parts, "sign-frame", (2.4, 1.0, 0.3), (0, 2.5, 0), blue,
+                    bevel=0.13, smooth=True, segments=2)
+    # Place faces just proud of the frame to avoid coplanar z-fighting.
+    for z in (-0.1625, 0.1625):
+        add_beveled_box(parts, f"sign-face-{z}", (2.05, 0.67, 0.035),
+                        (0, 2.5, z), white, bevel=0.06, smooth=True, segments=1)
 
 
 def build_crossing_gate(parts: list[bpy.types.Object]) -> None:
     yellow = material("Crossing yellow", "#FFD166")
     dark = material("Crossing dark", "#3A3F47")
-    add_box(parts, "gate-post", (0.3, 3.2, 0.6), (2.1, 1.6, 0), dark)
+    metal = material("Crossing metal", "#69727A")
+    add_beveled_box(parts, "gate-base", (0.72, 0.32, 0.6), (1.89, 0.16, 0), dark,
+                    bevel=0.09, smooth=True, segments=1)
+    add_beveled_box(parts, "gate-post", (0.32, 2.95, 0.48), (2.08, 1.675, 0), dark,
+                    bevel=0.075, smooth=True, segments=1)
+    add_beveled_box(parts, "gate-top-cap", (0.48, 0.22, 0.58), (2.08, 3.09, 0),
+                    yellow, bevel=0.075, smooth=True, segments=1)
+    add_disc_xy(parts, "pivot-housing-back", (1.91, 1.18, -0.25), 0.35, 0.10, metal, 16)
+    add_disc_xy(parts, "pivot-housing", (1.91, 1.18, 0.25), 0.35, 0.10, yellow, 16)
+    add_disc_xy(parts, "pivot-cap", (1.91, 1.18, 0.305), 0.14, 0.02, dark, 12)
+    add_beveled_box(parts, "pivot-bracket", (0.55, 0.28, 0.48), (1.72, 1.18, 0),
+                    metal, bevel=0.06, smooth=True, segments=1)
     segment_width = 4.2 / 8
     for index in range(8):
         x = -2.25 + segment_width * (index + 0.5)
-        add_box(parts, f"gate-bar-{index}", (segment_width, 0.15, 0.18), (x, 1.0, 0), yellow if index % 2 == 0 else dark)
+        add_beveled_box(parts, f"gate-bar-{index}", (segment_width, 0.18, 0.22),
+                        (x, 1.18, 0), yellow if index % 2 == 0 else dark,
+                        bevel=0.045, smooth=True, segments=1)
+    add_sphere(parts, "gate-tip", (0.22, 0.22, 0.24), (-2.14, 1.18, 0),
+               yellow, segments=12, rings=6, smooth=True)
 
 
 def build_crossing_sign(parts: list[bpy.types.Object]) -> None:
     yellow = material("Crossbuck yellow", "#FFD166")
     dark = material("Crossbuck dark", "#3A3F47")
     grey = material("Crossbuck post", "#6B6B6B")
-    add_box(parts, "sign-post", (0.12, 2.15, 0.12), (0, 1.075, 0), grey)
+    add_beveled_box(parts, "crossbuck-base", (0.46, 0.20, 0.20), (0, 0.10, 0), dark,
+                    bevel=0.06, smooth=True, segments=1)
+    add_beveled_box(parts, "sign-post", (0.15, 2.18, 0.15), (0, 1.09, 0), grey,
+                    bevel=0.035, smooth=True, segments=1)
     starts = [(-0.52, 2.05), (-0.52, 2.95)]
     ends = [(0.52, 2.95), (0.52, 2.05)]
     for index, (start, end) in enumerate(zip(starts, ends)):
-        add_beam_xy(parts, f"yellow-cross-{index}", start, end, 0.20, 0, 0.2, yellow)
-        add_beam_xy(parts, f"dark-cross-{index}", start, end, 0.07, 0.095, 0.01, dark)
+        beam = add_beam_xy(parts, f"yellow-cross-{index}", start, end, 0.22, 0, 0.2, yellow)
+        bevel_object(beam, 0.035, 1)
+        add_beam_xy(parts, f"dark-cross-{index}", start, end, 0.075, 0.105, 0.015, dark)
+    add_disc_xy(parts, "crossbuck-center", (0, 2.50, 0.085), 0.16, 0.03, dark, 12)
 
 
 def cat_ear(parts: list[bpy.types.Object], name: str, x: float, y0: float, y1: float, z: float,
@@ -1074,21 +1322,48 @@ def build_passenger(parts: list[bpy.types.Object]) -> None:
 
 
 def build_parcel(parts: list[bpy.types.Object]) -> None:
-    cardboard = material("Parcel cardboard", "#C89B6D")
-    ribbon = material("Parcel ribbon", "#E9573F")
-    add_box(parts, "parcel-box", (0.6, 0.5, 0.6), (0, 0.25, 0), cardboard)
-    add_box(parts, "ribbon-x", (0.12, 0.51, 0.62), (0, 0.255, 0), ribbon)
-    add_box(parts, "ribbon-z", (0.62, 0.52, 0.12), (0, 0.26, 0), ribbon)
+    cardboard = material("Parcel cardboard", "#A96F3F")
+    ribbon = material("Parcel ribbon", "#C83F36")
+    tag = material("Parcel tag", "#E7C57E")
+    add_beveled_box(parts, "parcel-box", (0.58, 0.42, 0.58), (0, 0.21, 0), cardboard,
+                    bevel=0.045, smooth=True, segments=2)
+    add_beveled_box(parts, "ribbon-x", (0.11, 0.44, 0.60), (0, 0.22, 0), ribbon,
+                    bevel=0.022, smooth=True, segments=1)
+    add_beveled_box(parts, "ribbon-z", (0.60, 0.44, 0.11), (0, 0.22, 0), ribbon,
+                    bevel=0.022, smooth=True, segments=1)
+    add_sphere(parts, "bow-left", (0.20, 0.08, 0.12), (-0.09, 0.46, 0), ribbon,
+               segments=12, rings=6, smooth=True)
+    add_sphere(parts, "bow-right", (0.20, 0.08, 0.12), (0.09, 0.46, 0), ribbon,
+               segments=12, rings=6, smooth=True)
+    add_sphere(parts, "bow-knot", (0.10, 0.09, 0.10), (0, 0.455, 0), ribbon,
+               segments=12, rings=6, smooth=True)
+    tag_piece = add_extruded_profile(parts, "parcel-tag",
+                                     [(0.10, 0.36), (0.25, 0.34), (0.26, 0.43), (0.11, 0.45)],
+                                     0.296, 0.300, tag)
+    bevel_object(tag_piece, 0.008, 1)
 
 
 def build_goal_flag(parts: list[bpy.types.Object]) -> None:
     red = material("Goal flag", "#E9573F")
     pole = material("Goal pole", "#6B6B6B")
-    add_vertical_cylinder(parts, "flag-pole", 0.05, 2.4, (-0.75, 1.2, 0), pole, 6)
-    add_mesh(parts, "triangle-flag",
-             [(-0.75, 2.35, -0.1), (0.8, 1.85, -0.1), (-0.75, 1.45, -0.1),
-              (-0.75, 2.35, 0.1), (0.8, 1.85, 0.1), (-0.75, 1.45, 0.1)],
-             [(0, 2, 1), (3, 4, 5), (0, 1, 4, 3), (1, 2, 5, 4), (2, 0, 3, 5)], red)
+    gold = material("Goal flag finial", "#FFD166")
+    add_beveled_box(parts, "flag-base", (0.28, 0.16, 0.20), (-0.66, 0.08, 0), pole,
+                    bevel=0.045, smooth=True, segments=1)
+    add_vertical_cylinder(parts, "flag-pole", 0.05, 2.22, (-0.66, 1.19, 0), pole, 10, True)
+    add_sphere(parts, "flag-finial", (0.18, 0.18, 0.18), (-0.66, 2.31, 0), gold,
+               segments=12, rings=6, smooth=True)
+    flag_vertices = [
+        (-0.66, 2.28, -0.10), (-0.15, 2.18, -0.06), (0.38, 2.02, -0.10),
+        (0.80, 1.86, -0.04), (0.38, 1.70, -0.10), (-0.15, 1.58, -0.06),
+        (-0.66, 1.50, -0.10),
+        (-0.66, 2.28, 0.10), (-0.15, 2.18, 0.06), (0.38, 2.02, 0.10),
+        (0.80, 1.86, 0.04), (0.38, 1.70, 0.10), (-0.15, 1.58, 0.06),
+        (-0.66, 1.50, 0.10),
+    ]
+    add_mesh(parts, "waving-flag", flag_vertices,
+             [(0, 6, 5, 4, 3, 2, 1), (7, 8, 9, 10, 11, 12, 13),
+              (0, 1, 8, 7), (1, 2, 9, 8), (2, 3, 10, 9),
+              (3, 4, 11, 10), (4, 5, 12, 11), (5, 6, 13, 12)], red)
 
 
 BUILDERS = {
@@ -1119,11 +1394,11 @@ def setup_preview(model: bpy.types.Object, model_name: str, minimum: list[float]
     is_character = model_name in character_names
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
-    scene.cycles.samples = 24
+    scene.cycles.samples = 16
     scene.cycles.use_denoising = True
     scene.cycles.max_bounces = 3
-    scene.render.resolution_x = 512
-    scene.render.resolution_y = 512
+    scene.render.resolution_x = 768
+    scene.render.resolution_y = 768
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
     scene.render.filepath = str(PREVIEW_DIR / f"{model_name}.png")
@@ -1133,9 +1408,9 @@ def setup_preview(model: bpy.types.Object, model_name: str, minimum: list[float]
     scene.world = world
     world.use_nodes = True
     world.node_tree.nodes["Background"].inputs["Color"].default_value = (
-        (0.66, 0.57, 0.47, 1.0) if is_character else (0.72, 0.72, 0.72, 1.0)
+        (0.66, 0.57, 0.47, 1.0) if is_character else (0.34, 0.30, 0.25, 1.0)
     )
-    world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.32 if is_character else 0.45
+    world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.32 if is_character else 0.34
 
     width = maximum[0] - minimum[0]
     height = maximum[1] - minimum[1]
@@ -1143,33 +1418,54 @@ def setup_preview(model: bpy.types.Object, model_name: str, minimum: list[float]
     center = ((minimum[0] + maximum[0]) / 2, (minimum[1] + maximum[1]) / 2,
               (minimum[2] + maximum[2]) / 2)
     span = max(width, height, depth)
-    ground_size = max(width, depth, 1.0) * 2.8
-    ground_mat = material("Preview ground", "#DED5C8" if is_character else "#D8D8D4")
+    # Keep the studio sweep well outside the camera frustum even for tall,
+    # narrow assets such as the clock tower.  A size based only on footprint
+    # exposed the World background at the frame edges.
+    ground_size = max(width, depth, span * 1.5, 1.0) * 4.0
+    ground_mat = material("Preview ground", "#DED5C8" if is_character else "#EEE9DF")
+    ground_shader = ground_mat.node_tree.nodes["Principled BSDF"]
+    emission_color = ground_shader.inputs.get("Emission Color") or ground_shader.inputs.get("Emission")
+    emission_strength = ground_shader.inputs.get("Emission Strength")
+    if emission_color is not None:
+        emission_color.default_value = ground_shader.inputs["Base Color"].default_value
+    if emission_strength is not None:
+        emission_strength.default_value = 0.16
     bpy.ops.mesh.primitive_plane_add(size=ground_size, location=(center[0], -center[2], -0.012))
+    bpy.context.object.data.materials.append(ground_mat)
+    bpy.ops.mesh.primitive_plane_add(
+        size=ground_size,
+        location=(center[0], -center[2] + span * 2.0, max(height, span)),
+        rotation=(math.pi / 2, 0, 0),
+    )
     bpy.context.object.data.materials.append(ground_mat)
 
     target_height = max(height * (0.48 if is_character else 0.42), center[1] * 0.8)
     target = Vector(to_blender((center[0], target_height, center[2])))
-    camera_location = target + Vector((span * (0.55 if is_character else 1.15),
-                                       -span * (2.60 if is_character else 1.90),
-                                       span * (0.18 if is_character else 1.00)))
+    if model_name == "platform":
+        # View the rail-side face and long edge instead of looking almost
+        # straight down the 30 m platform.
+        camera_location = target + Vector((-span * 1.80, -span * 0.35, span * 0.45))
+    else:
+        camera_location = target + Vector((span * (0.55 if is_character else 1.05),
+                                           -span * (2.60 if is_character else 2.15),
+                                           span * (0.18 if is_character else 0.78)))
     bpy.ops.object.camera_add(location=camera_location)
     camera = bpy.context.object
     camera.rotation_euler = (target - camera.location).to_track_quat("-Z", "Y").to_euler()
-    if is_character:
+    if is_character or model_name == "platform":
         camera.data.type = "ORTHO"
-        camera.data.ortho_scale = span * 1.30
+        camera.data.ortho_scale = span * (1.30 if is_character else 1.12)
     else:
-        camera.data.lens = 58.0
+        camera.data.lens = 64.0
     scene.camera = camera
 
     bpy.ops.object.light_add(type="AREA", location=target + Vector((span * 0.7, -span * 0.8, span * 1.1)))
-    bpy.context.object.data.energy = max(42, span * 38) if is_character else max(120, span * 55)
+    bpy.context.object.data.energy = max(42, span * 38) if is_character else max(35, span * 62)
     bpy.context.object.data.shape = "DISK"
-    bpy.context.object.data.size = max(span * 0.90, 1.2) if is_character else max(span * 0.75, 2.0)
+    bpy.context.object.data.size = max(span * 0.90, 1.2) if is_character else max(span * 0.75, 0.5)
     bpy.ops.object.light_add(type="AREA", location=target + Vector((-span * 0.8, span * 0.2, span * 0.5)))
-    bpy.context.object.data.energy = max(16, span * 16) if is_character else max(60, span * 25)
-    bpy.context.object.data.size = max(span * 0.65, 0.8) if is_character else max(span * 0.5, 1.5)
+    bpy.context.object.data.energy = max(16, span * 16) if is_character else max(15, span * 28)
+    bpy.context.object.data.size = max(span * 0.65, 0.8) if is_character else max(span * 0.5, 0.4)
     bpy.ops.render.render(write_still=True)
 
 

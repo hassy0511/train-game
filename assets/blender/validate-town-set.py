@@ -12,6 +12,11 @@ from town_common import ASSET_SPECS, ROOT
 
 TOLERANCE = 0.1
 CHARACTER_NAMES = {"cat-sleep", "cat-stand", "partner", "amanojaku", "passenger"}
+WORLD_STYLE_NAMES = {
+    "house-a", "house-b", "house-c", "shop", "tower", "hq",
+    "platform", "platform-roof", "station-sign", "crossing-gate",
+    "crossing-sign", "parcel", "goal-flag",
+}
 
 
 def clear_scene() -> None:
@@ -53,7 +58,8 @@ def validate(name: str, expected_size: tuple[float, float, float], budget: int) 
         violations.append(f"mesh name {[obj.name for obj in meshes]}")
     if triangles > budget:
         violations.append(f"triangles {triangles} > {budget}")
-    max_bytes = (350 if name in CHARACTER_NAMES else 100) * 1024
+    max_kb = 350 if name in CHARACTER_NAMES else 250 if name in WORLD_STYLE_NAMES else 100
+    max_bytes = max_kb * 1024
     if path.stat().st_size > max_bytes:
         violations.append(f"file size {path.stat().st_size} > {max_bytes}")
     if abs(minimum[1]) > TOLERANCE:
@@ -83,7 +89,17 @@ def main() -> None:
     for report in reports:
         print("TOWN_ASSET_VALIDATION=" + json.dumps(report, sort_keys=True))
     failed = [report["model"] for report in reports if not report["ok"]]
-    print("TOWN_SET_VALIDATION=" + json.dumps({"assets": len(reports), "failed": failed}, sort_keys=True))
+    world_triangles = sum(
+        report["triangles"] for report in reports if report["model"] in WORLD_STYLE_NAMES
+    )
+    if world_triangles > 20_000:
+        failed.append(f"world triangle total {world_triangles} > 20000")
+    print("TOWN_SET_VALIDATION=" + json.dumps({
+        "assets": len(reports),
+        "failed": failed,
+        "world_triangles": world_triangles,
+        "world_triangle_budget": 20_000,
+    }, sort_keys=True))
     if failed:
         raise SystemExit(2)
 

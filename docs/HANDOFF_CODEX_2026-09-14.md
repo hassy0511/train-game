@@ -9,12 +9,12 @@
 - 次の担当: Claude Code が差分レビュー、PR作成、mainへのマージを行う。
 - 0004は0003依存のため、0003のマージ後に着手する。
 
-### 2026-09-14 品質基準の再改定
+### 2026-09-14 品質基準の確定
 
-ユーザー評価では従来版の再現度は約15点、直近の改修版も約35点であり、完成扱いしない。
-旧チケットの一律ローポリ・フラット・極小予算が80点の再現目標を妨げるため、
-`docs/CHARACTER_3D_QUALITY_BAR.md` を新しい優先仕様として追加した。
-次のキャラクター版は既存プリミティブモデルの延長ではなく、カスタム輪郭と制御曲面から作り直す。
+キャラクター5体はユーザー承認済みのC案（強めデフォルメ）を当面のスタイルキーとする。
+この判断をキャラクターだけに閉じず、`docs/WORLD_ART_DIRECTION.md` を新設して、
+建物・駅・踏切・小物にも「デフォルメ強度C／形態写実度4/10／素材写実度2/10」を適用した。
+旧チケットの一律ローポリ・フラット・極小予算より、この世界共通方針を優先する。
 
 ## 実装済み
 
@@ -32,10 +32,10 @@
 - 共通生成処理: `assets/blender/town_common.py`
 - 一括生成: `assets/blender/generate-town-set.py`
 - 一括検証: `assets/blender/validate-town-set.py`
-- 集合プレビュー生成: `assets/blender/render-town-set.py`
+- 集合プレビュー生成: `assets/blender/render-town-set.py`, `assets/blender/render-world-parts.py`
 - GLB 18点: `public/models/<model>.glb`
 - 個別プレビュー18点: `assets/previews/<model>.png`
-- 建物6点の集合プレビュー: `assets/previews/town-set.png`
+- 集合プレビュー: `assets/previews/town-set.png`, `assets/previews/station-set.png`, `assets/previews/trackside-set.png`
 
 ### キャラクター再改修（ユーザーレビュー反映）
 
@@ -61,17 +61,30 @@
 - 頭・胴など有機的な大面だけスムーズ接続し、帽子・ケープ・靴・色面は明確な形状として維持
 - サカサの帽子は連続した太い曲面チューブ、乗客の帽子と靴は厚みのある独立形状にした
 
-旧チケットの120〜320三角形上限では、ユーザーが却下した「何か分からない安いポリゴン感」に戻るため、キャラクター5体だけ上限を480〜960へ改定した。実測合計は2,376三角形で、画面内10万三角形予算に対して約2.4%に留まる。全GLBは引き続き100KB未満・1ファイル1メッシュ・テクスチャなし。
+旧チケットの120〜320三角形上限では、ユーザーが却下した「何か分からない安いポリゴン感」に戻るため、キャラクター5体の上限を3,500〜8,200へ改定した。実測合計は29,344三角形で、1ファイル1メッシュ・テクスチャなし・各350KB以下を維持している。
 
 最終実測値:
 
 | モデル | 三角形 | 予算 | bbox寸法 X×Y×Z (m) |
 |---|---:|---:|---|
-| `cat-sleep` | 299 | 480 | 0.677×0.350×0.479 |
-| `cat-stand` | 457 | 640 | 0.631×0.607×0.492 |
-| `partner` | 460 | 720 | 0.635×0.693×0.435 |
-| `amanojaku` | 666 | 960 | 0.850×1.446×0.562 |
-| `passenger` | 494 | 640 | 0.675×1.600×0.450 |
+| `cat-sleep` | 3,084 | 3,500 | 0.700×0.350×0.500 |
+| `cat-stand` | 5,224 | 5,500 | 0.700×0.600×0.400 |
+| `partner` | 5,392 | 5,600 | 0.600×0.700×0.500 |
+| `amanojaku` | 7,664 | 8,200 | 0.900×1.400×0.600 |
+| `passenger` | 7,980 | 8,200 | 0.600×1.600×0.400 |
+
+### 世界パーツ13点の再設計
+
+キャラクターC案に合わせ、非キャラクター13点を旧プリミティブ主体モデルから再設計した。
+
+- 建物: 基礎、厚い屋根・軒、窓枠と奥まったガラス、玄関枠、庇、階層帯、柱、時計針、屋根リブを追加
+- 駅: ホーム安全帯・側壁パネル、屋根の柱脚・柱頭・梁・鼻隠し、駅名標の厚い両面枠を追加
+- 踏切: 台座、回転軸、ブラケット、厚い遮断棒、面取りした標識を追加
+- 小物: 荷物の帯・結び目・荷札、旗の台座・竿先・緩い波形を追加
+- 色数は1点3〜6色に整理し、クリーム、コーラル、深い青、紫、金を基調に統一
+- 個別13枚に加え、`town-set.png`、`station-set.png`、`trackside-set.png` を生成して相対スケールも確認
+
+非キャラクター13点の実測合計は14,502三角形（上限20,000）。最大GLBは`hq`の105,172 bytesで、各250KB以下。
 
 ## 検証結果
 
@@ -84,19 +97,21 @@
 - 三角形数: 全点チケット予算内
 - バウンディングボックス: 指定寸法に対して各軸±0.1m以内（下記の明示的判断を除く）
 - 原点: 接地面かつ水平方向中央
-- ファイルサイズ: 全点100KB未満
-- 個別プレビューと集合プレビュー: 目視確認済み
+- ファイルサイズ: キャラクター各350KB以下、非キャラクター各250KB以下
+- 個別18枚と集合4枚（キャラクター、街、駅、踏切・小物）: 目視確認済み
 
 一括検証の最終出力:
 
 ```text
-TOWN_SET_VALIDATION={"assets": 18, "failed": []}
+TOWN_SET_VALIDATION={"assets": 18, "failed": [], "world_triangle_budget": 20000, "world_triangles": 14502}
 ```
 
 アプリ側の回帰確認:
 
 - `pnpm run build`: 成功
-- `pnpm run smoke`: 4 passed（stage 0-0の2本、stage 1-1の2本。長尺の全ミッション完走を含む）
+- `pnpm run smoke:only`: 4 passed（stage 0-0の2本、stage 1-1の2本。長尺の全ミッション完走を含む）
+- PlaywrightのWebサーバー起動は`npx vite`依存を除き、package-script PATH上の`vite`を直接使うよう修正
+- 長尺テストのドア待機は`data-phase=doors`への遷移を確認してから完了待ちするよう修正し、乗降中に判定へ進む競合を解消
 
 このCodex環境では通常の`node` / `npm`がPATHにないため、Codex同梱Nodeとpnpmを使用した。PlaywrightのChromium導入時は企業プロキシ証明書に対応するため`NODE_OPTIONS=--use-system-ca`を指定した。`package.json`と`package-lock.json`は変更していない。
 
@@ -114,12 +129,13 @@ Blenderスキルのラッパーを使う。
 ```powershell
 powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.codex\skills\blender-headless-assets\scripts\run-blender.ps1" -b --factory-startup --python assets\blender\generate-town-set.py
 powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.codex\skills\blender-headless-assets\scripts\run-blender.ps1" -b --factory-startup --python assets\blender\render-town-set.py
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.codex\skills\blender-headless-assets\scripts\run-blender.ps1" -b --factory-startup --python assets\blender\render-world-parts.py
 powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.codex\skills\blender-headless-assets\scripts\run-blender.ps1" -b --factory-startup --python assets\blender\validate-town-set.py
 ```
 
 ## Claude Codeへの次アクション
 
-1. `codex/0003-town-set`をcheckoutし、18モデルとプレビューをレビューする。
+1. `codex/0003-town-set`をcheckoutし、`docs/WORLD_ART_DIRECTION.md`、18モデル、集合プレビューをレビューする。
 2. チケットの「20ファイル分」と列挙18点の差を、PR本文で判断事項として共有する。
 3. 問題がなければ0003のPRを作成してマージする。
 4. mainへのマージ後、依存が外れるチケット0004へ進む。

@@ -5,7 +5,7 @@
 この文書は、承認済み2Dデザインから制作するキャラクター3Dについて、
 `AGENTS.md`、`docs/tickets/0001-blender-proto-models.md`、
 `docs/tickets/0003-blender-town-set.md` の一般的なローポリ規定より優先する。
-建物・駅・踏切・小物には従来規定を適用する。
+建物・駅・踏切・小物には `docs/WORLD_ART_DIRECTION.md` を適用する。
 
 ## 目的
 

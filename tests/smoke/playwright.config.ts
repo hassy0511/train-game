@@ -26,7 +26,9 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: 'npx vite preview --host 127.0.0.1 --port 4173 --strictPort',
+    // Playwright inherits the package-script PATH, so the local Vite binary is
+    // directly available. Avoid npx, which is absent in the bundled runtime.
+    command: 'vite preview --host 127.0.0.1 --port 4173 --strictPort',
     cwd: resolve(here, '../..'),
     url: 'http://127.0.0.1:4173',
     stdout: 'ignore',

@@ -57,11 +57,16 @@ async function driveTo(page: Page, at: number, opts: { whistleAt?: number } = {}
 }
 
 async function doors(page: Page): Promise<void> {
+  const app = page.locator('#app');
   const door = page.locator('#door');
   await expect(door).toBeVisible({ timeout: 20_000 });
+  // Observe entry into the async door phase before clicking. Without this
+  // guard, a slow frame can make the later "not doors" wait pass on stale
+  // state while passengers are still boarding one by one.
+  await expect(app).toHaveAttribute('data-phase', 'doors');
   await door.dispatchEvent('pointerdown');
   await expect(door).toBeHidden();
-  await page.waitForFunction(() => document.getElementById('app')?.dataset.phase !== 'doors', null, { timeout: 60_000 });
+  await expect(app).not.toHaveAttribute('data-phase', 'doors', { timeout: 60_000 });
 }
 
 test('stage 1-1 full run: all three missions and the ending', async ({ page }) => {
