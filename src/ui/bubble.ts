@@ -32,7 +32,7 @@ export function createBubbles(root: HTMLElement, partnerName: string): Bubbles {
   const showOne = (line: string, who: Speaker): Promise<void> =>
     new Promise((resolve) => {
       el.className = `bubble ${SPEAKER_CLASS[who]}`;
-      name.textContent = who === 'partner' ? partnerName : who === 'amanojaku' ? 'サカサ' : 'おきゃくさん';
+      name.textContent = who === 'partner' ? partnerName : who === 'amanojaku' ? 'サカサ' : 'たんけんたいの なかま';
       text.textContent = line;
       el.hidden = false;
       el.dataset.line = line;

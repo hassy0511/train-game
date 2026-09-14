@@ -4,79 +4,436 @@
   "title": "てすとこーす",
   "chapter": 0,
   "hidden": true,
-  "unlock": { "requires": [], "purchase": null },
+  "unlock": {
+    "requires": [],
+    "purchase": null
+  },
   "unlocks": [],
   "environment": {
-    "sky": { "top": "#4f9dff", "bottom": "#d9f1ff" },
-    "fog": { "color": "#d9f1ff", "near": 150, "far": 450 },
+    "sky": {
+      "top": "#4f9dff",
+      "bottom": "#d9f1ff"
+    },
+    "fog": {
+      "color": "#d9f1ff",
+      "near": 150,
+      "far": 450
+    },
     "lighting": "day",
-    "ground": { "y": -0.6, "size": 800, "color": "#7fc96f" },
+    "ground": {
+      "y": -0.6,
+      "size": 800,
+      "color": "#7fc96f"
+    },
     "bgm": null
   },
-  "start": { "railId": "main", "at": 6, "direction": 1 },
+  "start": {
+    "railId": "main",
+    "at": 40,
+    "direction": 1
+  },
   "rails": [
     {
       "id": "main",
       "points": [
-        [0, 0, 0], [0, 0, 60], [0, 0, 120],
-        [8.04, 0, 150], [30, 0, 171.96], [60, 0, 180],
-        [90, 1.8, 180], [120, 3.6, 180], [150, 3.6, 180],
-        [180, 1.8, 180], [210, 0, 180], [270, 0, 180]
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          60
+        ],
+        [
+          0,
+          0,
+          120
+        ],
+        [
+          8.04,
+          0,
+          150
+        ],
+        [
+          30,
+          0,
+          171.96
+        ],
+        [
+          60,
+          0,
+          180
+        ],
+        [
+          90,
+          1.8,
+          180
+        ],
+        [
+          120,
+          3.6,
+          180
+        ],
+        [
+          150,
+          3.6,
+          180
+        ],
+        [
+          180,
+          1.8,
+          180
+        ],
+        [
+          210,
+          0,
+          180
+        ],
+        [
+          270,
+          0,
+          180
+        ]
       ],
-      "end": { "type": "buffer" }
+      "end": {
+        "type": "buffer"
+      }
     },
     {
       "id": "branch",
       "points": [
-        [0, 0, 120], [-8.04, 0, 150], [-30, 0, 171.96], [-60, 0, 180],
-        [-120, 0, 180], [-180, 0, 180]
+        [
+          0,
+          0,
+          120
+        ],
+        [
+          -8.04,
+          0,
+          150
+        ],
+        [
+          -30,
+          0,
+          171.96
+        ],
+        [
+          -60,
+          0,
+          180
+        ],
+        [
+          -120,
+          0,
+          180
+        ],
+        [
+          -180,
+          0,
+          180
+        ]
       ],
-      "end": { "type": "buffer" }
+      "end": {
+        "type": "buffer"
+      }
     }
   ],
   "junctions": [
-    { "id": "j1", "railId": "main", "at": 120, "left": "main", "right": "branch", "default": "left" }
+    {
+      "id": "j1",
+      "railId": "main",
+      "at": 120,
+      "left": "main",
+      "right": "branch",
+      "default": "left"
+    }
   ],
   "stations": [
-    { "id": "st-start", "name": "はじまりえき", "railId": "main", "at": 6, "tolerance": 4, "platformSide": "left" }
+    {
+      "id": "st-start",
+      "name": "はじまりえき",
+      "railId": "main",
+      "at": 40,
+      "tolerance": 4,
+      "platformSide": "left"
+    }
   ],
   "props": [
-    { "model": "tree-a-proto", "onRail": { "railId": "main", "at": 20, "lateral": -9 } },
-    { "model": "tree-b-proto", "onRail": { "railId": "main", "at": 32, "lateral": 9 } },
-    { "model": "tree-a-proto", "onRail": { "railId": "main", "at": 48, "lateral": -9 } },
-    { "model": "tree-b-proto", "onRail": { "railId": "main", "at": 64, "lateral": 9 } },
-    { "model": "tree-a-proto", "onRail": { "railId": "main", "at": 84, "lateral": -9 } },
-    { "model": "tree-b-proto", "onRail": { "railId": "main", "at": 100, "lateral": 9 } },
-    { "model": "rock-proto",   "onRail": { "railId": "main", "at": 40, "lateral": -14 } },
-    { "model": "tree-b-proto", "onRail": { "railId": "main", "at": 140, "lateral": -9 } },
-    { "model": "tree-a-proto", "onRail": { "railId": "main", "at": 170, "lateral": -9 } },
-    { "model": "tree-b-proto", "onRail": { "railId": "main", "at": 200, "lateral": -9 } },
-    { "model": "tree-a-proto", "onRail": { "railId": "main", "at": 240, "lateral": 9 } },
-    { "model": "tree-b-proto", "onRail": { "railId": "main", "at": 256, "lateral": -9 } },
-    { "model": "tree-a-proto", "onRail": { "railId": "main", "at": 300, "lateral": 9 } },
-    { "model": "tree-b-proto", "onRail": { "railId": "main", "at": 324, "lateral": -9 } },
-    { "model": "tree-a-proto", "onRail": { "railId": "main", "at": 352, "lateral": 9 } },
-    { "model": "tree-b-proto", "onRail": { "railId": "main", "at": 376, "lateral": -9 } },
-    { "model": "tree-a-proto", "onRail": { "railId": "main", "at": 404, "lateral": 9 } },
-    { "model": "rock-proto",   "onRail": { "railId": "main", "at": 380, "lateral": 14 } },
-    { "model": "tree-a-proto", "onRail": { "railId": "branch", "at": 40, "lateral": 9 } },
-    { "model": "tree-b-proto", "onRail": { "railId": "branch", "at": 70, "lateral": 9 } },
-    { "model": "tree-a-proto", "onRail": { "railId": "branch", "at": 110, "lateral": -9 } },
-    { "model": "tree-b-proto", "onRail": { "railId": "branch", "at": 128, "lateral": 9 } },
-    { "model": "tree-a-proto", "onRail": { "railId": "branch", "at": 152, "lateral": -9 } },
-    { "model": "tree-b-proto", "onRail": { "railId": "branch", "at": 170, "lateral": 9 } },
-    { "model": "tree-a-proto", "onRail": { "railId": "branch", "at": 194, "lateral": -9 } },
-    { "model": "rock-proto",   "onRail": { "railId": "branch", "at": 150, "lateral": 14 } },
-    { "model": "tree-a-proto", "position": [0, -0.6, 168] },
-    { "model": "tree-b-proto", "position": [-12, -0.6, 205] },
-    { "model": "tree-b-proto", "position": [12, -0.6, 205] },
-    { "model": "tree-a-proto", "position": [0, -0.6, 240] },
-    { "model": "rock-proto",   "position": [-40, -0.6, 60] },
-    { "model": "rock-proto",   "position": [45, -0.6, 90] }
+    {
+      "model": "tree-a-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 20,
+        "lateral": -9
+      }
+    },
+    {
+      "model": "tree-b-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 32,
+        "lateral": 9
+      }
+    },
+    {
+      "model": "tree-a-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 48,
+        "lateral": -9
+      }
+    },
+    {
+      "model": "tree-b-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 64,
+        "lateral": 9
+      }
+    },
+    {
+      "model": "tree-a-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 84,
+        "lateral": -9
+      }
+    },
+    {
+      "model": "tree-b-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 100,
+        "lateral": 9
+      }
+    },
+    {
+      "model": "rock-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 40,
+        "lateral": -14
+      }
+    },
+    {
+      "model": "tree-b-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 140,
+        "lateral": -9
+      }
+    },
+    {
+      "model": "tree-a-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 170,
+        "lateral": -9
+      }
+    },
+    {
+      "model": "tree-b-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 200,
+        "lateral": -9
+      }
+    },
+    {
+      "model": "tree-a-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 240,
+        "lateral": 9
+      }
+    },
+    {
+      "model": "tree-b-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 256,
+        "lateral": -9
+      }
+    },
+    {
+      "model": "tree-a-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 300,
+        "lateral": 9
+      }
+    },
+    {
+      "model": "tree-b-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 324,
+        "lateral": -9
+      }
+    },
+    {
+      "model": "tree-a-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 352,
+        "lateral": 9
+      }
+    },
+    {
+      "model": "tree-b-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 376,
+        "lateral": -9
+      }
+    },
+    {
+      "model": "tree-a-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 404,
+        "lateral": 9
+      }
+    },
+    {
+      "model": "rock-proto",
+      "onRail": {
+        "railId": "main",
+        "at": 380,
+        "lateral": 14
+      }
+    },
+    {
+      "model": "tree-a-proto",
+      "onRail": {
+        "railId": "branch",
+        "at": 40,
+        "lateral": 9
+      }
+    },
+    {
+      "model": "tree-b-proto",
+      "onRail": {
+        "railId": "branch",
+        "at": 70,
+        "lateral": 9
+      }
+    },
+    {
+      "model": "tree-a-proto",
+      "onRail": {
+        "railId": "branch",
+        "at": 110,
+        "lateral": -9
+      }
+    },
+    {
+      "model": "tree-b-proto",
+      "onRail": {
+        "railId": "branch",
+        "at": 128,
+        "lateral": 9
+      }
+    },
+    {
+      "model": "tree-a-proto",
+      "onRail": {
+        "railId": "branch",
+        "at": 152,
+        "lateral": -9
+      }
+    },
+    {
+      "model": "tree-b-proto",
+      "onRail": {
+        "railId": "branch",
+        "at": 170,
+        "lateral": 9
+      }
+    },
+    {
+      "model": "tree-a-proto",
+      "onRail": {
+        "railId": "branch",
+        "at": 194,
+        "lateral": -9
+      }
+    },
+    {
+      "model": "rock-proto",
+      "onRail": {
+        "railId": "branch",
+        "at": 150,
+        "lateral": 14
+      }
+    },
+    {
+      "model": "tree-a-proto",
+      "position": [
+        0,
+        -0.6,
+        168
+      ]
+    },
+    {
+      "model": "tree-b-proto",
+      "position": [
+        -12,
+        -0.6,
+        205
+      ]
+    },
+    {
+      "model": "tree-b-proto",
+      "position": [
+        12,
+        -0.6,
+        205
+      ]
+    },
+    {
+      "model": "tree-a-proto",
+      "position": [
+        0,
+        -0.6,
+        240
+      ]
+    },
+    {
+      "model": "rock-proto",
+      "position": [
+        -40,
+        -0.6,
+        60
+      ]
+    },
+    {
+      "model": "rock-proto",
+      "position": [
+        45,
+        -0.6,
+        90
+      ]
+    }
   ],
   "actors": [
-    { "id": "sensor-1", "type": "trigger", "onRail": { "railId": "main", "at": 25, "heightFromRail": 0 },
-      "size": [6, 4, 4], "reactsTo": "none" }
+    {
+      "id": "sensor-1",
+      "type": "trigger",
+      "onRail": {
+        "railId": "main",
+        "at": 55,
+        "heightFromRail": 0
+      },
+      "size": [
+        6,
+        4,
+        4
+      ],
+      "reactsTo": "none"
+    }
   ],
   "records": [],
   "missions": [],

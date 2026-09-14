@@ -17,6 +17,7 @@ import type { StageData } from '../../stage/types';
 import { TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
 import type { CameraFx, SceneView } from '../SceneView';
+import { cameraTarget, makeCameraTarget, smoothCamera, type CameraMode } from '../camera-rig';
 import { ActorLayer } from './actors';
 import { addEnvironment } from './environment';
 import { ModelLibrary } from './models';
@@ -29,9 +30,14 @@ export class ThreeSceneView implements SceneView {
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(TRAIN.cabFovDeg, 1, 0.1, 600);
   private readonly train = new Group();
+  private readonly cars: Group[] = [];
   private readonly models = new ModelLibrary();
   private readonly cameraPosition = new Vector3();
   private sky: Mesh | null = null;
+  private cameraMode: CameraMode = 'cab';
+  private cameraSnap = true;
+  private readonly camTarget = makeCameraTarget();
+  private readonly camCurrent = makeCameraTarget();
   private network: RailNetwork | null = null;
   private rails: Group | null = null;
   private actors: ActorLayer | null = null;
@@ -53,10 +59,14 @@ export class ThreeSceneView implements SceneView {
     this.scene.add(rails.group);
 
     this.train.name = 'train';
-    this.camera.position.copy(TRAIN.cabCameraOffset);
-    this.camera.rotation.set(0, Math.PI, 0);
-    this.train.add(this.camera);
     this.scene.add(this.train);
+    this.scene.add(this.camera);
+    for (let i = 1; i < TRAIN.carCount; i++) {
+      const car = new Group();
+      car.name = `car-${i}`;
+      this.cars.push(car);
+      this.scene.add(car);
+    }
 
     const props = new Group();
     props.name = 'props';
@@ -69,8 +79,9 @@ export class ThreeSceneView implements SceneView {
     this.actors = new ActorLayer(this.models, stage.stations);
     this.scene.add(this.actors.group);
 
-    const [trainModel] = await Promise.all([
+    const [trainModel, carModel] = await Promise.all([
       this.models.load('train-proto'),
+      this.models.load('car-proto'),
       addProps(props, stage.props, this.models),
       addModelPlacements(bufferStops, rails.bufferStops, this.models),
       this.actors.init(stage.actors),
@@ -78,6 +89,7 @@ export class ThreeSceneView implements SceneView {
     const trainInstance = trainModel.clone(true);
     trainInstance.name = 'train-proto';
     this.train.add(trainInstance);
+    for (const car of this.cars) car.add(carModel.clone(true));
 
     this.resize(container.clientWidth, container.clientHeight, window.devicePixelRatio);
   }
@@ -94,19 +106,39 @@ export class ThreeSceneView implements SceneView {
     void this.actors?.onStageEvent(event);
   }
 
+  setCamera(mode: CameraMode, snap = false): void {
+    this.cameraMode = mode;
+    this.cameraSnap = this.cameraSnap || snap;
+  }
+
   update(dt: number, pose: TrainPose, fx: CameraFx): void {
     if (!this.renderer) return;
     this.train.position.copy(pose.position);
     this.train.quaternion.copy(pose.quaternion);
-    this.camera.position.copy(TRAIN.cabCameraOffset);
-    this.camera.position.y -= 0.35 * fx.dip;
-    if (fx.shake > 0) {
-      this.camera.position.x += (Math.random() - 0.5) * 0.12 * fx.shake;
-      this.camera.position.y += (Math.random() - 0.5) * 0.12 * fx.shake;
+    this.cars.forEach((car, i) => {
+      const cp = pose.cars[i];
+      if (cp) {
+        car.position.copy(cp.position);
+        car.quaternion.copy(cp.quaternion);
+      }
+    });
+
+    cameraTarget(this.cameraMode, pose, this.camTarget);
+    smoothCamera(this.camCurrent, this.camTarget, dt, this.cameraSnap || this.cameraMode === 'cab');
+    this.cameraSnap = false;
+    this.camera.position.copy(this.camCurrent.position);
+    this.camera.up.copy(this.camCurrent.up);
+    this.camera.lookAt(this.camCurrent.lookAt);
+    if (this.cameraMode === 'cab') {
+      this.camera.position.y -= 0.35 * fx.dip;
+      if (fx.shake > 0) {
+        this.camera.position.x += (Math.random() - 0.5) * 0.12 * fx.shake;
+        this.camera.position.y += (Math.random() - 0.5) * 0.12 * fx.shake;
+      }
     }
+
     this.actors?.update(dt);
-    this.train.updateMatrixWorld(true);
-    this.camera.getWorldPosition(this.cameraPosition);
+    this.cameraPosition.copy(this.camera.position);
     this.sky?.position.copy(this.cameraPosition);
     this.renderer.render(this.scene, this.camera);
   }

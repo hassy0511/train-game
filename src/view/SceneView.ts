@@ -1,5 +1,6 @@
 import type { Scene } from 'three';
 import type { StageEvent } from '../core/stage-events';
+import type { CameraMode } from './camera-rig';
 import type { RailNetwork } from '../rail/types';
 import type { StageData } from '../stage/types';
 import type { TrainPose } from '../train/types';
@@ -17,6 +18,8 @@ export interface SceneView {
   update(dt: number, pose: TrainPose, fx: CameraFx): void;
   /** Game events to visualize (doors, passengers, actors, rail cuts, goal marker). */
   onStageEvent(event: StageEvent): void;
+  /** Switches the camera. `snap` skips the smooth transition. */
+  setCamera(mode: CameraMode, snap?: boolean): void;
   resize(width: number, height: number, devicePixelRatio: number): void;
   getStats(): { drawCalls: number; triangles: number } | null;
   /** For dev-only helpers (spline visualizer). May return null. */
