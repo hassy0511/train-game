@@ -14,9 +14,10 @@ TOLERANCE = 0.1
 CHARACTER_NAMES = {"cat-sleep", "cat-stand", "partner", "amanojaku", "passenger"}
 WORLD_STYLE_NAMES = {
     "house-a", "house-b", "house-c", "shop", "tower", "hq",
-    "platform", "platform-roof", "station-sign", "crossing-gate",
-    "crossing-sign", "parcel", "goal-flag",
+    "platform", "platform-roof", "station-sign", "stop-line", "stop-board",
+    "car-proto", "crossing-gate", "crossing-sign", "parcel", "goal-flag",
 }
+WORLD_TRIANGLE_BUDGET = 25_000
 
 
 def clear_scene() -> None:
@@ -92,13 +93,15 @@ def main() -> None:
     world_triangles = sum(
         report["triangles"] for report in reports if report["model"] in WORLD_STYLE_NAMES
     )
-    if world_triangles > 20_000:
-        failed.append(f"world triangle total {world_triangles} > 20000")
+    if world_triangles > WORLD_TRIANGLE_BUDGET:
+        failed.append(
+            f"world triangle total {world_triangles} > {WORLD_TRIANGLE_BUDGET}"
+        )
     print("TOWN_SET_VALIDATION=" + json.dumps({
         "assets": len(reports),
         "failed": failed,
         "world_triangles": world_triangles,
-        "world_triangle_budget": 20_000,
+        "world_triangle_budget": WORLD_TRIANGLE_BUDGET,
     }, sort_keys=True))
     if failed:
         raise SystemExit(2)

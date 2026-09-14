@@ -18,24 +18,25 @@
 
 ## 実装済み
 
-チケットに名前が列挙されている18モデルを、Blender 4.5.13 LTSで決定的に再生成できるPythonスクリプトとして実装した。
+最新版チケットに名前が列挙されている21モデルを、Blender 4.5.13 LTSで決定的に再生成できるPythonスクリプトとして実装した。
 
 - 建物6点: `house-a`, `house-b`, `house-c`, `shop`, `tower`, `hq`
-- 駅3点: `platform`, `platform-roof`, `station-sign`
+- 駅・停止位置5点: `platform`, `platform-roof`, `station-sign`, `stop-line`, `stop-board`
+- 客車1点: `car-proto`
 - 踏切2点: `crossing-gate`, `crossing-sign`
 - キャラクター5点: `cat-sleep`, `cat-stand`, `partner`, `amanojaku`, `passenger`
 - 小物2点: `parcel`, `goal-flag`
 
 成果物は次の場所にある。
 
-- 個別生成スクリプト18本: `assets/blender/<model>.py`
+- 個別生成スクリプト21本: `assets/blender/<model>.py`
 - 共通生成処理: `assets/blender/town_common.py`
 - 一括生成: `assets/blender/generate-town-set.py`
 - 一括検証: `assets/blender/validate-town-set.py`
 - 集合プレビュー生成: `assets/blender/render-town-set.py`, `assets/blender/render-world-parts.py`
-- GLB 18点: `public/models/<model>.glb`
-- 個別プレビュー18点: `assets/previews/<model>.png`
-- 集合プレビュー: `assets/previews/town-set.png`, `assets/previews/station-set.png`, `assets/previews/trackside-set.png`
+- GLB 21点: `public/models/<model>.glb`
+- 個別プレビュー21点: `assets/previews/<model>.png`
+- 集合プレビュー: `assets/previews/town-set.png`, `assets/previews/station-set.png`, `assets/previews/railway-set.png`, `assets/previews/trackside-set.png`
 
 ### キャラクター再改修（ユーザーレビュー反映）
 
@@ -60,8 +61,9 @@
 - 猫2ポーズ・ピコ・サカサ・乗客を三面図に合わせて再設計
 - 頭・胴など有機的な大面だけスムーズ接続し、帽子・ケープ・靴・色面は明確な形状として維持
 - サカサの帽子は連続した太い曲面チューブ、乗客の帽子と靴は厚みのある独立形状にした
+- 第2弾で乗客の帽子へ相棒と共通の黄色ランプを追加した
 
-旧チケットの120〜320三角形上限では、ユーザーが却下した「何か分からない安いポリゴン感」に戻るため、キャラクター5体の上限を3,500〜8,200へ改定した。実測合計は29,344三角形で、1ファイル1メッシュ・テクスチャなし・各350KB以下を維持している。
+旧チケットの120〜320三角形上限では、ユーザーが却下した「何か分からない安いポリゴン感」に戻るため、キャラクター5体の上限を3,500〜8,200へ改定した。実測合計は29,452三角形で、1ファイル1メッシュ・テクスチャなし・各350KB以下を維持している。
 
 最終実測値:
 
@@ -71,26 +73,37 @@
 | `cat-stand` | 5,224 | 5,500 | 0.700×0.600×0.400 |
 | `partner` | 5,392 | 5,600 | 0.600×0.700×0.500 |
 | `amanojaku` | 7,664 | 8,200 | 0.900×1.400×0.600 |
-| `passenger` | 7,980 | 8,200 | 0.600×1.600×0.400 |
+| `passenger` | 8,088 | 8,200 | 0.600×1.600×0.400 |
 
-### 世界パーツ13点の再設計
+### 世界パーツ16点の再設計
 
-キャラクターC案に合わせ、非キャラクター13点を旧プリミティブ主体モデルから再設計した。
+キャラクターC案に合わせ、非キャラクター16点を旧プリミティブ主体モデルから再設計した。
 
 - 建物: 基礎、厚い屋根・軒、窓枠と奥まったガラス、玄関枠、庇、階層帯、柱、時計針、屋根リブを追加
-- 駅: ホーム安全帯・側壁パネル、屋根の柱脚・柱頭・梁・鼻隠し、駅名標の厚い両面枠を追加
+- 駅: 45mホームの安全帯・側壁パネル、屋根の柱脚・柱頭・梁・鼻隠し、駅名標の厚い両面枠を追加
+- 停止位置: 薄い白線と、台座・支柱・厚い赤白表示面・丸印を持つ停止位置標を追加
+- 客車: 厚い屋根、床下、台車、車輪、連結器、側窓5枚、妻面扉・窓・標識灯、屋上機器を追加
 - 踏切: 台座、回転軸、ブラケット、厚い遮断棒、面取りした標識を追加
 - 小物: 荷物の帯・結び目・荷札、旗の台座・竿先・緩い波形を追加
 - 色数は1点3〜6色に整理し、クリーム、コーラル、深い青、紫、金を基調に統一
-- 個別13枚に加え、`town-set.png`、`station-set.png`、`trackside-set.png` を生成して相対スケールも確認
+- 個別16枚に加え、`town-set.png`、`station-set.png`、`railway-set.png`、`trackside-set.png` を生成して相対スケールも確認
 
-非キャラクター13点の実測合計は14,502三角形（上限20,000）。最大GLBは`hq`の105,172 bytesで、各250KB以下。
+非キャラクター16点の実測合計は17,742三角形（上限25,000）。最大GLBは`hq`の105,172 bytesで、各250KB以下。
+
+拡張版0003で追加・変更した4点の最終実測値:
+
+| モデル | 三角形 | 予算 | bbox寸法 X×Y×Z (m) | GLB bytes |
+|---|---:|---:|---|---:|
+| `platform` | 616 | 900 | 4.000×1.000×45.000 | 21,856 |
+| `stop-line` | 44 | 80 | 3.400×0.030×0.400 | 2,556 |
+| `stop-board` | 624 | 900 | 0.900×2.200×0.177 | 26,796 |
+| `car-proto` | 2,396 | 2,500 | 3.072×3.600×12.000 | 86,860 |
 
 ## 検証結果
 
 すべてのGLBについて、クリーンなBlenderプロセスからの再読込とプロジェクト内一括検証を実施した。
 
-- 対象: 18 / 18
+- 対象: 21 / 21
 - 失敗: 0
 - 1ファイル1メッシュ: 全点OK
 - オブジェクト名: 全点ファイル名と一致
@@ -98,12 +111,12 @@
 - バウンディングボックス: 指定寸法に対して各軸±0.1m以内（下記の明示的判断を除く）
 - 原点: 接地面かつ水平方向中央
 - ファイルサイズ: キャラクター各350KB以下、非キャラクター各250KB以下
-- 個別18枚と集合4枚（キャラクター、街、駅、踏切・小物）: 目視確認済み
+- 個別21枚と集合5枚（キャラクター、街、駅、客車、踏切・小物）: 目視確認済み
 
 一括検証の最終出力:
 
 ```text
-TOWN_SET_VALIDATION={"assets": 18, "failed": [], "world_triangle_budget": 20000, "world_triangles": 14502}
+TOWN_SET_VALIDATION={"assets": 21, "failed": [], "world_triangle_budget": 25000, "world_triangles": 17742}
 ```
 
 アプリ側の回帰確認:
@@ -115,10 +128,10 @@ TOWN_SET_VALIDATION={"assets": 18, "failed": [], "world_triangle_budget": 20000,
 
 このCodex環境では通常の`node` / `npm`がPATHにないため、Codex同梱Nodeとpnpmを使用した。PlaywrightのChromium導入時は企業プロキシ証明書に対応するため`NODE_OPTIONS=--use-system-ca`を指定した。`package.json`と`package-lock.json`は変更していない。
 
-## チケット記載の曖昧さと判断
+## 拡張版0003への追従と判断
 
-1. 受け入れ条件には「20ファイル分」とあるが、モデル名の表と本文に列挙されているのは18点。追加2点の名称・仕様がないため、列挙された18点を実装した。
-2. `platform` / `platform-roof`はチケット表の表記とランタイムの`placeholder-sizes.ts`で軸の見え方が異なる。ゲームの進行方向が+Zである契約を優先し、長手方向をZ軸にした（platformは4×1×30m、roofは4×4.2×12mのX×Y×Z）。
+1. `origin/main`の更新で`stop-line`、`stop-board`、`car-proto`が追加されたため、既存18点と合わせた実数21点を実装した。受け入れ条件の誤記「23ファイル分」は「21モデル分」へ修正した。
+2. `platform` / `platform-roof`はゲームの進行方向が+Zであるランタイム契約を優先し、長手方向をZ軸にした（platformは4×1×45m、roofは4×4.2×12mのX×Y×Z）。
 3. `hq`の表は20×12×14mだが、同じチケットで旗竿16mが明示されている。旗竿を守るため全体バウンディングボックスの高さは16mとし、建物本体は指定範囲内に収めた。
 4. キャラクター5体はユーザーレビューを優先し、丸い有機部分にスムーズシェーディングを採用した。単色マテリアル、ポリゴン予算、1メッシュ、寸法などの契約は維持している。
 
@@ -135,7 +148,6 @@ powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.codex\skills\blender
 
 ## Claude Codeへの次アクション
 
-1. `codex/0003-town-set`をcheckoutし、`docs/WORLD_ART_DIRECTION.md`、18モデル、集合プレビューをレビューする。
-2. チケットの「20ファイル分」と列挙18点の差を、PR本文で判断事項として共有する。
-3. 問題がなければ0003のPRを作成してマージする。
-4. mainへのマージ後、依存が外れるチケット0004へ進む。
+1. `codex/0003-town-set`をcheckoutし、`docs/WORLD_ART_DIRECTION.md`、21モデル、集合プレビューをレビューする。
+2. 問題がなければ0003のPRを作成してマージする。
+3. mainへのマージ後、依存が外れるチケット0004へ進む。
