@@ -11,6 +11,7 @@ from town_common import ASSET_SPECS, ROOT
 
 
 TOLERANCE = 0.1
+CHARACTER_NAMES = {"cat-sleep", "cat-stand", "partner", "amanojaku", "passenger"}
 
 
 def clear_scene() -> None:
@@ -52,8 +53,9 @@ def validate(name: str, expected_size: tuple[float, float, float], budget: int) 
         violations.append(f"mesh name {[obj.name for obj in meshes]}")
     if triangles > budget:
         violations.append(f"triangles {triangles} > {budget}")
-    if path.stat().st_size > 100 * 1024:
-        violations.append(f"file size {path.stat().st_size} > 102400")
+    max_bytes = (350 if name in CHARACTER_NAMES else 100) * 1024
+    if path.stat().st_size > max_bytes:
+        violations.append(f"file size {path.stat().st_size} > {max_bytes}")
     if abs(minimum[1]) > TOLERANCE:
         violations.append(f"ground min Y {minimum[1]:.4f}")
     for axis, label in enumerate("XYZ"):

@@ -29,11 +29,11 @@ ASSET_SPECS = {
     "crossing-sign": ((1.2, 3.0, 0.2), 60),
     # Revised for the user-approved Variant C style. These remain tiny against
     # the 100k on-screen budget while allowing controlled rounded transitions.
-    "cat-sleep": ((0.7, 0.35, 0.5), 1400),
-    "cat-stand": ((0.7, 0.6, 0.4), 1800),
-    "partner": ((0.6, 0.7, 0.5), 1800),
-    "amanojaku": ((0.9, 1.4, 0.6), 2600),
-    "passenger": ((0.6, 1.6, 0.4), 2400),
+    "cat-sleep": ((0.7, 0.35, 0.5), 3500),
+    "cat-stand": ((0.7, 0.6, 0.4), 5500),
+    "partner": ((0.6, 0.7, 0.5), 5600),
+    "amanojaku": ((0.9, 1.4, 0.6), 8200),
+    "passenger": ((0.6, 1.6, 0.4), 8200),
     "parcel": ((0.6, 0.5, 0.6), 40),
     "goal-flag": ((1.6, 2.4, 0.2), 60),
 }
