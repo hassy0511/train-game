@@ -63,15 +63,14 @@ async function driveTo(page: Page, at: number, opts: { whistleAt?: number } = {}
 }
 
 async function doors(page: Page): Promise<void> {
-  const app = page.locator('#app');
   const door = page.locator('#door');
   await expect(door).toBeVisible({ timeout: 20_000 });
   // The phase attribute is written once per frame; wait for it before pressing so the
   // "doors finished" wait below cannot pass on a stale value from the previous frame.
-  await expect(app).toHaveAttribute('data-phase', 'doors', { timeout: 10_000 });
+  await expect(page.locator('#app')).toHaveAttribute('data-phase', 'doors', { timeout: 10_000 });
   await door.dispatchEvent('pointerdown');
   await expect(door).toBeHidden();
-  await expect(app).not.toHaveAttribute('data-phase', 'doors', { timeout: 60_000 });
+  await page.waitForFunction(() => document.getElementById('app')?.dataset.phase !== 'doors', null, { timeout: 60_000 });
 }
 
 test('stage 1-1 full run: all three missions and the ending', async ({ page }) => {

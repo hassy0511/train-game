@@ -21,12 +21,12 @@
 |---|---|---|---|---|
 | [0001](0001-blender-proto-models.md) | Blender: Phase 0 の仮モデル一式 | Codex | 完了（PR #2） | なし |
 | [0002](0002-three-scene-view.md) | Three.js: シーン表示（線路メッシュ・車両・環境・運転席カメラ） | Codex | 完了（PR #4） | — |
-| [0003](0003-blender-town-set.md) | Blender: 1-1 はじまりの街 のモデル一式 | Codex | 発注中（着手可） | なし |
-| [0004](0004-three-stage-1-1-visuals.md) | Three.js: 1-1 の見た目と演出 | Codex | 発注中（0003 の後） | 0003 |
+| [0003](0003-blender-town-set.md) | Blender: 1-1 はじまりの街 のモデル一式 | Codex | 第 1 弾 完了（PR #11）。第 2 弾 実装完了（Claude引き継ぎ待ち） | なし |
+| [0004](0004-three-stage-1-1-visuals.md) | Three.js: 1-1 の見た目と演出 | Codex | 発注中（着手可） | — |
 
 ## 発注の順番
-1. **0003**（街のモデル）は今すぐ
-2. **0004**（1-1 の見た目と演出）は 0003 が main に入ってから
+1. **0003 第 2 弾**（停止線・とまれ看板・客車）はClaude CodeのレビューとPR作成へ進む
+2. **0004**（1-1 の見た目と演出）は今すぐ着手できる
 3. PR を Claude Code がレビューし、main にマージしたら GitHub Pages に出る
 
 ## Codex への渡し方（だいさん用・コピペ）
@@ -39,13 +39,22 @@
 受け入れ条件を全部満たしてから PR を出し、迷った点は PR に書いてください。
 ```
 
-0003 を頼むとき:
+0003 第 2 弾を頼むとき:
 
 ```
 リポジトリ hassy0511/train-game の main を開いて、AGENTS.md と docs/tickets/README.md を読んでください。
-その上で docs/tickets/0003-blender-town-set.md を実装してください。
-ブランチは codex/0003-town-set、PR は main 宛て、タイトルは「[#0003] 1-1 の街のモデル一式」。
-数が多いので、建物・駅・ふみきり と 登場人物・小物 の 2 回に分けて PR を出してよいです。
+その上で docs/tickets/0003-blender-town-set.md の「追加発注（第 2 弾）」を実装してください。
+ブランチは既存の codex/0003-town-set、PR は main 宛て、タイトルは「[#0003] 停止線・看板・客車」。
+```
+
+0004 を頼むとき:
+
+```
+リポジトリ hassy0511/train-game の main を開いて、AGENTS.md と docs/tickets/README.md を読んでください。
+その上で docs/tickets/0004-three-stage-1-1-visuals.md を実装してください。
+ブランチは codex/0004-stage-1-1-visuals、PR は main 宛て、タイトルは「[#0004] 1-1 の見た目と演出」。
+src/view/three/ 配下（actors.ts の仮実装を置き換えてよい）と src/stages/1-1.json の props だけを変更してください。
+npm run smoke を通し、tests/smoke/output のスクショと getStats() の値を PR に貼ってください。
 ```
 
 0002 を頼むとき:
