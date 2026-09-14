@@ -424,7 +424,7 @@
       "type": "trigger",
       "onRail": {
         "railId": "main",
-        "at": 70,
+        "at": 55,
         "heightFromRail": 0
       },
       "size": [
