@@ -140,6 +140,8 @@ export type MissionLines = Partial<
     | 'catDanger'
     | 'catDangerAfter'
     | 'signReversed'
+    | 'gauge'
+    | 'hardBrake'
     | 'complete',
     string
   >
@@ -169,8 +171,12 @@ export type CutsceneStep =
   | { remove: string }
   | { wait: number }
   | { cutRail: { railId: string; from: number; to: number } }
-  | { card: { title: string; button: string } }
-  | { emote: Emote };
+  | { card: { title: string; button: string; icon?: 'badge' } }
+  | { emote: Emote }
+  /** Switch the camera for the rest of the cutscene (restored afterwards). */
+  | { camera: 'cab' | 'chase' | 'side' | 'top' }
+  /** Full-screen dark caption that fades after `seconds`. */
+  | { caption: string; seconds?: number };
 
 export interface GimmickDef {
   type: string;

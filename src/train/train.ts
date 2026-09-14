@@ -7,9 +7,12 @@ import {
   BRAKING,
   BUFFER_MARGIN,
   EMERGENCY_STOP_SECONDS,
+  HARD_BRAKE_NOTCH,
   JUNCTION_ARROW_DISTANCE,
   JUNCTION_LOCK_DISTANCE,
+  LEVER_NOTCHES,
   SPEED_NOTCHES,
+  STOP_NOTCH,
   TRAIN,
 } from './params';
 import type { TrainPose, TrainState } from './types';
@@ -29,6 +32,8 @@ export interface TrainEvents extends Record<string, unknown> {
   junctionPassed: void;
   railChanged: { railId: string };
   endOfLine: void;
+  /** The hard brake was applied while moving faster than a walking pace. */
+  hardBrake: { speed: number };
 }
 
 /** The train state machine. Moves along the rail network by arc length; no free physics. */
@@ -57,14 +62,17 @@ export class Train {
     private readonly junctions: JunctionDef[],
     start: StartDef,
   ) {
-    this.state = { railId: start.railId, s: start.at, speed: 0, notch: 0, direction: start.direction };
+    // `start.at` is where the train front stands; the state tracks the lead car center.
+    const s0 = start.at - TRAIN.length / 2;
+    this.state = { railId: start.railId, s: s0, speed: 0, notch: STOP_NOTCH, direction: start.direction };
     this.pose = {
       railId: start.railId,
-      s: start.at,
+      s: s0,
       speed: 0,
       direction: start.direction,
       position: new Vector3(),
       quaternion: new Quaternion(),
+      cars: Array.from({ length: TRAIN.carCount - 1 }, () => ({ position: new Vector3(), quaternion: new Quaternion() })),
     };
     this.refreshPending();
     this.computePose();
@@ -100,7 +108,11 @@ export class Train {
   /** Returns false when the controls are locked (the caller should tell the player why). */
   setNotch(notch: number): boolean {
     if (this.ended || this.lockReason !== null || this.emergency) return false;
-    this.state.notch = Math.min(Math.max(Math.round(notch), 0), SPEED_NOTCHES.length - 1);
+    const next = Math.min(Math.max(Math.round(notch), 0), SPEED_NOTCHES.length - 1);
+    if (next === HARD_BRAKE_NOTCH && this.state.notch !== HARD_BRAKE_NOTCH && this.state.speed > 3) {
+      this.events.emit('hardBrake', { speed: this.state.speed });
+    }
+    this.state.notch = next;
     return true;
   }
 
@@ -110,12 +122,12 @@ export class Train {
     this.state.notch = 0;
   }
 
-  /** Puts the train back at `s` on the current rail, stopped, lever at "stop". */
-  rewindTo(s: number): void {
+  /** Puts the train back with its front at `frontS` on the current rail, stopped, lever at "stop". */
+  rewindTo(frontS: number): void {
     const st = this.state;
-    st.s = this.wrap(s);
+    st.s = this.wrap(frontS - TRAIN.length / 2);
     st.speed = 0;
-    st.notch = 0;
+    st.notch = STOP_NOTCH;
     this.emergency = false;
     this.ended = false;
     this.refreshPending();
@@ -140,9 +152,9 @@ export class Train {
     return d;
   }
 
-  /** Signed distance from the car center to `at` on the current rail (loop-aware). */
+  /** Signed distance from the car FRONT to `at` on the current rail (loop-aware). */
   offsetTo(at: number): number {
-    let d = at - this.state.s;
+    let d = at - this.frontS;
     if (this.onLoop) {
       const L = this.currentRail.length;
       while (d < -L / 2) d += L;
@@ -167,12 +179,17 @@ export class Train {
     const st = this.state;
     let rail = this.currentRail;
 
-    let target: number = SPEED_NOTCHES[st.notch];
+    const notch = LEVER_NOTCHES[st.notch];
+    let target: number = notch.speed;
+    let brake: number = notch.brake;
     const stopAt = this.stopDistance(rail);
     if (stopAt !== null) {
       const remaining = stopAt - st.s;
       const brakeDistance = (st.speed * st.speed) / (2 * BRAKING);
-      if (remaining <= brakeDistance + 1) target = 0;
+      if (remaining <= brakeDistance + 1) {
+        target = 0;
+        brake = Math.max(brake, BRAKING);
+      }
     }
 
     if (this.emergency) {
@@ -180,7 +197,7 @@ export class Train {
       const rate = Math.max(BRAKING, SPEED_NOTCHES[SPEED_NOTCHES.length - 1] / EMERGENCY_STOP_SECONDS);
       st.speed = Math.max(0, st.speed - rate * dt);
     } else if (st.speed < target) st.speed = Math.min(target, st.speed + ACCELERATION * dt);
-    else if (st.speed > target) st.speed = Math.max(target, st.speed - BRAKING * dt);
+    else if (st.speed > target) st.speed = Math.max(target, st.speed - brake * dt);
 
     st.s += st.speed * dt * st.direction;
 
@@ -263,33 +280,41 @@ export class Train {
       st.s = stopAt;
       st.speed = 0;
     }
-    if (!this.ended && st.speed === 0 && st.notch > 0 && stopAt - st.s < 3) {
+    if (!this.ended && st.speed === 0 && st.notch > STOP_NOTCH && stopAt - st.s < 3) {
       this.ended = true;
-      st.notch = 0;
+      st.notch = STOP_NOTCH;
       this.events.emit('endOfLine');
     }
   }
 
-  private computePose(): void {
-    const st = this.state;
-    const rail = this.currentRail;
-    const front = rail.frameAt(st.s + TRAIN.bogieOffset);
-    const rear = rail.frameAt(st.s - TRAIN.bogieOffset);
+  /** Frame on the current rail; wraps on loops, extrapolates at the ends otherwise. */
+  private frameOnRail(s: number) {
+    return this.currentRail.frameAt(this.onLoop ? this.wrap(s) : s);
+  }
+
+  /** Writes the body transform of a car centered at `s` into `position`/`quaternion`. */
+  private carPose(s: number, position: Vector3, quaternion: Quaternion): void {
+    const front = this.frameOnRail(s + TRAIN.bogieOffset);
+    const rear = this.frameOnRail(s - TRAIN.bogieOffset);
     this.front.copy(front.position);
     this.rear.copy(rear.position);
-
-    const pose = this.pose;
-    pose.railId = st.railId;
-    pose.s = st.s;
-    pose.speed = st.speed;
-    pose.direction = st.direction;
-    pose.position.addVectors(this.front, this.rear).multiplyScalar(0.5);
-
+    position.addVectors(this.front, this.rear).multiplyScalar(0.5);
     this.forward.subVectors(this.front, this.rear).normalize();
     this.up.addVectors(front.up, rear.up).normalize();
     this.xAxis.crossVectors(this.up, this.forward).normalize();
     this.up.crossVectors(this.forward, this.xAxis).normalize();
     this.basis.makeBasis(this.xAxis, this.up, this.forward);
-    pose.quaternion.setFromRotationMatrix(this.basis);
+    quaternion.setFromRotationMatrix(this.basis);
+  }
+
+  private computePose(): void {
+    const st = this.state;
+    const pose = this.pose;
+    pose.railId = st.railId;
+    pose.s = st.s;
+    pose.speed = st.speed;
+    pose.direction = st.direction;
+    this.carPose(st.s, pose.position, pose.quaternion);
+    pose.cars.forEach((car, i) => this.carPose(st.s - TRAIN.carSpacing * (i + 1), car.position, car.quaternion));
   }
 }

@@ -6,17 +6,20 @@ import { StageEventBus } from './core/stage-events';
 import { MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
 import { loadStage } from './stage/loader';
-import { SPEED_LABELS } from './train/params';
+import { SPEED_LABELS, STOP_NOTCH } from './train/params';
 import { Train } from './train/train';
 import { createUi } from './ui';
 import { createBubbles } from './ui/bubble';
+import { createCaption } from './ui/caption';
 import { createCargoStrip } from './ui/cargo-strip';
 import { showCard } from './ui/cards';
 import { createDoorButton } from './ui/door-button';
 import { createFade } from './ui/fade';
 import { showTitle } from './ui/title';
 import { createToast } from './ui/toast';
-import { createSceneView, type CameraFx } from './view';
+import { CAMERA_LABELS, CAMERA_MODES, createSceneView, type CameraFx, type CameraMode } from './view';
+import { createCameraButton } from './ui/camera-button';
+import { createStopGauge } from './ui/stop-gauge';
 
 const app = document.getElementById('app') as HTMLElement;
 const viewEl = document.getElementById('view') as HTMLElement;
@@ -50,6 +53,7 @@ async function boot(): Promise<void> {
 
   const ui = createUi(uiEl, {
     speedLabels: SPEED_LABELS,
+    initialNotch: STOP_NOTCH,
     onNotch: (n) => {
       if (!train.setNotch(n)) {
         ui.lever.setNotch(train.state.notch);
@@ -65,10 +69,39 @@ async function boot(): Promise<void> {
   window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
 
   const bubbles = createBubbles(uiEl, PARTNER_NAME);
+  const gauge = createStopGauge(uiEl);
+  const caption = createCaption(uiEl);
   const cargo = createCargoStrip(uiEl);
   const toast = createToast(uiEl);
   const fade = createFade(uiEl);
-  const doorButton = createDoorButton(uiEl.querySelector('.action-buttons') as HTMLElement);
+  const actionButtons = uiEl.querySelector('.action-buttons') as HTMLElement;
+  const doorButton = createDoorButton(actionButtons);
+
+  // Camera: the player picks a mode; the game may override it for a moment (doors, cutscenes).
+  let userCamera: CameraMode = 'cab';
+  let cameraOverride: CameraMode | null = null;
+  const applyCamera = (snap = false): void => {
+    const mode = cameraOverride ?? userCamera;
+    view.setCamera(mode, snap);
+    app.dataset.camera = mode;
+    cameraButton.setMode(mode);
+  };
+  const cameraButton = createCameraButton(
+    actionButtons,
+    CAMERA_MODES.map((mode) => ({ mode, label: CAMERA_LABELS[mode] })),
+    (mode) => {
+      userCamera = mode;
+      cameraOverride = null;
+      applyCamera();
+    },
+  );
+  applyCamera(true);
+
+  train.events.on('hardBrake', () => {
+    fx.dip = Math.max(fx.dip, 0.5);
+    audio.playSqueal();
+    if (hasMissions) void bubbles.say('わわっ！');
+  });
 
   const startPose = train.getPose();
   physics.addTrain(startPose.position, startPose.quaternion);
@@ -94,6 +127,8 @@ async function boot(): Promise<void> {
 
   document.title = GAME_TITLE;
   app.dataset.stage = stage.file.id;
+  app.dataset.build = __BUILD_ID__;
+  console.info(`build ${__BUILD_ID__}`);
   app.dataset.ready = '1';
 
   let last = performance.now();
@@ -158,10 +193,11 @@ async function boot(): Promise<void> {
   const ports: MissionPorts = {
     say: (text, who) => bubbles.say(text, who),
     sayAsync: (text, who) => void bubbles.say(text, who),
-    card: (title, button) => {
+    card: (title, button, icon) => {
       audio.playCard();
-      return showCard(uiEl, title, button);
+      return showCard(uiEl, title, button, icon);
     },
+    caption,
     wait: waitSeconds,
     toast: (text, kind) => {
       toast.show(text, kind);
@@ -176,7 +212,12 @@ async function boot(): Promise<void> {
       fx.shake = Math.max(fx.shake, shake);
       audio.playBoing();
     },
-    resetLever: () => ui.lever.setNotch(0),
+    resetLever: () => ui.lever.setNotch(STOP_NOTCH),
+    gauge: (state) => gauge.set(state),
+    autoCamera: (mode) => {
+      cameraOverride = mode;
+      applyCamera();
+    },
   };
   events.on('event', (e) => {
     if (e.type === 'door') audio.playDoor(e.open);

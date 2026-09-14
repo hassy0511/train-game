@@ -6,7 +6,7 @@ import { runCutscene, type CutscenePorts } from '../cutscene/runner';
 import type { MissionDef, MissionLines, MissionStep, Speaker, StageData, StationDef } from '../stage/types';
 import { PASSENGER_SECONDS, REWIND_DISTANCE } from '../train/params';
 import type { Train } from '../train/train';
-import { StopMonitor, type StopGrade } from './station-stop';
+import { StopMonitor, type GaugeState, type StopGrade } from './station-stop';
 
 /** Everything the runner needs from the UI layer. */
 export interface MissionPorts extends CutscenePorts {
@@ -20,6 +20,8 @@ export interface MissionPorts extends CutscenePorts {
   cameraFx(dip: number, shake: number): void;
   /** Lever back to "stop" after a rewind. */
   resetLever(): void;
+  /** Stop gauge state for this frame. */
+  gauge(state: GaugeState): void;
 }
 
 export type MissionPhase = 'idle' | 'driving' | 'stopped' | 'doors' | 'cutscene' | 'failing' | 'clear';
@@ -104,6 +106,7 @@ export class MissionRunner {
   /** Per-frame monitoring while driving. */
   update(dt: number): void {
     if (this.phase !== 'driving') return;
+    if (this.stop) this.ports.gauge(this.stop.gauge);
     if (!this.movingSaid && this.train.state.speed > 0) {
       this.movingSaid = true;
       if (this.lines.moving) this.ports.sayAsync(this.lines.moving);
@@ -120,6 +123,9 @@ export class MissionRunner {
     const outcome = this.stop?.update(dt) ?? null;
     if (outcome) {
       switch (outcome.kind) {
+        case 'gaugeShown':
+          if (this.lines.gauge) this.ports.sayAsync(this.lines.gauge);
+          break;
         case 'near':
           if (this.lines.stationNear) this.ports.sayAsync(this.lines.stationNear);
           break;
@@ -143,6 +149,7 @@ export class MissionRunner {
       if (c.kind === 'near' && this.lines.catNear) this.ports.sayAsync(this.lines.catNear);
       if (c.kind === 'danger') {
         this.train.emergencyStop();
+        this.ports.autoCamera('side');
         cat.flee();
         this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'flee', position: this.catFleePosition(cat), seconds: 0.6 });
         this.finishDrive({ kind: 'fail', reason: 'cat' });
@@ -214,6 +221,7 @@ export class MissionRunner {
 
   private finishDrive(outcome: DriveOutcome): void {
     this.phase = outcome.kind === 'fail' ? 'failing' : 'stopped';
+    if (this.stop) this.ports.gauge(this.stop.gauge);
     this.train.lockInput(this.phase);
     const r = this.resolveDrive;
     this.resolveDrive = null;
@@ -238,6 +246,7 @@ export class MissionRunner {
     for (const cat of this.cats) this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'sleep', position: cat.actor.position });
     this.events.post({ type: 'rewind' });
     this.ports.resetLever();
+    this.ports.autoCamera(null);
     await this.ports.wait(0.3);
     await this.ports.fade(false, 0.4);
   }
@@ -247,6 +256,7 @@ export class MissionRunner {
     this.train.lockInput('doors');
     await new Promise<void>((resolve) => this.ports.showDoorButton(resolve));
     this.ports.hideDoorButton();
+    this.ports.autoCamera('side');
     this.events.post({ type: 'door', open: true, stationId: station.id });
     if (this.lines.doorOpen) this.ports.sayAsync(this.lines.doorOpen);
     await this.ports.wait(0.6);
@@ -278,6 +288,7 @@ export class MissionRunner {
     this.events.post({ type: 'door', open: false, stationId: station.id });
     if (this.lines.doorClosed) this.ports.sayAsync(this.lines.doorClosed);
     await this.ports.wait(0.4);
+    this.ports.autoCamera(null);
     this.phase = 'idle';
     this.train.unlockInput();
   }
@@ -288,7 +299,9 @@ export class MissionRunner {
     const previous = this.phase;
     this.phase = 'cutscene';
     this.train.lockInput('cutscene');
+    this.ports.autoCamera('chase');
     await runCutscene(steps, this.stage.network, this.groundY, this.events, this.ports);
+    this.ports.autoCamera(null);
     this.phase = previous === 'driving' ? 'idle' : previous;
   }
 }

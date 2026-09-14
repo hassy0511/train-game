@@ -16,7 +16,10 @@ export function showTitle(root: HTMLElement, title: string): Promise<void> {
       el.remove();
       resolve();
     });
-    el.append(h, btn);
+    const stamp = document.createElement('div');
+    stamp.className = 'build-stamp';
+    stamp.textContent = `build ${__BUILD_ID__}`;
+    el.append(h, btn, stamp);
     root.appendChild(el);
   });
 }

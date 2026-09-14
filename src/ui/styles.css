@@ -62,9 +62,9 @@ body {
   position: absolute;
   left: calc(var(--safe-left) + 18px);
   bottom: calc(var(--safe-bottom) + 18px);
-  width: 150px;
-  height: min(46vh, 300px);
-  min-height: 200px;
+  width: 170px;
+  height: min(60vh, 360px);
+  min-height: 260px;
   touch-action: none;
 }
 
@@ -102,7 +102,7 @@ body {
   position: absolute;
   left: 74px;
   white-space: nowrap;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: #fff;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
@@ -113,13 +113,21 @@ body {
   color: var(--accent);
 }
 
+.lever-detent[data-notch='0'] .lever-label {
+  color: #ff8a80;
+}
+
+.lever-detent[data-notch='0'].is-active .lever-label {
+  color: #ff5252;
+}
+
 .lever-knob {
   position: absolute;
   left: -6px;
   width: 76px;
-  height: 52px;
-  margin-top: -26px;
-  border-radius: 26px;
+  height: 44px;
+  margin-top: -22px;
+  border-radius: 22px;
   background: linear-gradient(#ffd166, #ff9f1c);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35), inset 0 -3px 0 rgba(0, 0, 0, 0.15);
   transition: top 0.08s;
@@ -441,4 +449,169 @@ body {
 
 #ui > .fade.is-black {
   pointer-events: auto;
+}
+
+.build-stamp {
+  position: absolute;
+  right: calc(var(--safe-right) + 12px);
+  bottom: calc(var(--safe-bottom) + 8px);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* ---- stop gauge ---- */
+.stop-gauge {
+  position: absolute;
+  top: calc(var(--safe-top) + 58px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(70vw, 640px);
+  height: 36px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.stop-gauge-track {
+  position: relative;
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(43, 58, 74, 0.15);
+  overflow: visible;
+}
+
+.stop-gauge-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 6px;
+}
+
+.stop-gauge-ok {
+  background: rgba(79, 176, 107, 0.55);
+}
+
+.stop-gauge-perfect {
+  background: rgba(255, 159, 28, 0.85);
+}
+
+.stop-gauge-line {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  width: 4px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 0 2px #2b3a4a;
+}
+
+.stop-gauge-train {
+  position: absolute;
+  top: 50%;
+  width: 40px;
+  height: 26px;
+  margin-left: -34px;
+  transform: translateY(-50%);
+}
+
+.stop-gauge-train svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+}
+
+.stop-gauge.is-over .stop-gauge-track {
+  background: rgba(214, 69, 69, 0.45);
+}
+
+.stop-gauge.is-too-fast {
+  animation: gauge-blink 0.5s steps(2, end) infinite;
+}
+
+@keyframes gauge-blink {
+  0% { box-shadow: 0 0 0 4px rgba(214, 69, 69, 0.9), 0 4px 12px rgba(0, 0, 0, 0.25); }
+  100% { box-shadow: 0 0 0 0 rgba(214, 69, 69, 0), 0 4px 12px rgba(0, 0, 0, 0.25); }
+}
+
+#ui > .stop-gauge {
+  pointer-events: none;
+}
+
+/* ---- camera button ---- */
+.round-button .ring.is-camera {
+  background: #4f7fb0;
+}
+
+/* ---- camera picker ---- */
+.round-button.is-open .face {
+  background: #dbe9f7;
+}
+
+.camera-menu {
+  position: absolute;
+  right: calc(var(--safe-right) + 22px);
+  bottom: calc(var(--safe-bottom) + 260px);
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 22px;
+  background: var(--panel);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.camera-tile {
+  width: 104px;
+  height: 92px;
+  border: 3px solid transparent;
+  border-radius: 18px;
+  padding: 6px 4px 4px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.camera-tile svg {
+  width: 44px;
+  height: 44px;
+}
+
+.camera-tile.is-active {
+  border-color: var(--accent);
+  background: #fff4dc;
+}
+
+/* ---- story caption ---- */
+.caption {
+  border: none;
+  background: #101826;
+  color: #fff;
+  font-family: inherit;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.6;
+  opacity: 1;
+  transition: opacity 0.4s;
+}
+
+.caption.is-out {
+  opacity: 0;
+}
+
+.card-icon {
+  width: 140px;
+  height: 140px;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35));
 }
