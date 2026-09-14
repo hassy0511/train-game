@@ -209,7 +209,7 @@ Phase 0 の仮ステージ。実装時に `src/stages/0-0.json` として置く�
     { "model": "rock-proto",   "position": [45, -0.6, 90] }
   ],
   "actors": [
-    { "id": "sensor-1", "type": "trigger", "onRail": { "railId": "main", "at": 70, "heightFromRail": 0 },
+    { "id": "sensor-1", "type": "trigger", "onRail": { "railId": "main", "at": 55, "heightFromRail": 0 },
       "size": [6, 4, 4], "reactsTo": "none" }
   ],
   "records": [],
