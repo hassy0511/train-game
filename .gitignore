@@ -4,4 +4,6 @@ tests/smoke/output/*
 !tests/smoke/output/.gitkeep
 tests/smoke/test-results/
 playwright-report/
+__pycache__/
+*.py[cod]
 .DS_Store
