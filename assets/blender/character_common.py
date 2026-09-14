@@ -831,6 +831,13 @@ def build_passenger(parts: list[bpy.types.Object]) -> None:
                       0.10, 0.22, blue, 0.014, True)
     add_ellipsoid(parts, "passenger-cap-badge", (0.058, 0.058, 0.020),
                   (0.17, 1.505, 0.175), gold, 14, 7, True)
+    # The expedition-team lamp echoes Piko's antenna without turning the
+    # passenger into a robot. Keep it broad enough to read on a phone screen.
+    add_tapered_segment(parts, "passenger-lamp-stalk",
+                        (0, 1.555, -0.010), (-0.015, 1.665, 0.025),
+                        0.023, 0.017, blue_dark, 8)
+    add_ellipsoid(parts, "passenger-lamp", (0.060, 0.060, 0.045),
+                  (-0.015, 1.700, 0.036), gold, 10, 5, True)
 
     for side, x in (("left", -0.073), ("right", 0.073)):
         add_eye(parts, f"passenger-{side}-eye", (x, 1.335, 0.193), (0.075, 0.102),

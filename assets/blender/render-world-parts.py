@@ -1,7 +1,9 @@
 from pathlib import Path
+import math
+import sys
 
 import bpy
-from mathutils import Vector
+from mathutils import Quaternion, Vector
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -72,16 +74,40 @@ def render_station():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     import_model("platform")
     import_model("platform-roof", (0, 0, 1.0))
-    import_model("station-sign", (3.25, -8.0, 1.0))
+    import_model("station-sign", (3.25, 0.0, 1.0))
+    import_model("stop-line", (-1.2, -9.0, 0.16))
+    stop_board = import_model("stop-board", (0.65, -9.0, 1.0))
+    stop_board.rotation_mode = "QUATERNION"
+    stop_board.rotation_quaternion = (
+        Quaternion((0, 0, 1), math.pi) @ stop_board.rotation_quaternion
+    )
     ground()
     rail_mat = matte("Rail", (0.10, 0.12, 0.14, 1.0))
     for x in (-0.75, -1.65):
-        bpy.ops.mesh.primitive_cube_add(location=(x, 0, 0.08), scale=(0.055, 15, 0.07))
+        bpy.ops.mesh.primitive_cube_add(location=(x, 0, 0.08), scale=(0.055, 24, 0.07))
         bpy.context.object.data.materials.append(rail_mat)
     output = PREVIEW_DIR / "station-set.png"
     configure_scene(output, (22, -27, 18), (1.2, 0, 2.0))
     bpy.ops.render.render(write_still=True)
     print(f"STATION_SET_PREVIEW={output}")
+
+
+def render_railway():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    import_model("car-proto")
+    ground()
+    rail_mat = matte("Rail", (0.10, 0.12, 0.14, 1.0))
+    sleeper_mat = matte("Sleepers", (0.25, 0.18, 0.13, 1.0))
+    for x in (-0.72, 0.72):
+        bpy.ops.mesh.primitive_cube_add(location=(x, 0, 0.08), scale=(0.055, 8.5, 0.07))
+        bpy.context.object.data.materials.append(rail_mat)
+    for y in range(-8, 9):
+        bpy.ops.mesh.primitive_cube_add(location=(0, y, 0.025), scale=(1.25, 0.10, 0.035))
+        bpy.context.object.data.materials.append(sleeper_mat)
+    output = PREVIEW_DIR / "railway-set.png"
+    configure_scene(output, (14, -20, 10), (0, 0, 1.8), (1200, 800))
+    bpy.ops.render.render(write_still=True)
+    print(f"RAILWAY_SET_PREVIEW={output}")
 
 
 def render_trackside():
@@ -102,5 +128,13 @@ def render_trackside():
 
 if __name__ == "__main__":
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
-    render_station()
-    render_trackside()
+    renderers = {
+        "station": render_station,
+        "railway": render_railway,
+        "trackside": render_trackside,
+    }
+    requested = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else list(renderers)
+    for name in requested:
+        if name not in renderers:
+            raise ValueError(f"Unknown world preview: {name}")
+        renderers[name]()

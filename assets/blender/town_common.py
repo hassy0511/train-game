@@ -22,9 +22,12 @@ ASSET_SPECS = {
     "tower": ((6.0, 18.0, 6.0), 1700),
     # The building is 12 m high; the ticket explicitly requires a 16 m pole.
     "hq": ((20.0, 16.0, 14.0), 3000),
-    "platform": ((4.0, 1.0, 30.0), 700),
+    "platform": ((4.0, 1.0, 45.0), 900),
     "platform-roof": ((4.0, 4.2, 12.0), 1200),
     "station-sign": ((2.4, 3.0, 0.3), 600),
+    "stop-line": ((3.4, 0.03, 0.4), 80),
+    "stop-board": ((0.9, 2.2, 0.15), 900),
+    "car-proto": ((3.0, 3.6, 12.0), 2500),
     "crossing-gate": ((4.5, 3.2, 0.6), 900),
     "crossing-sign": ((1.2, 3.0, 0.2), 500),
     # Revised for the user-approved Variant C style. These remain tiny against
@@ -799,15 +802,123 @@ def build_platform(parts: list[bpy.types.Object]) -> None:
     side = material("Platform side", "#958E83")
     inset = material("Platform inset", "#77736D")
     # X=0 is the rail-side edge; the platform extends away in +X.
-    add_beveled_box(parts, "platform-body", (4, 0.84, 30), (2, 0.42, 0), side,
+    add_beveled_box(parts, "platform-body", (4, 0.84, 45), (2, 0.42, 0), side,
                     bevel=0.08, smooth=True, segments=1)
-    add_beveled_box(parts, "platform-top", (3.96, 0.18, 29.92), (2.02, 0.91, 0), body,
+    add_beveled_box(parts, "platform-top", (3.96, 0.18, 44.92), (2.02, 0.91, 0), body,
                     bevel=0.07, smooth=True, segments=1)
-    add_beveled_box(parts, "safety-strip", (0.30, 0.06, 29.9), (0.15, 0.97, 0),
+    add_beveled_box(parts, "safety-strip", (0.30, 0.06, 44.9), (0.15, 0.97, 0),
                     yellow, bevel=0.025, smooth=True, segments=1)
-    for z in (-12.0, -8.0, -4.0, 0.0, 4.0, 8.0, 12.0):
+    for z in (-20.0, -16.0, -12.0, -8.0, -4.0, 0.0, 4.0, 8.0, 12.0, 16.0, 20.0):
         add_beveled_box(parts, f"side-panel-{z}", (0.08, 0.46, 2.9),
                         (0.04, 0.40, z), inset, bevel=0.025, smooth=True, segments=1)
+
+
+def build_stop_line(parts: list[bpy.types.Object]) -> None:
+    white = material("Stop line white", "#F7F3E8")
+    add_beveled_box(parts, "stop-line-marking", (3.4, 0.03, 0.4), (0, 0.015, 0),
+                    white, bevel=0.008, smooth=True, segments=1)
+
+
+def build_stop_board(parts: list[bpy.types.Object]) -> None:
+    red = material("Stop board red", "#D64545")
+    red_dark = material("Stop board frame", "#8F3035")
+    white = material("Stop board white", "#F7F3E8")
+    metal = material("Stop board post", "#666A70")
+    base = material("Stop board base", "#343941")
+
+    add_beveled_box(parts, "stop-board-base", (0.68, 0.16, 0.15), (0, 0.08, 0),
+                    base, bevel=0.045, smooth=True, segments=1)
+    add_beveled_box(parts, "stop-board-post", (0.16, 1.16, 0.12), (0, 0.66, 0),
+                    metal, bevel=0.035, smooth=True, segments=1)
+    add_beveled_box(parts, "stop-board-post-cap", (0.32, 0.14, 0.14), (0, 1.20, 0),
+                    base, bevel=0.045, smooth=True, segments=1)
+    add_beveled_box(parts, "stop-board-back", (0.9, 1.0, 0.11), (0, 1.70, 0),
+                    red_dark, bevel=0.065, smooth=True, segments=2)
+
+    stripe_height = 0.13
+    for index in range(6):
+        y = 1.285 + index * 0.166
+        add_beveled_box(parts, f"stop-board-stripe-{index}", (0.76, stripe_height, 0.025),
+                        (0, y, -0.0675), red if index % 2 == 0 else white,
+                        bevel=0.022, smooth=True, segments=1)
+    add_disc_xy(parts, "stop-board-roundel-rim", (0, 1.70, -0.082), 0.235, 0.020,
+                red_dark, 16)
+    add_disc_xy(parts, "stop-board-roundel", (0, 1.70, -0.096), 0.175, 0.012,
+                white, 16)
+
+
+def build_car_proto(parts: list[bpy.types.Object]) -> None:
+    body = material("Wonder car blue", "#3FA7D6")
+    roof = material("Wonder car roof", "#F4F4F0")
+    underbody = material("Wonder car underbody", "#3A3F47")
+    glass = material("Wonder car windows", "#15324A", 0.42)
+    frame = material("Wonder car window frames", "#9FD6E7")
+    accent = material("Wonder car accent", "#FFD166")
+    marker = material("Wonder car marker lights", "#FF785A")
+
+    add_beveled_box(parts, "car-body", (3.0, 2.25, 11.8), (0, 2.075, 0), body,
+                    bevel=0.13, smooth=True, segments=2)
+    roof_profile = [(-1.5, 3.18), (-1.32, 3.44), (-1.05, 3.52),
+                    (1.05, 3.52), (1.32, 3.44), (1.5, 3.18)]
+    car_roof = add_extruded_profile(parts, "car-roof", roof_profile, -6.0, 6.0, roof)
+    bevel_object(car_roof, 0.055, 2)
+    add_beveled_box(parts, "car-lower-skirt", (2.82, 0.34, 11.55), (0, 1.10, 0),
+                    body, bevel=0.08, smooth=True, segments=1)
+    add_beveled_box(parts, "car-underbody", (2.30, 0.46, 9.8), (0, 0.69, 0),
+                    underbody, bevel=0.075, smooth=True, segments=1)
+    for z in (-3.95, 3.95):
+        add_beveled_box(parts, f"car-bogie-{z}", (2.45, 0.28, 2.25), (0, 0.40, z),
+                        underbody, bevel=0.055, smooth=True, segments=1)
+
+    for x in (-1.40, 1.40):
+        for z in (-4.35, -3.55, 3.55, 4.35):
+            bpy.ops.mesh.primitive_cylinder_add(
+                vertices=12,
+                radius=0.45,
+                depth=0.20,
+                location=to_blender((x, 0.45, z)),
+                rotation=(0, math.pi / 2, 0),
+            )
+            wheel = bpy.context.object
+            wheel.name = f"car-wheel-{x}-{z}"
+            finish_primitive(wheel, underbody, smooth=True)
+            parts.append(wheel)
+
+    window_centers = (-4.65, -2.325, 0.0, 2.325, 4.65)
+    for x in (-1.49, 1.49):
+        outward = -1 if x < 0 else 1
+        for index, z in enumerate(window_centers):
+            add_beveled_box(parts, f"car-window-frame-{outward}-{index}",
+                            (0.06, 1.12, 1.58), (x, 2.48, z), frame,
+                            bevel=0.075, smooth=True, segments=1)
+            add_beveled_box(parts, f"car-window-glass-{outward}-{index}",
+                            (0.022, 0.86, 1.30), (outward * 1.525, 2.48, z), glass,
+                            bevel=0.065, smooth=True, segments=1)
+        add_beveled_box(parts, f"car-side-accent-{outward}", (0.03, 0.14, 11.2),
+                        (outward * 1.505, 1.48, 0), accent,
+                        bevel=0.025, smooth=True, segments=1)
+
+    for z in (-5.88, 5.88):
+        add_beveled_box(parts, f"car-coupler-{z}", (0.46, 0.20, 0.24), (0, 0.58, z),
+                        underbody, bevel=0.055, smooth=True, segments=1)
+
+    # Both gangway ends stay readable when the car is separated from the train.
+    for z, outward in ((-5.91, -1), (5.91, 1)):
+        add_beveled_box(parts, f"car-end-frame-{outward}", (1.78, 1.94, 0.08),
+                        (0, 2.08, z), underbody, bevel=0.085, smooth=True, segments=1)
+        add_beveled_box(parts, f"car-end-door-{outward}", (1.48, 1.68, 0.07),
+                        (0, 2.04, outward * 5.95), roof,
+                        bevel=0.070, smooth=True, segments=1)
+        add_beveled_box(parts, f"car-end-window-{outward}", (0.94, 0.62, 0.015),
+                        (0, 2.38, outward * 5.9925), glass,
+                        bevel=0.060, smooth=True, segments=1)
+        for x in (-1.05, 1.05):
+            add_disc_xy(parts, f"car-marker-{outward}-{x}",
+                        (x, 1.48, outward * 5.988), 0.105, 0.024, marker, 12)
+
+    for index, z in enumerate((-2.8, 0.0, 2.8)):
+        add_beveled_box(parts, f"car-roof-vent-{index}", (0.78, 0.10, 0.62),
+                        (0, 3.55, z), underbody, bevel=0.045, smooth=True, segments=1)
 
 
 def build_platform_roof(parts: list[bpy.types.Object]) -> None:
@@ -1374,6 +1485,9 @@ BUILDERS = {
     "tower": build_tower,
     "hq": build_hq,
     "platform": build_platform,
+    "stop-line": build_stop_line,
+    "stop-board": build_stop_board,
+    "car-proto": build_car_proto,
     "platform-roof": build_platform_roof,
     "station-sign": build_station_sign,
     "crossing-gate": build_crossing_gate,
@@ -1421,8 +1535,11 @@ def setup_preview(model: bpy.types.Object, model_name: str, minimum: list[float]
     # Keep the studio sweep well outside the camera frustum even for tall,
     # narrow assets such as the clock tower.  A size based only on footprint
     # exposed the World background at the frame edges.
-    ground_size = max(width, depth, span * 1.5, 1.0) * 4.0
-    ground_mat = material("Preview ground", "#DED5C8" if is_character else "#EEE9DF")
+    ground_size = max(width, depth, span * 1.5, 1.0) * 6.0
+    ground_color = "#B9BDC0" if model_name == "stop-line" else (
+        "#DED5C8" if is_character else "#EEE9DF"
+    )
+    ground_mat = material("Preview ground", ground_color)
     ground_shader = ground_mat.node_tree.nodes["Principled BSDF"]
     emission_color = ground_shader.inputs.get("Emission Color") or ground_shader.inputs.get("Emission")
     emission_strength = ground_shader.inputs.get("Emission Strength")
@@ -1439,12 +1556,23 @@ def setup_preview(model: bpy.types.Object, model_name: str, minimum: list[float]
     )
     bpy.context.object.data.materials.append(ground_mat)
 
+    if model_name == "stop-board":
+        # Export is already complete. Rotate only the studio copy so its
+        # glTF -Z readable face points toward the standard -Y camera side.
+        model.rotation_euler[2] = math.pi
     target_height = max(height * (0.48 if is_character else 0.42), center[1] * 0.8)
     target = Vector(to_blender((center[0], target_height, center[2])))
     if model_name == "platform":
         # View the rail-side face and long edge instead of looking almost
-        # straight down the 30 m platform.
+        # straight down the 45 m platform.
         camera_location = target + Vector((-span * 1.80, -span * 0.35, span * 0.45))
+    elif model_name == "stop-board":
+        camera_location = target + Vector((span * 0.75, -span * 2.15, span * 0.65))
+    elif model_name == "stop-line":
+        # A grazing three-quarter angle keeps the 3 cm marking readable.
+        camera_location = target + Vector((span * 0.75, -span * 1.65, span * 0.58))
+    elif model_name == "car-proto":
+        camera_location = target + Vector((span * 1.45, -span * 1.75, span * 0.62))
     else:
         camera_location = target + Vector((span * (0.55 if is_character else 1.05),
                                            -span * (2.60 if is_character else 2.15),
@@ -1452,7 +1580,7 @@ def setup_preview(model: bpy.types.Object, model_name: str, minimum: list[float]
     bpy.ops.object.camera_add(location=camera_location)
     camera = bpy.context.object
     camera.rotation_euler = (target - camera.location).to_track_quat("-Z", "Y").to_euler()
-    if is_character or model_name == "platform":
+    if is_character or model_name in {"platform", "stop-line"}:
         camera.data.type = "ORTHO"
         camera.data.ortho_scale = span * (1.30 if is_character else 1.12)
     else:

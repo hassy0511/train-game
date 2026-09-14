@@ -21,13 +21,12 @@
 |---|---|---|---|---|
 | [0001](0001-blender-proto-models.md) | Blender: Phase 0 の仮モデル一式 | Codex | 完了（PR #2） | なし |
 | [0002](0002-three-scene-view.md) | Three.js: シーン表示（線路メッシュ・車両・環境・運転席カメラ） | Codex | 完了（PR #4） | — |
-| [0003](0003-blender-town-set.md) | Blender: 1-1 はじまりの街 のモデル一式 | Codex | 第 1 弾 完了（PR #11）。第 2 弾（停止線・看板・客車）発注中 | なし |
+| [0003](0003-blender-town-set.md) | Blender: 1-1 はじまりの街 のモデル一式 | Codex | 完了（第 1 弾 PR #11、第 2 弾 PR #12） | なし |
 | [0004](0004-three-stage-1-1-visuals.md) | Three.js: 1-1 の見た目と演出 | Codex | 発注中（着手可） | — |
 
 ## 発注の順番
-1. **0004**（1-1 の見た目と演出）は今すぐ着手できる
-2. **0003 第 2 弾**（停止線・とまれ看板・客車）も今すぐ。0004 と並行でよい
-3. PR を Claude Code がレビューし、main にマージしたら GitHub Pages に出る
+1. **0004**（1-1 の見た目と演出）が次。今すぐ着手できる
+2. PR を Claude Code がレビューし、main にマージしたら GitHub Pages に出る
 
 ## Codex への渡し方（だいさん用・コピペ）
 0001 を頼むとき:
@@ -37,14 +36,6 @@
 その上で docs/tickets/0001-blender-proto-models.md を実装してください。
 ブランチは codex/0001-proto-models、PR は main 宛て、タイトルは「[#0001] Phase 0 の仮モデル一式」。
 受け入れ条件を全部満たしてから PR を出し、迷った点は PR に書いてください。
-```
-
-0003 第 2 弾を頼むとき:
-
-```
-リポジトリ hassy0511/train-game の main を開いて、AGENTS.md と docs/tickets/README.md を読んでください。
-その上で docs/tickets/0003-blender-town-set.md の「追加発注（第 2 弾）」を実装してください。
-ブランチは codex/0003b-stop-and-car、PR は main 宛て、タイトルは「[#0003] 停止線・看板・客車」。
 ```
 
 0004 を頼むとき:
