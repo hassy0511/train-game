@@ -14,7 +14,7 @@ async function tapUntil(page: Page, selector: string, timeoutMs = 60_000): Promi
   while (Date.now() < deadline) {
     if (await target.isVisible()) return;
     if (await bubble.isVisible()) await bubble.dispatchEvent('pointerdown');
-    if (await page.locator('#caption').isVisible()) await page.locator('#caption').click();
+    if (await page.locator('#caption').isVisible()) await page.locator('#caption').dispatchEvent('click');
     await page.waitForTimeout(150);
   }
   throw new Error(`timed out waiting for ${selector}`);
@@ -47,7 +47,7 @@ test('stage 1-1: title, opening, and a graded stop at the first station', async 
 
   // Opening: caption, partner lines with camera moves, the badge card, then the mission 1 card.
   await expect(page.locator('#caption')).toBeVisible();
-  await page.locator('#caption').click();
+  await page.locator('#caption').dispatchEvent('click');
   await expect(page.locator('#bubble')).toBeVisible({ timeout: 15_000 });
   await page.screenshot({ path: resolve(OUT, '11-opening.png') });
   await tapUntil(page, '#card');

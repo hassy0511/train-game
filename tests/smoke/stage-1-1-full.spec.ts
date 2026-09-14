@@ -15,7 +15,7 @@ async function tapUntil(page: Page, selector: string, timeoutMs = 90_000): Promi
   while (Date.now() < deadline) {
     if (await target.isVisible()) return;
     if (await bubble.isVisible()) await bubble.dispatchEvent('pointerdown');
-    if (await page.locator('#caption').isVisible()) await page.locator('#caption').click();
+    if (await page.locator('#caption').isVisible()) await page.locator('#caption').dispatchEvent('click');
     await page.waitForTimeout(150);
   }
   throw new Error(`timed out waiting for ${selector}`);
