@@ -7,6 +7,7 @@
 - `docs/GAME_SPEC.md`（仕様）、`docs/TECH_SPEC.md`（技術）、該当チケット
 
 ## 作業の流れ
+0. ブランチ `codex/<番号>-<内容>` で作業し、必ず PR を出す。**main には直接 push しない**（レビューと Pages への反映は Claude Code が行う）
 1. チケットを読み、受け入れ条件を確認する
 2. 実装する。ステージ固有の値はステージJSONに置く
 3. `npm run build` と Playwright スモーク（`npm run smoke`）を通す
