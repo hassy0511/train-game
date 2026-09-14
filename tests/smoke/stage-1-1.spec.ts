@@ -14,6 +14,7 @@ async function tapUntil(page: Page, selector: string, timeoutMs = 60_000): Promi
   while (Date.now() < deadline) {
     if (await target.isVisible()) return;
     if (await bubble.isVisible()) await bubble.dispatchEvent('pointerdown');
+    if (await page.locator('#caption').isVisible()) await page.locator('#caption').click();
     await page.waitForTimeout(150);
   }
   throw new Error(`timed out waiting for ${selector}`);
@@ -44,9 +45,15 @@ test('stage 1-1: title, opening, and a graded stop at the first station', async 
   await page.screenshot({ path: resolve(OUT, '10-title.png') });
   await page.locator('#title-start').click();
 
-  // Opening: four partner lines, then the mission 1 card.
-  await expect(page.locator('#bubble')).toBeVisible();
+  // Opening: caption, partner lines with camera moves, the badge card, then the mission 1 card.
+  await expect(page.locator('#caption')).toBeVisible();
+  await page.locator('#caption').click();
+  await expect(page.locator('#bubble')).toBeVisible({ timeout: 15_000 });
   await page.screenshot({ path: resolve(OUT, '11-opening.png') });
+  await tapUntil(page, '#card');
+  await expect(page.locator('#card')).toContainText('にゅうたい');
+  await page.screenshot({ path: resolve(OUT, '11c-badge.png') });
+  await page.locator('#card-button').click();
   await tapUntil(page, '#card');
   await expect(page.locator('#card')).toContainText('はじめての うんてん');
   await page.locator('#card-button').click();
@@ -82,7 +89,7 @@ test('stage 1-1: title, opening, and a graded stop at the first station', async 
   await tapUntil(page, '#card');
   await expect(page.locator('#card')).toContainText('できた！');
   await page.locator('#card-button').click();
-  await expect(page.locator('#card')).toContainText('おきゃくを のせて');
+  await expect(page.locator('#card')).toContainText('なかまを のせて');
   console.log(`smoke 1-1: stop grade=${grade}, s=${await app.getAttribute('data-s')}`);
 
   expect(errors).toEqual([]);

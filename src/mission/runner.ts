@@ -6,7 +6,6 @@ import { runCutscene, type CutscenePorts } from '../cutscene/runner';
 import type { MissionDef, MissionLines, MissionStep, Speaker, StageData, StationDef } from '../stage/types';
 import { PASSENGER_SECONDS, REWIND_DISTANCE } from '../train/params';
 import type { Train } from '../train/train';
-import type { CameraMode } from '../view/camera-rig';
 import { StopMonitor, type GaugeState, type StopGrade } from './station-stop';
 
 /** Everything the runner needs from the UI layer. */
@@ -23,8 +22,6 @@ export interface MissionPorts extends CutscenePorts {
   resetLever(): void;
   /** Stop gauge state for this frame. */
   gauge(state: GaugeState): void;
-  /** Temporarily override the player's camera (null = give it back). */
-  autoCamera(mode: CameraMode | null): void;
 }
 
 export type MissionPhase = 'idle' | 'driving' | 'stopped' | 'doors' | 'cutscene' | 'failing' | 'clear';

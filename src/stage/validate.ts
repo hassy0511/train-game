@@ -69,6 +69,12 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
   } else if ('card' in st) {
     const c = st.card;
     if (!isObject(c) || !isString(c.title) || !isString(c.button)) fail(`${where}: card needs title and button`);
+    if (c.icon !== undefined && c.icon !== 'badge') fail(`${where}: card icon`);
+  } else if ('camera' in st) {
+    if (!['cab', 'chase', 'side', 'top'].includes(String(st.camera))) fail(`${where}: camera`);
+  } else if ('caption' in st) {
+    if (!isString(st.caption)) fail(`${where}: "caption" must be text`);
+    if (st.seconds !== undefined && !isNumber(st.seconds)) fail(`${where}: "seconds" must be a number`);
   } else if ('emote' in st) {
     if (!['jump', 'tilt', 'cheer'].includes(String(st.emote))) fail(`${where}: emote`);
   } else {

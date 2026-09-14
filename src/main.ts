@@ -10,6 +10,7 @@ import { SPEED_LABELS, STOP_NOTCH } from './train/params';
 import { Train } from './train/train';
 import { createUi } from './ui';
 import { createBubbles } from './ui/bubble';
+import { createCaption } from './ui/caption';
 import { createCargoStrip } from './ui/cargo-strip';
 import { showCard } from './ui/cards';
 import { createDoorButton } from './ui/door-button';
@@ -69,6 +70,7 @@ async function boot(): Promise<void> {
 
   const bubbles = createBubbles(uiEl, PARTNER_NAME);
   const gauge = createStopGauge(uiEl);
+  const caption = createCaption(uiEl);
   const cargo = createCargoStrip(uiEl);
   const toast = createToast(uiEl);
   const fade = createFade(uiEl);
@@ -191,10 +193,11 @@ async function boot(): Promise<void> {
   const ports: MissionPorts = {
     say: (text, who) => bubbles.say(text, who),
     sayAsync: (text, who) => void bubbles.say(text, who),
-    card: (title, button) => {
+    card: (title, button, icon) => {
       audio.playCard();
-      return showCard(uiEl, title, button);
+      return showCard(uiEl, title, button, icon);
     },
+    caption,
     wait: waitSeconds,
     toast: (text, kind) => {
       toast.show(text, kind);
