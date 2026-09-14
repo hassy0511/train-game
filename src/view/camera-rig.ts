@@ -4,12 +4,12 @@ import type { TrainPose } from '../train/types';
 
 export type CameraMode = 'cab' | 'chase' | 'side' | 'top';
 export const CAMERA_MODES: CameraMode[] = ['cab', 'chase', 'side', 'top'];
-/** Short labels for the camera button (fits a 96 px round button). */
+/** Labels for the camera picker tiles. */
 export const CAMERA_LABELS: Record<CameraMode, string> = {
-  cab: 'うんてん',
-  chase: 'うしろ',
-  side: 'よこ',
-  top: 'うえ',
+  cab: 'うんてんせき',
+  chase: 'うしろから',
+  side: 'よこから',
+  top: 'うえから',
 };
 
 /** Desired camera placement in world space for one frame. */
