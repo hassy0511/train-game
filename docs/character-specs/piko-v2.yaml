@@ -1,0 +1,66 @@
+character_name: piko
+model_name: partner
+reference_files:
+  - assets/concepts/character-deformation-c-strong.png
+  - assets/concepts/character-turnaround-c-piko.png
+
+confidence:
+  front: high
+  side: high
+  back: high
+
+dimensions_m:
+  total_height: 0.70
+  overall_width_pose: 0.425
+  overall_depth: 0.271
+
+proportions_normalized:
+  total_height: 1.00
+  head_height: 0.31
+  head_width: 0.35
+  head_depth: 0.36
+  shoulder_width: 0.23
+  torso_height: 0.33
+  torso_width: 0.24
+  torso_depth: 0.22
+  hip_width: 0.17
+  arm_length: 0.36
+  arm_thickness: 0.09
+  leg_length: 0.25
+  leg_thickness: 0.08
+  hand_height: 0.13
+  foot_width: 0.19
+  foot_depth: 0.29
+
+face:
+  eye_center_height: 0.72
+  eye_center_spacing: 0.17
+  eye_surface_style: surface-conforming
+  eye_notes: tall warm-white graphic ovals with dark pupils and a thin dark outline
+  mouth_center_height: 0.66
+  nose_or_muzzle_notes: shallow cyan wedge; no realistic nose bridge or protruding muzzle
+
+silhouette_features:
+  - broad faceted head with fuller back and a short forward face
+  - narrow neck and tapered pear-shaped torso
+  - thin jointed limbs with readable elbows and knees
+  - broad rounded feet with shallow toe grooves
+  - left arm relaxed downward
+  - right forearm raised with one index finger pointing upward
+  - curved cyan lamp stalk with a thick gold rim and cream center
+
+style:
+  low_poly_planes: controlled
+  angular_vs_round: rounded main masses tightened by visible low-poly planes and tapers
+  smoothing_notes: smooth organic masses without ballooning; graphic face elements remain flat
+
+uncertain_or_inferred:
+  - exact underside of feet is inferred and kept flat for grounding
+  - rear torso seam and hidden hand surfaces are inferred from the three-view design
+
+critical_do_not_change:
+  - cyan, warm cream, dark brown, and gold palette
+  - face-surface eyes that do not protrude in profile
+  - visible cream neck and belly patch
+  - head lamp silhouette
+  - slim body and limbs; do not restore the old 0.60 m width or 0.50 m depth

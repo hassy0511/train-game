@@ -24,7 +24,7 @@ export const PLACEHOLDER_SIZES: Record<string, [number, number, number]> = {
   'cat-sleep': [0.7, 0.35, 0.5],
   'cat-stand': [0.7, 0.6, 0.4],
   cat: [0.7, 0.4, 0.5],
-  partner: [0.6, 0.7, 0.5],
+  partner: [0.43, 0.7, 0.27],
   amanojaku: [0.9, 1.4, 0.6],
   passenger: [0.6, 1.6, 0.4],
   parcel: [0.6, 0.5, 0.6],
