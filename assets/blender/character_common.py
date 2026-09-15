@@ -132,6 +132,56 @@ def add_mesh(
     return obj
 
 
+def fuse_skin_parts(
+    skin_parts: list[bpy.types.Object],
+    name: str,
+    voxel_size: float,
+    target_triangles: int,
+) -> bpy.types.Object:
+    """Fuse overlapping anatomical forms into one continuous watertight skin."""
+    if not skin_parts:
+        raise ValueError(f"{name}: no skin parts to fuse")
+    for part in skin_parts:
+        bpy.ops.object.select_all(action="DESELECT")
+        part.select_set(True)
+        bpy.context.view_layer.objects.active = part
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+
+    bpy.ops.object.select_all(action="DESELECT")
+    for part in skin_parts:
+        part.select_set(True)
+    bpy.context.view_layer.objects.active = skin_parts[0]
+    bpy.ops.object.join()
+    skin = bpy.context.object
+    skin.name = name
+    skin.data.name = name
+
+    remesh = skin.modifiers.new(name="Seamless anatomical union", type="REMESH")
+    remesh.mode = "VOXEL"
+    remesh.voxel_size = voxel_size
+    remesh.adaptivity = 0.0
+    remesh.use_smooth_shade = True
+    remesh.use_remove_disconnected = True
+    bpy.ops.object.modifier_apply(modifier=remesh.name)
+
+    smooth = skin.modifiers.new(name="Continuous joint transitions", type="SMOOTH")
+    smooth.factor = 0.22
+    smooth.iterations = 2
+    bpy.ops.object.modifier_apply(modifier=smooth.name)
+
+    skin.data.calc_loop_triangles()
+    triangle_count = len(skin.data.loop_triangles)
+    if triangle_count > target_triangles:
+        decimate = skin.modifiers.new(name="Character surface budget", type="DECIMATE")
+        decimate.decimate_type = "COLLAPSE"
+        decimate.ratio = target_triangles / triangle_count
+        decimate.use_collapse_triangulate = True
+        bpy.ops.object.modifier_apply(modifier=decimate.name)
+    for polygon in skin.data.polygons:
+        polygon.use_smooth = True
+    return skin
+
+
 def bevel_object(obj: bpy.types.Object, width: float, segments: int = 2, smooth: bool = True) -> bpy.types.Object:
     bpy.ops.object.select_all(action="DESELECT")
     obj.select_set(True)
@@ -661,26 +711,140 @@ def build_partner(parts: list[bpy.types.Object]) -> None:
     dark = material("Piko facial line", "#2D251F")
     gold = material("Piko lamp gold", "#F0A62A")
 
-    # The torso is a designed chest -> belly -> waist volume.  It intentionally
-    # replaces the old single stretched ellipsoid and preserves the slim C-style
-    # silhouette in both front and side views.
+    # All cyan anatomical masses are authored with deliberate overlap, then
+    # voxel-unioned into one watertight skin.  This makes shoulder, elbow,
+    # wrist, hip, knee, ankle, neck, hand, and foot transitions genuinely
+    # continuous instead of hiding intersections between separate primitives.
+    skin_parts: list[bpy.types.Object] = []
     torso_rings = [
-        (0.175, 0.042, 0.047, 0, -0.006),
-        (0.190, 0.052, 0.053, 0, -0.004),
-        (0.205, 0.061, 0.062, 0, -0.003),
-        (0.225, 0.068, 0.067, 0, -0.002),
-        (0.250, 0.075, 0.072, 0, -0.001),
-        (0.275, 0.080, 0.076, 0, 0.000),
-        (0.300, 0.083, 0.078, 0, 0.000),
-        (0.325, 0.083, 0.077, 0, -0.001),
-        (0.350, 0.079, 0.073, 0, -0.002),
-        (0.370, 0.073, 0.068, 0, -0.003),
-        (0.390, 0.063, 0.059, 0, -0.004),
-        (0.405, 0.055, 0.051, 0, -0.004),
+        (0.188, 0.050, 0.049, 0, -0.004),
+        (0.205, 0.063, 0.058, 0, -0.002),
+        (0.230, 0.075, 0.067, 0, 0.000),
+        (0.260, 0.082, 0.074, 0, 0.002),
+        (0.295, 0.085, 0.078, 0, 0.002),
+        (0.330, 0.082, 0.075, 0, 0.000),
+        (0.360, 0.075, 0.069, 0, -0.002),
+        (0.387, 0.068, 0.062, 0, -0.003),
+        (0.407, 0.061, 0.055, 0, -0.003),
+        (0.418, 0.056, 0.050, 0, -0.002),
     ]
-    torso_segments = 48
-    add_profiled_volume(parts, "piko-torso", torso_rings, blue,
-                        torso_segments, True)
+    add_profiled_volume(skin_parts, "piko-torso-skin", torso_rings, blue, 32, True)
+
+    # A shorter, wider cranium matches the approved 2D head ratio (about
+    # 1.28:1 width-to-height) while keeping a shorter face and fuller rear mass.
+    head_rings = [
+        (0.398, 0.043, 0.046, 0, 0.010),
+        (0.414, 0.076, 0.079, 0, 0.015),
+        (0.438, 0.107, 0.107, 0, 0.017),
+        (0.468, 0.124, 0.120, 0, 0.014),
+        (0.502, 0.128, 0.123, 0, 0.005),
+        (0.533, 0.120, 0.118, 0, -0.003),
+        (0.560, 0.101, 0.103, 0, -0.009),
+        (0.579, 0.070, 0.073, 0, -0.010),
+        (0.590, 0.036, 0.038, 0, -0.009),
+        (0.594, 0.012, 0.013, 0, -0.008),
+    ]
+    add_profiled_volume(skin_parts, "piko-head-skin", head_rings, blue, 36, True)
+
+    def head_surface_z(x: float, y: float) -> float:
+        lower = head_rings[0]
+        upper = head_rings[-1]
+        for ring_index in range(len(head_rings) - 1):
+            if head_rings[ring_index][0] <= y <= head_rings[ring_index + 1][0]:
+                lower = head_rings[ring_index]
+                upper = head_rings[ring_index + 1]
+                break
+        blend = (y - lower[0]) / max(upper[0] - lower[0], 1e-6)
+        radius_x = lower[1] + (upper[1] - lower[1]) * blend
+        radius_z = lower[2] + (upper[2] - lower[2]) * blend
+        center_z = lower[4] + (upper[4] - lower[4]) * blend
+        normalized_x = min(abs(x) / max(radius_x, 1e-6), 0.995)
+        return center_z + radius_z * math.sqrt(1.0 - normalized_x * normalized_x)
+
+    # Continuous tapered legs.  The hip and ankle endpoints are buried in the
+    # torso and feet so the union produces one uninterrupted silhouette.
+    for x in (-0.060, 0.060):
+        hip_x = x * 0.77
+        add_swept_tube(
+            skin_parts,
+            f"piko-leg-skin-{x}",
+            [
+                (hip_x, 0.246, -0.003),
+                (x * 0.90, 0.205, 0.000),
+                (x, 0.153, 0.004),
+                (x, 0.105, 0.009),
+                (x, 0.057, 0.014),
+            ],
+            [0.035, 0.034, 0.030, 0.027, 0.025],
+            [blue, blue, blue, blue],
+            14,
+        )
+        foot_x = x + (-0.008 if x < 0 else 0.008)
+        add_profiled_volume(skin_parts, f"piko-foot-skin-{x}", [
+            (0.003, 0.055, 0.084, foot_x, 0.033),
+            (0.014, 0.062, 0.100, foot_x, 0.036),
+            (0.029, 0.060, 0.097, foot_x, 0.034),
+            (0.044, 0.049, 0.073, foot_x, 0.024),
+            (0.058, 0.033, 0.043, x, 0.014),
+        ], blue, 18, True)
+
+    # The arms use single swept cages instead of upper-arm / elbow / forearm
+    # primitives.  Their 32--46 mm diameter follows the approved thin-limb
+    # proportion and eliminates the previous oversized shoulder cones.
+    add_swept_tube(skin_parts, "piko-left-arm-skin", [
+        (-0.058, 0.393, -0.001),
+        (-0.087, 0.367, 0.005),
+        (-0.126, 0.320, 0.014),
+        (-0.148, 0.268, 0.024),
+        (-0.160, 0.231, 0.032),
+        (-0.175, 0.196, 0.040),
+    ], [0.029, 0.025, 0.021, 0.019, 0.017, 0.016],
+       [blue, blue, blue, blue, blue], 14)
+    add_ellipsoid(skin_parts, "piko-left-palm-skin", (0.064, 0.073, 0.052),
+                  (-0.178, 0.175, 0.043), blue, 16, 8, True)
+    for finger_index, finger_x in enumerate((-0.194, -0.174)):
+        add_ellipsoid(skin_parts, f"piko-left-finger-skin-{finger_index}",
+                      (0.027, 0.052, 0.030), (finger_x, 0.147, 0.046),
+                      blue, 12, 6, True)
+    add_ellipsoid(skin_parts, "piko-left-thumb-skin", (0.029, 0.048, 0.031),
+                  (-0.148, 0.173, 0.047), blue, 12, 6, True)
+
+    add_swept_tube(skin_parts, "piko-right-arm-skin", [
+        (0.058, 0.393, -0.001),
+        (0.088, 0.375, 0.005),
+        (0.132, 0.348, 0.016),
+        (0.151, 0.320, 0.025),
+        (0.160, 0.340, 0.032),
+        (0.169, 0.370, 0.040),
+        (0.170, 0.392, 0.045),
+    ], [0.029, 0.025, 0.021, 0.019, 0.018, 0.017, 0.016],
+       [blue, blue, blue, blue, blue, blue], 14)
+    add_ellipsoid(skin_parts, "piko-right-palm-skin", (0.056, 0.064, 0.050),
+                  (0.165, 0.393, 0.047), blue, 16, 8, True)
+    for finger_index, finger_x in enumerate((0.150, 0.164)):
+        add_ellipsoid(skin_parts, f"piko-right-folded-finger-skin-{finger_index}",
+                      (0.025, 0.035, 0.039), (finger_x, 0.377, 0.052),
+                      blue, 12, 6, True)
+    add_swept_tube(skin_parts, "piko-raised-index-skin", [
+        (0.174, 0.401, 0.047),
+        (0.181, 0.421, 0.049),
+        (0.183, 0.445, 0.049),
+        (0.181, 0.460, 0.048),
+    ], [0.016, 0.015, 0.014, 0.0115], [blue, blue, blue], 12)
+    add_ellipsoid(skin_parts, "piko-index-tip-skin", (0.024, 0.028, 0.024),
+                  (0.181, 0.464, 0.048), blue, 12, 6, True)
+
+    add_swept_tube(skin_parts, "piko-lamp-stalk-skin", [
+        (0.000, 0.585, -0.007),
+        (-0.006, 0.611, 0.002),
+        (-0.017, 0.635, 0.026),
+        (-0.021, 0.653, 0.056),
+        (-0.012, 0.665, 0.080),
+    ], [0.020, 0.019, 0.017, 0.015, 0.013],
+       [blue, blue, blue, blue], 12)
+
+    skin = fuse_skin_parts(skin_parts, "piko-continuous-skin", 0.0045, 4550)
+    parts.append(skin)
 
     def torso_surface_z(x: float, y: float) -> float:
         lower = torso_rings[0]
@@ -697,20 +861,28 @@ def build_partner(parts: list[bpy.types.Object]) -> None:
         normalized_x = min(abs(x) / max(radius_x, 1e-6), 0.995)
         return center_z + radius_z * math.sqrt(1.0 - normalized_x * normalized_x)
 
-    # A curved grid hugs the exact torso profile.  It keeps an organic outline
-    # without the floating plate or stair-stepped material boundary of earlier
-    # attempts.
+    # Cream areas are thin surface graphics rather than separate neck/torso
+    # solids, so their color boundary cannot reintroduce anatomical seams.
     belly_rows = [
-        (0.185, 0.009), (0.195, 0.028), (0.215, 0.046),
-        (0.245, 0.058), (0.285, 0.062), (0.320, 0.058),
-        (0.345, 0.043), (0.365, 0.010),
+        (0.198, 0.010, None), (0.207, 0.026, None),
+        (0.226, 0.044, None), (0.255, 0.056, None),
+        (0.290, 0.060, None), (0.322, 0.056, None),
+        (0.348, 0.042, None), (0.365, 0.032, None),
+        (0.377, 0.032, 0.062), (0.392, 0.033, 0.064),
+        (0.405, 0.033, 0.076), (0.417, 0.032, 0.094),
+        (0.428, 0.027, 0.108),
     ]
     belly_columns = 9
     belly_vertices: list[tuple[float, float, float]] = []
-    for y, half_width in belly_rows:
+    for y, half_width, front_override in belly_rows:
         for column in range(belly_columns):
             x = -half_width + 2.0 * half_width * column / (belly_columns - 1)
-            belly_vertices.append((x, y, torso_surface_z(x, y) + 0.0080))
+            if front_override is None:
+                front_z = torso_surface_z(x, y) + 0.0055
+            else:
+                curve = 1.0 - (x / max(half_width, 1e-6)) ** 2
+                front_z = front_override + 0.004 * curve
+            belly_vertices.append((x, y, front_z))
     belly_faces: list[tuple[int, ...]] = []
     for row in range(len(belly_rows) - 1):
         first = row * belly_columns
@@ -722,133 +894,114 @@ def build_partner(parts: list[bpy.types.Object]) -> None:
                 second + column + 1,
                 second + column,
             ))
-    add_mesh(parts, "piko-belly", belly_vertices, belly_faces, [white], smooth=True)
-    add_profiled_volume(parts, "piko-neck", [
-        (0.365, 0.046, 0.042, 0, 0.000),
-        (0.395, 0.054, 0.047, 0, 0.002),
-        (0.425, 0.052, 0.046, 0, 0.004),
-    ], white, 18, True)
+    add_mesh(parts, "piko-belly-and-neck", belly_vertices, belly_faces, [white], smooth=True)
 
-    # Ring-controlled head: short face in front, fuller cranium behind, and a
-    # tapered chin.  This avoids a symmetric ball in profile.
-    add_profiled_volume(parts, "piko-head", [
-        (0.387, 0.040, 0.046, 0, 0.006),
-        (0.404, 0.073, 0.074, 0, 0.012),
-        (0.427, 0.100, 0.101, 0, 0.018),
-        (0.460, 0.115, 0.116, 0, 0.017),
-        (0.499, 0.121, 0.124, 0, 0.009),
-        (0.536, 0.114, 0.120, 0, -0.002),
-        (0.568, 0.095, 0.099, 0, -0.010),
-        (0.587, 0.065, 0.066, 0, -0.011),
-        (0.597, 0.033, 0.034, 0, -0.009),
-        (0.601, 0.011, 0.010, 0, -0.008),
-    ], blue, 32, True)
+    # The approved face uses cream eye shapes without a heavy full outline.
+    # Slightly asymmetric pupils look toward Piko's raised hand as in the style
+    # key; restrained upper lids and brows preserve the gentle expression.
+    eye_outline = [
+        (-0.48, 0.05), (-0.43, 0.29), (-0.28, 0.45), (-0.05, 0.50),
+        (0.18, 0.46), (0.39, 0.30), (0.49, 0.05), (0.45, -0.24),
+        (0.28, -0.44), (0.02, -0.50), (-0.24, -0.44), (-0.43, -0.23),
+    ]
+    pupil_outline = [
+        (math.cos(2.0 * math.pi * index / 16) * 0.5,
+         math.sin(2.0 * math.pi * index / 16) * 0.5)
+        for index in range(16)
+    ]
+    def add_head_patch(
+        name: str,
+        center: tuple[float, float],
+        size: tuple[float, float],
+        outline: list[tuple[float, float]],
+        mat: bpy.types.Material,
+        offset: float,
+    ) -> None:
+        cx, cy = center
+        width, height = size
+        vertices = []
+        for local_x, local_y in outline:
+            x = cx + local_x * width
+            y = cy + local_y * height
+            vertices.append((x, y, head_surface_z(x, y) + offset))
+        add_mesh(parts, name, vertices, [tuple(range(len(vertices)))], [mat], smooth=False)
+
+    def add_head_arc_patch(
+        name: str,
+        center: tuple[float, float],
+        radius: tuple[float, float],
+        start_angle: float,
+        end_angle: float,
+        thickness: float,
+        mat: bpy.types.Material,
+        offset: float,
+        samples: int,
+    ) -> None:
+        cx, cy = center
+        radius_x, radius_y = radius
+        outer = []
+        inner = []
+        for index in range(samples):
+            angle = start_angle + (end_angle - start_angle) * index / (samples - 1)
+            outer.append((
+                cx + math.cos(angle) * (radius_x + thickness * 0.5),
+                cy + math.sin(angle) * (radius_y + thickness * 0.5),
+            ))
+            inner.append((
+                cx + math.cos(angle) * (radius_x - thickness * 0.5),
+                cy + math.sin(angle) * (radius_y - thickness * 0.5),
+            ))
+        vertices = [
+            (x, y, head_surface_z(x, y) + offset)
+            for x, y in outer + list(reversed(inner))
+        ]
+        add_mesh(parts, name, vertices, [tuple(range(len(vertices)))], [mat], smooth=False)
+
+    ellipse_12 = [
+        (math.cos(2.0 * math.pi * index / 12) * 0.5,
+         math.sin(2.0 * math.pi * index / 12) * 0.5)
+        for index in range(12)
+    ]
+    for side, x in (("left", -0.052), ("right", 0.052)):
+        eye_center = (x, 0.505)
+        add_head_patch(f"piko-{side}-eye", eye_center,
+                       (0.049, 0.070), eye_outline, white, 0.0030)
+        gaze_x = x + 0.007
+        add_head_patch(f"piko-{side}-pupil", (gaze_x, 0.502),
+                       (0.024, 0.048), pupil_outline, dark, 0.0051)
+        add_head_patch(f"piko-{side}-highlight", (gaze_x - 0.004, 0.516),
+                       (0.0055, 0.010), ellipse_12, white, 0.0063)
+        add_head_arc_patch(f"piko-{side}-upper-lid", eye_center,
+                           (0.0255, 0.035), 0.08 * math.pi, 0.91 * math.pi,
+                           0.0023, dark, 0.0060, 10)
+        add_head_arc_patch(f"piko-{side}-brow", (x, 0.550),
+                           (0.024, 0.012), 0.17 * math.pi, 0.82 * math.pi,
+                           0.0030, dark, 0.0032, 8)
+
+    add_head_patch("piko-nose", (0.0, 0.473), (0.020, 0.016),
+                   [(-0.5, 0.20), (0.5, 0.20), (0.0, -0.40)],
+                   blue_shadow, 0.0034)
+    add_head_arc_patch("piko-smile", (0.0, 0.451), (0.032, 0.016),
+                       math.pi, 2 * math.pi, 0.0032, dark, 0.0040, 11)
 
     for x in (-0.060, 0.060):
-        hip_x = x * 0.82
-        add_tapered_segment(parts, f"piko-thigh-{x}", (hip_x, 0.235, -0.003),
-                            (x, 0.150, 0.000), 0.033, 0.028, blue, 12)
-        add_ellipsoid(parts, f"piko-knee-{x}", (0.058, 0.056, 0.056),
-                      (x, 0.145, 0.000), blue, 14, 7, True)
-        add_tapered_segment(parts, f"piko-calf-{x}", (x, 0.138, 0.000),
-                            (x, 0.055, 0.008), 0.027, 0.022, blue, 12)
-        foot_x = x + (-0.010 if x < 0 else 0.010)
-        # Asymmetric ring volume: flat sole, broad toe, tapered ankle.  This
-        # keeps the strong-design footprint without the old oval-slipper look.
-        add_profiled_volume(parts, f"piko-foot-{x}", [
-            (0.004, 0.058, 0.086, foot_x, 0.026),
-            (0.016, 0.064, 0.100, foot_x, 0.028),
-            (0.035, 0.061, 0.096, foot_x, 0.026),
-            (0.052, 0.051, 0.074, foot_x, 0.016),
-            (0.064, 0.035, 0.043, foot_x, 0.003),
-        ], blue, 18, True)
-        for groove_index, offset in enumerate((-0.018, 0.018)):
+        foot_x = x + (-0.008 if x < 0 else 0.008)
+        for groove_index, offset in enumerate((-0.016, 0.016)):
             add_swept_tube(
                 parts,
                 f"piko-foot-{x}-groove-{groove_index}",
-                [(foot_x + offset, 0.012, 0.146), (foot_x + offset * 0.82, 0.043, 0.144)],
-                [0.0024, 0.0024],
-                [blue_shadow],
-                5,
+                [(foot_x + offset, 0.010, 0.137),
+                 (foot_x + offset * 0.82, 0.038, 0.139)],
+                [0.0020, 0.0020], [blue_shadow], 5,
             )
-
-    add_tapered_segment(parts, "piko-left-upper-arm", (-0.080, 0.380, 0.000),
-                        (-0.145, 0.292, 0.014), 0.031, 0.025, blue, 12)
-    add_ellipsoid(parts, "piko-left-elbow", (0.052, 0.052, 0.050),
-                  (-0.142, 0.290, 0.014), blue, 14, 7, True)
-    add_tapered_segment(parts, "piko-left-forearm", (-0.142, 0.285, 0.014),
-                        (-0.177, 0.190, 0.035), 0.025, 0.020, blue, 12)
-    # The fingers overlap into a single graphic mitten silhouette, matching the
-    # approved concept and avoiding the skeletal gaps of the previous hand.
-    add_ellipsoid(parts, "piko-left-palm", (0.078, 0.078, 0.058),
-                  (-0.180, 0.160, 0.040), blue, 16, 8, True)
-    for finger_index, finger_x in enumerate((-0.202, -0.180, -0.158)):
-        add_ellipsoid(parts, f"piko-left-finger-{finger_index}",
-                      (0.031, 0.058, 0.032), (finger_x, 0.132, 0.044),
-                      blue, 12, 6, True)
-    add_ellipsoid(parts, "piko-left-thumb", (0.034, 0.052, 0.034),
-                  (-0.150, 0.157, 0.045), blue, 12, 6, True)
-
-    add_tapered_segment(parts, "piko-right-upper-arm", (0.080, 0.380, 0.000),
-                        (0.145, 0.320, 0.020), 0.031, 0.025, blue, 12)
-    add_ellipsoid(parts, "piko-right-elbow", (0.052, 0.052, 0.050),
-                  (0.145, 0.320, 0.020), blue, 14, 7, True)
-    add_tapered_segment(parts, "piko-right-forearm", (0.145, 0.325, 0.020),
-                        (0.170, 0.425, 0.038), 0.025, 0.020, blue, 12)
-    add_ellipsoid(parts, "piko-right-palm", (0.074, 0.082, 0.056),
-                  (0.170, 0.451, 0.042), blue, 14, 7, True)
-    for finger_index, finger_x in enumerate((0.154, 0.173)):
-        add_ellipsoid(parts, f"piko-right-folded-finger-{finger_index}",
-                      (0.035, 0.043, 0.050), (finger_x, 0.433, 0.050),
-                      blue, 12, 6, True)
     add_swept_tube(parts, "piko-right-palm-groove",
-                   [(0.163, 0.418, 0.068), (0.163, 0.446, 0.070)],
-                   [0.0024, 0.0024], [blue_shadow], 5)
-    add_tapered_segment(parts, "piko-raised-index", (0.176, 0.470, 0.044),
-                        (0.176, 0.536, 0.046), 0.018, 0.014, blue, 10)
-    add_ellipsoid(parts, "piko-index-tip", (0.029, 0.032, 0.027),
-                  (0.176, 0.541, 0.046), blue, 12, 6, True)
+                   [(0.152, 0.371, 0.071), (0.153, 0.390, 0.072)],
+                   [0.0019, 0.0019], [blue_shadow], 5)
 
-    for side, x, yaw in (("left", -0.052, -0.42), ("right", 0.052, 0.42)):
-        eye_center = (x, 0.505, 0.124)
-        add_face_ellipse(parts, f"piko-{side}-eye-outline", eye_center,
-                         (0.054, 0.078), dark, yaw, 0.000, 20)
-        add_face_ellipse(parts, f"piko-{side}-eye-white", eye_center,
-                         (0.048, 0.071), white, yaw, 0.0012, 20)
-        look_offset = 0.005
-        pupil_center = (
-            x + math.cos(yaw) * look_offset,
-            0.503,
-            0.124 - math.sin(yaw) * look_offset,
-        )
-        add_face_ellipse(parts, f"piko-{side}-pupil", pupil_center,
-                         (0.022, 0.049), dark, yaw, 0.0024, 18)
-        highlight_offset = -0.004
-        add_face_ellipse(parts, f"piko-{side}-highlight",
-                         (x + math.cos(yaw) * highlight_offset,
-                          0.519,
-                          0.124 - math.sin(yaw) * highlight_offset),
-                         (0.006, 0.011), white, yaw, 0.0033, 12)
-        add_face_arc(parts, f"piko-{side}-brow", (x, 0.555, 0.105),
-                     0.036, 0.019, 0.18 * math.pi, 0.82 * math.pi,
-                     0.0055, dark, yaw=yaw, samples=9)
-
-    add_mesh(parts, "piko-nose", [
-        (-0.013, 0.474, 0.131), (0.013, 0.474, 0.131), (0.000, 0.461, 0.133),
-    ], [(0, 1, 2)], [blue_shadow], smooth=False)
-    add_face_arc(parts, "piko-smile", (0, 0.442, 0.127), 0.040, 0.023,
-                 math.pi, 2 * math.pi, 0.0055, dark, samples=11)
-
-    add_swept_tube(parts, "piko-lamp-stalk", [
-        (0.000, 0.604, -0.008),
-        (-0.012, 0.628, 0.010),
-        (-0.019, 0.649, 0.045),
-        (-0.010, 0.663, 0.077),
-    ], [0.018, 0.017, 0.015, 0.013], [blue, blue, blue], 10)
-    add_ellipsoid(parts, "piko-lamp-rim", (0.074, 0.074, 0.027),
-                  (-0.010, 0.665, 0.094), gold, 18, 9, True)
-    add_face_ellipse(parts, "piko-lamp-glow", (-0.010, 0.665, 0.108),
-                     (0.046, 0.046), white, 0.0, 0.0, 18)
+    add_ellipsoid(parts, "piko-lamp-rim", (0.078, 0.078, 0.029),
+                  (-0.012, 0.667, 0.096), gold, 20, 10, True)
+    add_face_ellipse(parts, "piko-lamp-glow", (-0.012, 0.667, 0.111),
+                     (0.048, 0.048), white, 0.0, 0.0, 20)
 
 
 def build_amanojaku(parts: list[bpy.types.Object]) -> None:

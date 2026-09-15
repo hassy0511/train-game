@@ -11,39 +11,39 @@ confidence:
 
 dimensions_m:
   total_height: 0.70
-  overall_width_pose: 0.425
-  overall_depth: 0.271
+  overall_width_pose: 0.41
+  overall_depth: 0.26
 
 proportions_normalized:
   total_height: 1.00
-  head_height: 0.31
-  head_width: 0.35
-  head_depth: 0.36
-  shoulder_width: 0.23
+  head_height: 0.28
+  head_width: 0.36
+  head_depth: 0.35
+  shoulder_width: 0.26
   torso_height: 0.33
   torso_width: 0.24
   torso_depth: 0.22
   hip_width: 0.17
-  arm_length: 0.36
-  arm_thickness: 0.09
-  leg_length: 0.25
+  arm_length: 0.37
+  arm_thickness: 0.06
+  leg_length: 0.27
   leg_thickness: 0.08
-  hand_height: 0.13
-  foot_width: 0.19
-  foot_depth: 0.29
+  hand_height: 0.10
+  foot_width: 0.18
+  foot_depth: 0.28
 
 face:
   eye_center_height: 0.72
   eye_center_spacing: 0.17
   eye_surface_style: surface-conforming
-  eye_notes: tall warm-white graphic ovals with dark pupils and a thin dark outline
+  eye_notes: warm-white curved eye patches with dark oval pupils, restrained upper lids, and no heavy full outline
   mouth_center_height: 0.66
   nose_or_muzzle_notes: shallow cyan wedge; no realistic nose bridge or protruding muzzle
 
 silhouette_features:
   - broad faceted head with fuller back and a short forward face
   - narrow neck and tapered pear-shaped torso
-  - thin jointed limbs with readable elbows and knees
+  - thin continuous limbs with readable bends but no separate elbow or knee spheres
   - broad rounded feet with shallow toe grooves
   - left arm relaxed downward
   - right forearm raised with one index finger pointing upward
@@ -52,7 +52,7 @@ silhouette_features:
 style:
   low_poly_planes: controlled
   angular_vs_round: rounded main masses tightened by visible low-poly planes and tapers
-  smoothing_notes: smooth organic masses without ballooning; graphic face elements remain flat
+  smoothing_notes: watertight voxel-unioned skin with smooth anatomical transitions; graphic face elements conform to the head surface
 
 uncertain_or_inferred:
   - exact underside of feet is inferred and kept flat for grounding

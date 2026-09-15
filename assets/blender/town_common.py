@@ -34,7 +34,7 @@ ASSET_SPECS = {
     # the 100k on-screen budget while allowing controlled rounded transitions.
     "cat-sleep": ((0.7, 0.35, 0.5), 3500),
     "cat-stand": ((0.7, 0.6, 0.4), 5500),
-    "partner": ((0.43, 0.7, 0.27), 5600),
+    "partner": ((0.41, 0.70, 0.26), 5600),
     "amanojaku": ((0.9, 1.4, 0.6), 8200),
     "passenger": ((0.6, 1.6, 0.4), 8200),
     "parcel": ((0.6, 0.5, 0.6), 600),
