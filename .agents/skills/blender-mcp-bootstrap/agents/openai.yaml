@@ -1,0 +1,7 @@
+interface:
+  display_name: "Blender MCP Bootstrap"
+  short_description: "Securely connect Codex to Blender and verify it"
+  default_prompt: "Use $blender-mcp-bootstrap to inspect the current machine, install only missing Blender MCP components, disable telemetry, preserve unrelated MCP configuration, and prove the connection with a read-only scene query before any modeling."
+
+policy:
+  allow_implicit_invocation: true

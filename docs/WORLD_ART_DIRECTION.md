@@ -8,7 +8,8 @@
 
 ## スタイルキー
 
-- 基準モデル: `assets/previews/cat-stand.png`、`partner.png`、`amanojaku.png`、`passenger.png`
+- キャラクターの造形正本: `assets/concepts/character-deformation-c-strong.png` と `assets/concepts/character-turnaround-c-*.png`
+- `assets/previews/cat-stand.png`、`partner.png`、`amanojaku.png`、`passenger.png` は現行3Dの比較資料であり、2D正本と衝突する形状を維持する根拠にしない
 - デフォルメ強度: C案（強め）。大きな形を整理し、短い直線、明確なテーパー、少し大きな固有部品で役割を伝える。
 - 形態の写実度: 4 / 10。構造、厚み、接合、接地は現実に沿わせるが、細かな汚れ、傷、微細な凹凸は省略する。
 - 素材の写実度: 2 / 10。写真テクスチャや写実的な経年表現は使わず、色面と粗さの差で素材を分ける。

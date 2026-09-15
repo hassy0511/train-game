@@ -1,0 +1,7 @@
+interface:
+  display_name: "Blender Character Modeling"
+  short_description: "Rebuild stylized game characters from approved art"
+  default_prompt: "Use $blender-character-modeling to rebuild one repository character from the approved concept and turnaround, verify it in four canonical views, preserve deterministic headless generation, and do not finish below the 80-point quality gate."
+
+policy:
+  allow_implicit_invocation: true

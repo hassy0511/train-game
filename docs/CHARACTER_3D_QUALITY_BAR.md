@@ -11,6 +11,7 @@
 
 - 参照デザイン: `assets/concepts/character-deformation-c-strong.png`
 - 三面図: `assets/concepts/character-turnaround-c-*.png`
+- 制作手順: `.agents/skills/blender-character-modeling/SKILL.md`
 - 目標は「旧モデルより良い」ではなく、参照画像の再現度80点以上。
 - 1回の提出前に内部で生成・比較・修正を繰り返し、80点未満のラフを完成品として提出しない。
 

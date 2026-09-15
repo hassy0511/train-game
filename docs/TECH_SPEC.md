@@ -91,8 +91,8 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
 
 ## 4. アセットパイプライン（Blender）
 
-- Blender は **ヘッドレス実行のみ**（`blender -b --python <script>`）。手作業造形はしない
-- 各モデルは `assets/blender/<name>.py` の生成スクリプトから作る。再現可能にする
+- 各モデルは `assets/blender/<name>.py` の生成スクリプトを正本とし、最終生成は **ヘッドレス実行**（`blender -b --python <script>`）で再現可能にする
+- Blender MCP / GUIは、シーン確認、ブロックアウト、造形検討、4方向レビューに使用してよい。採用した変更は生成スクリプトへ反映し、未記録の手作業 `.blend` を正本にしない
 - 出力: `public/models/<name>.glb` ＋ 確認用プレビュー `assets/previews/<name>.png`（CPU Cyclesの低サンプル）
 - 発注書（Claude → Codex）に含める項目: 用途、寸法（m単位、電車の車両幅を基準）、ポリゴン予算、マテリアル（単色・フラット基本）、原点位置、前方向（+Z）、アニメーション要否、命名
 - 絵柄: `docs/WORLD_ART_DIRECTION.md` を正本とする。C案の強めデフォルメ、形態写実度4 / 10、単色寄りの材質を基準にし、構造・厚み・接合を省略しない。実在車両の連想を避ける

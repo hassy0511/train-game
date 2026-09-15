@@ -14,12 +14,15 @@
 5. PRにはチケット番号、変更点、確認方法、判断に迷った点を書く
 
 ## Blender作業
-- ヘッドレスのみ: `blender -b --python assets/blender/<name>.py`
+- 正本は再現可能なPython生成スクリプトとし、最終生成は `blender -b --python assets/blender/<name>.py` で行う
+- Blender MCP / GUIは、シーン確認、ブロックアウト、4方向レビューに使ってよい。採用した造形は必ず生成スクリプトへ反映し、未記録の手作業 `.blend` を正本にしない
 - 出力: `public/models/<name>.glb`（1 unit = 1 m、前方向 +Z、原点は発注書の指定）
 - プレビュー: `assets/previews/<name>.png` をCPU Cyclesの低サンプルでレンダしてコミット
 - 絵柄: ローポリ・フラットシェーディング・単色寄り。ポリゴン予算はチケットに従う
 - Phase 1以降の本番アセットは `docs/WORLD_ART_DIRECTION.md` を優先し、強めのデフォルメと写実度4相当の構造・厚み・接合を両立する
 - 承認済み2Dデザインから作るキャラクターは `docs/CHARACTER_3D_QUALITY_BAR.md` を優先し、スムーズシェーディング、カスタムメッシュ、ベベル、必要に応じた単純テクスチャを許可する
+- キャラクターの新規作成・作り直しでは `.agents/skills/blender-character-modeling/SKILL.md` を適用する
+- Blender MCPが未接続・不調なら `.agents/skills/blender-mcp-bootstrap/SKILL.md` を適用し、接続確認前にモデルを変更しない
 - 実在の車両・キャラを連想させる形状・配色を避ける
 
 ## コード規約
