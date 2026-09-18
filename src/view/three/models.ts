@@ -14,7 +14,7 @@ const PLACEHOLDER_COLORS: Record<string, number> = {
   'car-proto': 0x3fa7d6,
 };
 
-/** Stage-facing names retained from the schema before the prototype GLBs were named. */
+/** Fallbacks used only while the real model is not built yet (stage names that predate the town set). */
 const MODEL_ALIASES: Record<string, string> = {
   'tree-a': 'tree-a-proto',
   'tree-b': 'tree-b-proto',
@@ -33,7 +33,14 @@ export class ModelLibrary {
 
   /** True when a .glb for this name exists in the build. */
   has(name: string): boolean {
-    return this.available.has(MODEL_ALIASES[name] ?? name);
+    return this.available.has(this.resolve(name));
+  }
+
+  /** The asset to load for `name`: itself when built, otherwise its alias when that one exists. */
+  private resolve(name: string): string {
+    if (this.available.has(name)) return name;
+    const alias = MODEL_ALIASES[name];
+    return alias && this.available.has(alias) ? alias : name;
   }
 
   load(name: string): Promise<Group> {
@@ -42,7 +49,7 @@ export class ModelLibrary {
 
     // Models that are not built yet (pending Blender tickets) get a flat box of the right size,
     // so stages stay playable and no 404 requests are made.
-    const assetName = MODEL_ALIASES[name] ?? name;
+    const assetName = this.resolve(name);
     if (!this.available.has(assetName)) {
       console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(makePlaceholder(name));

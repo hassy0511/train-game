@@ -13,7 +13,7 @@
 - **GitHub Actions**: ビルド・スモークテスト・Pagesデプロイ
 - **だいさん**: iPadで実プレイして判断
 
-基盤部分（rail/train/physics/stage ローダー等）は Claude Code が直接実装してよい。ステージ固有の実装やアセットは Codex に発注する。
+基盤部分（rail/train/physics/stage ローダー等）は Claude Code が直接実装してよい。ステージ固有の実装やアセットは Codex に発注するが、Codex が詰まっているときは Claude Code が巻き取ってよい（Blender は `python3 scripts/run-bpy.py assets/blender/<name>.py` で動く。pip の `bpy` が必要）。
 
 ## 進め方のルール（重要）
 - **GOルール**: 設計・方針を先に提示し、だいさんから明示的な GO をもらってから実装する。Phase 単位でも、大きな設計変更でも同じ

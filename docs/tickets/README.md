@@ -2,6 +2,9 @@
 
 1チケット1ファイル。番号順。作業前に `AGENTS.md` と、チケットの「関連」に書かれた文書を読むこと。
 
+## Blender の実行環境
+Codex は `blender -b --python assets/blender/<name>.py`。Claude Code の環境には Blender 本体がないが、pip の `bpy` モジュール（Blender 5.0）が入るので `python3 scripts/run-bpy.py assets/blender/<name>.py` で同じスクリプトを実行できる（.glb とプレビュー PNG を生成、`validate-town-set.py` も動く）。**モデル作業は Claude Code でも巻き取れる**。
+
 ## 状態の意味
 | 状態 | 意味 |
 |---|---|
@@ -23,11 +26,11 @@
 | [0002](0002-three-scene-view.md) | Three.js: シーン表示（線路メッシュ・車両・環境・運転席カメラ） | Codex | 完了（PR #4） | — |
 | [0003](0003-blender-town-set.md) | Blender: 1-1 はじまりの街 のモデル一式 | Codex | 完了（第 1 弾 PR #11、第 2 弾 PR #12） | なし |
 | [0004](0004-three-stage-1-1-visuals.md) | Three.js: 1-1 の見た目と演出 | Codex | 完了（main 直接 push b2246c8） | — |
-| [0005](0005-blender-dino-valley-set.md) | Blender: 1-2 きょうりゅうの谷 のモデル一式（＋0003 第 3 弾の木 2 種を先に） | Codex | 発注中（着手可） | なし |
+| [0005](0005-blender-dino-valley-set.md) | Blender: 1-2 きょうりゅうの谷 のモデル一式 | Codex | 発注中（着手可） | なし |
 | [0006](0006-blender-sky-islands-set.md) | Blender: 1-3 くものうえ のモデル一式 | Codex | 発注中（0005 の後） | なし |
 
 ## 発注の順番
-1. **0005**（1-2 のモデル）。先に 0003 第 3 弾の木 2 種（`tree-a` / `tree-b`）を作ってから
+1. **0005**（1-2 のモデル）
 2. **0006**（1-3 のモデル）。0005 の後
 3. 1-2 / 1-3 の Three.js 組み込み（0007 以降）は Phase 2 / 3 の設計とだいさんの GO の後に発注する
 4. **必ず PR を出す（main に直接 push しない）**。Claude Code がレビューし、main にマージしたら GitHub Pages に出る
@@ -57,7 +60,6 @@ npm run smoke を通し、tests/smoke/output のスクショと getStats() の�
 
 ```
 リポジトリ hassy0511/train-game の main を開いて、AGENTS.md と docs/tickets/README.md を読んでください。
-まず docs/tickets/0003-blender-town-set.md の「追加発注（第 3 弾）」の木 2 種（tree-a / tree-b）を作ってください。
 その上で docs/tickets/0005-blender-dino-valley-set.md を実装してください。
 ブランチは codex/0005-dino-valley-set、PR は main 宛て、タイトルは「[#0005] 1-2 きょうりゅうの谷 のモデル一式」。main には直接 push しないでください。
 モデル（assets/blender、public/models、assets/previews）だけを追加し、src/ は変更しないでください。
