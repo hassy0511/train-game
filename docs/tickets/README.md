@@ -5,6 +5,8 @@
 ## Blender の実行環境
 Codex は `blender -b --python assets/blender/<name>.py`。Claude Code の環境には Blender 本体がないが、pip の `bpy` モジュール（Blender 5.0）が入るので `python3 scripts/run-bpy.py assets/blender/<name>.py` で同じスクリプトを実行できる（.glb とプレビュー PNG を生成、`validate-town-set.py` も動く）。**モデル作業は Claude Code でも巻き取れる**。
 
+納品したモデルは `https://hassy0511.github.io/train-game/models.html?model=<名前>` で 1 点ずつ 3D で確認できる（main にマージ後）。
+
 ## 状態の意味
 | 状態 | 意味 |
 |---|---|
