@@ -39,6 +39,8 @@ ASSET_SPECS = {
     "passenger": ((0.6, 1.6, 0.4), 8200),
     "parcel": ((0.6, 0.5, 0.6), 600),
     "goal-flag": ((1.6, 2.4, 0.2), 400),
+    "tree-a": ((3.2, 4.2, 3.2), 500),
+    "tree-b": ((3.6, 4.6, 3.6), 600),
 }
 
 _materials: dict[tuple[str, str], bpy.types.Material] = {}
@@ -1477,6 +1479,38 @@ def build_goal_flag(parts: list[bpy.types.Object]) -> None:
               (3, 4, 11, 10), (4, 5, 12, 11), (5, 6, 13, 12)], red)
 
 
+def build_tree_a(parts: list[bpy.types.Object]) -> None:
+    """Pointed town tree: scaled trunk and three thick cone tiers with a lip under each."""
+    bark = material("Tree bark", "#7A5A3A")
+    leaf = material("Tree-a leaf", "#3E8E5A")
+    leaf_dark = material("Tree-a leaf shade", "#2F7448")
+    add_vertical_cylinder(parts, "trunk", 0.22, 1.25, (0, 0.625, 0), bark, 8)
+    for index, y in enumerate((0.25, 0.6, 0.95)):
+        add_vertical_cone(parts, f"trunk-scale-{index}", 0.30, 0.22, 0.18, (0, y, 0), bark, 8)
+    tiers = ((1.0, 1.6, 1.7), (2.0, 1.25, 1.5), (2.85, 0.85, 1.35))
+    for index, (base, radius, height) in enumerate(tiers):
+        # Lip: a short inverted frustum under the tier so the edge reads as thick foliage.
+        add_vertical_cone(parts, f"tier-lip-{index}", radius - 0.3, radius, 0.28, (0, base - 0.14, 0), leaf_dark, 8)
+        add_vertical_cone(parts, f"tier-{index}", radius, 0.0, height, (0, base + height / 2, 0), leaf, 8)
+
+
+def build_tree_b(parts: list[bpy.types.Object]) -> None:
+    """Round town tree: trunk with two stubs and four overlapping leaf blobs."""
+    bark = material("Tree bark", "#7A5A3A")
+    leaf = material("Tree-b leaf", "#6CBF3F")
+    leaf_dark = material("Tree-b leaf shade", "#4FA332")
+    add_vertical_cylinder(parts, "trunk", 0.30, 1.7, (0, 0.85, 0), bark, 8)
+    add_vertical_cone(parts, "trunk-flare", 0.42, 0.30, 0.3, (0, 0.15, 0), bark, 8)
+    blobs = (
+        ("blob-main", (3.0, 2.7, 3.55), (0.0, 2.85, 0.0), leaf_dark),
+        ("blob-left", (1.9, 1.7, 1.9), (-0.85, 2.55, 0.35), leaf_dark),
+        ("blob-right", (2.0, 1.8, 2.0), (0.8, 2.75, -0.3), leaf),
+        ("blob-top", (1.9, 1.6, 1.9), (0.1, 3.8, 0.1), leaf),
+    )
+    for name, size, center, mat in blobs:
+        add_sphere(parts, name, size, center, mat, segments=10, rings=6, smooth=True)
+
+
 BUILDERS = {
     "house-a": build_house_a,
     "house-b": build_house_b,
@@ -1499,6 +1533,8 @@ BUILDERS = {
     "passenger": build_passenger,
     "parcel": build_parcel,
     "goal-flag": build_goal_flag,
+    "tree-a": build_tree_a,
+    "tree-b": build_tree_b,
 }
 
 

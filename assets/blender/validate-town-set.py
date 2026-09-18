@@ -16,6 +16,7 @@ WORLD_STYLE_NAMES = {
     "house-a", "house-b", "house-c", "shop", "tower", "hq",
     "platform", "platform-roof", "station-sign", "stop-line", "stop-board",
     "car-proto", "crossing-gate", "crossing-sign", "parcel", "goal-flag",
+    "tree-a", "tree-b",
 }
 WORLD_TRIANGLE_BUDGET = 25_000
 
