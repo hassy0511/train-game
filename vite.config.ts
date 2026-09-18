@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
 // BASE_PATH is set in CI for the GitHub Pages deploy (e.g. "/train-game/").
@@ -31,6 +32,10 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
+    rollupOptions: {
+      // models.html is the standalone model viewer for reviewing Blender deliveries.
+      input: { main: resolve(__dirname, 'index.html'), models: resolve(__dirname, 'models.html') },
+    },
     sourcemap: false,
     // Rapier's inlined wasm makes one large chunk; that is expected.
     chunkSizeWarningLimit: 3000,
