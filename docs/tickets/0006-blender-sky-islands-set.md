@@ -1,8 +1,8 @@
 # 0006 Blender発注: 1-3 くものうえ のモデル一式
 
-- 状態: **発注中**（着手条件: 0005 の後。Phase 3 のコードは Claude Code が別途作る）
-- 担当: Codex
-- 依存: なし（`docs/WORLD_ART_DIRECTION.md` を基準にする）
+- 状態: **未着手**（Phase 3 の GO と一緒に着手する）
+- 担当: Claude Code（2026-09-24 に Codex から変更）
+- 依存: なし（作り方は `docs/ASSET_PIPELINE.md`）
 - 関連: `docs/GAME_SPEC.md` §7「1-3 くものうえ」、`docs/POC_PLAN.md` Phase 3、`docs/STORY.md`
 
 ## 目的
@@ -41,7 +41,7 @@ Three.js 側の組み込み（連続ジャンプ・重力逆転・消えるジ�
 | `cloud-crystal` | 0.6 × 0.9 × 0.6 | ≤ 300 | 雲の結晶（調査記録）。六角柱の集合、半透明ではなく白青 `#DCE9F5` |
 | `sky-buoy` | 1.0 × 2.4 × 1.0 | ≤ 400 | 線路の先を示す浮き標。球＋支柱＋小旗。島と島の間で「この先に線路が続く」目印 |
 
-### 生き物（原点: 胴の中心。顔の向きが +Z。`docs/CHARACTER_3D_QUALITY_BAR.md`）
+### 生き物（原点: 胴の中心。顔の向きが +Z。`docs/ASSET_PIPELINE.md`）
 | 名前 | 寸法 (m) | 三角形 | メモ |
 |---|---|---|---|
 | `bird-glide` | 0.5 × 0.3 × 0.6 | ≤ 900 | 小鳥、翼を広げた滑空姿勢。群れで 10〜20 体インスタンス化するので軽く。`#5FA8E6` ＋腹 `#F4EEDC` |

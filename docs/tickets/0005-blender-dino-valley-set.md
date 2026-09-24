@@ -1,8 +1,8 @@
 # 0005 Blender発注: 1-2 きょうりゅうの谷 のモデル一式
 
-- 状態: **発注中**（着手条件: なし。0004 と並行してよい。Phase 2 のコードは Claude Code が別途作る）
-- 担当: Codex
-- 依存: なし（`docs/WORLD_ART_DIRECTION.md`、`docs/CHARACTER_3D_QUALITY_BAR.md` を基準にする）
+- 状態: **未着手**（Phase 2 の GO と一緒に着手する）
+- 担当: Claude Code（2026-09-24 に Codex から変更）
+- 依存: なし（作り方は `docs/ASSET_PIPELINE.md`）
 - 関連: `docs/GAME_SPEC.md` §7「1-2 きょうりゅうの谷」、`docs/POC_PLAN.md` Phase 2、`docs/STORY.md`
 
 ## 目的
@@ -11,7 +11,7 @@ Three.js 側の組み込み（ジャンプ・落石・首くぐりの演出）�
 
 ## 共通仕様
 0003 と同じ（`assets/blender/<name>.py` から `public/models/<name>.glb` を再生成できる。1 ファイル 1 メッシュ、テクスチャなし、原点は底面中心、+Z が前、bbox ±0.1 m、スクリプト末尾で三角形数と bbox を print）。
-- 世界パーツは `docs/WORLD_ART_DIRECTION.md`、生き物は `docs/CHARACTER_3D_QUALITY_BAR.md` を優先する
+- 作り方・絵柄は `docs/ASSET_PIPELINE.md`（生き物は粘土＋色ぬり焼き込み、世界パーツは箱・ロフト）
 - 生成・検証は `assets/blender/generate-town-set.py` / `validate-town-set.py` と同じ仕組みで `generate-valley-set.py` / `validate-valley-set.py` を作る
 - **プレビュー PNG は長辺 512 px 以下**（0003 のプレビューは大きすぎた。集合プレビューは 1024 px 以下）
 - 生き物は着手前に **三面図のコンセプト画** `assets/previews/dino-set-concept.png` を 1 枚描いてコミットする（だいさんが後から見て差し戻せるように）。承認待ちはせず、そのまま造形に進んでよい
@@ -24,7 +24,7 @@ Three.js 側の組み込み（ジャンプ・落石・首くぐりの演出）�
 
 ## モデル
 
-### 世界パーツ（原点: 底面中心。`docs/WORLD_ART_DIRECTION.md`）
+### 世界パーツ（原点: 底面中心）
 | 名前 | 寸法 幅×高さ×奥行 (m) | 三角形 | メモ |
 |---|---|---|---|
 | `fern-a` | 2.4 × 2.0 × 2.4 | ≤ 600 | 大きなシダ。放射状の葉 6〜8 枚、葉に厚みと中央の葉脈の段。`#3E8E5A` / `#5FB877` |
@@ -40,7 +40,7 @@ Three.js 側の組み込み（ジャンプ・落石・首くぐりの演出）�
 | `footprint-slab` | 2.0 × 0.3 × 2.4 | ≤ 400 | 調査記録。足跡（3 本指）がくぼんだ岩板 |
 | `jump-unit` | 1.6 × 0.6 × 1.2 | ≤ 600 | ピコが取り付けるジャンプ装置。車体屋根の後方（車体原点から (0, 3.6, −3.0)）に載せる。ばね 2 本＋噴出口 2 個＋黄色の帯。車体色 `#3FA7D6` / `#FFD166` / `#3A3F47` |
 
-### 生き物（原点: 底面中心。顔の向きが +Z。`docs/CHARACTER_3D_QUALITY_BAR.md`）
+### 生き物（原点: 底面中心。顔の向きが +Z）
 | 名前 | 寸法 幅×高さ×奥行 (m) | 三角形 | メモ |
 |---|---|---|---|
 | `dino-small-walk` | 1.2 × 1.2 × 2.4 | ≤ 5,000 | 子恐竜（二足）。線路を横断する。頭が大きい 2 頭身、短い尾、片足を上げた歩き姿勢 |
