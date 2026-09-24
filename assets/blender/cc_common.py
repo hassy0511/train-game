@@ -25,22 +25,177 @@ import bmesh  # noqa: E402
 from mathutils import Vector  # noqa: E402
 from mathutils.bvhtree import BVHTree  # noqa: E402
 
-import character_common as cc  # noqa: E402
-from town_common import ASSET_SPECS, MODEL_DIR  # noqa: E402
-
 Paint = Union[str, Callable[[Vector, Vector], str]]
 SCRATCH = Path(tempfile.gettempdir()) / "cc-bake"
+ROOT = Path(__file__).resolve().parents[2]
+MODEL_DIR = ROOT / "public" / "models"
+PREVIEW_DIR = ROOT / "assets" / "previews"
+_materials: dict[tuple[str, str], bpy.types.Material] = {}
+
+
+# ---------------------------------------------------------------- primitives (glTF coordinates)
+
+def srgb_channel(value: int) -> float:
+    channel = value / 255.0
+    return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+
+def material(name: str, hex_color: str, roughness: float = 0.65) -> bpy.types.Material:
+    key = (name, hex_color)
+    if key in _materials:
+        return _materials[key]
+    rgb = tuple(srgb_channel(int(hex_color[i:i + 2], 16)) for i in (1, 3, 5))
+    value = bpy.data.materials.new(name)
+    value.use_nodes = True
+    value.use_backface_culling = True
+    shader = value.node_tree.nodes["Principled BSDF"]
+    shader.inputs["Base Color"].default_value = (*rgb, 1.0)
+    shader.inputs["Roughness"].default_value = roughness
+    value.diffuse_color = (*rgb, 1.0)
+    _materials[key] = value
+    return value
+
+
+def to_blender(point) -> tuple[float, float, float]:
+    x, y, z = point
+    return (x, -z, y)
+
+
+def _finish(obj: bpy.types.Object, mat: bpy.types.Material, smooth: bool) -> bpy.types.Object:
+    obj.data.materials.append(mat)
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = smooth
+    return obj
+
+
+def add_mesh(parts, name, vertices, faces, materials, material_indices=None, smooth=False):
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata([to_blender(p) for p in vertices], [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    for mat in materials:
+        mesh.materials.append(mat)
+    for index, polygon in enumerate(mesh.polygons):
+        polygon.use_smooth = smooth
+        if material_indices and index < len(material_indices):
+            polygon.material_index = material_indices[index]
+    parts.append(obj)
+    return obj
+
+
+def add_ellipsoid(parts, name, size, center, mat, segments=20, rings=10, smooth=True):
+    width, height, depth = size
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings, radius=1.0,
+                                         location=to_blender(center))
+    obj = bpy.context.object
+    obj.name = name
+    obj.scale = (width / 2.0, depth / 2.0, height / 2.0)
+    _finish(obj, mat, smooth)
+    parts.append(obj)
+    return obj
+
+
+def add_box(parts, name, size, center, mat, bevel=0.0, segments=2, smooth=False):
+    width, height, depth = size
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=to_blender(center))
+    obj = bpy.context.object
+    obj.name = name
+    obj.scale = (width, depth, height)
+    _finish(obj, mat, smooth)
+    if bevel > 0:
+        modifier = obj.modifiers.new(name="bevel", type="BEVEL")
+        modifier.width = bevel
+        modifier.segments = segments
+        modifier.limit_method = "ANGLE"
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+        for polygon in obj.data.polygons:
+            polygon.use_smooth = smooth
+    parts.append(obj)
+    return obj
+
+
+def add_tapered_segment(parts, name, start, end, radius_start, radius_end, mat, vertices=12, smooth=True):
+    start_b, end_b = Vector(to_blender(start)), Vector(to_blender(end))
+    direction = end_b - start_b
+    bpy.ops.mesh.primitive_cone_add(vertices=vertices, radius1=radius_start, radius2=radius_end,
+                                    depth=direction.length, location=(start_b + end_b) / 2.0)
+    obj = bpy.context.object
+    obj.name = name
+    obj.rotation_euler = direction.to_track_quat("Z", "Y").to_euler()
+    _finish(obj, mat, smooth)
+    parts.append(obj)
+    return obj
+
+
+def add_swept_tube(parts, name, points, radii, segment_materials, sides=12, smooth=True):
+    """Closed tube along a polyline; one material per segment (used for stripes)."""
+    vectors = [Vector(p) for p in points]
+    verts = []
+    for index, center in enumerate(vectors):
+        previous = vectors[max(index - 1, 0)]
+        following = vectors[min(index + 1, len(vectors) - 1)]
+        tangent = (following - previous).normalized()
+        reference = Vector((0, 0, 1)) if abs(tangent.z) < 0.9 else Vector((1, 0, 0))
+        normal = tangent.cross(reference).normalized()
+        binormal = tangent.cross(normal).normalized()
+        for side in range(sides):
+            angle = 2 * math.pi * side / sides
+            verts.append(tuple(center + normal * (math.cos(angle) * radii[index])
+                               + binormal * (math.sin(angle) * radii[index])))
+    faces = [tuple(range(sides - 1, -1, -1))]
+    indices = [0]
+    for segment in range(len(points) - 1):
+        a, b = segment * sides, (segment + 1) * sides
+        for side in range(sides):
+            n = (side + 1) % sides
+            faces.append((a + side, a + n, b + n, b + side))
+            indices.append(segment)
+    last = (len(points) - 1) * sides
+    faces.append(tuple(last + side for side in range(sides)))
+    indices.append(len(segment_materials) - 1)
+    return add_mesh(parts, name, verts, faces, segment_materials, material_indices=indices, smooth=smooth)
+
+
+def add_profiled_volume(parts, name, rings, mat, segments=20, smooth=True):
+    """Stack of horizontal ellipses (y, radius_x, radius_z, center_x, center_z), capped at both ends."""
+    verts = []
+    for y, rx, rz, cx, cz in rings:
+        for i in range(segments):
+            a = 2 * math.pi * i / segments
+            verts.append((cx + math.cos(a) * rx, y, cz + math.sin(a) * rz))
+    faces = [tuple(range(segments - 1, -1, -1))]
+    for r in range(len(rings) - 1):
+        a, b = r * segments, (r + 1) * segments
+        for i in range(segments):
+            n = (i + 1) % segments
+            faces.append((a + i, a + n, b + n, b + i))
+    last = (len(rings) - 1) * segments
+    faces.append(tuple(last + i for i in range(segments)))
+    return add_mesh(parts, name, verts, faces, [mat], smooth=smooth)
+
+
+def model_metrics(model: bpy.types.Object) -> tuple[int, list[float], list[float]]:
+    model.data.calc_loop_triangles()
+    pts = [model.matrix_world @ v.co for v in model.data.vertices]
+    pts = [(p.x, p.z, -p.y) for p in pts]
+    minimum = [min(p[a] for p in pts) for a in range(3)]
+    maximum = [max(p[a] for p in pts) for a in range(3)]
+    return len(model.data.loop_triangles), minimum, maximum
 
 
 # ---------------------------------------------------------------- basics
 
 def reset() -> None:
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    cc._materials.clear()
+    _materials.clear()
 
 
 def mat(name: str, hex_color: str, roughness: float = 0.65) -> bpy.types.Material:
-    return cc.material(name, hex_color, roughness)
+    return material(name, hex_color, roughness)
 
 
 def active(obj: bpy.types.Object) -> None:
@@ -84,7 +239,7 @@ def triangles(obj: bpy.types.Object) -> int:
 
 
 def hex_linear(hex_color: str) -> tuple[float, float, float]:
-    return tuple(cc.srgb_channel(int(hex_color[i:i + 2], 16)) for i in (1, 3, 5))
+    return tuple(srgb_channel(int(hex_color[i:i + 2], 16)) for i in (1, 3, 5))
 
 
 def gltf(v: Vector) -> Vector:
@@ -111,7 +266,7 @@ def disc_decal(parts, name, center, size, material, rings=3, segments=18, tilt=0
         for s in range(segments):
             n = (s + 1) % segments
             faces.append((a0 + s, a1 + s, a1 + n, a0 + n))
-    return cc.add_mesh(parts, name, verts, faces, [material], smooth=True)
+    return add_mesh(parts, name, verts, faces, [material], smooth=True)
 
 
 def poly_decal(parts, name, outline, z, material, rings=3):
@@ -130,7 +285,7 @@ def poly_decal(parts, name, outline, z, material, rings=3):
         for s in range(n):
             m = (s + 1) % n
             faces.append((a0 + s, a1 + s, a1 + m, a0 + m))
-    return cc.add_mesh(parts, name, verts, faces, [material], smooth=True)
+    return add_mesh(parts, name, verts, faces, [material], smooth=True)
 
 
 def ribbon_decal(parts, name, points, width, material, taper=True):
@@ -147,7 +302,7 @@ def ribbon_decal(parts, name, points, width, material, taper=True):
         verts.append((x + nx * half, y + ny * half, z))
         verts.append((x - nx * half, y - ny * half, z))
     faces = [(2 * i + 1, 2 * i + 3, 2 * i + 2, 2 * i) for i in range(len(points) - 1)]
-    return cc.add_mesh(parts, name, verts, faces, [material], smooth=True)
+    return add_mesh(parts, name, verts, faces, [material], smooth=True)
 
 
 def arc_points(center, half_width, bend, z, samples=11, tilt=0.0):
@@ -272,17 +427,38 @@ def painted_clay(parts: list[tuple[bpy.types.Object, Paint]], name: str, voxel: 
     return low
 
 
+def flat_clay(objects: list[bpy.types.Object], name: str, material_: bpy.types.Material, voxel: float,
+              budget: int, ground: bool = False, smooth: int = 3) -> bpy.types.Object:
+    """Fuse same-colour volumes into one smooth surface with a single flat material (no texture)."""
+    clay = join(objects, name)
+    apply_modifier(clay, "REMESH", mode="VOXEL", voxel_size=voxel, adaptivity=0.0)
+    if ground:
+        active(clay)
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.mesh.bisect(plane_co=(0, 0, 0), plane_no=(0, 0, 1), clear_inner=True, use_fill=True)
+        bpy.ops.object.mode_set(mode="OBJECT")
+    if smooth:
+        apply_modifier(clay, "SMOOTH", factor=0.5, iterations=smooth)
+    apply_modifier(clay, "DECIMATE", decimate_type="COLLAPSE", ratio=min(1.0, budget / max(triangles(clay), 1)),
+                   use_collapse_triangulate=True)
+    clay.data.materials.clear()
+    clay.data.materials.append(material_)
+    set_smooth(clay)
+    return clay
+
+
 # ---------------------------------------------------------------- finish
 
 def normalize(model: bpy.types.Object, height: float | None) -> None:
     """Uniform scale to `height` (None keeps the modelled size), then bottom-centre origin."""
     if height is not None:
-        _, minimum, maximum = cc.model_metrics(model)
+        _, minimum, maximum = model_metrics(model)
         scale = height / (maximum[1] - minimum[1])
         model.scale = (scale, scale, scale)
         active(model)
         bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    _, minimum, maximum = cc.model_metrics(model)
+    _, minimum, maximum = model_metrics(model)
     model.location += Vector((-(minimum[0] + maximum[0]) / 2, (minimum[2] + maximum[2]) / 2, -minimum[1]))
     active(model)
     bpy.ops.object.transform_apply(location=True, rotation=False, scale=False)
@@ -290,9 +466,77 @@ def normalize(model: bpy.types.Object, height: float | None) -> None:
     bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
 
 
-def export(model: bpy.types.Object, name: str, budget: int, compare_with: str) -> None:
-    """Export the GLB and a turnaround preview framed exactly like Codex's `compare_with` model."""
-    tris, minimum, maximum = cc.model_metrics(model)
+def _studio(scene, target: Vector, span: float, width: int, height: int, path: Path) -> None:
+    scene.render.engine = "CYCLES"
+    scene.cycles.device = "CPU"
+    scene.cycles.samples = 24
+    scene.cycles.use_denoising = True
+    scene.render.resolution_x = width
+    scene.render.resolution_y = height
+    scene.render.resolution_percentage = 100
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.image_settings.color_mode = "RGB"
+    scene.render.image_settings.compression = 90
+    scene.render.filepath = str(path)
+    scene.view_settings.view_transform = "Standard"
+    scene.view_settings.look = "None"
+    world = bpy.data.worlds.new("studio")
+    scene.world = world
+    world.use_nodes = True
+    world.node_tree.nodes["Background"].inputs["Color"].default_value = (0.93, 0.92, 0.90, 1)
+    world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.85
+    floor = material("studio floor", "#F4F1EA", 0.9)
+    bpy.ops.mesh.primitive_plane_add(size=span * 40, location=(target.x, target.y, -0.002))
+    bpy.context.object.data.materials.append(floor)
+    bpy.ops.object.light_add(type="SUN", location=(0, 0, 10), rotation=(math.radians(40), 0, math.radians(25)))
+    bpy.context.object.data.energy = 2.4
+    bpy.context.object.data.angle = math.radians(14)
+
+
+def preview_character(model: bpy.types.Object, name: str) -> None:
+    """Front, three-quarter and side views on one strip (orthographic, same scale)."""
+    _, minimum, maximum = model_metrics(model)
+    width, height, depth = (maximum[i] - minimum[i] for i in range(3))
+    span = max(width, depth)
+    spacing = span * 1.25
+    for i, rot in enumerate((0.0, math.radians(-35), math.radians(-90))):
+        view = model if i == 0 else model.copy()
+        if i:
+            view.data = model.data.copy()
+            bpy.context.collection.objects.link(view)
+        view.location = ((i - 1) * spacing, 0, 0)
+        view.rotation_euler[2] = rot
+    scene = bpy.context.scene
+    target = Vector((0, 0, height * 0.5))
+    _studio(scene, target, max(span, height), 1200, 525, PREVIEW_DIR / f"{name}.png")
+    bpy.ops.object.camera_add(location=(0, -max(height, span) * 8, height * 0.5))
+    camera = bpy.context.object
+    camera.data.type = "ORTHO"
+    camera.data.ortho_scale = max((spacing * 2 + span) * 1.08, height * (1200 / 525) * 1.1)
+    camera.rotation_euler = (target - camera.location).to_track_quat("-Z", "Y").to_euler()
+    scene.camera = camera
+    bpy.ops.render.render(write_still=True)
+
+
+def preview_world(model: bpy.types.Object, name: str) -> None:
+    """One three-quarter view from the front-right, 512 x 512."""
+    _, minimum, maximum = model_metrics(model)
+    size = Vector([maximum[i] - minimum[i] for i in range(3)])
+    center = Vector(to_blender([(maximum[i] + minimum[i]) / 2 for i in range(3)]))
+    span = max(size)
+    scene = bpy.context.scene
+    _studio(scene, center, span, 512, 512, PREVIEW_DIR / f"{name}.png")
+    bpy.ops.object.camera_add(location=center + Vector((span * 1.1, -span * 1.6, span * 0.8)))
+    camera = bpy.context.object
+    camera.data.lens = 50
+    camera.rotation_euler = (center - camera.location).to_track_quat("-Z", "Y").to_euler()
+    scene.camera = camera
+    bpy.ops.render.render(write_still=True)
+
+
+def export(model: bpy.types.Object, name: str, budget: int, kind: str = "character", max_kb: int = 350) -> None:
+    """Export the GLB (JPEG textures) and a preview; fails loudly when over budget."""
+    tris, minimum, maximum = model_metrics(model)
     if tris > budget:
         raise RuntimeError(f"{name}: {tris} triangles exceeds budget {budget}")
     dims = [maximum[i] - minimum[i] for i in range(3)]
@@ -300,11 +544,10 @@ def export(model: bpy.types.Object, name: str, budget: int, compare_with: str) -
     glb = MODEL_DIR / f"{name}.glb"
     bpy.ops.export_scene.gltf(filepath=str(glb), export_format="GLB", export_yup=True, use_selection=True,
                               export_image_format="JPEG", export_image_quality=88)
-    if glb.stat().st_size > 350 * 1024:
-        raise RuntimeError(f"{name}: GLB exceeds 350 KB")
-    ASSET_SPECS[name] = (ASSET_SPECS[compare_with][0], budget)
-    cc.setup_turnaround_preview(model, name)
-    print("CHARACTER_METRICS=" + json.dumps({
-        "model": name, "triangles": tris, "budget": budget, "dimensions": dims,
-        "bbox": {"min": minimum, "max": maximum}, "file_bytes": glb.stat().st_size,
+    if glb.stat().st_size > max_kb * 1024:
+        raise RuntimeError(f"{name}: GLB exceeds {max_kb} KB")
+    (preview_character if kind == "character" else preview_world)(model, name)
+    print("MODEL_METRICS=" + json.dumps({
+        "model": name, "triangles": tris, "budget": budget, "dimensions": [round(d, 3) for d in dims],
+        "min_y": round(minimum[1], 4), "file_bytes": glb.stat().st_size,
     }, sort_keys=True))
