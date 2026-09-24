@@ -1,4 +1,4 @@
-"""Shared tabby-cat parts for `cat-stand-cc` and `cat-sleep-cc` (Claude Code versions).
+"""Shared tabby-cat parts for `cat-stand` and `cat-sleep` (Claude Code).
 
 The head is modelled once around the standing cat's head centre and moved as a unit, so both poses share
 the same face, ears, colours and stripe rules. Coordinates are glTF metres (face looks toward +Z).
@@ -8,7 +8,6 @@ from __future__ import annotations
 import math
 
 import cc_common as k
-import character_common as cc
 from mathutils import Vector
 
 ORANGE, STRIPE, CREAM, PINK = "#E8812F", "#BD5716", "#F6D8AE", "#EE9E96"
@@ -88,11 +87,11 @@ def add_head(clay: list, placeholder, offset: Vector) -> None:
         return (x + o.x, y + o.y, z + o.z)
 
     parts: list = []
-    cc.add_ellipsoid(parts, "skull", (0.200, 0.160, 0.165), at(0, 0.398, 0.200), placeholder, 28, 14)
+    k.add_ellipsoid(parts, "skull", (0.200, 0.160, 0.165), at(0, 0.398, 0.200), placeholder, 28, 14)
     for side in (-1, 1):
-        cc.add_ellipsoid(parts, f"cheek-{side}", (0.105, 0.090, 0.100), at(side * 0.068, 0.372, 0.214),
+        k.add_ellipsoid(parts, f"cheek-{side}", (0.105, 0.090, 0.100), at(side * 0.068, 0.372, 0.214),
                          placeholder, 16, 8)
-    cc.add_ellipsoid(parts, "muzzle", (0.088, 0.062, 0.070), at(0, 0.366, 0.278), placeholder, 16, 8)
+    k.add_ellipsoid(parts, "muzzle", (0.088, 0.062, 0.070), at(0, 0.366, 0.278), placeholder, 16, 8)
     clay.extend((obj, paint) for obj in parts)
 
     ears: list = []
@@ -103,7 +102,7 @@ def add_head(clay: list, placeholder, offset: Vector) -> None:
         verts = [(a[0], a[1], bz + front), (b[0], b[1], bz + front), (c[0], c[1], bz - 0.006),
                  (a[0], a[1], bz + back), (b[0], b[1], bz + back), (c[0], c[1], bz - 0.018)]
         faces = [(0, 1, 2), (5, 4, 3), (0, 3, 4, 1), (1, 4, 5, 2), (2, 5, 3, 0)]
-        cc.add_mesh(ears, f"ear-{side}", verts, faces, [placeholder], smooth=False)
+        k.add_mesh(ears, f"ear-{side}", verts, faces, [placeholder], smooth=False)
     clay.extend((obj, ear_paint(o)) for obj in ears)
 
 

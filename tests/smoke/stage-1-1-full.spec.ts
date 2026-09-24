@@ -62,7 +62,7 @@ async function driveTo(page: Page, at: number, opts: { whistleAt?: number } = {}
   await expect(page.locator('#toast')).toBeVisible({ timeout: 20_000 });
 }
 
-async function doors(page: Page): Promise<void> {
+async function doors(page: Page, shot?: string): Promise<void> {
   const door = page.locator('#door');
   await expect(door).toBeVisible({ timeout: 20_000 });
   // The phase attribute is written once per frame; wait for it before pressing so the
@@ -70,6 +70,11 @@ async function doors(page: Page): Promise<void> {
   await expect(page.locator('#app')).toHaveAttribute('data-phase', 'doors', { timeout: 10_000 });
   await door.dispatchEvent('pointerdown');
   await expect(door).toBeHidden();
+  if (shot) {
+    // Doors switch the camera to the side view; passengers are mid-walk after ~1.2 s.
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: resolve(OUT, shot) });
+  }
   await page.waitForFunction(() => document.getElementById('app')?.dataset.phase !== 'doors', null, { timeout: 60_000 });
 }
 
@@ -100,7 +105,7 @@ test('stage 1-1 full run: all three missions and the ending', async ({ page }) =
   await tapUntil(page, '#card');
   await expect(page.locator('#card')).toContainText('なかまを のせて');
   await page.locator('#card-button').click();
-  await doors(page);
+  await doors(page, '12b-sakura-boarding.png');
   await expect(page.locator('#cargo')).toHaveAttribute('data-passengers', '2');
   await driveTo(page, 425);
   await doors(page);
