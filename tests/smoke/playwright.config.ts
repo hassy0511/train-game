@@ -19,6 +19,8 @@ export default defineConfig({
     viewport: { width: 1194, height: 834 },
     deviceScaleFactor: 1,
     hasTouch: true,
+    // The offline cache is tested on its own (pwa.spec.ts); elsewhere it would only add timing noise.
+    serviceWorkers: 'block',
     launchOptions: {
       // Set PW_CHROMIUM_PATH to reuse a pre-installed Chromium instead of downloading one.
       executablePath: process.env.PW_CHROMIUM_PATH || undefined,

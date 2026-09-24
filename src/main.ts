@@ -58,6 +58,15 @@ async function nextStage(cleared: string[], after?: string): Promise<{ id: strin
   return null;
 }
 
+/**
+ * Production only: the service worker caches the game so it also starts without a connection (home-screen
+ * app). Online it still loads the latest deploy first. Failure is harmless: the game simply needs the network.
+ */
+function registerOffline(): void {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((err: unknown) => console.info('offline cache off:', err));
+}
+
 /** Opens a stage straight into play (no title). */
 function goToStage(id: string): void {
   location.search = `?stage=${encodeURIComponent(id)}&go=1`;
@@ -213,6 +222,7 @@ async function boot(): Promise<void> {
   app.dataset.build = __BUILD_ID__;
   console.info(`build ${__BUILD_ID__}`);
   app.dataset.ready = '1';
+  registerOffline();
 
   let last = performance.now();
   let fpsAccum = 0;

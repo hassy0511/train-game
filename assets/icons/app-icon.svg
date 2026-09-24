@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- App icon: Wonder-go seen from the side, running right on a rail under a blue sky. No face (side view). -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3f8ff0"/>
+      <stop offset="1" stop-color="#bfe6ff"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4bb4e3"/>
+      <stop offset="1" stop-color="#2f8fc0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#sky)"/>
+  <!-- clouds -->
+  <g fill="#ffffff" opacity="0.95">
+    <circle cx="210" cy="250" r="70"/><circle cx="290" cy="225" r="90"/><circle cx="380" cy="255" r="65"/>
+    <rect x="200" y="250" width="200" height="70" rx="35"/>
+    <circle cx="760" cy="190" r="50"/><circle cx="820" cy="170" r="65"/><circle cx="885" cy="195" r="45"/>
+    <rect x="752" y="190" width="140" height="50" rx="25"/>
+  </g>
+  <!-- hills and ground -->
+  <path d="M0 700 Q 250 600 520 690 T 1024 660 V 1024 H 0 Z" fill="#8ed66b"/>
+  <rect y="760" width="1024" height="264" fill="#6fbf5a"/>
+  <!-- rail: ballast, sleepers, rail -->
+  <rect y="772" width="1024" height="46" fill="#b8ad9c"/>
+  <g fill="#7a5a3a">
+    <rect x="20" y="780" width="46" height="22" rx="4"/><rect x="120" y="780" width="46" height="22" rx="4"/>
+    <rect x="220" y="780" width="46" height="22" rx="4"/><rect x="320" y="780" width="46" height="22" rx="4"/>
+    <rect x="420" y="780" width="46" height="22" rx="4"/><rect x="520" y="780" width="46" height="22" rx="4"/>
+    <rect x="620" y="780" width="46" height="22" rx="4"/><rect x="720" y="780" width="46" height="22" rx="4"/>
+    <rect x="820" y="780" width="46" height="22" rx="4"/><rect x="920" y="780" width="46" height="22" rx="4"/>
+  </g>
+  <rect y="770" width="1024" height="14" fill="#5b6570"/>
+  <!-- speed lines -->
+  <g stroke="#ffffff" stroke-width="18" stroke-linecap="round" opacity="0.85">
+    <line x1="40" y1="470" x2="150" y2="470"/><line x1="70" y1="560" x2="170" y2="560"/><line x1="30" y1="650" x2="140" y2="650"/>
+  </g>
+  <!-- the car: body with a rounded nose to the right -->
+  <path d="M190 420 H 760 Q 900 420 925 600 Q 935 700 860 740 H 190 Q 160 740 160 710 V 450 Q 160 420 190 420 Z" fill="url(#body)"/>
+  <!-- cream roof -->
+  <path d="M200 380 H 740 Q 860 380 890 470 L 880 470 Q 850 430 760 430 H 190 Q 180 380 200 380 Z" fill="#f4ecd6"/>
+  <rect x="190" y="400" width="570" height="34" rx="12" fill="#f4ecd6"/>
+  <!-- roof lamp -->
+  <rect x="660" y="340" width="70" height="44" rx="14" fill="#3a3f47"/>
+  <circle cx="695" cy="345" r="26" fill="#ffd166"/>
+  <!-- yellow stripe -->
+  <path d="M160 640 H 905 Q 900 668 885 690 H 160 Z" fill="#ffd166"/>
+  <!-- windows (one row) and the door -->
+  <g fill="#1f2a44">
+    <rect x="205" y="470" width="110" height="100" rx="16"/>
+    <rect x="345" y="470" width="110" height="100" rx="16"/>
+    <rect x="485" y="470" width="110" height="100" rx="16"/>
+    <path d="M630 470 H 790 Q 850 470 872 560 Q 874 570 862 570 H 630 Q 620 570 620 560 V 480 Q 620 470 630 470 Z"/>
+  </g>
+  <g fill="#ffffff" opacity="0.35">
+    <rect x="220" y="482" width="30" height="70" rx="10"/><rect x="360" y="482" width="30" height="70" rx="10"/><rect x="500" y="482" width="30" height="70" rx="10"/>
+  </g>
+  <!-- wheels -->
+  <g fill="#3a3f47">
+    <circle cx="280" cy="755" r="46"/><circle cx="420" cy="755" r="46"/><circle cx="640" cy="755" r="46"/><circle cx="780" cy="755" r="46"/>
+  </g>
+  <g fill="#9aa4ae">
+    <circle cx="280" cy="755" r="16"/><circle cx="420" cy="755" r="16"/><circle cx="640" cy="755" r="16"/><circle cx="780" cy="755" r="16"/>
+  </g>
+</svg>
