@@ -90,4 +90,24 @@ export class AudioEngine {
     this.tone(523, 0.12, 'triangle', 0.15);
     window.setTimeout(() => this.tone(784, 0.2, 'triangle', 0.15), 110);
   }
+
+  /** "ぴょん": a quick rising hop. */
+  playJump(): void {
+    this.tone(330, 0.22, 'sine', 0.2, 880);
+  }
+
+  /** Soft thump on landing. */
+  playLand(): void {
+    this.tone(160, 0.18, 'triangle', 0.18, 90);
+  }
+
+  /** "ひゅ〜… ぽよん": a slow slide down, then a soft bounce (not scary). */
+  playFall(): void {
+    this.tone(900, 0.8, 'sine', 0.12, 220);
+    window.setTimeout(() => this.tone(260, 0.35, 'sine', 0.18, 520), 850);
+  }
+
+  playLight(on: boolean): void {
+    this.tone(on ? 1200 : 700, 0.08, 'square', 0.06);
+  }
 }

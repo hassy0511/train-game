@@ -68,3 +68,35 @@ export const BUBBLE_SECONDS = 3.5;
 
 /** Emergency stop: seconds to reach 0 from any speed. */
 export const EMERGENCY_STOP_SECONDS = 0.5;
+
+/**
+ * Jump: fixed height and air time, so the distance is speed × airTime (ゆっくり 8 m … びゅーん 35 m).
+ * The whole consist follows the same arc in space (each car lifts off where the lead car did).
+ */
+export const JUMP = {
+  airTime: 1.6,
+  height: 4,
+  /** Seconds after landing before the next jump. */
+  cooldown: 2,
+  /** Below this speed (m/s) the button is grey. */
+  minSpeed: 1,
+  /**
+   * A jump that would come down inside a gap but within this share of its length of the far edge
+   * floats on to the edge instead ("ふわっと"). Keeps the notch choice decisive but forgives timing.
+   */
+  glide: 0.25,
+  /** Rail beyond the gap's far edge the landing needs (m). */
+  landingMargin: 1,
+  /** The partner names the right notch this far before a gap. */
+  hintDistance: 60,
+} as const;
+
+/**
+ * Falling into a gap: the lead bogie (2 m behind the car front) running off the rail end starts it.
+ * The consist sinks and tips forward, then the screen fades and the train is put back.
+ */
+export const FALL = { bogieLead: 2, seconds: 0.8, depth: 3.5 } as const;
+
+/** Light: toggled; caps the speed while on and reveals reversed things and records nearby. */
+export const LIGHT = { speedScale: 0.7, revealDistance: 40, recordDistance: 25, cooldown: 0.4 } as const;
+

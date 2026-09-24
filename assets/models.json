@@ -25,5 +25,7 @@
   "goal-flag": { "script": "town.py", "triangles": 400, "kb": 250 },
   "rock": { "script": "town.py", "triangles": 400, "kb": 250 },
   "tree-a": { "script": "tree-a.py", "triangles": 500, "kb": 60 },
-  "tree-b": { "script": "tree-b.py", "triangles": 600, "kb": 60 }
+  "tree-b": { "script": "tree-b.py", "triangles": 600, "kb": 60 },
+  "dino-egg": { "script": "valley.py", "triangles": 1600, "kb": 250 },
+  "footprint-slab": { "script": "valley.py", "triangles": 900, "kb": 250 }
 }

@@ -20,6 +20,7 @@ import { TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
 import type { CameraFx, SceneView } from '../SceneView';
 import { cameraTarget, makeCameraTarget, smoothCamera, type CameraMode } from '../camera-rig';
+import { buildGapPits, buildJumpDevice, buildLightBeam, JunctionSigns } from './abilities';
 import { ActorLayer } from './actors';
 import { addEnvironment } from './environment';
 import { ModelLibrary } from './models';
@@ -60,6 +61,10 @@ export class ThreeSceneView implements SceneView {
   private doorTarget = 0;
   private doorSide = 1;
   private readonly railCutEffects: RailCutEffect[] = [];
+  private signs: JunctionSigns | null = null;
+  private readonly lightBeam = buildLightBeam();
+  private jumpDevice: Object3D | null = null;
+  private clock = 0;
 
   async init(container: HTMLElement, stage: StageData, network: RailNetwork): Promise<void> {
     this.stage = stage;
@@ -100,13 +105,19 @@ export class ThreeSceneView implements SceneView {
     this.actors.setTrain(this.train);
     this.scene.add(this.actors.group);
 
+    this.scene.add(buildGapPits(network, stage.file.environment.ground?.y ?? null));
+    this.signs = new JunctionSigns(stage, this.models);
+    this.scene.add(this.signs.group);
+    this.train.add(this.lightBeam);
+
     const [trainModel, carModel, partnerModel] = await Promise.all([
       this.models.load('train-proto'),
       this.models.load('car-proto'),
       this.models.load('partner'),
       addProps(props, stage.props, this.models),
       addModelPlacements(bufferStops, rails.bufferStops, this.models),
-      this.actors.init(stage.actors),
+      this.actors.init(stage.actors, stage.records),
+      this.signs.init(),
     ]);
     const trainInstance = trainModel.clone(true);
     trainInstance.name = 'train-proto';
@@ -171,7 +182,17 @@ export class ThreeSceneView implements SceneView {
       return;
     }
     if (event.type === 'door') this.setDoor(event.open, event.stationId);
+    if (event.type === 'light') this.lightBeam.visible = event.on;
+    if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
+    if (event.type === 'ability' && event.id === 'jump' && !this.jumpDevice) {
+      this.jumpDevice = new Object3D();
+      void buildJumpDevice(this.models).then((device) => {
+        this.jumpDevice = device;
+        this.train.add(device);
+      });
+    }
     if (event.type === 'rewind') {
+      this.signs?.reset();
       this.doorProgress = 0;
       this.doorTarget = 0;
       for (const door of this.doors) door.group.visible = false;
@@ -252,8 +273,10 @@ export class ThreeSceneView implements SceneView {
       }
     }
 
+    this.clock += dt;
     this.updateDoorVisuals(dt);
     this.updateRailCutEffects(dt);
+    this.signs?.update(dt, this.clock);
     this.actors?.update(dt);
     this.cameraPosition.copy(this.camera.position);
     this.sky?.position.copy(this.cameraPosition);

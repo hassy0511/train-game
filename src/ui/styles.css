@@ -142,10 +142,39 @@ body {
   position: absolute;
   right: calc(var(--safe-right) + 22px);
   bottom: calc(var(--safe-bottom) + 26px);
-  display: flex;
-  flex-direction: column;
+  /* Up to four always-visible buttons in a 2×2 block under the right thumb: whistle and jump on the
+     bottom row, camera and light above. Hidden buttons leave their column empty (width 0). */
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    'light camera'
+    'jump whistle';
   gap: 18px;
   align-items: center;
+  justify-items: center;
+}
+
+#whistle {
+  grid-area: whistle;
+}
+
+#camera {
+  grid-area: camera;
+}
+
+#jump {
+  grid-area: jump;
+}
+
+#light {
+  grid-area: light;
+}
+
+/* The door button is temporary; it sits to the left of the block. */
+#door {
+  position: absolute;
+  right: calc(100% + 18px);
+  bottom: 0;
 }
 
 .round-button {
@@ -429,6 +458,11 @@ body {
   background: rgba(255, 159, 28, 0.95);
 }
 
+.toast {
+  white-space: pre-line;
+  text-align: center;
+}
+
 .fade {
   position: absolute;
   inset: 0;
@@ -614,4 +648,116 @@ body {
   width: 140px;
   height: 140px;
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35));
+}
+
+/* ---- Phase 2: jump, light, reversed signs, title, picture book ---- */
+.round-button .ring.is-jump {
+  --accent: #e76f51;
+}
+
+.round-button .ring.is-light {
+  --accent: #f4c542;
+}
+
+/* Grey while stopped: the jump needs speed. */
+.round-button[data-idle='1'] .face {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.round-button[data-idle='1'] .icon {
+  opacity: 0.45;
+}
+
+/* "Now!" — jumping at this moment clears the gap ahead. */
+.round-button[data-glow='1'] .face {
+  background: #ffe8a3;
+  animation: jump-glow 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes jump-glow {
+  from {
+    box-shadow: 0 0 0 0 rgba(255, 209, 102, 0.9), 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+  to {
+    box-shadow: 0 0 0 14px rgba(255, 209, 102, 0), 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.round-button[data-on='1'] .face {
+  background: #fff1a8;
+  box-shadow: 0 0 18px 6px rgba(255, 230, 120, 0.8);
+}
+
+/* With a second column of buttons the partner's bubble moves left of the block. */
+#ui:has(#jump:not([hidden])) .bubble,
+#ui:has(#light:not([hidden])) .bubble {
+  right: calc(var(--safe-right) + 250px);
+}
+
+.arrow.is-true {
+  background: rgba(255, 230, 120, 0.85);
+  box-shadow: 0 0 22px 6px rgba(255, 230, 120, 0.8);
+}
+
+.title-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+}
+
+.big-button.is-secondary {
+  background: linear-gradient(#f4f4f0, #d8dee6);
+}
+
+.zukan {
+  background: rgba(24, 40, 58, 0.92);
+  color: #fff;
+  justify-content: flex-start;
+  padding-top: calc(var(--safe-top) + 24px);
+  overflow-y: auto;
+}
+
+.zukan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 16px;
+  width: min(92vw, 900px);
+}
+
+.zukan-card {
+  border-radius: 20px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  text-align: center;
+}
+
+.zukan-card.is-found {
+  background: #fff8e1;
+  color: var(--ink);
+}
+
+.zukan-picture {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.zukan-picture img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.zukan-name {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.zukan-note {
+  font-size: 14px;
+  margin-top: 4px;
 }

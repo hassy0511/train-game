@@ -1,6 +1,6 @@
 # 0005 Blender発注: 1-2 きょうりゅうの谷 のモデル一式
 
-- 状態: **未着手**（Phase 2 の GO と一緒に着手する）
+- 状態: **進行中**（2026-09-24。`dino-egg`・`footprint-slab` は `assets/blender/valley.py` で済み。ほかは仮の箱／コードの仮形で遊べる状態）
 - 担当: Claude Code（2026-09-24 に Codex から変更）
 - 依存: なし（作り方は `docs/ASSET_PIPELINE.md`）
 - 関連: `docs/GAME_SPEC.md` §7「1-2 きょうりゅうの谷」、`docs/POC_PLAN.md` Phase 2、`docs/STORY.md`

@@ -3,6 +3,8 @@ import type { JunctionSide } from '../train/train';
 export interface JunctionArrows {
   show(options: { left: boolean; right: boolean; default: JunctionSide }): void;
   markSelected(side: JunctionSide): void;
+  /** The light showed the true way: highlight it instead of the (reversed) sign's. */
+  reveal(side: JunctionSide): void;
   hide(): void;
 }
 
@@ -43,13 +45,20 @@ export function createJunctionArrows(root: HTMLElement, onSelect: (side: Junctio
     show(options): void {
       left.hidden = !options.left;
       right.hidden = !options.right;
-      left.classList.remove('is-selected');
-      right.classList.remove('is-selected');
+      left.classList.remove('is-selected', 'is-true');
+      right.classList.remove('is-selected', 'is-true');
       left.classList.toggle('is-default', options.default === 'left');
       right.classList.toggle('is-default', options.default === 'right');
       box.hidden = false;
     },
     markSelected,
+    reveal(side): void {
+      left.classList.toggle('is-default', side === 'left');
+      right.classList.toggle('is-default', side === 'right');
+      left.classList.toggle('is-true', side === 'left');
+      right.classList.toggle('is-true', side === 'right');
+      markSelected(side);
+    },
     hide(): void {
       box.hidden = true;
     },

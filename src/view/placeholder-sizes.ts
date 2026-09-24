@@ -29,6 +29,16 @@ export const PLACEHOLDER_SIZES: Record<string, [number, number, number]> = {
   passenger: [0.6, 1.6, 0.4],
   parcel: [0.6, 0.5, 0.6],
   'goal-flag': [1.6, 2.4, 0.2],
+  // Phase 2 (dino valley). Replaced by real models in ticket 0005.
+  'direction-sign': [1.6, 3.1, 0.15],
+  'jump-unit': [1.6, 0.6, 1.2],
+  'dino-mid-sleep': [3, 1.8, 6],
+  'dino-mid-stand': [3, 3, 6],
+  'dino-small-walk': [1.2, 1.2, 2.4],
+  'dino-large-body': [7, 6, 16],
+  'dino-large-neck': [2, 5, 6],
+  'dino-egg': [0.8, 0.8, 0.8],
+  'footprint-slab': [3, 0.45, 2.4],
 };
 
 export function placeholderSize(model: string): [number, number, number] {

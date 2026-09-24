@@ -1,7 +1,7 @@
 import type { StageEventBus } from '../core/stage-events';
 import type { RailNetwork } from '../rail/types';
 import { resolvePlacement } from '../stage/loader';
-import type { CutsceneStep, Emote, Speaker } from '../stage/types';
+import type { AbilityId, CutsceneStep, Emote, Speaker } from '../stage/types';
 import type { CameraMode } from '../view/camera-rig';
 
 /** What the cutscene runner needs from the UI. */
@@ -12,6 +12,8 @@ export interface CutscenePorts {
   wait(seconds: number): Promise<void>;
   /** Temporarily override the player's camera (null = give it back). */
   autoCamera(mode: CameraMode | null): void;
+  /** Learn an ability: its button appears and a card says so. */
+  unlock(ability: AbilityId): Promise<void>;
 }
 
 /** Plays a list of cutscene steps in order. The caller locks the controls around it. */
@@ -51,6 +53,8 @@ export async function runCutscene(
       await ports.caption(step.caption, step.seconds ?? 3);
     } else if ('emote' in step) {
       events.post({ type: 'partner:emote', kind: step.emote as Emote });
+    } else if ('unlock' in step) {
+      await ports.unlock(step.unlock);
     }
   }
 }

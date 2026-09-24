@@ -1,7 +1,7 @@
 import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
 import { buildRailNetwork } from '../rail/network';
 import type { RailNetwork } from '../rail/types';
-import type { Placement, ResolvedActor, ResolvedProp, ResolvedStation, StageData, StageFile, Vec3 } from './types';
+import type { Placement, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
 import { validateStageFile } from './validate';
 
 // One chunk per stage file; stages load lazily.
@@ -10,7 +10,27 @@ const stageModules = import.meta.glob('../stages/*.json');
 export function listStageIds(): string[] {
   return Object.keys(stageModules)
     .map((k) => k.replace('../stages/', '').replace('.json', ''))
-    .sort();
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+/** Every record of every playable (non-hidden) stage, in stage order, for the picture book. */
+export async function loadAllRecords(): Promise<{ stageTitle: string; record: RecordDef }[]> {
+  const out: { stageTitle: string; record: RecordDef }[] = [];
+  for (const id of listStageIds()) {
+    const mod = (await stageModules[`../stages/${id}.json`]()) as { default: StageFile };
+    const file = mod.default;
+    if (file.hidden) continue;
+    for (const record of file.records) out.push({ stageTitle: file.title, record });
+  }
+  return out;
+}
+
+/** Title and required stages of a stage, without building it. */
+export async function peekStage(id: string): Promise<Pick<StageFile, 'id' | 'title' | 'unlock' | 'unlocks'> | null> {
+  const load = stageModules[`../stages/${id}.json`];
+  if (!load) return null;
+  const file = ((await load()) as { default: StageFile }).default;
+  return { id: file.id, title: file.title, unlock: file.unlock, unlocks: file.unlocks };
 }
 
 export async function loadStage(id: string): Promise<StageData> {
@@ -48,7 +68,12 @@ export async function loadStage(id: string): Promise<StageData> {
     return { def, position: t.position, quaternion: t.quaternion };
   });
 
-  return { file, network, props, actors, stations };
+  const records: ResolvedRecord[] = file.records.map((def) => {
+    const t = resolvePlacement(def, network, groundY);
+    return { def, position: t.position, quaternion: t.quaternion, onRail: 'onRail' in def ? { ...def.onRail } : undefined };
+  });
+
+  return { file, network, props, actors, stations, records };
 }
 
 function checkRanges(file: StageFile, network: RailNetwork): void {

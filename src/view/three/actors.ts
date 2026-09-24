@@ -16,11 +16,26 @@ import {
 import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { StageEvent } from '../../core/stage-events';
-import type { Emote, MissionDef, ResolvedActor, ResolvedStation } from '../../stage/types';
+import type { Emote, MissionDef, ResolvedActor, ResolvedRecord, ResolvedStation } from '../../stage/types';
+import { NECK_DOWN, NECK_UP, placeholderLargeBody, placeholderNeck } from './abilities';
 import type { ModelLibrary } from './models';
 import { addModelPlacements, type ModelPlacement } from './props';
 
-const ACTOR_MODELS: Record<string, string> = { cat: 'cat-sleep', amanojaku: 'amanojaku', passenger: 'passenger' };
+const ACTOR_MODELS: Record<string, string> = {
+  cat: 'cat-sleep',
+  amanojaku: 'amanojaku',
+  passenger: 'passenger',
+  'dino-mid': 'dino-mid-sleep',
+  'dino-small': 'dino-small-walk',
+  'dino-large': 'dino-large-body',
+};
+/** Models an actor switches to by state (sleeping vs standing). */
+const STATE_MODELS: Record<string, { sleep: string; awake: string }> = {
+  cat: { sleep: 'cat-sleep', awake: 'cat-stand' },
+  'dino-mid': { sleep: 'dino-mid-sleep', awake: 'dino-mid-stand' },
+};
+/** Where the large dinosaur's neck joins its body (model space, m; ticket 0005). */
+const NECK_PIVOT = new Vector3(0, 5.9, 7.0);
 const PLATFORM_CLEARANCE = 1.7;
 const PLATFORM_HEIGHT = 1;
 /** The stop line sits this far before the platform's far end (m). */
@@ -120,6 +135,9 @@ export class ActorLayer {
   private partnerAnimation: PartnerAnimation | null = null;
   private sparkle: SparkleEffect | null = null;
   private train: Object3D | null = null;
+  private readonly actorTypes = new Map<string, string>();
+  private readonly necks = new Map<string, { neck: Object3D; down: boolean; t: number }>();
+  private readonly records = new Map<string, ResolvedRecord>();
 
   constructor(
     private readonly models: ModelLibrary,
@@ -145,13 +163,39 @@ export class ActorLayer {
     this.partnerBaseQuaternion.copy(partner.quaternion);
   }
 
-  async init(actors: ResolvedActor[]): Promise<void> {
+  async init(actors: ResolvedActor[], records: ResolvedRecord[] = []): Promise<void> {
+    for (const actor of actors) this.actorTypes.set(actor.id, actor.type);
     await Promise.all(
       actors
         .filter((actor) => actor.type !== 'trigger')
         .map((actor) => this.place(actor.id, ACTOR_MODELS[actor.type] ?? actor.type, actor.position, actor.quaternion)),
     );
+    await Promise.all(actors.filter((a) => a.type === 'dino-large').map((a) => this.addNeck(a.id)));
+    await Promise.all(
+      records
+        .filter((r) => r.def.model)
+        .map((r) => {
+          this.records.set(r.def.id, r);
+          return this.place(`record:${r.def.id}`, r.def.model as string, r.position, r.quaternion);
+        }),
+    );
     await Promise.all([this.addStations(), this.addCrossingGates(actors), this.resetWaitingPassengers()]);
+  }
+
+  private async addNeck(id: string): Promise<void> {
+    const body = this.objects.get(id);
+    if (!body) return;
+    // Until the models exist, a code-built body (legs apart, the train fits under) and neck stand in.
+    if (!this.models.has('dino-large-body')) {
+      body.clear();
+      body.add(placeholderLargeBody());
+    }
+    const neck = this.models.has('dino-large-neck') ? (await this.models.load('dino-large-neck')).clone(true) : placeholderNeck();
+    neck.name = `${id}:neck`;
+    neck.position.copy(NECK_PIVOT);
+    neck.quaternion.copy(NECK_UP);
+    body.add(neck);
+    this.necks.set(id, { neck, down: false, t: 1 });
   }
 
   private async addStations(): Promise<void> {
@@ -429,8 +473,7 @@ export class ActorLayer {
     this.partnerAnimation = { kind, elapsed: 0, seconds: kind === 'cheer' ? 1 : 0.75 };
   }
 
-  private makeSparkles(): void {
-    this.clearSparkles();
+  private makeStationSparkles(): void {
     if (!this.train || this.stations.length === 0) return;
     const trainPosition = this.train.getWorldPosition(new Vector3());
     const station = this.stations.reduce((nearest, candidate) =>
@@ -439,6 +482,17 @@ export class ActorLayer {
         : nearest,
     );
     const frame = stationFrame(station);
+    this.makeSparkles(
+      station.position
+        .clone()
+        .addScaledVector(frame.side, PLATFORM_CLEARANCE + 1.8)
+        .addScaledVector(frame.forward, -6)
+        .addScaledVector(frame.up, 1.2),
+    );
+  }
+
+  private makeSparkles(at: Vector3): void {
+    this.clearSparkles();
     const positions: number[] = [];
     for (let index = 0; index < 10; index += 1) {
       const angle = (index / 10) * Math.PI * 2;
@@ -449,12 +503,8 @@ export class ActorLayer {
     geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
     const material = new PointsMaterial({ color: '#FFD166', size: 0.34, sizeAttenuation: true, transparent: true });
     const points = new Points(geometry, material);
-    points.name = 'perfect-stop-sparkles';
-    points.position
-      .copy(station.position)
-      .addScaledVector(frame.side, PLATFORM_CLEARANCE + 1.8)
-      .addScaledVector(frame.forward, -6)
-      .addScaledVector(frame.up, 1.2);
+    points.name = 'sparkles';
+    points.position.copy(at);
     this.group.add(points);
     this.sparkle = { points, elapsed: 0 };
   }
@@ -480,12 +530,25 @@ export class ActorLayer {
         break;
       case 'actor:state': {
         const object = this.objects.get(event.id);
-        if (object && (event.state === 'awake' || event.state === 'flee') && this.models.has('cat-stand')) {
-          await this.place(event.id, 'cat-stand', object.position, object.quaternion);
-        } else if (object && event.state === 'sleep' && this.models.has('cat-sleep')) {
-          await this.place(event.id, 'cat-sleep', object.position, object.quaternion);
+        const swap = STATE_MODELS[this.actorTypes.get(event.id) ?? ''];
+        if (object && swap) {
+          const want = event.state === 'awake' || event.state === 'flee' ? swap.awake : event.state === 'sleep' ? swap.sleep : null;
+          if (want && this.objectModels.get(event.id) !== want) await this.place(event.id, want, object.position, object.quaternion);
+        }
+        const neck = this.necks.get(event.id);
+        if (neck && (event.state === 'neck-down' || event.state === 'neck-up')) {
+          const down = event.state === 'neck-down';
+          if (down !== neck.down) {
+            neck.down = down;
+            neck.t = 0;
+          }
         }
         if (event.position) this.move(event.id, event.position, event.seconds ?? 0);
+        break;
+      }
+      case 'record:found': {
+        const record = this.records.get(event.id);
+        if (record) this.makeSparkles(record.position.clone().add(new Vector3(0, 0.5, 0)));
         break;
       }
       case 'actor:remove':
@@ -519,7 +582,7 @@ export class ActorLayer {
         this.startPartnerEmote(event.kind);
         break;
       case 'stop':
-        if (event.grade === 'perfect') this.makeSparkles();
+        if (event.grade === 'perfect') this.makeStationSparkles();
         break;
       case 'rewind':
         this.clearSparkles();
@@ -573,6 +636,13 @@ export class ActorLayer {
         this.partner.rotateZ(Math.sin(t * Math.PI * 4) * 0.14);
       }
       if (t >= 1) this.partnerAnimation = null;
+    }
+
+    for (const neck of this.necks.values()) {
+      if (neck.t >= 1) continue;
+      neck.t = Math.min(1, neck.t + dt / 0.5);
+      const e = neck.t * neck.t * (3 - 2 * neck.t);
+      neck.neck.quaternion.slerpQuaternions(neck.down ? NECK_UP : NECK_DOWN, neck.down ? NECK_DOWN : NECK_UP, e);
     }
 
     if (this.goal) {

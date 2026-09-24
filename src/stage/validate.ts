@@ -1,6 +1,8 @@
 import type { Placement, StageFile } from './types';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
+const ABILITIES = ['whistle', 'light', 'jump', 'rocket', 'dive', 'magnetLight', 'reverse'];
+const JUMP_HINTS = ['normal', 'fast', 'max'];
 
 class StageValidationError extends Error {
   constructor(message: string) {
@@ -77,6 +79,8 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
     if (st.seconds !== undefined && !isNumber(st.seconds)) fail(`${where}: "seconds" must be a number`);
   } else if ('emote' in st) {
     if (!['jump', 'tilt', 'cheer'].includes(String(st.emote))) fail(`${where}: emote`);
+  } else if ('unlock' in st) {
+    if (!ABILITIES.includes(String(st.unlock))) fail(`${where}: unknown ability "${String(st.unlock)}"`);
   } else {
     fail(`${where}: unknown step`);
   }
@@ -118,6 +122,15 @@ export function validateStageFile(raw: unknown): StageFile {
     if (r.end.type === 'merge' && (!isString(r.end.railId) || !isNumber(r.end.at))) {
       fail(`rail "${r.id}": merge end needs railId and at`);
     }
+    if (r.gaps !== undefined) {
+      if (!Array.isArray(r.gaps)) fail(`rail "${r.id}": "gaps" must be an array`);
+      for (const g of r.gaps as unknown[]) {
+        if (!isObject(g) || !isNumber(g.from) || !isNumber(g.to) || g.to <= g.from) fail(`rail "${r.id}": gap needs from < to`);
+        if (g.hint !== undefined && !JUMP_HINTS.includes(String(g.hint))) fail(`rail "${r.id}": gap hint must be normal, fast or max`);
+      }
+    }
+    if (r.deadEnd !== undefined && typeof r.deadEnd !== 'boolean') fail(`rail "${r.id}": "deadEnd" must be true or false`);
+    if (r.deadEnd === true && r.end.type !== 'buffer') fail(`rail "${r.id}": a dead end must end in a buffer`);
     railIds.add(r.id);
   }
   for (const r of rails as Record<string, unknown>[]) {
@@ -173,6 +186,8 @@ export function validateStageFile(raw: unknown): StageFile {
 
   for (const r of requireArray(raw, 'records')) {
     if (!isObject(r) || !isString(r.id) || !isString(r.name)) fail('each record needs "id" and "name"');
+    if (r.requires !== null && !ABILITIES.includes(String(r.requires))) fail(`record "${r.id}": "requires" must be an ability or null`);
+    if (r.model !== undefined && (!isString(r.model) || !MODEL_NAME.test(r.model))) fail(`record "${r.id}": "model" must match [a-z0-9-]+`);
     checkPlacement(r, `record "${r.id}"`, railIds);
   }
 

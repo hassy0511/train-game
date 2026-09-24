@@ -20,7 +20,7 @@
 | [0002](0002-three-scene-view.md) | Three.js: シーン表示（線路メッシュ・車両・環境・運転席カメラ） | Codex | 完了（PR #4）。コードは Claude Code が引き継ぎ |
 | [0003](0003-blender-town-set.md) | Blender: 1-1 はじまりの街 のモデル一式 | Codex → Claude Code | 完了。2026-09-24 に全モデルを Claude Code 製へ差し替え（PR #20・#21） |
 | [0004](0004-three-stage-1-1-visuals.md) | Three.js: 1-1 の見た目と演出 | Codex | 完了（b2246c8）。コードは Claude Code が引き継ぎ |
-| [0005](0005-blender-dino-valley-set.md) | Blender: 1-2 きょうりゅうの谷 のモデル一式 | Claude Code | 未着手（Phase 2 の GO と一緒に） |
+| [0005](0005-blender-dino-valley-set.md) | Blender: 1-2 きょうりゅうの谷 のモデル一式 | Claude Code | 進行中（記録の 2 点 `dino-egg`・`footprint-slab` は済み。残りは仮の箱で動いている） |
 | [0006](0006-blender-sky-islands-set.md) | Blender: 1-3 くものうえ のモデル一式 | Claude Code | 未着手（Phase 3 の GO と一緒に） |
 
 ## 進め方
