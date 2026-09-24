@@ -11,6 +11,8 @@ import {
   HARD_BRAKE_NOTCH,
   JUMP,
   JUNCTION_ARROW_DISTANCE,
+  PAD_JUMP,
+  UPDRAFT_ACCELERATION,
   JUNCTION_LOCK_DISTANCE,
   LEVER_NOTCHES,
   SPEED_NOTCHES,
@@ -49,6 +51,7 @@ interface JumpArc {
   railId: string;
   from: number;
   length: number;
+  height: number;
 }
 
 /** Share of the arc's slope the car body shows while in the air (0 = stays level). */
@@ -58,7 +61,7 @@ const JUMP_PITCH = 0.3;
 function arcHeight(arc: JumpArc, s: number): number {
   const u = (s - arc.from) / arc.length;
   if (u <= 0 || u >= 1) return 0;
-  return JUMP.height * 4 * u * (1 - u);
+  return arc.height * 4 * u * (1 - u);
 }
 
 /** The train state machine. Moves along the rail network by arc length; no free physics. */
@@ -78,6 +81,8 @@ export class Train {
   private falling: { t: number } | null = null;
   /** Multiplies every notch's target speed (the light slows the train down). */
   speedScale = 1;
+  /** An updraft pushes the train up to this speed (m/s) while the lever is on a running notch; 0 = none. */
+  boostSpeed = 0;
 
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
@@ -149,6 +154,7 @@ export class Train {
   /** 0 right after a jump, 1 when the next jump is allowed. */
   get jumpProgress(): number {
     if (this.airborne) return 0;
+    if (JUMP.cooldown <= 0) return 1;
     return 1 - Math.min(Math.max(this.jumpCooldown / JUMP.cooldown, 0), 1);
   }
 
@@ -194,9 +200,24 @@ export class Train {
     if (this.jumpCooldown > 0) return 'cooldown';
     if (this.state.speed < JUMP.minSpeed) return 'stopped';
     const distance = this.jumpDistance();
-    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length: distance });
+    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length: distance, height: JUMP.height });
     this.events.emit('jumped', { distance });
     return 'ok';
+  }
+
+  /**
+   * A jump pad: a big, high jump that always clears the gap right after it (the pad is the helper; finding
+   * and waking it is the puzzle). Returns false when the train cannot jump now.
+   */
+  padJump(): boolean {
+    if (this.ended || this.emergency || this.falling || this.airborne || this.state.speed < JUMP.minSpeed) return false;
+    const plain = this.state.speed * JUMP.airTime * PAD_JUMP.scale;
+    const gap = this.nextGap(plain + 40);
+    const needed = gap ? gap.to + JUMP.landingMargin + PAD_JUMP.extra - this.bogieS : 0;
+    const distance = Math.max(plain, needed);
+    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length: distance, height: PAD_JUMP.height });
+    this.events.emit('jumped', { distance });
+    return true;
   }
 
   /** Returns false when the controls are locked (the caller should tell the player why). */
@@ -301,6 +322,8 @@ export class Train {
       target = 0;
       const rate = Math.max(BRAKING, SPEED_NOTCHES[SPEED_NOTCHES.length - 1] / EMERGENCY_STOP_SECONDS);
       st.speed = Math.max(0, st.speed - rate * dt);
+    } else if (this.boostSpeed > target && st.notch > STOP_NOTCH) {
+      st.speed = Math.min(this.boostSpeed, st.speed + UPDRAFT_ACCELERATION * dt);
     } else if (st.speed < target) st.speed = Math.min(target, st.speed + ACCELERATION * dt);
     else if (st.speed > target) st.speed = Math.max(target, st.speed - brake * dt);
 

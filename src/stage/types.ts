@@ -12,6 +12,10 @@ export interface EnvironmentDef {
   lighting: 'day' | 'evening' | 'night' | 'cave';
   ground: { y: number; size: number; color: string } | null;
   bgm: string | null;
+  /** v1.3: how a fall looks: "dark" (default, fade to black) or "cloud" (caught by a cloud, fade to white). */
+  fall?: 'dark' | 'cloud';
+  /** v1.3: a soft sea of clouds far below (stages in the sky). */
+  cloudSea?: { y: number };
 }
 
 export type RailEndDef =
@@ -27,6 +31,8 @@ export interface GapDef {
   to: number;
   /** v1.2: the notch that clears this gap; the partner names it before the gap. */
   hint?: JumpHint;
+  /** v1.3: where the train front goes back to after falling here (default: 80 m before the gap). */
+  rewind?: { railId: string; at: number };
 }
 
 export interface RailDef {
@@ -37,6 +43,8 @@ export interface RailDef {
   oneWay?: boolean;
   /** v1.2: a wrong turn. Reaching its buffer puts the train back before the junction. */
   deadEnd?: boolean;
+  /** v1.3: "follow" = up turns with the rail's bends (vertical loops, riding upside down). Default "fixed". */
+  upMode?: 'fixed' | 'follow';
   end: RailEndDef;
 }
 
@@ -173,7 +181,10 @@ export type MissionLines = Partial<
     | 'signNear'
     | 'signRevealed'
     | 'deadEnd'
-    | 'recordFound',
+    | 'recordFound'
+    // v1.3
+    | 'padGone'
+    | 'padAppear',
     string
   >
 >;

@@ -1,6 +1,7 @@
 import {
   BoxGeometry,
   BufferGeometry,
+  Fog,
   Group,
   Material,
   Mesh,
@@ -9,6 +10,7 @@ import {
   Object3D,
   PerspectiveCamera,
   Scene,
+  ShaderMaterial,
   SRGBColorSpace,
   Vector3,
   WebGLRenderer,
@@ -20,7 +22,7 @@ import { TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
 import type { CameraFx, SceneView } from '../SceneView';
 import { cameraTarget, makeCameraTarget, smoothCamera, type CameraMode } from '../camera-rig';
-import { buildGapPits, buildJumpDevice, buildLightBeam, Flocks, JunctionSigns } from './abilities';
+import { buildGapPits, buildJumpDevice, buildLightBeam, Flocks, JunctionSigns, SkyGimmicks } from './abilities';
 import { ActorLayer } from './actors';
 import { addEnvironment } from './environment';
 import { ModelLibrary } from './models';
@@ -63,6 +65,8 @@ export class ThreeSceneView implements SceneView {
   private readonly railCutEffects: RailCutEffect[] = [];
   private signs: JunctionSigns | null = null;
   private flocks: Flocks | null = null;
+  private sky3: SkyGimmicks | null = null;
+  private baseFog: { near: number; far: number } | null = null;
   private readonly lightBeam = buildLightBeam();
   private jumpDevice: Object3D | null = null;
   private clock = 0;
@@ -112,6 +116,10 @@ export class ThreeSceneView implements SceneView {
     this.train.add(this.lightBeam);
     this.flocks = new Flocks(stage);
     this.scene.add(this.flocks.group);
+    this.sky3 = new SkyGimmicks(stage);
+    this.scene.add(this.sky3.group);
+    const fog = stage.file.environment.fog;
+    this.baseFog = fog ? { near: fog.near, far: fog.far } : null;
 
     const [trainModel, carModel, partnerModel] = await Promise.all([
       this.models.load('train-proto'),
@@ -122,6 +130,7 @@ export class ThreeSceneView implements SceneView {
       this.actors.init(stage.actors, stage.records),
       this.signs.init(),
       this.flocks.init(this.models),
+      this.sky3.init(this.models),
     ]);
     const trainInstance = trainModel.clone(true);
     trainInstance.name = 'train-proto';
@@ -187,6 +196,7 @@ export class ThreeSceneView implements SceneView {
     }
     if (event.type === 'door') this.setDoor(event.open, event.stationId);
     if (event.type === 'light') this.lightBeam.visible = event.on;
+    this.sky3?.onStageEvent(event);
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
     if (event.type === 'ability' && event.id === 'jump' && !this.jumpDevice) {
       this.jumpDevice = new Object3D();
@@ -282,6 +292,11 @@ export class ThreeSceneView implements SceneView {
     this.updateRailCutEffects(dt);
     this.signs?.update(dt, this.clock);
     this.flocks?.update(dt);
+    this.sky3?.update(dt, pose.railId, pose.s + TRAIN.length / 2, this.scene.fog as Fog | null, this.baseFog);
+    if (this.sky3 && this.sky) {
+      const uniforms = (this.sky.material as ShaderMaterial).uniforms;
+      if (uniforms.mist) uniforms.mist.value = this.sky3.mist;
+    }
     this.actors?.update(dt);
     this.cameraPosition.copy(this.camera.position);
     this.sky?.position.copy(this.cameraPosition);

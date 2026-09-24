@@ -1,5 +1,7 @@
 export interface WhistleButton {
   setProgress(progress: number): void;
+  /** Glow: something in reach reacts to the whistle right now (a hidden jump pad). */
+  setGlow(on: boolean): void;
 }
 
 const ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
@@ -30,6 +32,10 @@ export function createWhistleButton(root: HTMLElement, onPress: () => void): Whi
       last = p;
       button.style.setProperty('--cd', String(p));
       button.dataset.cooldown = p < 1 ? '1' : '0';
+    },
+    setGlow(on: boolean): void {
+      const v = on ? '1' : '0';
+      if (button.dataset.glow !== v) button.dataset.glow = v;
     },
   };
 }

@@ -107,6 +107,8 @@ export function validateStageFile(raw: unknown): StageFile {
   if (env.ground !== null && (!isObject(env.ground) || !isNumber(env.ground.y) || !isNumber(env.ground.size))) {
     fail('"environment.ground" must be null or {y, size, color}');
   }
+  if (env.fall !== undefined && env.fall !== 'dark' && env.fall !== 'cloud') fail('"environment.fall" must be dark or cloud');
+  if (env.cloudSea !== undefined && (!isObject(env.cloudSea) || !isNumber(env.cloudSea.y))) fail('"environment.cloudSea" needs y');
 
   const rails = requireArray(raw, 'rails');
   if (rails.length === 0) fail('at least one rail is required');
@@ -127,9 +129,13 @@ export function validateStageFile(raw: unknown): StageFile {
       for (const g of r.gaps as unknown[]) {
         if (!isObject(g) || !isNumber(g.from) || !isNumber(g.to) || g.to <= g.from) fail(`rail "${r.id}": gap needs from < to`);
         if (g.hint !== undefined && !JUMP_HINTS.includes(String(g.hint))) fail(`rail "${r.id}": gap hint must be normal, fast or max`);
+        if (g.rewind !== undefined && (!isObject(g.rewind) || !isString(g.rewind.railId) || !isNumber(g.rewind.at))) {
+          fail(`rail "${r.id}": gap rewind needs railId and at`);
+        }
       }
     }
     if (r.deadEnd !== undefined && typeof r.deadEnd !== 'boolean') fail(`rail "${r.id}": "deadEnd" must be true or false`);
+    if (r.upMode !== undefined && r.upMode !== 'fixed' && r.upMode !== 'follow') fail(`rail "${r.id}": "upMode" must be fixed or follow`);
     if (r.deadEnd === true && r.end.type !== 'buffer') fail(`rail "${r.id}": a dead end must end in a buffer`);
     railIds.add(r.id);
   }
@@ -233,6 +239,14 @@ export function validateStageFile(raw: unknown): StageFile {
 
   requireArray(raw, 'gimmicks').forEach((g, i) => {
     if (!isObject(g) || !isString(g.type)) fail(`gimmicks[${i}]: "type" is required`);
+    const zoned = ['camera', 'updraft', 'fog', 'jump-pad'];
+    if (zoned.includes(g.type)) {
+      if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`gimmicks[${i}] ${g.type}: needs a known railId and "from"`);
+      if (g.type !== 'jump-pad' && (!isNumber(g.to) || (g.to as number) <= (g.from as number))) fail(`gimmicks[${i}] ${g.type}: needs "to" after "from"`);
+    }
+    if (g.type === 'camera' && !['cab', 'chase', 'side', 'top'].includes(String((g.params as Record<string, unknown> | undefined)?.mode))) {
+      fail(`gimmicks[${i}] camera: params.mode must be cab, chase, side or top`);
+    }
   });
 
   return raw as unknown as StageFile;

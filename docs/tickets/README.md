@@ -21,7 +21,7 @@
 | [0003](0003-blender-town-set.md) | Blender: 1-1 はじまりの街 のモデル一式 | Codex → Claude Code | 完了。2026-09-24 に全モデルを Claude Code 製へ差し替え（PR #20・#21） |
 | [0004](0004-three-stage-1-1-visuals.md) | Three.js: 1-1 の見た目と演出 | Codex | 完了（b2246c8）。コードは Claude Code が引き継ぎ |
 | [0005](0005-blender-dino-valley-set.md) | Blender: 1-2 きょうりゅうの谷 のモデル一式 | Claude Code | 完了（2026-09-24） |
-| [0006](0006-blender-sky-islands-set.md) | Blender: 1-3 くものうえ のモデル一式 | Claude Code | 未着手（Phase 3 の GO と一緒に） |
+| [0006](0006-blender-sky-islands-set.md) | Blender: 1-3 くものうえ のモデル一式 | Claude Code | 後回し（1-3 はコードの仮の形で遊べる。2026-09-24） |
 
 ## 進め方
 1. 設計を示して、だいさんの GO をもらう（`CLAUDE.md` の GO ルール）

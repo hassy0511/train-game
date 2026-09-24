@@ -334,3 +334,38 @@ interface StageFile {
 ジャンプ（`src/train/params.ts` の `JUMP`）: 高さ 4 m・空中 1.6 秒で固定。飛距離 = 押した瞬間の速さ × 1.6 秒（ゆっくり 8 / ふつう 16 / はやい 24 / びゅーん 35 m）。
 あと少しで向こう岸に届くとき（飛距離の 25% 以内）はふわっと届く。今とべば越えられるとき、ジャンプボタンが光る。
 3 両は同じ放物線をたどる（先頭が飛んだ場所で後ろの車両も飛ぶ）。先頭の台車が切れ目に入ったら落ちる。
+
+---
+
+## 6. v1.3 の追加（Phase 3、2026-09-24）
+
+`schemaVersion` は 1 のまま。追加はすべて省略可。実例は `src/stages/1-3.json`。
+
+```ts
+interface RailDef {
+  // ...v1.2...
+  upMode?: 'fixed' | 'follow';   // "follow" = 線路の「上」が曲がりに沿って回る。島の端を縦に回り込むと、裏側でさかさまになる
+  gaps?: { from; to; hint?; rewind?: { railId: string; at: number } }[];   // rewind = ここで落ちたときの戻り先（先頭の位置）。既定は 80 m 手前
+}
+
+interface EnvironmentDef {
+  // ...v1...
+  fall?: 'dark' | 'cloud';       // 落ちたときの画面。"cloud" = 雲にぽよん → 白くなって戻る（既定 "dark" = 暗転）
+  cloudSea?: { y: number };      // はるか下に広がる雲の海（空のステージ用）
+}
+
+type LineKey = /* v1.2 */ | 'padGone' | 'padAppear';   // 消えたジャンプ台（ヒント）／汽笛で出た
+```
+
+仕掛け（`gimmicks[]`、区間は線路 `railId` の `from`〜`to`、電車の先頭で判定）:
+| type | 動き | params（既定値） |
+|---|---|---|
+| `camera` | 区間の間、視点を自動で切り替える（天井の区間など） | `{ mode: "side" \| "chase" \| "cab" \| "top" }` |
+| `jump-pad` | `from` の位置に消えたジャンプ台。`range` m 以内で汽笛 → `seconds` 秒だけ出る（最後の 2 秒は点滅）。先頭の台車が乗ると大ジャンプ（飛距離 2 倍、次の切れ目は必ず越える）。消えている間は台の場所がきらきらし、近づくと汽笛ボタンが光り、ピコが「きてきを ならしてみよう！」と言う | `{ seconds: 8, range: 60 }` |
+| `updraft` | 上昇気流。区間の間、速さの上限を超えて `speed` m/s まで加速する（レバーが「ゆっくり」以上のとき）。線路をくぐる風の輪が並ぶ | `{ speed: 28 }` |
+| `fog` | 視界ゼロの雲。霧が濃くなり空も白くなる。ライトを点けると `lightFar` m 先まで見える | `{ near: 2, far: 22, lightFar: 70 }` |
+| `flock` | 空を回る群れ（見た目だけ。1-2 の翼竜） | `{ model, count, center, radius, speed }` |
+
+モデルがまだないもの（`assets/models.json` の `_pending`）は、ゲームがコードで作る仮の形で表示する（`src/view/three/sky-placeholders.ts`）。本物ができたら `_pending` から外す。
+
+ジャンプの着地後の待ち時間は 0 秒（2026-09-24 変更）。空中の間は押せない。

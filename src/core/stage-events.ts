@@ -22,7 +22,9 @@ export type StageEvent =
   | { type: 'jump' }
   /** The light showed which way a reversed junction really goes. */
   | { type: 'sign:reveal'; junctionId: string }
-  | { type: 'record:found'; id: string };
+  | { type: 'record:found'; id: string }
+  /** A jump pad shows (for `seconds`, blinking at the end) or hides again. `index` is its place in gimmicks[]. */
+  | { type: 'pad'; index: number; visible: boolean; seconds?: number };
 
 export class StageEventBus extends Emitter<{ event: StageEvent }> {
   post(event: StageEvent): void {
