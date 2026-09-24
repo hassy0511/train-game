@@ -116,6 +116,14 @@ GitHub Actions
 
 - 進め方の規約は `CLAUDE.md`。2026-09-24 までは Codex に実装を発注していた（`archive/codex/`）
 
+### ホーム画面アプリ（2026-09-24）
+- iPad の Safari で「ホーム画面に追加」すると、アイコン「ワンダーごう」から全画面・横向きで起動する（`public/manifest.webmanifest`、`index.html` の apple 用 meta）
+- アイコンの元絵は `assets/icons/app-icon.svg`。直したら `node scripts/make-icons.mjs` で `public/icons/` の PNG を作り直す
+- オフライン: 本番ビルドだけサービスワーカー（`src/pwa/sw-template.js` → ビルドで `dist/sw.js`）を登録する。初回に遊ぶのに要るもの一式（約 7 MB、モデル確認ページと図鑑の絵は除く）を保存する
+  - ネットにつながっているときは、ページ・モデルを毎回ネットから読む（マージ後の反映はこれまでどおり）
+  - つながらないときは、保存したもので動く。名前にハッシュが付いたビルドファイル（`assets/`）は保存したものを先に使う
+- テスト: `tests/smoke/pwa.spec.ts`。ホーム画面用の設定と、ゲーム一式が保存されること、サーバーが止まっても保存分が返ることを確かめる。ほかのテストではサービスワーカーを止めている
+
 ---
 
 ## 6. 性能・品質予算
