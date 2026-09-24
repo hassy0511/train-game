@@ -1,7 +1,9 @@
 // Checks every GLB in public/models against assets/models.json (no Blender needed, runs in CI):
 // listed both ways, generator script present, triangles and file size within budget, origin on the floor,
-// and every model named in a stage JSON exists.
+// no closed part inside out (the game culls back faces; tests/smoke/model-culling.spec.ts covers decals and
+// other open parts), and every model named in a stage JSON exists.
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { analyse } from './check-winding.mjs';
 
 const manifest = JSON.parse(readFileSync('assets/models.json', 'utf8'));
 delete manifest._doc;
@@ -28,6 +30,10 @@ for (const [name, spec] of Object.entries(manifest)) {
   if (tris > spec.triangles) errors.push(`${name}: ${tris} triangles > budget ${spec.triangles}`);
   if (kb > spec.kb) errors.push(`${name}: ${kb.toFixed(0)} KB > ${spec.kb} KB`);
   if (Math.abs(minY) > 0.02) errors.push(`${name}: lowest point y=${minY.toFixed(3)} (origin must be on the floor)`);
+  for (const node of json.nodes ?? []) {
+    if ((node.scale ?? []).filter((v) => v < 0).length % 2) errors.push(`${name}: node "${node.name}" is mirrored (negative scale flips its faces)`);
+  }
+  for (const problem of analyse(path)) errors.push(`${name}: ${problem}`);
 }
 
 for (const file of readdirSync('src/stages').filter((f) => f.endsWith('.json'))) {

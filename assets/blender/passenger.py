@@ -125,7 +125,7 @@ def main() -> None:
     k.wrap_onto(k.ribbon_decal(decals, "smile", k.arc_points((0, 1.046), 0.020, -0.008, z, 11), 0.0050, line), body, 0.0015)
     k.wrap_onto(k.disc_decal(decals, "nose", (0, 1.078, z), (0.014, 0.010), k.mat("Passenger nose", "#E0A882", 0.7), 1, 10),
                 body, 0.0014)
-    k.wrap_onto(k.poly_decal(decals, "shirt-collar", [(0.0, 0.852), (0.050, 0.950), (-0.050, 0.950)][::-1], z, shirt, 3),
+    k.wrap_onto(k.poly_decal(decals, "shirt-collar", [(0.0, 0.852), (0.050, 0.950), (-0.050, 0.950)], z, shirt, 3),
                 coat_clay, 0.0030)
     k.wrap_onto(k.ribbon_decal(decals, "coat-seam", [(0.0, 0.84, z), (0.0, 0.60, z), (0.0, 0.38, z)], 0.0045, seam, False),
                 coat_clay, 0.0020)

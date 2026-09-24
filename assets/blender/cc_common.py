@@ -300,8 +300,16 @@ def disc_decal(parts, name, center, size, material, rings=3, segments=18, tilt=0
     return add_mesh(parts, name, verts, faces, [material], smooth=True)
 
 
-def poly_decal(parts, name, outline, z, material, rings=3):
-    """Flat star-shaped polygon (outline listed counter-clockwise as seen from +Z) at depth z."""
+def poly_decal(parts, name, outline, z, material, rings=3, facing=1):
+    """Flat star-shaped polygon at depth z, facing +Z (facing=-1: -Z) whichever way the outline winds.
+
+    The game culls back faces, so a decal wound the wrong way vanishes in play (Blender previews still
+    show it). The outline order therefore never decides the facing: it is normalised here.
+    """
+    area = sum(outline[i][0] * outline[(i + 1) % len(outline)][1] - outline[(i + 1) % len(outline)][0] * outline[i][1]
+               for i in range(len(outline)))
+    if (area > 0) != (facing > 0):
+        outline = list(outline)[::-1]
     cx = sum(p[0] for p in outline) / len(outline)
     cy = sum(p[1] for p in outline) / len(outline)
     n = len(outline)

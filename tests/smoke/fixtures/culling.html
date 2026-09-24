@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+  <body style="margin: 0">
+    <canvas id="c" width="256" height="256"></canvas>
+    <!-- Served by model-culling.spec.ts straight from the repo (not part of the build). -->
+    <script type="importmap">
+      { "imports": { "three": "/__culling/node_modules/three/build/three.module.js", "three/addons/": "/__culling/node_modules/three/examples/jsm/" } }
+    </script>
+    <script type="module">
+      import * as THREE from 'three';
+      import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+      const SIZE = 256;
+      const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), preserveDrawingBuffer: true });
+      renderer.setSize(SIZE, SIZE, false);
+      renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+      const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 1000);
+      const gl = renderer.getContext();
+
+      // Renders the model from 32 directions twice: as the game draws it (front faces only) and double-sided.
+      // Every material gets a flat ID colour, so a pixel that changes between the two renders belongs to a
+      // face seen from behind: a part that is invisible or see-through in the game.
+      window.measure = async (url) => {
+        const root = (await new GLTFLoader().loadAsync(url)).scene;
+        const mats = [];
+        root.traverse((o) => {
+          if (!o.isMesh) return;
+          const swap = (m) => {
+            const i = mats.length + 1;
+            const id = new THREE.MeshBasicMaterial({ side: THREE.FrontSide });
+            id.color.setRGB(((i * 67) % 251) / 255, ((i * 131) % 251) / 255, ((i * 29 + 40) % 251) / 255, THREE.LinearSRGBColorSpace);
+            id.userData.name = m.name;
+            id.userData.key = [Math.round(id.color.r * 255), Math.round(id.color.g * 255), Math.round(id.color.b * 255)].join();
+            mats.push(id);
+            return id;
+          };
+          o.material = Array.isArray(o.material) ? o.material.map(swap) : swap(o.material);
+        });
+        const byKey = new Map(mats.map((m) => [m.userData.key, m.userData.name]));
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0, 0, 0);
+        scene.add(root);
+        const sphere = new THREE.Box3().setFromObject(root).getBoundingSphere(new THREE.Sphere());
+        const front = new Uint8Array(SIZE * SIZE * 4);
+        const both = new Uint8Array(SIZE * SIZE * 4);
+        const seen = {};
+        const hidden = {};
+        for (const elev of [-20, 10, 35, 70]) {
+          for (let az = 0; az < 360; az += 45) {
+            const d = (sphere.radius / Math.sin(THREE.MathUtils.degToRad(17))) * 1.02;
+            const e = THREE.MathUtils.degToRad(elev);
+            const a = THREE.MathUtils.degToRad(az);
+            camera.position.set(
+              sphere.center.x + d * Math.cos(e) * Math.sin(a),
+              sphere.center.y + d * Math.sin(e),
+              sphere.center.z + d * Math.cos(e) * Math.cos(a),
+            );
+            camera.lookAt(sphere.center);
+            camera.near = d / 50;
+            camera.far = d * 3;
+            camera.updateProjectionMatrix();
+            for (const [side, buf] of [[THREE.FrontSide, front], [THREE.DoubleSide, both]]) {
+              mats.forEach((m) => { m.side = side; m.needsUpdate = true; });
+              renderer.render(scene, camera);
+              gl.readPixels(0, 0, SIZE, SIZE, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+            }
+            for (let i = 0; i < both.length; i += 4) {
+              const name = byKey.get(`${both[i]},${both[i + 1]},${both[i + 2]}`);
+              if (!name) continue;
+              seen[name] = (seen[name] ?? 0) + 1;
+              if (front[i] !== both[i] || front[i + 1] !== both[i + 1] || front[i + 2] !== both[i + 2]) hidden[name] = (hidden[name] ?? 0) + 1;
+            }
+          }
+        }
+        return Object.keys(seen).map((name) => ({ name, seen: seen[name], hidden: hidden[name] ?? 0 }));
+      };
+      window.ready = true;
+    </script>
+  </body>
+</html>

@@ -9,13 +9,14 @@
 - 1 モデル = `assets/blender/` の Python スクリプト（複数モデルをまとめたスクリプトもある）。手作業の造形はしない。何度実行しても同じ形になる
 - 実行: `python3 scripts/run-bpy.py assets/blender/<script>.py`（pip の `bpy`＝Blender 5.0 を使う。Blender 本体があれば `blender -b --python` でも同じ）。まとめスクリプトは `-- 名前` で 1 つだけ作れる（例: `python3 scripts/run-bpy.py assets/blender/town.py -- tower`）
 - 出力: `public/models/<名前>.glb` と `assets/previews/<名前>.png`
-- 一覧と予算: `assets/models.json`（スクリプト、三角形の上限、ファイルサイズの上限）。`npm run build` のたびに `scripts/check-models.mjs` が全モデルを確認する（一覧との一致、予算、原点が床にあるか、ステージ JSON が参照するモデルがあるか）
+- 一覧と予算: `assets/models.json`（スクリプト、三角形の上限、ファイルサイズの上限）。`npm run build` のたびに `scripts/check-models.mjs` が全モデルを確認する（一覧との一致、予算、原点が床にあるか、ステージ JSON が参照するモデルがあるか、閉じた部品が裏返っていないか）。スモークテストの `tests/smoke/model-culling.spec.ts` は全モデルを 32 方向から「ゲームと同じ表だけ描画」と「両面描画」で撮り比べ、ゲームで消えてしまう部品（裏返ったデカール・屋根など）があると落ちる
 - 確認: `https://hassy0511.github.io/train-game/models.html?model=<名前>`、並べて比べるときは `?compare=<名前>,<名前>`
 
 ## 2. 共通のルール
 - 単位 1 = 1 m。+Y が上、+Z が前（顔・正面・進行方向）。原点は底面の中心（例外は各スクリプトの冒頭に書く。車両は車体中心の真下、ホームは線路側の縁）
 - 1 ファイル 1 メッシュ（マテリアルは複数可）。キャラクターは 350 KB、ほかは 250 KB まで
 - 実在の車両・キャラクターに似せない。電車に顔を付けない（ライトは横長の帯とランプ 1 つ）
+- 面の表裏を守る。ゲームは面の表側しか描かない（裏は透ける）が、Blender のプレビューは両面を描くので裏返りに気づけない。デカールは `poly_decal` / `disc_decal` / `ribbon_decal` を使えば頂点の並び順に関係なく +Z 向き（`facing=-1` で -Z）になる。手で面を組んだときは法線の向きを確かめる
 - 権利の心配がある素材（写真・既存のテクスチャ）は使わない。色は単色マテリアルか、スクリプトで塗って焼き込んだ画像だけ
 
 ## 3. 作り方の道具（`assets/blender/cc_common.py`）
