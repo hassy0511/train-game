@@ -44,10 +44,10 @@ scene.background = new Color('#dfe8f0');
 const camera = new PerspectiveCamera(45, 1, 0.05, 500);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.autoRotate = true;
-controls.autoRotateSpeed = 1.2;
+// Each model turns on its own spot (so compared models stay side by side) until the viewer drags.
+let spin = true;
 controls.addEventListener('start', () => {
-  controls.autoRotate = false;
+  spin = false;
 });
 
 scene.add(new AmbientLight('#ffffff', 1.4));
@@ -85,36 +85,48 @@ function countTriangles(root: Group): number {
   return tris;
 }
 
-async function show(name: string): Promise<void> {
+function describe(model: Group): string {
+  const size = new Box3().setFromObject(model).getSize(new Vector3());
+  return `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} m ／ ${countTriangles(model)} 三角形`;
+}
+
+/** Shows one model, or several side by side at the same scale (left to right, in the given order). */
+async function show(names: string[]): Promise<void> {
+  const compare = names.length > 1;
   for (const b of listEl.querySelectorAll('button[data-model]')) {
-    b.setAttribute('aria-pressed', String(b.getAttribute('data-model') === name));
+    b.setAttribute('aria-pressed', String(names.includes(b.getAttribute('data-model') ?? '')));
   }
-  listEl.querySelector(`button[data-model="${name}"]`)?.scrollIntoView({ inline: 'center', block: 'nearest' });
-  history.replaceState(null, '', `?model=${name}`);
-  nameEl.textContent = name;
+  listEl.querySelector(`button[data-model="${names[0]}"]`)?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  history.replaceState(null, '', compare ? `?compare=${names.join(',')}` : `?model=${names[0]}`);
+  nameEl.textContent = names.join(' ｜ ');
   dimsEl.textContent = 'よみこみ中…';
   holder.clear();
   grid?.removeFromParent();
 
-  const gltf = await loader.loadAsync(`${base}models/${name}.glb`);
-  const model = gltf.scene;
-  holder.add(model);
-  const box = new Box3().setFromObject(model);
+  const models = await Promise.all(names.map(async (n) => (await loader.loadAsync(`${base}models/${n}.glb`)).scene));
+  const widest = Math.max(...models.map((m) => new Box3().setFromObject(m).getSize(new Vector3()).x));
+  const spacing = widest * 1.35;
+  models.forEach((m, i) => {
+    m.position.x = (i - (models.length - 1) / 2) * spacing;
+    holder.add(m);
+  });
+  const box = new Box3().setFromObject(holder);
   const size = box.getSize(new Vector3());
   const center = box.getCenter(new Vector3());
   const radius = Math.max(size.x, size.y, size.z);
-  dimsEl.textContent = `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} m ／ ${countTriangles(model)} 三角形`;
+  dimsEl.textContent = models.map((m, i) => (compare ? `${names[i]}: ` : '') + describe(m)).join('　');
 
   grid = new GridHelper(Math.max(4, Math.ceil(radius * 1.5)), Math.max(4, Math.ceil(radius * 1.5)), '#9fb3c8', '#c9d4e0');
   grid.position.y = box.min.y;
   scene.add(grid);
 
   controls.target.copy(center);
-  camera.position.set(center.x + radius * 1.1, center.y + radius * 0.75, center.z + radius * 1.5);
+  if (compare) camera.position.set(center.x + radius * 0.12, center.y + radius * 0.22, center.z + radius * 1.25);
+  else camera.position.set(center.x + radius * 1.1, center.y + radius * 0.75, center.z + radius * 1.5);
   camera.near = radius / 100;
   camera.far = radius * 20;
   camera.updateProjectionMatrix();
-  controls.autoRotate = true;
+  spin = true;
   controls.update();
 }
 
@@ -137,15 +149,21 @@ for (const [label] of GROUPS) {
     b.type = 'button';
     b.dataset.model = n;
     b.textContent = n;
-    b.addEventListener('click', () => void show(n));
+    b.addEventListener('click', () => void show([n]));
     listEl.appendChild(b);
   }
 }
 
-const requested = new URLSearchParams(location.search).get('model');
-void show(requested && names.includes(requested) ? requested : names[0]);
+const params = new URLSearchParams(location.search);
+const compared = (params.get('compare') ?? '').split(',').filter((n) => names.includes(n));
+const requested = params.get('model');
+void show(compared.length > 0 ? compared : [requested && names.includes(requested) ? requested : names[0]]);
 
-renderer.setAnimationLoop(() => {
+let last = performance.now();
+renderer.setAnimationLoop((now: number) => {
+  const dt = Math.min((now - last) / 1000, 0.1);
+  last = now;
+  if (spin) for (const m of holder.children) m.rotation.y += dt * 0.6;
   controls.update();
   renderer.render(scene, camera);
 });
