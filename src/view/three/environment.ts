@@ -27,11 +27,13 @@ void main() {
 const skyFragmentShader = `
 uniform vec3 topColor;
 uniform vec3 bottomColor;
+uniform vec3 mistColor;
+uniform float mist;
 varying vec3 vDirection;
 
 void main() {
   float gradient = smoothstep(-0.15, 0.75, vDirection.y);
-  gl_FragColor = vec4(mix(bottomColor, topColor, gradient), 1.0);
+  gl_FragColor = vec4(mix(mix(bottomColor, topColor, gradient), mistColor, mist), 1.0);
 }
 `;
 
@@ -48,6 +50,9 @@ export function addEnvironment(scene: Scene, environment: EnvironmentDef): Mesh 
       uniforms: {
         topColor: { value: new Color(environment.sky.top) },
         bottomColor: { value: new Color(environment.sky.bottom) },
+        // Inside a fog stretch the sky whitens too (0 = clear, 1 = all mist).
+        mistColor: { value: new Color(environment.fog?.color ?? '#ffffff') },
+        mist: { value: 0 },
       },
       vertexShader: skyVertexShader,
       fragmentShader: skyFragmentShader,
@@ -58,6 +63,14 @@ export function addEnvironment(scene: Scene, environment: EnvironmentDef): Mesh 
   );
   sky.name = 'sky';
   sky.frustumCulled = false;
+  if (environment.cloudSea) {
+    // A soft white floor far below the sky islands; the fog blends it into the horizon.
+    const sea = new Mesh(new PlaneGeometry(4000, 4000), new MeshLambertMaterial({ color: '#F4F8FF', emissive: new Color('#DDE8F5') }));
+    sea.name = 'cloud-sea';
+    sea.rotation.x = -Math.PI / 2;
+    sea.position.y = environment.cloudSea.y;
+    scene.add(sea);
+  }
   scene.add(sky);
 
   const hemisphere = new HemisphereLight(0xffffff, 0x99bb77, 0.9);

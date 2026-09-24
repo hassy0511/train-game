@@ -76,8 +76,11 @@ export const EMERGENCY_STOP_SECONDS = 0.5;
 export const JUMP = {
   airTime: 1.6,
   height: 4,
-  /** Seconds after landing before the next jump. */
-  cooldown: 2,
+  /**
+   * Seconds after landing before the next jump. 0 since 2026-09-24 (1-3 chains jumps island to island);
+   * the jump cannot be pressed in the air, so mashing still cannot keep the train aloft.
+   */
+  cooldown: 0,
   /** Below this speed (m/s) the button is grey. */
   minSpeed: 1,
   /**
@@ -90,6 +93,12 @@ export const JUMP = {
   /** The partner names the right notch this far before a gap. */
   hintDistance: 60,
 } as const;
+
+/** Jump pad: double the normal distance, higher, and always far enough to land past the next gap (+extra m). */
+export const PAD_JUMP = { scale: 2, height: 7, extra: 4 } as const;
+
+/** How fast (m/s²) an updraft speeds the train up. */
+export const UPDRAFT_ACCELERATION = 6;
 
 /**
  * Falling into a gap: the lead bogie (2 m behind the car front) running off the rail end starts it.

@@ -1,4 +1,4 @@
-import { CatmullRomCurve3, Vector3 } from 'three';
+import { CatmullRomCurve3, Quaternion, Vector3 } from 'three';
 import type { RailEndDef } from '../stage/types';
 import type { Rail as RailApi, RailFrame } from './types';
 
@@ -13,10 +13,18 @@ export interface RailInit {
   leadIn?: Vector3;
   /** Phantom control point after the last point (merge continuity). */
   leadOut?: Vector3;
+  /**
+   * "fixed" (default): up is the reference up made square to the rail. "follow": up turns with the rail's
+   * bends (rotation-minimising frame from the start), so a vertical half-loop around an island's end
+   * leaves the train upside down on the island's underside.
+   */
+  upMode?: 'fixed' | 'follow';
 }
 
 const DEFAULT_UP = new Vector3(0, 1, 0);
 const SAMPLE_SPACING = 0.25;
+/** Spacing (m) of the precomputed up vectors for upMode "follow". */
+const UP_SPACING = 0.5;
 
 /** A single rail: a centripetal Catmull-Rom spline addressed by arc length. */
 export class Rail implements RailApi {
@@ -31,6 +39,8 @@ export class Rail implements RailApi {
   private readonly totalLength: number;
   /** Arc length at which the real rail starts. */
   private readonly startOffset: number;
+  /** upMode "follow": up vectors every UP_SPACING m along the rail. */
+  private readonly ups: Vector3[] | null = null;
 
   constructor(init: RailInit) {
     if (init.points.length < 2) throw new Error(`Rail "${init.id}" needs at least 2 points`);
@@ -64,6 +74,30 @@ export class Rail implements RailApi {
     this.totalLength = lengths[divisions];
     this.startOffset = lengthAtT(tStart);
     this.length = lengthAtT(tEnd) - this.startOffset;
+    if (init.upMode === 'follow') this.ups = this.transportUps();
+  }
+
+  private tangentAt(s: number): Vector3 {
+    const clamped = Math.min(Math.max(s, 0), this.length);
+    return this.curve.getTangentAt((this.startOffset + clamped) / this.totalLength).normalize();
+  }
+
+  /** Carries the start's up along the rail, turning it only as much as the tangent turns (no twist). */
+  private transportUps(): Vector3[] {
+    const count = Math.max(2, Math.ceil(this.length / UP_SPACING) + 1);
+    const ups: Vector3[] = [];
+    let tangent = this.tangentAt(0);
+    let up = this.upRef.clone().addScaledVector(tangent, -tangent.dot(this.upRef)).normalize();
+    const turn = new Quaternion();
+    for (let i = 0; i < count; i++) {
+      const next = this.tangentAt((this.length * i) / (count - 1));
+      turn.setFromUnitVectors(tangent, next);
+      up = up.applyQuaternion(turn);
+      up.addScaledVector(next, -next.dot(up)).normalize();
+      ups.push(up.clone());
+      tangent = next;
+    }
+    return ups;
   }
 
   frameAt(s: number): RailFrame {
@@ -72,9 +106,17 @@ export class Rail implements RailApi {
     const position = this.curve.getPointAt(u);
     const tangent = this.curve.getTangentAt(u).normalize();
     if (s !== clamped) position.addScaledVector(tangent, s - clamped);
-    const up = this.upRef.clone().addScaledVector(tangent, -tangent.dot(this.upRef)).normalize();
+    const up = this.upAt(clamped, tangent);
     const right = new Vector3().crossVectors(tangent, up).normalize();
     return { position, tangent, up, right };
+  }
+
+  private upAt(s: number, tangent: Vector3): Vector3 {
+    if (!this.ups) return this.upRef.clone().addScaledVector(tangent, -tangent.dot(this.upRef)).normalize();
+    const x = (s / this.length) * (this.ups.length - 1);
+    const i = Math.min(Math.floor(x), this.ups.length - 2);
+    const up = this.ups[i].clone().lerp(this.ups[i + 1], x - i);
+    return up.addScaledVector(tangent, -tangent.dot(up)).normalize();
   }
 
   /** True when `s` lies inside a gap (no rail under the train). */

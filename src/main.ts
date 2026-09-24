@@ -17,6 +17,7 @@ import { createCargoStrip } from './ui/cargo-strip';
 import { showCard } from './ui/cards';
 import { createDoorButton } from './ui/door-button';
 import { createFade } from './ui/fade';
+import { param, zoneAt } from './gimmick/zones';
 import { showTitle } from './ui/title';
 import { createToast } from './ui/toast';
 import { CAMERA_LABELS, CAMERA_MODES, createSceneView, type CameraFx, type CameraMode } from './view';
@@ -152,14 +153,16 @@ async function boot(): Promise<void> {
   const caption = createCaption(uiEl);
   const cargo = createCargoStrip(uiEl);
   const toast = createToast(uiEl);
-  const fade = createFade(uiEl);
+  const fade = createFade(uiEl, stage.file.environment.fall === 'cloud' ? '#ffffff' : '#000000');
   const doorButton = createDoorButton(actionButtons);
 
   // Camera: the player picks a mode; the game may override it for a moment (doors, cutscenes).
   let userCamera: CameraMode = 'cab';
   let cameraOverride: CameraMode | null = null;
+  // Stage camera zones (gimmicks "camera"): e.g. the outside view while the train rides a loop upside down.
+  let zoneCamera: CameraMode | null = null;
   const applyCamera = (snap = false): void => {
-    const mode = cameraOverride ?? userCamera;
+    const mode = cameraOverride ?? zoneCamera ?? userCamera;
     view.setCamera(mode, snap);
     app.dataset.camera = mode;
     cameraButton.setMode(mode);
@@ -240,6 +243,18 @@ async function boot(): Promise<void> {
         w.resolve();
       }
     }
+
+    // Stage zones along the rail (front of the train): camera views and updrafts.
+    const gimmicks = stage.file.gimmicks;
+    const camZone = zoneAt(gimmicks, 'camera', train.state.railId, train.frontS);
+    const nextCamera = camZone ? (camZone.params?.mode as CameraMode) : null;
+    if (nextCamera !== zoneCamera) {
+      zoneCamera = nextCamera;
+      applyCamera();
+    }
+    const updraft = zoneAt(gimmicks, 'updraft', train.state.railId, train.frontS);
+    train.boostSpeed = updraft ? param(updraft, 'speed', 28) : 0;
+    app.dataset.updraft = updraft ? '1' : '0';
 
     train.update(dt);
     whistle.update(dt);
@@ -340,6 +355,7 @@ async function boot(): Promise<void> {
       await showCard(uiEl, `${ABILITY_NAMES[ability] ?? ability}を\nおぼえた！`, 'やったね！', 'badge');
     },
     revealJunction: (side) => ui.junction.reveal(side),
+    whistleHint: (on) => ui.whistle.setGlow(on),
     recordFound: (record) => {
       toast.show(`みつけた！\n${record.name}`, 'perfect');
       audio.playStop('perfect');
@@ -350,6 +366,7 @@ async function boot(): Promise<void> {
   });
 
   runner = new MissionRunner(stage, train, whistle, events, ports);
+  runner.knowAbilities(abilities);
   runner.setLight(lightOn);
   await runner.run();
   addToProgress('cleared', [stage.file.id]);

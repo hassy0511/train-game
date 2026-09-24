@@ -6,19 +6,25 @@ import {
   ConeGeometry,
   DoubleSide,
   Float32BufferAttribute,
+  Fog,
   Group,
   Mesh,
   MeshBasicMaterial,
   Object3D,
+  Points,
+  PointsMaterial,
   Quaternion,
   Shape,
   ShapeGeometry,
   Vector3,
 } from 'three';
+import type { StageEvent } from '../../core/stage-events';
+import { param, zoneAt } from '../../gimmick/zones';
 import type { RailNetwork } from '../../rail/types';
 import { resolvePlacement } from '../../stage/loader';
 import type { JunctionDef, StageData } from '../../stage/types';
 import type { ModelLibrary } from './models';
+import { addModelPlacements, type ModelPlacement } from './props';
 
 /** Dark "pit" strips on the ground under rail gaps, so a missing piece of rail reads as a hole. */
 export function buildGapPits(network: RailNetwork, groundY: number | null): Group {
@@ -261,4 +267,108 @@ export class Flocks {
       bird.object.rotation.set(0, Math.atan2(-Math.sin(a) * dir, Math.cos(a) * dir), -0.25 * dir, 'YXZ');
     }
   }
+}
+
+interface PadVisual {
+  pad: Object3D;
+  sparkle: Points<BufferGeometry, PointsMaterial>;
+  left: number;
+}
+
+/**
+ * Sky-stage gimmicks drawn from stage data: jump pads (a faint sparkle while hidden, the pad for a few
+ * seconds after a whistle, blinking before it goes), hoops along updraft stretches, and fog stretches.
+ */
+export class SkyGimmicks {
+  readonly group = new Group();
+  private readonly pads = new Map<number, PadVisual>();
+  private time = 0;
+  private lightOn = false;
+  private fogNear = 0;
+  private fogFar = 0;
+
+  constructor(private readonly stage: StageData) {
+    this.group.name = 'sky-gimmicks';
+  }
+
+  async init(models: ModelLibrary): Promise<void> {
+    const gimmicks = this.stage.file.gimmicks;
+    const rings: ModelPlacement[] = [];
+    for (const [index, g] of gimmicks.entries()) {
+      if (g.railId === undefined || g.from === undefined) continue;
+      if (g.type === 'jump-pad') {
+        const t = resolvePlacement({ onRail: { railId: g.railId, at: g.from, heightFromRail: 0 } }, this.stage.network, null);
+        const pad = (await models.load('jump-pad')).clone(true);
+        pad.position.copy(t.position);
+        pad.quaternion.copy(t.quaternion);
+        pad.visible = false;
+        const sparkle = makeSparkle();
+        sparkle.position.copy(t.position);
+        sparkle.quaternion.copy(t.quaternion);
+        this.group.add(pad, sparkle);
+        this.pads.set(index, { pad, sparkle, left: 0 });
+      }
+      if (g.type === 'updraft' && g.to !== undefined) {
+        for (let s = g.from + 6; s <= g.to; s += 14) {
+          const t = resolvePlacement({ onRail: { railId: g.railId, at: s, heightFromRail: 0 } }, this.stage.network, null);
+          rings.push({ model: 'updraft-ring', position: t.position, quaternion: t.quaternion, scale: 1 });
+        }
+      }
+    }
+    if (rings.length) {
+      const holder = new Group();
+      holder.name = 'updraft-rings';
+      this.group.add(holder);
+      await addModelPlacements(holder, rings, models);
+    }
+  }
+
+  onStageEvent(event: StageEvent): void {
+    if (event.type === 'light') this.lightOn = event.on;
+    if (event.type !== 'pad') return;
+    const pad = this.pads.get(event.index);
+    if (!pad) return;
+    pad.left = event.visible ? (event.seconds ?? 8) : 0;
+  }
+
+  /** How white the sky is right now (0 = clear, 1 = inside a thick fog stretch). */
+  mist = 0;
+
+  /** Per frame: pad state, and the fog for where the train is (fog stretches thicken it; the light thins it). */
+  update(dt: number, railId: string, frontS: number, fog: Fog | null, baseFog: { near: number; far: number } | null): void {
+    this.time += dt;
+    for (const p of this.pads.values()) {
+      if (p.left > 0) p.left = Math.max(0, p.left - dt);
+      const shown = p.left > 0;
+      // Blink during the last two seconds.
+      p.pad.visible = shown && (p.left > 2 || Math.sin(this.time * 18) > -0.2);
+      p.sparkle.visible = !shown;
+      if (!shown) p.sparkle.material.opacity = 0.45 + 0.35 * Math.sin(this.time * 5);
+    }
+    if (!fog || !baseFog) return;
+    let near = baseFog.near;
+    let far = baseFog.far;
+    const zone = zoneAt(this.stage.file.gimmicks, 'fog', railId, frontS);
+    if (zone) {
+      near = param(zone, 'near', 2);
+      far = this.lightOn ? param(zone, 'lightFar', 70) : param(zone, 'far', 22);
+    }
+    const k = 1 - Math.exp(-dt * 2.5);
+    this.mist += ((zone ? (this.lightOn ? 0.75 : 1) : 0) - this.mist) * k;
+    this.fogNear = this.fogNear === 0 ? near : this.fogNear + (near - this.fogNear) * k;
+    this.fogFar = this.fogFar === 0 ? far : this.fogFar + (far - this.fogFar) * k;
+    fog.near = this.fogNear;
+    fog.far = this.fogFar;
+  }
+}
+
+function makeSparkle(): Points<BufferGeometry, PointsMaterial> {
+  const positions: number[] = [];
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2;
+    positions.push(Math.cos(a) * (1.2 + (i % 3) * 0.5), 0.3 + (i % 4) * 0.35, Math.sin(a) * 2.2);
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  return new Points(geometry, new PointsMaterial({ color: '#FFE38A', size: 0.45, transparent: true, depthWrite: false }));
 }

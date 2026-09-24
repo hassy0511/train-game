@@ -15,6 +15,7 @@ function makeRail(def: RailDef, leadIn?: Vector3, leadOut?: Vector3): Rail {
     up: def.up ? toVector(def.up) : undefined,
     gaps: def.gaps,
     end: def.end,
+    upMode: def.upMode,
     leadIn,
     leadOut,
   });

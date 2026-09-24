@@ -91,6 +91,7 @@ function checkRanges(file: StageFile, network: RailNetwork): void {
     for (const g of r.gaps ?? []) {
       check(r.id, g.from, `rail "${r.id}" gap`);
       check(r.id, g.to, `rail "${r.id}" gap`);
+      if (g.rewind) check(g.rewind.railId, g.rewind.at, `rail "${r.id}" gap rewind`);
     }
   }
   const placed: [Placement, string][] = [
@@ -99,6 +100,11 @@ function checkRanges(file: StageFile, network: RailNetwork): void {
     ...file.records.map((r): [Placement, string] => [r, `record "${r.id}"`]),
   ];
   for (const [p, what] of placed) if ('onRail' in p) check(p.onRail.railId, p.onRail.at, what);
+  file.gimmicks.forEach((g, i) => {
+    if (g.railId === undefined || g.from === undefined) return;
+    check(g.railId, g.from, `gimmicks[${i}] ${g.type}`);
+    if (g.to !== undefined) check(g.railId, g.to, `gimmicks[${i}] ${g.type}`);
+  });
 }
 
 const Y_AXIS = new Vector3(0, 1, 0);

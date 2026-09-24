@@ -18,7 +18,8 @@ import type {
   StageData,
   StationDef,
 } from '../stage/types';
-import { JUMP, LEVER_NOTCHES, LIGHT, PASSENGER_SECONDS, REWIND_DISTANCE } from '../train/params';
+import { param } from '../gimmick/zones';
+import { FALL, JUMP, LEVER_NOTCHES, LIGHT, PASSENGER_SECONDS, REWIND_DISTANCE } from '../train/params';
 import type { JunctionSide, Train } from '../train/train';
 import { StopMonitor, type GaugeState, type StopGrade } from './station-stop';
 
@@ -40,6 +41,8 @@ export interface MissionPorts extends CutscenePorts {
   revealJunction(side: JunctionSide): void;
   /** A record was found (already saved). */
   recordFound(record: RecordDef): void;
+  /** Something nearby reacts to the whistle right now: make the whistle button glow. */
+  whistleHint(on: boolean): void;
 }
 
 export type MissionPhase = 'idle' | 'driving' | 'stopped' | 'doors' | 'cutscene' | 'failing' | 'clear';
@@ -59,7 +62,9 @@ type DefaultLine =
   | 'dinoDanger'
   | 'dangerAfter'
   | 'deadEnd'
-  | 'recordFound';
+  | 'recordFound'
+  | 'padGone'
+  | 'padAppear';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -77,6 +82,8 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   dangerAfter: 'びっくりした〜。もういっかい！',
   deadEnd: 'いきどまり！ ライトで たしかめよう',
   recordFound: 'みつけた！',
+  padGone: 'あれ？ ジャンプだいが きえてる… きてきを ならしてみよう！',
+  padAppear: 'でた！ だいに のって！',
 };
 
 /** Lever labels by jump hint, for the partner's "つぎの きれめは ふつう で とべる". */
@@ -105,6 +112,8 @@ export class MissionRunner {
   private readonly revealed = new Set<string>();
   private readonly found: Set<string>;
   private readonly abilities: Set<AbilityId>;
+  /** Jump pads: shown for a few seconds after a whistle; `index` into gimmicks[]. */
+  private readonly pads: { index: number; railId: string; at: number; seconds: number; range: number; left: number; hinted: boolean }[];
   private movingSaid = false;
   private hintsFired = new Set<number>();
   private resolveDrive: ((outcome: DriveOutcome) => void) | null = null;
@@ -121,6 +130,11 @@ export class MissionRunner {
     this.groundY = stage.file.environment.ground?.y ?? null;
     this.cats = stage.actors.filter((a) => a.type === 'cat').map((a) => new CatActor(a, train));
     this.dinos = stage.actors.map((a) => makeDino(a, train)).filter((d): d is Dino => d !== null);
+    this.pads = stage.file.gimmicks.flatMap((g, index) =>
+      g.type === 'jump-pad' && g.railId !== undefined && g.from !== undefined
+        ? [{ index, railId: g.railId, at: g.from, seconds: param(g, 'seconds', 8), range: param(g, 'range', 60), left: 0, hinted: false }]
+        : [],
+    );
     const progress = loadProgress();
     this.found = new Set(progress.records);
     this.abilities = new Set(progress.abilities);
@@ -142,6 +156,11 @@ export class MissionRunner {
   /** The jump button was pressed while stopped or otherwise refused. */
   onJumpRefused(reason: string): void {
     if (reason === 'stopped' && this.phase === 'driving') this.ports.sayAsync(this.lines.jumpStopped ?? DEFAULT_LINES.jumpStopped);
+  }
+
+  /** Abilities the player already has on entering the stage (saved, or inherited when opened directly). */
+  knowAbilities(abilities: Iterable<AbilityId>): void {
+    for (const a of abilities) this.abilities.add(a);
   }
 
   /** Grants an ability (cutscene step). The caller shows its button; this saves it. */
@@ -204,6 +223,7 @@ export class MissionRunner {
       }
     });
     this.updateGapHints();
+    this.updatePads(dt);
     this.updateJunctionSigns();
     this.updateRecords();
     if (this.checkDeadEnd()) return;
@@ -285,6 +305,32 @@ export class MissionRunner {
     }
   }
 
+  /**
+   * Jump pads: the partner points out the missing pad and the whistle button glows while it is in reach;
+   * a shown pad counts down and launches the train when the lead bogie runs over it.
+   */
+  private updatePads(dt: number): void {
+    let glow = false;
+    for (const pad of this.pads) {
+      const d = this.train.distanceAhead(pad.railId, pad.at);
+      if (pad.left > 0) {
+        pad.left = Math.max(0, pad.left - dt);
+        if (pad.left === 0) this.events.post({ type: 'pad', index: pad.index, visible: false });
+      }
+      if (d === null) continue;
+      if (!pad.hinted && d > 0 && d <= pad.range + 30) {
+        pad.hinted = true;
+        this.ports.sayAsync(this.lines.padGone ?? DEFAULT_LINES.padGone);
+      }
+      if (pad.left === 0 && d > -FALL.bogieLead && d <= pad.range) glow = true;
+      // The lead bogie is FALL.bogieLead behind the front: launch when it reaches the pad.
+      if (pad.left > 0 && d <= -FALL.bogieLead && d > -FALL.bogieLead - 4 && this.train.padJump()) {
+        this.events.post({ type: 'jump' });
+      }
+    }
+    this.ports.whistleHint(glow);
+  }
+
   /** "つぎの きれめは ふつう で とべる！" once per gap and attempt. */
   private updateGapHints(): void {
     const gap = this.train.nextGap(JUMP.hintDistance);
@@ -359,7 +405,11 @@ export class MissionRunner {
   private onFell(gap: GapDef, railId: string, short: boolean): void {
     if (this.phase !== 'driving') return;
     this.ports.autoCamera('chase');
-    this.finishDrive({ kind: 'fail', reason: short ? 'fellShort' : 'fellNoJump', rewind: { railId, at: gap.from - REWIND_DISTANCE } });
+    this.finishDrive({
+      kind: 'fail',
+      reason: short ? 'fellShort' : 'fellNoJump',
+      rewind: gap.rewind ?? { railId, at: gap.from - REWIND_DISTANCE },
+    });
   }
 
   /** Lever moved while locked: explain why. */
@@ -369,6 +419,14 @@ export class MissionRunner {
 
   private onWhistle(): void {
     if (this.phase !== 'driving') return;
+    for (const pad of this.pads) {
+      const d = this.train.distanceAhead(pad.railId, pad.at);
+      if (d === null || d > pad.range || d <= -FALL.bogieLead) continue;
+      const fresh = pad.left === 0;
+      pad.left = pad.seconds;
+      this.events.post({ type: 'pad', index: pad.index, visible: true, seconds: pad.seconds });
+      if (fresh) this.ports.sayAsync(this.lines.padAppear ?? DEFAULT_LINES.padAppear);
+    }
     for (const cat of this.cats) {
       if (cat.onWhistle()) {
         this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'awake', position: this.catFleePosition(cat), seconds: cat.params.fleeSeconds });
@@ -460,6 +518,12 @@ export class MissionRunner {
     for (const cat of this.cats) cat.reset();
     for (const cat of this.cats) this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'sleep', position: cat.actor.position });
     this.resetActors();
+    for (const pad of this.pads) {
+      pad.left = 0;
+      pad.hinted = false;
+      this.events.post({ type: 'pad', index: pad.index, visible: false });
+    }
+    this.ports.whistleHint(false);
     this.gapHints.clear();
     this.signLines.clear();
     this.revealed.clear();
