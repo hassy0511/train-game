@@ -1,13 +1,15 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { Emitter } from '../core/events';
 import type { Rail, RailNetwork } from '../rail/types';
-import type { JunctionDef, StartDef } from '../stage/types';
+import type { GapDef, JunctionDef, StartDef } from '../stage/types';
 import {
   ACCELERATION,
   BRAKING,
   BUFFER_MARGIN,
   EMERGENCY_STOP_SECONDS,
+  FALL,
   HARD_BRAKE_NOTCH,
+  JUMP,
   JUNCTION_ARROW_DISTANCE,
   JUNCTION_LOCK_DISTANCE,
   LEVER_NOTCHES,
@@ -34,6 +36,29 @@ export interface TrainEvents extends Record<string, unknown> {
   endOfLine: void;
   /** The hard brake was applied while moving faster than a walking pace. */
   hardBrake: { speed: number };
+  jumped: { distance: number };
+  landed: void;
+  /** The lead bogie ran into a gap. `short`: it jumped but not far enough; otherwise it never jumped. */
+  fell: { gap: GapDef; railId: string; short: boolean };
+}
+
+export type JumpResult = 'ok' | 'stopped' | 'cooldown' | 'air' | 'locked';
+
+/** A jump arc in space: bogies between `from` and `from + length` on `railId` are lifted. */
+interface JumpArc {
+  railId: string;
+  from: number;
+  length: number;
+}
+
+/** Share of the arc's slope the car body shows while in the air (0 = stays level). */
+const JUMP_PITCH = 0.3;
+
+/** Height (m) of an arc at bogie position `s`; 0 outside it. */
+function arcHeight(arc: JumpArc, s: number): number {
+  const u = (s - arc.from) / arc.length;
+  if (u <= 0 || u >= 1) return 0;
+  return JUMP.height * 4 * u * (1 - u);
 }
 
 /** The train state machine. Moves along the rail network by arc length; no free physics. */
@@ -48,6 +73,11 @@ export class Train {
   private ended = false;
   private lockReason: string | null = null;
   private emergency = false;
+  private arcs: JumpArc[] = [];
+  private jumpCooldown = 0;
+  private falling: { t: number } | null = null;
+  /** Multiplies every notch's target speed (the light slows the train down). */
+  speedScale = 1;
 
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
@@ -105,9 +135,73 @@ export class Train {
     this.lockReason = null;
   }
 
+  /** True while the lead bogie is in the air. */
+  get airborne(): boolean {
+    const arc = this.arcs[this.arcs.length - 1];
+    const b = this.bogieS;
+    return !!arc && arc.railId === this.state.railId && b > arc.from && b < arc.from + arc.length;
+  }
+
+  get isFalling(): boolean {
+    return this.falling !== null;
+  }
+
+  /** 0 right after a jump, 1 when the next jump is allowed. */
+  get jumpProgress(): number {
+    if (this.airborne) return 0;
+    return 1 - Math.min(Math.max(this.jumpCooldown / JUMP.cooldown, 0), 1);
+  }
+
+  /** Where the lead bogie is (m along the current rail): the point that falls into a gap. */
+  private get bogieS(): number {
+    return this.frontS - FALL.bogieLead;
+  }
+
+  /** The first gap on the current rail the lead bogie has not passed yet, within `range` m. */
+  nextGap(range: number): GapDef | null {
+    const b = this.bogieS;
+    let best: GapDef | null = null;
+    for (const g of this.currentRail.gaps as GapDef[]) {
+      if (g.to < b || g.from - b > range) continue;
+      if (!best || g.from < best.from) best = g;
+    }
+    return best;
+  }
+
+  /** Distance the lead bogie would travel in a jump started now (with the glide to a near far edge). */
+  private jumpDistance(): number {
+    const plain = this.state.speed * JUMP.airTime;
+    const gap = this.nextGap(plain);
+    if (!gap) return plain;
+    const landing = this.bogieS + plain;
+    const needed = gap.to + JUMP.landingMargin - this.bogieS;
+    if (landing >= gap.from && landing < gap.to + JUMP.landingMargin && needed - plain <= JUMP.glide * plain) return needed;
+    return plain;
+  }
+
+  /** True when a jump started now clears the next gap ahead (the button glows). */
+  get jumpWouldClear(): boolean {
+    if (this.state.speed < JUMP.minSpeed || this.airborne || this.jumpCooldown > 0 || this.falling) return false;
+    const gap = this.nextGap(JUMP.hintDistance);
+    if (!gap || this.bogieS >= gap.from) return false;
+    return this.bogieS + this.jumpDistance() >= gap.to + JUMP.landingMargin;
+  }
+
+  /** Starts a jump. Distance = speed × air time; the lever does nothing until the lead car lands. */
+  jump(): JumpResult {
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling) return 'locked';
+    if (this.airborne) return 'air';
+    if (this.jumpCooldown > 0) return 'cooldown';
+    if (this.state.speed < JUMP.minSpeed) return 'stopped';
+    const distance = this.jumpDistance();
+    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length: distance });
+    this.events.emit('jumped', { distance });
+    return 'ok';
+  }
+
   /** Returns false when the controls are locked (the caller should tell the player why). */
   setNotch(notch: number): boolean {
-    if (this.ended || this.lockReason !== null || this.emergency) return false;
+    if (this.ended || this.lockReason !== null || this.emergency || this.airborne || this.falling) return false;
     const next = Math.min(Math.max(Math.round(notch), 0), SPEED_NOTCHES.length - 1);
     if (next === HARD_BRAKE_NOTCH && this.state.notch !== HARD_BRAKE_NOTCH && this.state.speed > 3) {
       this.events.emit('hardBrake', { speed: this.state.speed });
@@ -122,9 +216,13 @@ export class Train {
     this.state.notch = 0;
   }
 
-  /** Puts the train back with its front at `frontS` on the current rail, stopped, lever at "stop". */
-  rewindTo(frontS: number): void {
+  /** Puts the train back with its front at `frontS` (on `railId`, default the current rail), stopped, lever at "stop". */
+  rewindTo(frontS: number, railId?: string): void {
     const st = this.state;
+    if (railId) st.railId = railId;
+    this.arcs = [];
+    this.falling = null;
+    this.jumpCooldown = 0;
     st.s = this.wrap(frontS - TRAIN.length / 2);
     st.speed = 0;
     st.notch = STOP_NOTCH;
@@ -178,9 +276,10 @@ export class Train {
   update(dt: number): void {
     const st = this.state;
     let rail = this.currentRail;
+    const wasAirborne = this.airborne;
 
     const notch = LEVER_NOTCHES[st.notch];
-    let target: number = notch.speed;
+    let target: number = notch.speed * this.speedScale;
     let brake: number = notch.brake;
     const stopAt = this.stopDistance(rail);
     if (stopAt !== null) {
@@ -192,7 +291,13 @@ export class Train {
       }
     }
 
-    if (this.emergency) {
+    if (this.falling) {
+      // Slide on a little while sinking; the runner fades out and puts the train back.
+      this.falling.t = Math.min(this.falling.t + dt, FALL.seconds);
+      st.speed = Math.max(0, st.speed - st.speed * 1.8 * dt);
+    } else if (wasAirborne) {
+      // Ballistic: the speed does not change in the air.
+    } else if (this.emergency) {
       target = 0;
       const rate = Math.max(BRAKING, SPEED_NOTCHES[SPEED_NOTCHES.length - 1] / EMERGENCY_STOP_SECONDS);
       st.speed = Math.max(0, st.speed - rate * dt);
@@ -204,7 +309,35 @@ export class Train {
     this.handleJunctions();
     rail = this.currentRail;
     this.handleEnd(rail);
+    this.handleJump(dt, wasAirborne);
     this.computePose();
+  }
+
+  private handleJump(dt: number, wasAirborne: boolean): void {
+    const airborne = this.airborne;
+    if (wasAirborne && !airborne) {
+      this.jumpCooldown = JUMP.cooldown;
+      this.events.emit('landed');
+    }
+    if (!airborne && this.jumpCooldown > 0) this.jumpCooldown = Math.max(0, this.jumpCooldown - dt);
+    // Forget arcs the last car has left behind.
+    const lastBogie = this.state.s - TRAIN.carSpacing * (TRAIN.carCount - 1) - TRAIN.bogieOffset;
+    this.arcs = this.arcs.filter((a) => a.railId !== this.state.railId || a.from + a.length > lastBogie);
+    if (airborne || this.falling) return;
+    const b = this.bogieS;
+    const gap = (this.currentRail.gaps as GapDef[]).find((g) => b >= g.from && b <= g.to);
+    if (!gap) return;
+    const short = this.arcs.some((a) => a.railId === this.state.railId && a.from + a.length > gap.from - 12);
+    this.falling = { t: 0 };
+    this.events.emit('fell', { gap, railId: this.state.railId, short });
+  }
+
+  /** Shifts jump arcs when the train's s is re-based (junction or merge). */
+  private shiftArcs(delta: number, railId: string): void {
+    for (const a of this.arcs) {
+      a.from += delta;
+      a.railId = railId;
+    }
   }
 
   getPose(): TrainPose {
@@ -256,6 +389,7 @@ export class Train {
       this.choice = null;
       if (targetId !== st.railId) {
         st.s -= j.at;
+        this.shiftArcs(-j.at, targetId);
         st.railId = targetId;
         this.refreshPending();
         this.events.emit('railChanged', { railId: targetId });
@@ -269,6 +403,7 @@ export class Train {
     if (rail.end.type === 'merge') {
       if (st.s >= rail.length) {
         st.s = rail.end.at + (st.s - rail.length);
+        this.shiftArcs(rail.end.at - rail.length, rail.end.railId);
         st.railId = rail.end.railId;
         this.refreshPending();
         this.events.emit('railChanged', { railId: st.railId });
@@ -292,12 +427,31 @@ export class Train {
     return this.currentRail.frameAt(this.onLoop ? this.wrap(s) : s);
   }
 
+  /** Lift (m) from jump arcs at position `s`. */
+  private arcLift(s: number): number {
+    let h = 0;
+    for (const a of this.arcs) if (a.railId === this.state.railId) h = Math.max(h, arcHeight(a, s));
+    return h;
+  }
+
+  /** Sink (m) while falling; the front bogie sinks deeper so the car tips forward. */
+  private fallDrop(front: boolean): number {
+    if (!this.falling) return 0;
+    const k = this.falling.t / FALL.seconds;
+    return FALL.depth * k * k * (front ? 1.25 : 0.85);
+  }
+
   /** Writes the body transform of a car centered at `s` into `position`/`quaternion`. */
   private carPose(s: number, position: Vector3, quaternion: Quaternion): void {
     const front = this.frameOnRail(s + TRAIN.bogieOffset);
     const rear = this.frameOnRail(s - TRAIN.bogieOffset);
-    this.front.copy(front.position);
-    this.rear.copy(rear.position);
+    // The car rides the arc at its center and keeps only a hint of the arc's slope, so the cab view
+    // stays on the horizon ("ぴょん" like a toy, not a ski jump). Falling tips it forward.
+    const hc = this.arcLift(s);
+    const hf = hc + JUMP_PITCH * (this.arcLift(s + TRAIN.bogieOffset) - hc) - this.fallDrop(true);
+    const hr = hc + JUMP_PITCH * (this.arcLift(s - TRAIN.bogieOffset) - hc) - this.fallDrop(false);
+    this.front.copy(front.position).addScaledVector(front.up, hf);
+    this.rear.copy(rear.position).addScaledVector(rear.up, hr);
     position.addVectors(this.front, this.rear).multiplyScalar(0.5);
     this.forward.subVectors(this.front, this.rear).normalize();
     this.up.addVectors(front.up, rear.up).normalize();

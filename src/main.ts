@@ -3,10 +3,12 @@ import { Whistle } from './actions/whistle';
 import { AudioEngine } from './audio/audio';
 import { GAME_TITLE, PARTNER_NAME } from './config';
 import { StageEventBus } from './core/stage-events';
-import { MissionRunner, type MissionPorts } from './mission/runner';
+import { addToProgress, loadProgress } from './core/progress';
+import { ABILITY_NAMES, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
-import { loadStage } from './stage/loader';
-import { SPEED_LABELS, STOP_NOTCH } from './train/params';
+import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/loader';
+import type { AbilityId } from './stage/types';
+import { JUMP, LIGHT, SPEED_LABELS, STOP_NOTCH } from './train/params';
 import { Train } from './train/train';
 import { createUi } from './ui';
 import { createBubbles } from './ui/bubble';
@@ -20,6 +22,8 @@ import { createToast } from './ui/toast';
 import { CAMERA_LABELS, CAMERA_MODES, createSceneView, type CameraFx, type CameraMode } from './view';
 import { createCameraButton } from './ui/camera-button';
 import { createStopGauge } from './ui/stop-gauge';
+import { createJumpButton, createLightButton } from './ui/ability-buttons';
+import { showZukan } from './ui/zukan';
 
 const app = document.getElementById('app') as HTMLElement;
 const viewEl = document.getElementById('view') as HTMLElement;
@@ -27,12 +31,48 @@ const uiEl = document.getElementById('ui') as HTMLElement;
 
 const MAX_DT = 0.1;
 
+/** Abilities granted by the stages `id` requires (recursively): playing a later stage directly still works. */
+async function inheritedAbilities(id: string, seen = new Set<string>()): Promise<AbilityId[]> {
+  const stage = await peekStage(id);
+  if (!stage || seen.has(id)) return [];
+  seen.add(id);
+  const out: AbilityId[] = [];
+  for (const req of stage.unlock.requires) {
+    const before = await peekStage(req);
+    if (before) out.push(...before.unlocks, ...(await inheritedAbilities(req, seen)));
+  }
+  return out;
+}
+
+/**
+ * The first playable stage not cleared yet whose required stages are all cleared. With `after`, only
+ * stages after that one count (the stage to go on to after a clear).
+ */
+async function nextStage(cleared: string[], after?: string): Promise<{ id: string; title: string } | null> {
+  for (const id of listStageIds()) {
+    if (after !== undefined && id.localeCompare(after, undefined, { numeric: true }) <= 0) continue;
+    const stage = await peekStage(id);
+    if (!stage || cleared.includes(id) || id.startsWith('0-')) continue;
+    if (stage.unlock.requires.every((r) => cleared.includes(r))) return { id: stage.id, title: stage.title };
+  }
+  return null;
+}
+
+/** Opens a stage straight into play (no title). */
+function goToStage(id: string): void {
+  location.search = `?stage=${encodeURIComponent(id)}&go=1`;
+}
+
 async function boot(): Promise<void> {
   const params = new URLSearchParams(location.search);
   const stageId = params.get('stage') ?? '1-1';
 
   const [stage, physics] = await Promise.all([loadStage(stageId), PhysicsWorld.create()]);
   const hasMissions = stage.file.missions.length > 0;
+  // The hidden test course has every button, so the jump and the light can be tried there.
+  const abilities = new Set<AbilityId>(
+    hasMissions ? [...loadProgress().abilities, ...(await inheritedAbilities(stageId))] : ['whistle', 'jump', 'light'],
+  );
   const train = new Train(stage.network, stage.file.junctions, stage.file.start);
   const whistle = new Whistle();
   const audio = new AudioEngine();
@@ -66,6 +106,36 @@ async function boot(): Promise<void> {
     },
     onJunction: (side) => train.chooseJunction(side),
   });
+  const actionButtons = uiEl.querySelector('.action-buttons') as HTMLElement;
+  const jumpButton = createJumpButton(actionButtons, () => {
+    audio.unlock();
+    const result = train.jump();
+    if (result === 'ok') {
+      audio.playJump();
+      events.post({ type: 'jump' });
+    } else runner?.onJumpRefused(result);
+  });
+  let lightOn = false;
+  let lightReadyAt = 0;
+  const lightButton = createLightButton(actionButtons, () => {
+    // Toggle, with a short lockout so a double tap does not flicker it.
+    if (simTime < lightReadyAt) return;
+    lightReadyAt = simTime + LIGHT.cooldown;
+    lightOn = !lightOn;
+    audio.unlock();
+    audio.playLight(lightOn);
+    train.speedScale = lightOn ? LIGHT.speedScale : 1;
+    lightButton.setOn(lightOn);
+    runner?.setLight(lightOn);
+    events.post({ type: 'light', on: lightOn });
+  });
+  const showAbility = (ability: AbilityId): void => {
+    abilities.add(ability);
+    if (ability === 'jump') jumpButton.show();
+    if (ability === 'light') lightButton.show();
+    events.post({ type: 'ability', id: ability });
+  };
+  for (const ability of abilities) showAbility(ability);
   window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
 
   const bubbles = createBubbles(uiEl, PARTNER_NAME);
@@ -74,7 +144,6 @@ async function boot(): Promise<void> {
   const cargo = createCargoStrip(uiEl);
   const toast = createToast(uiEl);
   const fade = createFade(uiEl);
-  const actionButtons = uiEl.querySelector('.action-buttons') as HTMLElement;
   const doorButton = createDoorButton(actionButtons);
 
   // Camera: the player picks a mode; the game may override it for a moment (doors, cutscenes).
@@ -96,6 +165,20 @@ async function boot(): Promise<void> {
     },
   );
   applyCamera(true);
+
+  train.events.on('landed', () => audio.playLand());
+  train.events.on('fell', () => {
+    audio.playFall();
+    if (!hasMissions) {
+      // Test course: no runner to handle it; fade and put the train back before the gap.
+      void (async () => {
+        await fade(true, 0.4);
+        train.rewindTo(Math.max(40, train.frontS - 80));
+        ui.lever.setNotch(STOP_NOTCH);
+        await fade(false, 0.4);
+      })();
+    }
+  });
 
   train.events.on('hardBrake', () => {
     fx.dip = Math.max(fx.dip, 0.5);
@@ -151,6 +234,7 @@ async function boot(): Promise<void> {
     train.update(dt);
     whistle.update(dt);
     ui.whistle.setProgress(whistle.progress);
+    jumpButton.set(train.jumpProgress, train.jumpWouldClear, train.state.speed < JUMP.minSpeed);
     runner?.update(dt);
 
     const pose = train.getPose();
@@ -174,10 +258,13 @@ async function boot(): Promise<void> {
     app.dataset.s = train.state.s.toFixed(1);
     app.dataset.rail = train.state.railId;
     app.dataset.notch = String(train.state.notch);
+    app.dataset.air = train.airborne ? '1' : '0';
+    app.dataset.speed = train.state.speed.toFixed(1);
     if (runner) {
       app.dataset.phase = runner.phase;
       app.dataset.mission = String(runner.missionIndex);
       app.dataset.step = String(runner.stepIndex);
+      app.dataset.neck = runner.bigDinoNeck;
     }
     debug?.update(fps);
 
@@ -187,7 +274,26 @@ async function boot(): Promise<void> {
 
   if (!hasMissions) return; // Test course: just drive.
 
-  await showTitle(uiEl, GAME_TITLE);
+  const progress = loadProgress();
+  const next = await nextStage(progress.cleared);
+  if (!params.has('go')) {
+    const choice = await showTitle(uiEl, GAME_TITLE, {
+      continueLabel: next && next.id !== stageId ? `つづきから（${next.title}）` : undefined,
+      onZukan: () => {
+        void loadAllRecords().then((all) => {
+          const found = loadProgress().records;
+          showZukan(
+            uiEl,
+            all.map(({ stageTitle, record }) => ({ stageTitle, record, found: found.includes(record.id) })),
+          );
+        });
+      },
+    });
+    if (choice === 'continue' && next) {
+      goToStage(next.id);
+      return;
+    }
+  }
   audio.unlock();
 
   const ports: MissionPorts = {
@@ -218,14 +324,29 @@ async function boot(): Promise<void> {
       cameraOverride = mode;
       applyCamera();
     },
+    unlock: async (ability) => {
+      showAbility(ability);
+      audio.playCard();
+      await showCard(uiEl, `${ABILITY_NAMES[ability] ?? ability}を\nおぼえた！`, 'やったね！', 'badge');
+    },
+    revealJunction: (side) => ui.junction.reveal(side),
+    recordFound: (record) => {
+      toast.show(`みつけた！\n${record.name}`, 'perfect');
+      audio.playStop('perfect');
+    },
   };
   events.on('event', (e) => {
     if (e.type === 'door') audio.playDoor(e.open);
   });
 
   runner = new MissionRunner(stage, train, whistle, events, ports);
+  runner.setLight(lightOn);
   await runner.run();
-  location.reload();
+  addToProgress('cleared', [stage.file.id]);
+  addToProgress('abilities', stage.file.unlocks);
+  const after = await nextStage(loadProgress().cleared, stage.file.id);
+  if (after) goToStage(after.id);
+  else location.href = location.pathname;
 }
 
 boot().catch((err: unknown) => {

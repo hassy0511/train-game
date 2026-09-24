@@ -21,6 +21,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const GROUPS: [string, RegExp][] = [
   ['のりもの', /^(train|car)-/],
+  ['しらべもの', /^(dino-egg|footprint)/],
   ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird)/],
   ['えき・せんろ', /^(platform|station|stop|buffer|crossing|direction|jump|updraft|sky-buoy)/],
   ['たてもの', /^(house|shop|tower|hq)/],

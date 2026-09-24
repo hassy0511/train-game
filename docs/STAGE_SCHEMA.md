@@ -282,3 +282,55 @@ type CutsceneStep =
 
 駅停車の判定（`src/mission/station-stop.ts`）: 停止位置とのずれが ±perfect で「ぴったり」、±ok で「とまれた」、ok を超えていきすぎたら失敗。ゾーン（`zone` m 手前）に `maxSpeed` より速く入ったら即失敗。
 実例は `src/stages/1-1.json`。
+
+---
+
+## 5. v1.2 の追加（Phase 2、2026-09-24）
+
+`schemaVersion` は 1 のまま。追加はすべて省略可。実例は `src/stages/1-2.json`。
+
+```ts
+interface RailDef {
+  // ...v1...
+  gaps?: { from: number; to: number; hint?: 'normal' | 'fast' | 'max' }[];  // hint = とべる段。相棒が 60 m 手前で「つぎの きれめは ふつう で とべる！」
+  deadEnd?: boolean;       // 外れの線路。車止めで止まったら、その線路へ入る分岐の 80 m 手前に戻す（end は buffer に限る）
+}
+
+interface JunctionDef {
+  // ...v1...
+  signReversed?: boolean;  // 逆標識。標識と矢印 UI は default 側を「おすすめ」と表示する（= うそ）。
+                           // ライトを点けて 40 m 以内に入ると、反対側（本当の道）が光り、そちらが進路になる
+}
+
+type RecordDef = /* v1 */ & {
+  model?: string;          // 世界に置くモデル、図鑑の絵（assets/previews/<model>.png）
+  note?: string;           // 図鑑の 1 行
+};
+// requires: null = 25 m 以内を通れば見つかる / "light" = ライトを点けて 25 m 以内 / それ以外 = まだ取れない（図鑑で「？」）
+
+type CutsceneStep = /* v1.1 */ | { unlock: AbilityId };   // 能力を覚える: ボタンが出て、札「〇〇を おぼえた！」
+
+type LineKey = /* v1.1 */
+  | 'gapNear'        // 切れ目の手前。{speed} が段の名前に置き換わる
+  | 'jumpStopped'    // 止まったままジャンプを押した
+  | 'fellShort' | 'fellNoJump'          // 落ちた（飛距離不足／押さなかった）
+  | 'dinoNear' | 'dinoWoke' | 'dinoDanger' | 'dangerAfter'
+  | 'smallCrossing' | 'bigDinoNear'
+  | 'signNear' | 'signRevealed' | 'deadEnd' | 'recordFound';
+
+interface StageFile {
+  // ...v1...
+  unlock: { requires: string[] };  // 既存。requires のステージを直接開いたとき（?stage=1-2）は、その unlocks の能力を持った状態で始まる
+}
+```
+
+アクターの型（v1.2 追加）:
+| type | 動き | params（既定値） |
+|---|---|---|
+| `dino-mid` | 線路で寝ている中型。汽笛で起きて右へ歩いてどく（猫と同じ） | `{ wakeDistance: 60, dangerDistance: 8, fleeLateral: 9, fleeSeconds: 2.5 }` |
+| `dino-small` | 子ども。先頭が `startDistance` まで来ると左から右へ横断（`crossSeconds` 秒）。横断中に `dangerDistance` まで近づくと急停止 | `{ startDistance: 60, crossSeconds: 4, dangerDistance: 6, lateral: 8 }` |
+| `dino-large` | 大型。線路の横に立ち、首が線路の上で上下する（上 `upSeconds`、下 `downSeconds`）。先頭が `gateDistance` に届いたとき首が下なら急停止、上なら通れる（通り終わるまで首は上のまま） | `{ upSeconds: 3.5, downSeconds: 1.5, gateDistance: 8 }` |
+
+ジャンプ（`src/train/params.ts` の `JUMP`）: 高さ 4 m・空中 1.6 秒で固定。飛距離 = 押した瞬間の速さ × 1.6 秒（ゆっくり 8 / ふつう 16 / はやい 24 / びゅーん 35 m）。
+あと少しで向こう岸に届くとき（飛距離の 25% 以内）はふわっと届く。今とべば越えられるとき、ジャンプボタンが光る。
+3 両は同じ放物線をたどる（先頭が飛んだ場所で後ろの車両も飛ぶ）。先頭の台車が切れ目に入ったら落ちる。

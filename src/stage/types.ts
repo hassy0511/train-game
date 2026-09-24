@@ -1,7 +1,7 @@
 import type { Quaternion, Vector3 } from 'three';
 import type { RailNetwork } from '../rail/types';
 
-/** Stage JSON schema v1. See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
+/** Stage JSON schema v1 (additions up to v1.2). See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
 export type Vec3 = [number, number, number];
 
 export type AbilityId = 'whistle' | 'light' | 'jump' | 'rocket' | 'dive' | 'magnetLight' | 'reverse';
@@ -19,12 +19,24 @@ export type RailEndDef =
   | { type: 'merge'; railId: string; at: number }
   | { type: 'open' };
 
+/** Lever notch the partner recommends for a jump (v1.2). */
+export type JumpHint = 'normal' | 'fast' | 'max';
+
+export interface GapDef {
+  from: number;
+  to: number;
+  /** v1.2: the notch that clears this gap; the partner names it before the gap. */
+  hint?: JumpHint;
+}
+
 export interface RailDef {
   id: string;
   points: Vec3[];
   up?: Vec3;
-  gaps?: { from: number; to: number }[];
+  gaps?: GapDef[];
   oneWay?: boolean;
+  /** v1.2: a wrong turn. Reaching its buffer puts the train back before the junction. */
+  deadEnd?: boolean;
   end: RailEndDef;
 }
 
@@ -98,6 +110,10 @@ export type RecordDef = Placement & {
   id: string;
   name: string;
   requires: AbilityId | null;
+  /** v1.2: model shown in the world and in the picture book. */
+  model?: string;
+  /** v1.2: one line for the picture book. */
+  note?: string;
 };
 
 export interface MissionStep {
@@ -142,7 +158,22 @@ export type MissionLines = Partial<
     | 'signReversed'
     | 'gauge'
     | 'hardBrake'
-    | 'complete',
+    | 'complete'
+    // v1.2
+    | 'gapNear'
+    | 'jumpStopped'
+    | 'fellShort'
+    | 'fellNoJump'
+    | 'dinoNear'
+    | 'dinoWoke'
+    | 'dinoDanger'
+    | 'dangerAfter'
+    | 'smallCrossing'
+    | 'bigDinoNear'
+    | 'signNear'
+    | 'signRevealed'
+    | 'deadEnd'
+    | 'recordFound',
     string
   >
 >;
@@ -176,7 +207,9 @@ export type CutsceneStep =
   /** Switch the camera for the rest of the cutscene (restored afterwards). */
   | { camera: 'cab' | 'chase' | 'side' | 'top' }
   /** Full-screen dark caption that fades after `seconds`. */
-  | { caption: string; seconds?: number };
+  | { caption: string; seconds?: number }
+  /** v1.2: grant an ability (its button appears) and show the "learned" card. */
+  | { unlock: AbilityId };
 
 export interface GimmickDef {
   type: string;
@@ -227,6 +260,14 @@ export interface ResolvedProp {
   physics: PhysicsType;
 }
 
+/** A record with its placement resolved. */
+export interface ResolvedRecord {
+  def: RecordDef;
+  position: Vector3;
+  quaternion: Quaternion;
+  onRail?: { railId: string; at: number };
+}
+
 /** An actor with its placement resolved. `position` is the bottom center of the sensor box. */
 export interface ResolvedActor {
   id: string;
@@ -255,4 +296,5 @@ export interface StageData {
   props: ResolvedProp[];
   actors: ResolvedActor[];
   stations: ResolvedStation[];
+  records: ResolvedRecord[];
 }

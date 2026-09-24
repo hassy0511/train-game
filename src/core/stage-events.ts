@@ -1,5 +1,5 @@
 import type { Quaternion, Vector3 } from 'three';
-import type { Emote } from '../stage/types';
+import type { AbilityId, Emote } from '../stage/types';
 import { Emitter } from './events';
 
 /** Things that happened in the game that the view (and audio) may want to show. */
@@ -14,8 +14,15 @@ export type StageEvent =
   | { type: 'goal'; stationId: string | null }
   | { type: 'partner:emote'; kind: Emote }
   | { type: 'stop'; grade: 'perfect' | 'ok' }
-  | { type: 'fail'; reason: 'tooFast' | 'overshoot' | 'cat' }
-  | { type: 'rewind' };
+  | { type: 'fail'; reason: 'tooFast' | 'overshoot' | 'cat' | 'dino' | 'fellShort' | 'fellNoJump' | 'deadEnd' }
+  | { type: 'rewind' }
+  /** The player has this ability (at load and when it is learned). */
+  | { type: 'ability'; id: AbilityId }
+  | { type: 'light'; on: boolean }
+  | { type: 'jump' }
+  /** The light showed which way a reversed junction really goes. */
+  | { type: 'sign:reveal'; junctionId: string }
+  | { type: 'record:found'; id: string };
 
 export class StageEventBus extends Emitter<{ event: StageEvent }> {
   post(event: StageEvent): void {

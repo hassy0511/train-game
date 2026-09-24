@@ -1,11 +1,25 @@
 import { Vector3 } from 'three';
 import type { Whistle } from '../actions/whistle';
 import { CatActor } from '../actors/cat';
+import { LargeDino, makeDino, MidDino, SmallDino, type Dino } from '../actors/dino';
+import { addToProgress, loadProgress } from '../core/progress';
 import type { StageEventBus } from '../core/stage-events';
 import { runCutscene, type CutscenePorts } from '../cutscene/runner';
-import type { MissionDef, MissionLines, MissionStep, Speaker, StageData, StationDef } from '../stage/types';
-import { PASSENGER_SECONDS, REWIND_DISTANCE } from '../train/params';
-import type { Train } from '../train/train';
+import type {
+  AbilityId,
+  GapDef,
+  JunctionDef,
+  MissionDef,
+  MissionLines,
+  MissionStep,
+  RecordDef,
+  ResolvedRecord,
+  Speaker,
+  StageData,
+  StationDef,
+} from '../stage/types';
+import { JUMP, LEVER_NOTCHES, LIGHT, PASSENGER_SECONDS, REWIND_DISTANCE } from '../train/params';
+import type { JunctionSide, Train } from '../train/train';
 import { StopMonitor, type GaugeState, type StopGrade } from './station-stop';
 
 /** Everything the runner needs from the UI layer. */
@@ -22,11 +36,32 @@ export interface MissionPorts extends CutscenePorts {
   resetLever(): void;
   /** Stop gauge state for this frame. */
   gauge(state: GaugeState): void;
+  /** The light revealed a reversed junction: highlight the true side on the arrows. */
+  revealJunction(side: JunctionSide): void;
+  /** A record was found (already saved). */
+  recordFound(record: RecordDef): void;
 }
 
 export type MissionPhase = 'idle' | 'driving' | 'stopped' | 'doors' | 'cutscene' | 'failing' | 'clear';
 
-const DEFAULT_LINES: Required<Pick<MissionLines, 'tooFast' | 'overshoot' | 'short' | 'perfect' | 'ok' | 'catDanger' | 'catDangerAfter' | 'doorsOpenLever'>> = {
+type DefaultLine =
+  | 'tooFast'
+  | 'overshoot'
+  | 'short'
+  | 'perfect'
+  | 'ok'
+  | 'catDanger'
+  | 'catDangerAfter'
+  | 'doorsOpenLever'
+  | 'jumpStopped'
+  | 'fellShort'
+  | 'fellNoJump'
+  | 'dinoDanger'
+  | 'dangerAfter'
+  | 'deadEnd'
+  | 'recordFound';
+
+const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
   overshoot: 'いきすぎた〜！ もういっかい！',
   short: 'もうちょっと まえ！',
@@ -35,7 +70,20 @@ const DEFAULT_LINES: Required<Pick<MissionLines, 'tooFast' | 'overshoot' | 'shor
   catDanger: 'あぶない！',
   catDangerAfter: 'びっくりした〜。もういっかい！',
   doorsOpenLever: 'ドアが あいてるよ！',
+  jumpStopped: 'はしりながら おしてね',
+  fellShort: 'もうちょっと はやく！',
+  fellNoJump: 'ジャンプ わすれてた！',
+  dinoDanger: 'あぶない！',
+  dangerAfter: 'びっくりした〜。もういっかい！',
+  deadEnd: 'いきどまり！ ライトで たしかめよう',
+  recordFound: 'みつけた！',
 };
+
+/** Lever labels by jump hint, for the partner's "つぎの きれめは ふつう で とべる". */
+const HINT_NOTCH: Record<NonNullable<GapDef['hint']>, number> = { normal: 3, fast: 4, max: 5 };
+
+/** Card titles for newly learned abilities. */
+export const ABILITY_NAMES: Partial<Record<AbilityId, string>> = { jump: 'ジャンプ', light: 'ライト', whistle: 'きてき' };
 
 /**
  * Drives a stage: opening → missions (steps at stations) → ending.
@@ -50,6 +98,13 @@ export class MissionRunner {
 
   private stop: StopMonitor | null = null;
   private cats: CatActor[] = [];
+  private dinos: Dino[] = [];
+  private lightOn = false;
+  private readonly gapHints = new Set<GapDef>();
+  private readonly signLines = new Set<string>();
+  private readonly revealed = new Set<string>();
+  private readonly found: Set<string>;
+  private readonly abilities: Set<AbilityId>;
   private movingSaid = false;
   private hintsFired = new Set<number>();
   private resolveDrive: ((outcome: DriveOutcome) => void) | null = null;
@@ -65,7 +120,34 @@ export class MissionRunner {
   ) {
     this.groundY = stage.file.environment.ground?.y ?? null;
     this.cats = stage.actors.filter((a) => a.type === 'cat').map((a) => new CatActor(a, train));
+    this.dinos = stage.actors.map((a) => makeDino(a, train)).filter((d): d is Dino => d !== null);
+    const progress = loadProgress();
+    this.found = new Set(progress.records);
+    this.abilities = new Set(progress.abilities);
     whistle.onWhistle(() => this.onWhistle());
+    train.events.on('fell', (e) => this.onFell(e.gap, e.railId, e.short));
+  }
+
+  /** '1' while the first large dinosaur's neck is down, '0' while up, '' when there is none (test hook). */
+  get bigDinoNeck(): string {
+    const big = this.dinos.find((d): d is LargeDino => d instanceof LargeDino);
+    return big ? (big.neckDown ? '1' : '0') : '';
+  }
+
+  /** The light button was toggled (the train's speed cap is handled by the caller). */
+  setLight(on: boolean): void {
+    this.lightOn = on;
+  }
+
+  /** The jump button was pressed while stopped or otherwise refused. */
+  onJumpRefused(reason: string): void {
+    if (reason === 'stopped' && this.phase === 'driving') this.ports.sayAsync(this.lines.jumpStopped ?? DEFAULT_LINES.jumpStopped);
+  }
+
+  /** Grants an ability (cutscene step). The caller shows its button; this saves it. */
+  grant(ability: AbilityId): void {
+    this.abilities.add(ability);
+    addToProgress('abilities', [ability]);
   }
 
   get currentMission(): MissionDef | null {
@@ -75,6 +157,7 @@ export class MissionRunner {
   /** Runs the whole stage. Resolves when the clear card was dismissed. */
   async run(): Promise<void> {
     const file = this.stage.file;
+    this.resetActors();
     if (file.opening) await this.cutscene(file.opening);
 
     for (let i = 0; i < file.missions.length; i++) {
@@ -120,6 +203,10 @@ export class MissionRunner {
         this.ports.sayAsync(h.text);
       }
     });
+    this.updateGapHints();
+    this.updateJunctionSigns();
+    this.updateRecords();
+    if (this.checkDeadEnd()) return;
     const outcome = this.stop?.update(dt) ?? null;
     if (outcome) {
       switch (outcome.kind) {
@@ -152,10 +239,127 @@ export class MissionRunner {
         this.ports.autoCamera('side');
         cat.flee();
         this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'flee', position: this.catFleePosition(cat), seconds: 0.6 });
-        this.finishDrive({ kind: 'fail', reason: 'cat' });
+        this.finishDrive({ kind: 'fail', reason: 'cat', rewind: { railId: cat.railId, at: cat.at - REWIND_DISTANCE } });
         return;
       }
     }
+    for (const dino of this.dinos) {
+      const o = dino.update(dt);
+      if (!o) continue;
+      const id = dino.actor.id;
+      if (o.kind === 'near') {
+        const line = dino instanceof LargeDino ? this.lines.bigDinoNear : this.lines.dinoNear;
+        if (line) this.ports.sayAsync(line);
+      } else if (o.kind === 'cross') {
+        if (this.lines.smallCrossing) this.ports.sayAsync(this.lines.smallCrossing);
+        const lateral = (dino as SmallDino).params.lateral;
+        this.events.post({ type: 'actor:state', id, state: 'cross', position: this.lateralPosition(dino.railId, dino.at, lateral), seconds: o.seconds });
+      } else if (o.kind === 'neck') {
+        this.events.post({ type: 'actor:state', id, state: o.down ? 'neck-down' : 'neck-up' });
+      } else if (o.kind === 'danger') {
+        this.train.emergencyStop();
+        this.ports.autoCamera('side');
+        if (dino instanceof LargeDino) this.events.post({ type: 'actor:state', id, state: 'neck-down' });
+        if (dino instanceof SmallDino) this.events.post({ type: 'actor:state', id, state: 'stop' });
+        if (dino instanceof MidDino) {
+          this.events.post({ type: 'actor:state', id, state: 'awake', position: this.lateralPosition(dino.railId, dino.at, dino.params.fleeLateral), seconds: 0.8 });
+        }
+        this.finishDrive({ kind: 'fail', reason: 'dino', rewind: { railId: dino.railId, at: dino.at - REWIND_DISTANCE } });
+        return;
+      }
+    }
+  }
+
+  /** Puts every actor back where it waits (start of the stage and after a rewind). */
+  private resetActors(): void {
+    for (const dino of this.dinos) {
+      dino.reset();
+      const id = dino.actor.id;
+      if (dino instanceof SmallDino) {
+        this.events.post({ type: 'actor:state', id, state: 'wait', position: this.lateralPosition(dino.railId, dino.at, -dino.params.lateral), seconds: 0 });
+      } else if (dino instanceof LargeDino) {
+        this.events.post({ type: 'actor:state', id, state: 'neck-up' });
+      } else {
+        this.events.post({ type: 'actor:state', id, state: 'sleep', position: dino.actor.position, seconds: 0 });
+      }
+    }
+  }
+
+  /** "つぎの きれめは ふつう で とべる！" once per gap and attempt. */
+  private updateGapHints(): void {
+    const gap = this.train.nextGap(JUMP.hintDistance);
+    if (!gap || !gap.hint || this.gapHints.has(gap) || !this.lines.gapNear) return;
+    this.gapHints.add(gap);
+    this.ports.sayAsync(this.lines.gapNear.replace('{speed}', LEVER_NOTCHES[HINT_NOTCH[gap.hint]].label));
+  }
+
+  /** The junction ahead on the current rail, if it is within `range` m of the train front. */
+  private junctionAhead(range: number): JunctionDef | null {
+    for (const j of this.stage.file.junctions) {
+      const d = this.train.distanceAhead(j.railId, j.at);
+      if (d !== null && d > 0 && d <= range) return j;
+    }
+    return null;
+  }
+
+  /** Reversed signs: a line when one comes up; with the light on, the true way lights up and becomes the default. */
+  private updateJunctionSigns(): void {
+    const j = this.junctionAhead(80);
+    if (!j || !j.signReversed || this.revealed.has(j.id)) return;
+    if (!this.signLines.has(j.id)) {
+      this.signLines.add(j.id);
+      if (this.lines.signNear && !this.lightOn) this.ports.sayAsync(this.lines.signNear);
+    }
+    const d = this.train.distanceAhead(j.railId, j.at);
+    if (!this.lightOn || d === null || d > LIGHT.revealDistance) return;
+    this.revealed.add(j.id);
+    const truth: JunctionSide = j.default === 'left' ? 'right' : 'left';
+    this.train.chooseJunction(truth);
+    this.ports.revealJunction(truth);
+    this.events.post({ type: 'sign:reveal', junctionId: j.id });
+    if (this.lines.signRevealed) this.ports.sayAsync(this.lines.signRevealed);
+  }
+
+  /** Records: found by passing close (no ability needed) or by lighting them up when they need the light. */
+  private updateRecords(): void {
+    for (const record of this.stage.records) {
+      const def = record.def;
+      if (this.found.has(def.id)) continue;
+      if (def.requires !== null && !(def.requires === 'light' && this.lightOn && this.abilities.has('light'))) continue;
+      const d = this.recordDistance(record);
+      if (d === null || d > LIGHT.recordDistance) continue;
+      this.found.add(def.id);
+      addToProgress('records', [def.id]);
+      this.events.post({ type: 'record:found', id: def.id });
+      this.ports.recordFound(def);
+      this.ports.sayAsync(this.lines.recordFound ?? DEFAULT_LINES.recordFound);
+    }
+  }
+
+  private recordDistance(record: ResolvedRecord): number | null {
+    if (record.onRail) {
+      const d = this.train.distanceAhead(record.onRail.railId, record.onRail.at);
+      return d === null ? null : Math.abs(d);
+    }
+    return record.position.distanceTo(this.train.getPose().position);
+  }
+
+  /** Stopped at the buffer of a wrong turn: back before the junction. */
+  private checkDeadEnd(): boolean {
+    const rail = this.train.currentRail;
+    const def = this.stage.file.rails.find((r) => r.id === rail.id);
+    if (!def?.deadEnd || this.train.state.speed > 0) return false;
+    if (rail.length - this.train.frontS > 10) return false;
+    const feeder = this.stage.file.junctions.find((j) => j.left === rail.id || j.right === rail.id);
+    if (!feeder) return false;
+    this.finishDrive({ kind: 'fail', reason: 'deadEnd', rewind: { railId: feeder.railId, at: feeder.at - REWIND_DISTANCE } });
+    return true;
+  }
+
+  private onFell(gap: GapDef, railId: string, short: boolean): void {
+    if (this.phase !== 'driving') return;
+    this.ports.autoCamera('chase');
+    this.finishDrive({ kind: 'fail', reason: short ? 'fellShort' : 'fellNoJump', rewind: { railId, at: gap.from - REWIND_DISTANCE } });
   }
 
   /** Lever moved while locked: explain why. */
@@ -172,11 +376,23 @@ export class MissionRunner {
         this.events.post({ type: 'partner:emote', kind: 'jump' });
       }
     }
+    for (const dino of this.dinos) {
+      if (!dino.onWhistle() || !(dino instanceof MidDino)) continue;
+      const position = this.lateralPosition(dino.railId, dino.at, dino.params.fleeLateral);
+      this.events.post({ type: 'actor:state', id: dino.actor.id, state: 'awake', position, seconds: dino.params.fleeSeconds });
+      if (this.lines.dinoWoke) this.ports.sayAsync(this.lines.dinoWoke);
+      this.events.post({ type: 'partner:emote', kind: 'jump' });
+    }
   }
 
   private catFleePosition(cat: CatActor): Vector3 {
-    const frame = this.stage.network.getRail(cat.railId).frameAt(cat.at);
-    const p = frame.position.clone().addScaledVector(frame.right, cat.params.fleeLateral);
+    return this.lateralPosition(cat.railId, cat.at, cat.params.fleeLateral);
+  }
+
+  /** A point on the ground `lateral` m to the right of the rail at `at`. */
+  private lateralPosition(railId: string, at: number, lateral: number): Vector3 {
+    const frame = this.stage.network.getRail(railId).frameAt(at);
+    const p = frame.position.clone().addScaledVector(frame.right, lateral);
     if (this.groundY !== null) p.y = this.groundY;
     return p;
   }
@@ -205,7 +421,7 @@ export class MissionRunner {
         if (outcome.grade === 'perfect') this.events.post({ type: 'partner:emote', kind: 'jump' });
         break;
       }
-      await this.fail(outcome.reason, station);
+      await this.fail(outcome, station);
     }
     if ((step.board ?? 0) > 0 || (step.alight ?? 0) > 0 || step.parcel) await this.doors(step, station);
   }
@@ -228,22 +444,25 @@ export class MissionRunner {
     r?.(outcome);
   }
 
-  private async fail(reason: 'tooFast' | 'overshoot' | 'cat', station: StationDef): Promise<void> {
+  private async fail(outcome: FailOutcome, station: StationDef): Promise<void> {
+    const reason = outcome.reason;
     this.events.post({ type: 'fail', reason });
-    this.ports.cameraFx(reason === 'cat' ? 1 : 0.5, 1);
-    const line = this.lines[reason === 'cat' ? 'catDanger' : reason] ?? DEFAULT_LINES[reason === 'cat' ? 'catDanger' : reason];
-    await this.ports.say(line, 'partner');
+    const scary = reason === 'cat' || reason === 'dino';
+    this.ports.cameraFx(scary ? 1 : 0.5, 1);
+    const key: DefaultLine = reason === 'cat' ? 'catDanger' : reason === 'dino' ? 'dinoDanger' : reason;
+    await this.ports.say(this.lines[key] ?? DEFAULT_LINES[key], 'partner');
     if (reason === 'cat') await this.ports.say(this.lines.catDangerAfter ?? DEFAULT_LINES.catDangerAfter, 'partner');
+    if (reason === 'dino') await this.ports.say(this.lines.dangerAfter ?? DEFAULT_LINES.dangerAfter, 'partner');
     await this.ports.fade(true, 0.4);
-    // Rewind to a bit before whatever we failed at (the station, or the cat that was in the way).
-    let target = station.at;
-    if (reason === 'cat') {
-      const cat = this.cats.find((c) => c.state === 'fled');
-      if (cat) target = cat.at;
-    }
-    this.train.rewindTo(target - REWIND_DISTANCE);
+    // Rewind to a bit before whatever we failed at (the station, a cat or dinosaur, a gap, a junction).
+    const target = outcome.rewind ?? { railId: station.railId, at: station.at - REWIND_DISTANCE };
+    this.train.rewindTo(target.at, target.railId);
     for (const cat of this.cats) cat.reset();
     for (const cat of this.cats) this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'sleep', position: cat.actor.position });
+    this.resetActors();
+    this.gapHints.clear();
+    this.signLines.clear();
+    this.revealed.clear();
     this.events.post({ type: 'rewind' });
     this.ports.resetLever();
     this.ports.autoCamera(null);
@@ -300,10 +519,23 @@ export class MissionRunner {
     this.phase = 'cutscene';
     this.train.lockInput('cutscene');
     this.ports.autoCamera('chase');
-    await runCutscene(steps, this.stage.network, this.groundY, this.events, this.ports);
+    await runCutscene(steps, this.stage.network, this.groundY, this.events, {
+      ...this.ports,
+      unlock: async (ability) => {
+        this.grant(ability);
+        await this.ports.unlock(ability);
+      },
+    });
     this.ports.autoCamera(null);
     this.phase = previous === 'driving' ? 'idle' : previous;
   }
 }
 
-type DriveOutcome = { kind: 'stopped'; grade: StopGrade } | { kind: 'fail'; reason: 'tooFast' | 'overshoot' | 'cat' };
+type FailReason = 'tooFast' | 'overshoot' | 'cat' | 'dino' | 'fellShort' | 'fellNoJump' | 'deadEnd';
+interface FailOutcome {
+  kind: 'fail';
+  reason: FailReason;
+  /** Where to put the train front back; default: REWIND_DISTANCE before the station. */
+  rewind?: { railId: string; at: number };
+}
+type DriveOutcome = { kind: 'stopped'; grade: StopGrade } | FailOutcome;

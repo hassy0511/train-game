@@ -1,0 +1,1760 @@
+{
+  "schemaVersion": 1,
+  "id": "1-2",
+  "title": "きょうりゅうの たに",
+  "chapter": 1,
+  "unlock": {
+    "requires": [
+      "1-1"
+    ],
+    "purchase": null
+  },
+  "unlocks": [
+    "jump",
+    "light"
+  ],
+  "environment": {
+    "sky": {
+      "top": "#5fa8e8",
+      "bottom": "#f3e6c4"
+    },
+    "fog": {
+      "color": "#efe3c2",
+      "near": 140,
+      "far": 420
+    },
+    "lighting": "day",
+    "ground": {
+      "y": -0.6,
+      "size": 1800,
+      "color": "#9cbf62"
+    },
+    "bgm": null
+  },
+  "start": {
+    "railId": "main",
+    "at": 40,
+    "direction": 1
+  },
+  "rails": [
+    {
+      "id": "main",
+      "points": [
+        [0, 0, 0],
+        [0, 0, 120],
+        [8, 0, 240],
+        [26, 0, 360],
+        [36, 0, 480],
+        [32, 0, 600],
+        [14, 0, 720],
+        [0, 0, 840],
+        [-8, 0, 940],
+        [-10, 0, 1000],
+        [-10, 0, 1100],
+        [-10, 0, 1200],
+        [-10, 0, 1300],
+        [-10, 0, 1400],
+        [-10, 0, 1440]
+      ],
+      "gaps": [
+        {
+          "from": 150,
+          "to": 160,
+          "hint": "normal"
+        },
+        {
+          "from": 280,
+          "to": 298,
+          "hint": "fast"
+        },
+        {
+          "from": 430,
+          "to": 458,
+          "hint": "max"
+        }
+      ],
+      "end": {
+        "type": "buffer"
+      }
+    },
+    {
+      "id": "dead-a",
+      "points": [
+        [-10.065, 0, 1075.191],
+        [-12.565, 0, 1095.191],
+        [-20.065, 0, 1119.191],
+        [-26.065, 0, 1135.191]
+      ],
+      "deadEnd": true,
+      "end": {
+        "type": "buffer"
+      }
+    },
+    {
+      "id": "dead-b",
+      "points": [
+        [-10.0, 0, 1215.191],
+        [-7.5, 0, 1235.191],
+        [0.0, 0, 1259.191],
+        [6.0, 0, 1275.191]
+      ],
+      "deadEnd": true,
+      "end": {
+        "type": "buffer"
+      }
+    }
+  ],
+  "junctions": [
+    {
+      "id": "sign-a",
+      "railId": "main",
+      "at": 1080,
+      "left": "main",
+      "right": "dead-a",
+      "default": "right",
+      "signReversed": true
+    },
+    {
+      "id": "sign-b",
+      "railId": "main",
+      "at": 1220,
+      "left": "dead-b",
+      "right": "main",
+      "default": "left",
+      "signReversed": true
+    }
+  ],
+  "stations": [
+    {
+      "id": "kyoryu",
+      "name": "きょうりゅうえき",
+      "railId": "main",
+      "at": 560,
+      "platformSide": "left"
+    },
+    {
+      "id": "iwa",
+      "name": "いわのえき",
+      "railId": "main",
+      "at": 980,
+      "platformSide": "left"
+    },
+    {
+      "id": "oku",
+      "name": "たにのおく",
+      "railId": "main",
+      "at": 1360,
+      "platformSide": "left"
+    }
+  ],
+  "props": [
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 60.0, "lateral": -21.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 71.4, "lateral": -21.4 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 82.8, "lateral": -21.6 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 94.2, "lateral": -21.5 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 105.6, "lateral": -21.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 117.0, "lateral": -22.0 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 128.4, "lateral": -21.3 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 139.8, "lateral": -22.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 151.2, "lateral": -21.5 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 162.6, "lateral": -21.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 60.0, "lateral": 24.0 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 71.4, "lateral": 24.2 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 82.8, "lateral": 24.1 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 94.2, "lateral": 24.6 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 105.6, "lateral": 24.5 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 117.0, "lateral": 23.9 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 128.4, "lateral": 24.7 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 139.8, "lateral": 24.2 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 151.2, "lateral": 24.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 162.6, "lateral": 24.8 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 244.1, "lateral": -23.7 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 255.5, "lateral": -23.0 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 266.9, "lateral": -22.8 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 278.3, "lateral": -23.6 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 289.7, "lateral": -23.3 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 301.1, "lateral": -23.5 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 312.5, "lateral": -23.4 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 323.9, "lateral": -23.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 335.3, "lateral": -23.4 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 244.1, "lateral": 23.7 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 255.5, "lateral": 23.3 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 266.9, "lateral": 22.8 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 278.3, "lateral": 23.5 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 289.7, "lateral": 23.7 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 301.1, "lateral": 23.2 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 312.5, "lateral": 22.7 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 323.9, "lateral": 22.9 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 335.3, "lateral": 22.8 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 424.5, "lateral": -22.4 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 435.9, "lateral": -21.9 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 447.3, "lateral": -22.5 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 458.7, "lateral": -22.4 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 470.1, "lateral": -21.9 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 481.5, "lateral": -22.5 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 492.9, "lateral": -21.6 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 504.3, "lateral": -21.7 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 515.7, "lateral": -22.0 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 424.5, "lateral": 22.8 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 435.9, "lateral": 23.2 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 447.3, "lateral": 23.9 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 458.7, "lateral": 23.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 470.1, "lateral": 23.6 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 481.5, "lateral": 23.8 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 492.9, "lateral": 23.8 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 504.3, "lateral": 23.2 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 515.7, "lateral": 22.9 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 587.8, "lateral": -20.9 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 599.2, "lateral": -20.7 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 610.6, "lateral": -20.9 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 622.0, "lateral": -21.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 633.4, "lateral": -21.7 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 644.8, "lateral": -20.8 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 656.2, "lateral": -21.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 667.6, "lateral": -20.8 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 587.8, "lateral": 24.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 599.2, "lateral": 23.9 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 610.6, "lateral": 24.2 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 622.0, "lateral": 24.8 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 633.4, "lateral": 23.8 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 644.8, "lateral": 24.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 656.2, "lateral": 24.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 667.6, "lateral": 24.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 762.4, "lateral": -23.6 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 773.8, "lateral": -24.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 785.2, "lateral": -24.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 796.6, "lateral": -23.5 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 808.0, "lateral": -24.4 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 819.4, "lateral": -24.2 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 830.8, "lateral": -24.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 842.2, "lateral": -23.8 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 853.6, "lateral": -23.2 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 865.0, "lateral": -23.5 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 876.4, "lateral": -24.0 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 887.8, "lateral": -23.7 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 899.2, "lateral": -24.4 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 910.6, "lateral": -23.6 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 762.4, "lateral": 21.5 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 773.8, "lateral": 22.0 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 785.2, "lateral": 22.3 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 796.6, "lateral": 22.1 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 808.0, "lateral": 21.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 819.4, "lateral": 22.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 830.8, "lateral": 22.2 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 842.2, "lateral": 21.5 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 853.6, "lateral": 21.7 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 865.0, "lateral": 22.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 876.4, "lateral": 21.8 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 887.8, "lateral": 22.2 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 899.2, "lateral": 21.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 910.6, "lateral": 22.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1000.4, "lateral": -24.5 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1011.8, "lateral": -24.4 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1023.2, "lateral": -23.7 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1034.6, "lateral": -24.5 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1046.0, "lateral": -24.8 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1057.4, "lateral": -24.8 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1068.8, "lateral": -31.7 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1080.2, "lateral": -31.8 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1091.6, "lateral": -32.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1000.4, "lateral": 21.6 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1011.8, "lateral": 21.9 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1023.2, "lateral": 22.1 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1034.6, "lateral": 21.9 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1046.0, "lateral": 22.0 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1057.4, "lateral": 22.1 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1068.8, "lateral": 31.9 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1080.2, "lateral": 31.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1091.6, "lateral": 31.6 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1157.2, "lateral": -32.0 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1168.6, "lateral": -32.3 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1180.0, "lateral": -32.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1191.4, "lateral": -31.7 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1202.8, "lateral": -32.0 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1214.2, "lateral": -32.3 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1225.6, "lateral": -31.9 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1237.0, "lateral": -32.0 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1248.4, "lateral": -32.2 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1259.8, "lateral": -32.0 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1271.2, "lateral": -32.5 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1282.6, "lateral": -32.5 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1294.0, "lateral": -31.7 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1157.2, "lateral": 32.4 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1168.6, "lateral": 31.5 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1180.0, "lateral": 31.5 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1191.4, "lateral": 31.5 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1202.8, "lateral": 32.3 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1214.2, "lateral": 31.6 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1225.6, "lateral": 32.2 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1237.0, "lateral": 32.5 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1248.4, "lateral": 31.7 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1259.8, "lateral": 31.9 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1271.2, "lateral": 32.6 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1282.6, "lateral": 31.6 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1294.0, "lateral": 32.0 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1359.4, "lateral": -21.7 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1370.8, "lateral": -22.2 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1382.2, "lateral": -22.1 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1393.6, "lateral": -22.3 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1405.0, "lateral": -22.9 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1416.4, "lateral": -22.8 },
+      "rotationY": -90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1359.4, "lateral": 20.9 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1370.8, "lateral": 21.1 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1382.2, "lateral": 21.3 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1393.6, "lateral": 21.8 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-b",
+      "onRail": { "railId": "main", "at": 1405.0, "lateral": 21.0 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "cliff-a",
+      "onRail": { "railId": "main", "at": 1416.4, "lateral": 21.5 },
+      "rotationY": 90,
+      "scale": 1.0
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 153.5, "lateral": -15.8 },
+      "rotationY": 37,
+      "scale": 1.03
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 53.2, "lateral": -15.8 },
+      "rotationY": 113,
+      "scale": 0.93
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 1402.1, "lateral": 17.2 },
+      "rotationY": 66,
+      "scale": 0.92
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 1009.2, "lateral": -17.7 },
+      "rotationY": 92,
+      "scale": 1.0
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 460.5, "lateral": 12.8 },
+      "rotationY": 228,
+      "scale": 1.15
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 275.5, "lateral": 15.8 },
+      "rotationY": 18,
+      "scale": 0.91
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 1041.7, "lateral": -12.7 },
+      "rotationY": 228,
+      "scale": 0.95
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 783.4, "lateral": 17.7 },
+      "rotationY": 110,
+      "scale": 1.39
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 509.6, "lateral": -16.2 },
+      "rotationY": 320,
+      "scale": 1.27
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 382.7, "lateral": -7.6 },
+      "rotationY": 195,
+      "scale": 1.34
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 955.3, "lateral": 13.6 },
+      "rotationY": 23,
+      "scale": 1.13
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 247.4, "lateral": 7.0 },
+      "rotationY": 168,
+      "scale": 1.39
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 785.0, "lateral": -7.4 },
+      "rotationY": 111,
+      "scale": 1.08
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 31.5, "lateral": 7.9 },
+      "rotationY": 335,
+      "scale": 1.0
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 726.5, "lateral": -8.0 },
+      "rotationY": 73,
+      "scale": 1.1
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 87.5, "lateral": -10.3 },
+      "rotationY": 43,
+      "scale": 1.19
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 760.3, "lateral": -14.2 },
+      "rotationY": 305,
+      "scale": 1.09
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 480.1, "lateral": 8.6 },
+      "rotationY": 329,
+      "scale": 0.97
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 836.0, "lateral": -7.9 },
+      "rotationY": 326,
+      "scale": 1.08
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 174.8, "lateral": 13.1 },
+      "rotationY": 320,
+      "scale": 1.17
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 367.5, "lateral": 7.0 },
+      "rotationY": 257,
+      "scale": 1.35
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 156.9, "lateral": -15.2 },
+      "rotationY": 38,
+      "scale": 1.32
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 354.0, "lateral": -9.5 },
+      "rotationY": 235,
+      "scale": 1.15
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 557.9, "lateral": 17.0 },
+      "rotationY": 23,
+      "scale": 1.21
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 917.0, "lateral": -13.6 },
+      "rotationY": 333,
+      "scale": 1.27
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 450.1, "lateral": -7.1 },
+      "rotationY": 137,
+      "scale": 1.39
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 167.3, "lateral": -14.4 },
+      "rotationY": 264,
+      "scale": 1.04
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 672.9, "lateral": -17.9 },
+      "rotationY": 159,
+      "scale": 1.39
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 135.5, "lateral": 17.9 },
+      "rotationY": 107,
+      "scale": 0.94
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 154.6, "lateral": 17.5 },
+      "rotationY": 323,
+      "scale": 1.15
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 249.5, "lateral": 14.5 },
+      "rotationY": 72,
+      "scale": 1.11
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 549.0, "lateral": -16.2 },
+      "rotationY": 173,
+      "scale": 1.32
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 195.7, "lateral": -14.8 },
+      "rotationY": 148,
+      "scale": 1.03
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 119.7, "lateral": 18.0 },
+      "rotationY": 184,
+      "scale": 1.36
+    },
+    {
+      "model": "fern-a",
+      "onRail": { "railId": "main", "at": 101.2, "lateral": 14.0 },
+      "rotationY": 136,
+      "scale": 1.12
+    },
+    {
+      "model": "fern-b",
+      "onRail": { "railId": "main", "at": 465.5, "lateral": 15.6 },
+      "rotationY": 14,
+      "scale": 1.31
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 900.6, "lateral": -15.8 },
+      "rotationY": 25,
+      "scale": 1.27
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 597.0, "lateral": -15.2 },
+      "rotationY": 146,
+      "scale": 1.09
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 602.5, "lateral": 12.4 },
+      "rotationY": 334,
+      "scale": 1.0
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 935.3, "lateral": 13.9 },
+      "rotationY": 342,
+      "scale": 1.06
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 260.9, "lateral": -10.6 },
+      "rotationY": 256,
+      "scale": 1.26
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 716.0, "lateral": -13.6 },
+      "rotationY": 170,
+      "scale": 1.3
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 650.9, "lateral": -14.4 },
+      "rotationY": 124,
+      "scale": 0.94
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 501.9, "lateral": -12.6 },
+      "rotationY": 188,
+      "scale": 1.0
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 816.1, "lateral": -16.0 },
+      "rotationY": 211,
+      "scale": 1.05
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 1059.3, "lateral": -13.0 },
+      "rotationY": 173,
+      "scale": 1.2
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 717.4, "lateral": 11.0 },
+      "rotationY": 257,
+      "scale": 1.11
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 645.3, "lateral": 16.8 },
+      "rotationY": 11,
+      "scale": 0.95
+    },
+    {
+      "model": "cycad",
+      "onRail": { "railId": "main", "at": 616.8, "lateral": 17.7 },
+      "rotationY": 250,
+      "scale": 0.9
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 570.3, "lateral": 17.7 },
+      "rotationY": 55,
+      "scale": 0.83
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 239.9, "lateral": -17.3 },
+      "rotationY": 358,
+      "scale": 1.09
+    },
+    {
+      "model": "rock-b",
+      "onRail": { "railId": "main", "at": 351.0, "lateral": -13.7 },
+      "rotationY": 65,
+      "scale": 1.08
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 759.0, "lateral": 14.4 },
+      "rotationY": 50,
+      "scale": 0.74
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 753.7, "lateral": -10.7 },
+      "rotationY": 307,
+      "scale": 0.7
+    },
+    {
+      "model": "rock-b",
+      "onRail": { "railId": "main", "at": 771.7, "lateral": 9.3 },
+      "rotationY": 330,
+      "scale": 1.2
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 364.5, "lateral": -12.6 },
+      "rotationY": 210,
+      "scale": 1.12
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 454.2, "lateral": -8.3 },
+      "rotationY": 331,
+      "scale": 0.95
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 385.0, "lateral": 17.1 },
+      "rotationY": 252,
+      "scale": 0.72
+    },
+    {
+      "model": "rock-b",
+      "onRail": { "railId": "main", "at": 496.5, "lateral": 10.3 },
+      "rotationY": 101,
+      "scale": 0.7
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 433.1, "lateral": -8.5 },
+      "rotationY": 159,
+      "scale": 1.16
+    },
+    {
+      "model": "rock-b",
+      "onRail": { "railId": "main", "at": 297.6, "lateral": 8.7 },
+      "rotationY": 55,
+      "scale": 1.27
+    },
+    {
+      "model": "rock-b",
+      "onRail": { "railId": "main", "at": 714.2, "lateral": -16.8 },
+      "rotationY": 213,
+      "scale": 1.25
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 107.9, "lateral": -17.1 },
+      "rotationY": 109,
+      "scale": 0.71
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 852.7, "lateral": 6.6 },
+      "rotationY": 94,
+      "scale": 0.94
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 1406.6, "lateral": -10.0 },
+      "rotationY": 334,
+      "scale": 1.26
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 1059.9, "lateral": -9.7 },
+      "rotationY": 193,
+      "scale": 1.2
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 1389.3, "lateral": 8.0 },
+      "rotationY": 40,
+      "scale": 0.87
+    },
+    {
+      "model": "rock-a",
+      "onRail": { "railId": "main", "at": 515.0, "lateral": -12.7 },
+      "rotationY": 194,
+      "scale": 0.91
+    },
+    {
+      "model": "rock-b",
+      "onRail": { "railId": "main", "at": 1003.3, "lateral": -10.5 },
+      "rotationY": 98,
+      "scale": 0.89
+    },
+    {
+      "model": "rock-b",
+      "onRail": { "railId": "main", "at": 1047.5, "lateral": 6.4 },
+      "rotationY": 126,
+      "scale": 1.19
+    },
+    {
+      "model": "boulder",
+      "onRail": { "railId": "main", "at": 146, "lateral": 5.5 },
+      "rotationY": 237,
+      "scale": 1.0
+    },
+    {
+      "model": "boulder",
+      "onRail": { "railId": "main", "at": 284, "lateral": -5.5 },
+      "rotationY": 32,
+      "scale": 1.0
+    },
+    {
+      "model": "boulder",
+      "onRail": { "railId": "main", "at": 426, "lateral": 5.5 },
+      "rotationY": 31,
+      "scale": 1.0
+    }
+  ],
+  "actors": [
+    {
+      "id": "dino-nebosuke",
+      "type": "dino-mid",
+      "onRail": { "railId": "main", "at": 680 },
+      "rotationY": 90,
+      "reactsTo": "whistle",
+      "params": {
+        "wakeDistance": 60,
+        "dangerDistance": 8,
+        "fleeLateral": 9,
+        "fleeSeconds": 2.5
+      }
+    },
+    {
+      "id": "dino-kodomo",
+      "type": "dino-small",
+      "onRail": { "railId": "main", "at": 760 },
+      "rotationY": 90,
+      "reactsTo": "none",
+      "params": {
+        "startDistance": 60,
+        "crossSeconds": 4,
+        "dangerDistance": 6,
+        "lateral": 8
+      }
+    },
+    {
+      "id": "dino-ookii",
+      "type": "dino-large",
+      "onRail": { "railId": "main", "at": 880, "heightFromRail": 0 },
+      "rotationY": 180,
+      "reactsTo": "none",
+      "params": {
+        "upSeconds": 3.5,
+        "downSeconds": 1.5,
+        "gateDistance": 20
+      }
+    }
+  ],
+  "records": [
+    {
+      "id": "dino-egg",
+      "name": "きょうりゅうの たまご",
+      "note": "せんろの そばで みつけた。まだ あったかい",
+      "requires": null,
+      "model": "dino-egg",
+      "onRail": { "railId": "main", "at": 620, "lateral": 5 }
+    },
+    {
+      "id": "cliff-nest",
+      "name": "がけの うえの なにか",
+      "note": "たかい がけの うえ。ロケットが あれば…",
+      "requires": "rocket",
+      "onRail": { "railId": "main", "at": 800, "lateral": -24 }
+    },
+    {
+      "id": "footprints",
+      "name": "おおきな あしあと",
+      "note": "ライトで てらすと うかびあがった",
+      "requires": "light",
+      "model": "footprint-slab",
+      "onRail": { "railId": "main", "at": 1300, "lateral": -6 }
+    }
+  ],
+  "missions": [
+    {
+      "id": "m1",
+      "type": "deliver",
+      "title": "とびこえろ",
+      "steps": [
+        {
+          "stationId": "kyoryu"
+        }
+      ],
+      "lines": {
+        "start": "せんろの きれめは ジャンプで とぼう！\nはやいほど とおくへ とぶよ",
+        "moving": "そうそう、その ちょうし！",
+        "gapNear": "つぎの きれめは {speed} で とべる！",
+        "jumpStopped": "はしりながら おしてね",
+        "fellShort": "もうちょっと はやく！",
+        "fellNoJump": "ジャンプ わすれてた！",
+        "stationNear": "えきが みえたら、ゆっくり！",
+        "complete": "ぜんぶ とびこえた！"
+      }
+    },
+    {
+      "id": "m2",
+      "type": "deliver",
+      "title": "ねぼすけ",
+      "steps": [
+        {
+          "stationId": "iwa"
+        }
+      ],
+      "onComplete": "light",
+      "lines": {
+        "start": "このさきは きょうりゅうの すみか。\nやさしく とおして もらおう",
+        "dinoNear": "きょうりゅうが ねてる！ きてきで おこそう",
+        "dinoWoke": "おきた！ ありがとう〜",
+        "smallCrossing": "こどもが わたるよ！ ゆっくり！",
+        "bigDinoNear": "おおきいのは おきないや。\nくびが あがったら くぐろう！",
+        "dinoDanger": "あぶない！",
+        "dangerAfter": "びっくりした〜。もういっかい！",
+        "recordFound": "みつけた！ ずかんに のせよう",
+        "stationNear": "いわのえきだ。ゆっくり！",
+        "complete": "みんな とおして くれた！"
+      }
+    },
+    {
+      "id": "m3",
+      "type": "deliver",
+      "title": "あべこべひょうしき",
+      "steps": [
+        {
+          "stationId": "oku"
+        }
+      ],
+      "lines": {
+        "start": "このさきの ひょうしき、なんだか あやしい…",
+        "signNear": "ひょうしきが あやしい… ライトを つけて みよう",
+        "signRevealed": "ほんとうは こっちだ！",
+        "deadEnd": "いきどまり！ ライトで たしかめよう",
+        "recordFound": "みつけた！ ずかんに のせよう",
+        "stationNear": "たにのおくだ。ゆっくり！",
+        "complete": "ついた！ ……あれ？"
+      }
+    }
+  ],
+  "gimmicks": [
+    {
+      "type": "flock",
+      "params": {
+        "model": "ptero",
+        "count": 10,
+        "center": [30, 48, 330],
+        "radius": 70,
+        "speed": 0.1
+      }
+    },
+    {
+      "type": "flock",
+      "params": {
+        "model": "ptero",
+        "count": 8,
+        "center": [-5, 55, 1050],
+        "radius": 60,
+        "speed": -0.08
+      }
+    }
+  ],
+  "opening": "opening",
+  "ending": "ending",
+  "cutscenes": {
+    "opening": [
+      {
+        "caption": "きょうりゅうの たに",
+        "seconds": 2.5
+      },
+      {
+        "camera": "chase"
+      },
+      {
+        "say": "せんろが あちこち きれてる…",
+        "emote": "tilt"
+      },
+      {
+        "say": "だいじょうぶ！ ぼくが かいぞう する！",
+        "emote": "jump"
+      },
+      {
+        "unlock": "jump"
+      },
+      {
+        "say": "せんろが きれてても、とべば いい！",
+        "emote": "cheer"
+      },
+      {
+        "camera": "cab"
+      },
+      {
+        "say": "ためしに はしって、ボタンを おしてみて"
+      }
+    ],
+    "light": [
+      {
+        "say": "まっくらじゃ ないけど、ライトで ヘンなものが わかるんだ"
+      },
+      {
+        "unlock": "light"
+      },
+      {
+        "say": "ライトを つけると、すこし ゆっくりに なるよ"
+      }
+    ],
+    "ending": [
+      {
+        "say": "ひょうしきに らくがき…「サカサ さんじょう」？",
+        "emote": "tilt"
+      },
+      {
+        "spawn": "sakasa",
+        "model": "amanojaku",
+        "onRail": { "railId": "main", "at": 1400, "lateral": 3 }
+      },
+      {
+        "say": "さようなら！ また あったのだ！",
+        "who": "amanojaku"
+      },
+      {
+        "say": "ひょうしき、ぜんぶ さかさまなのだ！",
+        "who": "amanojaku"
+      },
+      {
+        "say": "やっぱり サカサの しわざ だったんだ！"
+      },
+      {
+        "say": "さかさま、さいこう！ こんにちは〜！",
+        "who": "amanojaku"
+      },
+      {
+        "move": "sakasa",
+        "onRail": { "railId": "main", "at": 1440, "lateral": 14 },
+        "seconds": 2.5
+      },
+      {
+        "remove": "sakasa"
+      },
+      {
+        "say": "…よし、いこう！ つぎの せかいへ！",
+        "emote": "cheer"
+      }
+    ]
+  }
+}
