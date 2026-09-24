@@ -10,6 +10,10 @@ import platform  # noqa: F401  (must be imported before assets/blender is on sys
 import runpy
 import sys
 
-for script in sys.argv[1:]:
+# `run-bpy.py a.py b.py` runs each script; `run-bpy.py station.py -- platform` passes names after "--".
+args = sys.argv[1:]
+scripts, extra = (args[:args.index("--")], args[args.index("--") + 1:]) if "--" in args else (args, [])
+for script in scripts:
     print(f"== {script}")
+    sys.argv = [script, *extra]
     runpy.run_path(script, run_name="__main__")
