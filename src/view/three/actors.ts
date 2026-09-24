@@ -17,7 +17,7 @@ import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { StageEvent } from '../../core/stage-events';
 import type { Emote, MissionDef, ResolvedActor, ResolvedRecord, ResolvedStation } from '../../stage/types';
-import { NECK_DOWN, NECK_UP, placeholderLargeBody, placeholderNeck } from './abilities';
+import { NECK_DOWN, NECK_UP } from './abilities';
 import type { ModelLibrary } from './models';
 import { addModelPlacements, type ModelPlacement } from './props';
 
@@ -34,8 +34,8 @@ const STATE_MODELS: Record<string, { sleep: string; awake: string }> = {
   cat: { sleep: 'cat-sleep', awake: 'cat-stand' },
   'dino-mid': { sleep: 'dino-mid-sleep', awake: 'dino-mid-stand' },
 };
-/** Where the large dinosaur's neck joins its body (model space, m; ticket 0005). */
-const NECK_PIVOT = new Vector3(0, 5.9, 7.0);
+/** Where the large dinosaur's neck joins its body (model space, m; NECK_PIVOT in assets/blender/dinos.py). */
+const NECK_PIVOT = new Vector3(0, 8.0, 4.8);
 const PLATFORM_CLEARANCE = 1.7;
 const PLATFORM_HEIGHT = 1;
 /** The stop line sits this far before the platform's far end (m). */
@@ -185,12 +185,7 @@ export class ActorLayer {
   private async addNeck(id: string): Promise<void> {
     const body = this.objects.get(id);
     if (!body) return;
-    // Until the models exist, a code-built body (legs apart, the train fits under) and neck stand in.
-    if (!this.models.has('dino-large-body')) {
-      body.clear();
-      body.add(placeholderLargeBody());
-    }
-    const neck = this.models.has('dino-large-neck') ? (await this.models.load('dino-large-neck')).clone(true) : placeholderNeck();
+    const neck = (await this.models.load('dino-large-neck')).clone(true);
     neck.name = `${id}:neck`;
     neck.position.copy(NECK_PIVOT);
     neck.quaternion.copy(NECK_UP);

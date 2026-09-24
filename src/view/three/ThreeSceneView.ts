@@ -20,7 +20,7 @@ import { TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
 import type { CameraFx, SceneView } from '../SceneView';
 import { cameraTarget, makeCameraTarget, smoothCamera, type CameraMode } from '../camera-rig';
-import { buildGapPits, buildJumpDevice, buildLightBeam, JunctionSigns } from './abilities';
+import { buildGapPits, buildJumpDevice, buildLightBeam, Flocks, JunctionSigns } from './abilities';
 import { ActorLayer } from './actors';
 import { addEnvironment } from './environment';
 import { ModelLibrary } from './models';
@@ -62,6 +62,7 @@ export class ThreeSceneView implements SceneView {
   private doorSide = 1;
   private readonly railCutEffects: RailCutEffect[] = [];
   private signs: JunctionSigns | null = null;
+  private flocks: Flocks | null = null;
   private readonly lightBeam = buildLightBeam();
   private jumpDevice: Object3D | null = null;
   private clock = 0;
@@ -109,6 +110,8 @@ export class ThreeSceneView implements SceneView {
     this.signs = new JunctionSigns(stage, this.models);
     this.scene.add(this.signs.group);
     this.train.add(this.lightBeam);
+    this.flocks = new Flocks(stage);
+    this.scene.add(this.flocks.group);
 
     const [trainModel, carModel, partnerModel] = await Promise.all([
       this.models.load('train-proto'),
@@ -118,6 +121,7 @@ export class ThreeSceneView implements SceneView {
       addModelPlacements(bufferStops, rails.bufferStops, this.models),
       this.actors.init(stage.actors, stage.records),
       this.signs.init(),
+      this.flocks.init(this.models),
     ]);
     const trainInstance = trainModel.clone(true);
     trainInstance.name = 'train-proto';
@@ -277,6 +281,7 @@ export class ThreeSceneView implements SceneView {
     this.updateDoorVisuals(dt);
     this.updateRailCutEffects(dt);
     this.signs?.update(dt, this.clock);
+    this.flocks?.update(dt);
     this.actors?.update(dt);
     this.cameraPosition.copy(this.camera.position);
     this.sky?.position.copy(this.cameraPosition);

@@ -2,7 +2,6 @@ import {
   AdditiveBlending,
   BufferGeometry,
   CircleGeometry,
-  CylinderGeometry,
   Color,
   ConeGeometry,
   DoubleSide,
@@ -10,7 +9,6 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
   Object3D,
   Quaternion,
   Shape,
@@ -207,36 +205,60 @@ export async function buildJumpDevice(models: ModelLibrary): Promise<Object3D> {
   return device;
 }
 
-/** Placeholder neck (until `dino-large-neck` exists): rises and reaches forward from its origin (+Z, +Y). */
-export function placeholderNeck(): Object3D {
-  const pivot = new Group();
-  const material = new MeshLambertMaterial({ color: '#b8a46a' });
-  const neck = new Mesh(new ConeGeometry(0.9, 7, 10).translate(0, 3.5, 0), material);
-  neck.rotation.x = 0.85; // leaning forward from vertical
-  const head = new Mesh(new ConeGeometry(0.8, 1.8, 10).rotateX(Math.PI / 2), material);
-  head.position.set(0, 7 * Math.cos(0.85), 7 * Math.sin(0.85) + 0.4);
-  pivot.add(neck, head);
-  return pivot;
+/**
+ * The neck model's rest pose is up (head about 12 m above the rail). Swinging it this far about +X brings
+ * the head down to about 4.3 m over the rail, some 10 m in front of the body: the train cannot pass.
+ */
+export const NECK_UP = new Quaternion();
+export const NECK_DOWN = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 1.33);
+
+interface FlockParams {
+  model: string;
+  count: number;
+  center: [number, number, number];
+  radius: number;
+  /** rad/s around the circle; negative flies the other way. */
+  speed: number;
 }
 
-/** Placeholder body (until `dino-large-body` exists): four legs 5.6 m apart and a body the train passes under. */
-export function placeholderLargeBody(): Object3D {
-  const group = new Group();
-  const material = new MeshLambertMaterial({ color: '#b8a46a' });
-  const body = new Mesh(new CylinderGeometry(3, 3, 14, 12).rotateX(Math.PI / 2), material);
-  body.scale.set(1.1, 0.75, 1);
-  body.position.set(0, 7.9, 0);
-  group.add(body);
-  for (const x of [-3.3, 3.3]) {
-    for (const z of [-4.5, 4.5]) {
-      const leg = new Mesh(new CylinderGeometry(0.75, 0.9, 6.5, 10), material);
-      leg.position.set(x, 3.25, z);
-      group.add(leg);
+/** Flyers circling over the stage (`gimmicks[].type === 'flock'`). Visual only. */
+export class Flocks {
+  readonly group = new Group();
+  private readonly birds: { object: Object3D; flock: FlockParams; phase: number; lane: number }[] = [];
+  private time = 0;
+
+  constructor(private readonly stage: StageData) {
+    this.group.name = 'flocks';
+  }
+
+  async init(models: ModelLibrary): Promise<void> {
+    for (const gimmick of this.stage.file.gimmicks) {
+      if (gimmick.type !== 'flock') continue;
+      const flock = gimmick.params as unknown as FlockParams;
+      const template = await models.load(flock.model);
+      for (let i = 0; i < flock.count; i++) {
+        const object = template.clone(true);
+        object.scale.setScalar(0.8 + ((i * 37) % 10) / 20);
+        this.group.add(object);
+        this.birds.push({ object, flock, phase: (i / flock.count) * Math.PI * 2 * 0.35 + i * 0.13, lane: ((i * 53) % 9) - 4 });
+      }
     }
   }
-  return group;
-}
 
-/** The neck's rest pose is up; this much rotation (about +X) brings the head down over the rail. */
-export const NECK_UP = new Quaternion();
-export const NECK_DOWN = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 1.0);
+  update(dt: number): void {
+    this.time += dt;
+    for (const bird of this.birds) {
+      const { center, radius, speed } = bird.flock;
+      const a = this.time * speed + bird.phase;
+      const r = radius + bird.lane * 3;
+      bird.object.position.set(
+        center[0] + Math.cos(a) * r,
+        center[1] + bird.lane * 1.5 + Math.sin(this.time * 0.9 + bird.phase * 3) * 1.2,
+        center[2] + Math.sin(a) * r,
+      );
+      // Face along the circle, banking into the turn.
+      const dir = Math.sign(speed) || 1;
+      bird.object.rotation.set(0, Math.atan2(-Math.sin(a) * dir, Math.cos(a) * dir), -0.25 * dir, 'YXZ');
+    }
+  }
+}

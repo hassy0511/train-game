@@ -29,7 +29,8 @@ for (const [name, spec] of Object.entries(manifest)) {
   const kb = statSync(path).size / 1024;
   if (tris > spec.triangles) errors.push(`${name}: ${tris} triangles > budget ${spec.triangles}`);
   if (kb > spec.kb) errors.push(`${name}: ${kb.toFixed(0)} KB > ${spec.kb} KB`);
-  if (Math.abs(minY) > 0.02) errors.push(`${name}: lowest point y=${minY.toFixed(3)} (origin must be on the floor)`);
+  // "origin": "joint" = a part the game rotates about its origin (the big dinosaur's neck), not placed on the floor.
+  if (spec.origin !== 'joint' && Math.abs(minY) > 0.02) errors.push(`${name}: lowest point y=${minY.toFixed(3)} (origin must be on the floor)`);
   for (const node of json.nodes ?? []) {
     if ((node.scale ?? []).filter((v) => v < 0).length % 2) errors.push(`${name}: node "${node.name}" is mirrored (negative scale flips its faces)`);
   }
