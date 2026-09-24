@@ -412,7 +412,7 @@
         "railId": "loop",
         "at": 600,
         "lateral": 3.5,
-        "heightFromRail": 0
+        "heightFromRail": 3.09
       },
       "rotation": [
         0,

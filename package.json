@@ -7,11 +7,12 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && node scripts/check-models.mjs && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "smoke": "npm run build && playwright test -c tests/smoke/playwright.config.ts",
-    "smoke:only": "playwright test -c tests/smoke/playwright.config.ts"
+    "smoke:only": "playwright test -c tests/smoke/playwright.config.ts",
+    "check:models": "node scripts/check-models.mjs"
   },
   "repository": {
     "type": "git",

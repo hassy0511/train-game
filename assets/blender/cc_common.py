@@ -178,6 +178,35 @@ def add_profiled_volume(parts, name, rings, mat, segments=20, smooth=True):
     return add_mesh(parts, name, verts, faces, [mat], smooth=smooth)
 
 
+def add_loft_z(parts, name, sections, materials, face_material=None, smooth=False):
+    """Loft closed outlines along Z. `sections` = [(z, [(x, y), ...])] with equal point counts, outlines
+    counter-clockwise when seen from +Z. `face_material(center, normal) -> index` colours each face
+    (glTF coordinates); caps included."""
+    n = len(sections[0][1])
+    verts = [(x, y, z) for z, outline in sections for x, y in outline]
+    faces = [tuple(range(n - 1, -1, -1))]
+    for i in range(len(sections) - 1):
+        a, b = i * n, (i + 1) * n
+        for j in range(n):
+            m = (j + 1) % n
+            faces.append((a + j, a + m, b + m, b + j))
+    last = (len(sections) - 1) * n
+    faces.append(tuple(last + j for j in range(n)))
+    obj = add_mesh(parts, name, verts, faces, materials, smooth=smooth)
+    if face_material:
+        for polygon in obj.data.polygons:
+            c = polygon.center
+            nrm = polygon.normal
+            polygon.material_index = face_material(Vector((c.x, c.z, -c.y)), Vector((nrm.x, nrm.z, -nrm.y)))
+    return obj
+
+
+def smooth_by_angle(obj: bpy.types.Object, degrees: float = 32.0) -> None:
+    """Smooth shading with hard edges above `degrees` (exported as split normals)."""
+    active(obj)
+    bpy.ops.object.shade_smooth_by_angle(angle=math.radians(degrees))
+
+
 def model_metrics(model: bpy.types.Object) -> tuple[int, list[float], list[float]]:
     model.data.calc_loop_triangles()
     pts = [model.matrix_world @ v.co for v in model.data.vertices]
@@ -248,8 +277,8 @@ def gltf(v: Vector) -> Vector:
 
 # ---------------------------------------------------------------- decals
 
-def disc_decal(parts, name, center, size, material, rings=3, segments=18, tilt=0.0):
-    """Flat ellipse facing +Z, later projected onto the surface."""
+def disc_decal(parts, name, center, size, material, rings=3, segments=18, tilt=0.0, facing=1):
+    """Flat ellipse facing +Z (or -Z with facing=-1), usually projected onto a surface afterwards."""
     cx, cy, cz = center
     w, h = size
     verts = [(cx, cy, cz)]
@@ -266,6 +295,8 @@ def disc_decal(parts, name, center, size, material, rings=3, segments=18, tilt=0
         for s in range(segments):
             n = (s + 1) % segments
             faces.append((a0 + s, a1 + s, a1 + n, a0 + n))
+    if facing < 0:
+        faces = [tuple(reversed(f)) for f in faces]
     return add_mesh(parts, name, verts, faces, [material], smooth=True)
 
 
@@ -450,8 +481,9 @@ def flat_clay(objects: list[bpy.types.Object], name: str, material_: bpy.types.M
 
 # ---------------------------------------------------------------- finish
 
-def normalize(model: bpy.types.Object, height: float | None) -> None:
-    """Uniform scale to `height` (None keeps the modelled size), then bottom-centre origin."""
+def normalize(model: bpy.types.Object, height: float | None, center: bool = True) -> None:
+    """Uniform scale to `height` (None keeps the modelled size), then bottom-centre origin.
+    `center=False` keeps the modelled X/Z origin (vehicles: the car centre, not the bbox centre)."""
     if height is not None:
         _, minimum, maximum = model_metrics(model)
         scale = height / (maximum[1] - minimum[1])
@@ -459,7 +491,10 @@ def normalize(model: bpy.types.Object, height: float | None) -> None:
         active(model)
         bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     _, minimum, maximum = model_metrics(model)
-    model.location += Vector((-(minimum[0] + maximum[0]) / 2, (minimum[2] + maximum[2]) / 2, -minimum[1]))
+    if center:
+        model.location += Vector((-(minimum[0] + maximum[0]) / 2, (minimum[2] + maximum[2]) / 2, -minimum[1]))
+    else:
+        model.location += Vector((0, 0, -minimum[1]))
     active(model)
     bpy.ops.object.transform_apply(location=True, rotation=False, scale=False)
     bpy.context.scene.cursor.location = (0, 0, 0)
@@ -518,15 +553,18 @@ def preview_character(model: bpy.types.Object, name: str) -> None:
     bpy.ops.render.render(write_still=True)
 
 
-def preview_world(model: bpy.types.Object, name: str) -> None:
-    """One three-quarter view from the front-right, 512 x 512."""
+def preview_world(model: bpy.types.Object, name: str, facing: int = 1) -> None:
+    """One three-quarter view of the readable side (+Z, or -Z with facing=-1), fitted to the bounding
+    sphere, 512 x 512."""
     _, minimum, maximum = model_metrics(model)
     size = Vector([maximum[i] - minimum[i] for i in range(3)])
     center = Vector(to_blender([(maximum[i] + minimum[i]) / 2 for i in range(3)]))
     span = max(size)
+    radius = size.length / 2
     scene = bpy.context.scene
     _studio(scene, center, span, 512, 512, PREVIEW_DIR / f"{name}.png")
-    bpy.ops.object.camera_add(location=center + Vector((span * 1.1, -span * 1.6, span * 0.8)))
+    direction = Vector((0.55, -0.72 * facing, 0.42)).normalized()
+    bpy.ops.object.camera_add(location=center + direction * radius * 2.9)
     camera = bpy.context.object
     camera.data.lens = 50
     camera.rotation_euler = (center - camera.location).to_track_quat("-Z", "Y").to_euler()
@@ -534,7 +572,8 @@ def preview_world(model: bpy.types.Object, name: str) -> None:
     bpy.ops.render.render(write_still=True)
 
 
-def export(model: bpy.types.Object, name: str, budget: int, kind: str = "character", max_kb: int = 350) -> None:
+def export(model: bpy.types.Object, name: str, budget: int, kind: str = "character", max_kb: int = 350,
+           facing: int = 1) -> None:
     """Export the GLB (JPEG textures) and a preview; fails loudly when over budget."""
     tris, minimum, maximum = model_metrics(model)
     if tris > budget:
@@ -546,7 +585,10 @@ def export(model: bpy.types.Object, name: str, budget: int, kind: str = "charact
                               export_image_format="JPEG", export_image_quality=88)
     if glb.stat().st_size > max_kb * 1024:
         raise RuntimeError(f"{name}: GLB exceeds {max_kb} KB")
-    (preview_character if kind == "character" else preview_world)(model, name)
+    if kind == "character":
+        preview_character(model, name)
+    else:
+        preview_world(model, name, facing)
     print("MODEL_METRICS=" + json.dumps({
         "model": name, "triangles": tris, "budget": budget, "dimensions": [round(d, 3) for d in dims],
         "min_y": round(minimum[1], 4), "file_bytes": glb.stat().st_size,

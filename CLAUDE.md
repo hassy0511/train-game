@@ -1,6 +1,6 @@
 # CLAUDE.md — つなげ！レール探検隊（仮題）
 
-このリポジトリは子供向け3D電車ゲーム。Claude Code が開発の主導権を持ち、Codex に実装を発注し、GitHub Pages で確認する体制。
+このリポジトリは子供向け3D電車ゲーム。Claude Code が設計から実装（コード・3D モデル）までを担当し、GitHub Pages で確認する体制。
 
 ## まず読むもの
 1. `docs/GAME_SPEC.md` — 世界観・ルール・ステージ。仕様の唯一の正
@@ -8,12 +8,12 @@
 3. `docs/POC_PLAN.md` — 開発順序と各Phaseの成果物
 
 ## 役割
-- **Claude Code（あなた）**: 設計、チケット・Blender発注書の作成、Codex成果物のレビュー、CI・基盤の維持、だいさんへの判断依頼
-- **Codex**: チケットに基づく実装（Three.jsコード、Blenderスクリプト実行→.glb）。規約は `AGENTS.md`
+- **Claude Code（あなた）**: 設計、実装（コード・Three.js・3D モデル）、CI・基盤の維持、だいさんへの判断依頼
+- （2026-09-24 まで Codex に実装を発注していた。納品物と規約は `archive/codex/` にアーカイブ済み。今は発注しない）
 - **GitHub Actions**: ビルド・スモークテスト・Pagesデプロイ
 - **だいさん**: iPadで実プレイして判断
 
-基盤部分（rail/train/physics/stage ローダー等）は Claude Code が直接実装してよい。ステージ固有の実装やアセットは Codex に発注するが、Codex が詰まっているときは Claude Code が巻き取ってよい（Blender は `python3 scripts/run-bpy.py assets/blender/<name>.py` で動く。pip の `bpy` が必要）。
+3D モデルの作り方・ルール・予算は `docs/ASSET_PIPELINE.md`。Blender は `python3 scripts/run-bpy.py assets/blender/<name>.py` で動く（pip の `bpy` が必要）。モデルを足したら `assets/models.json` にも書く（`npm run build` が確認する）。
 
 ## 進め方のルール（重要）
 - **GOルール**: 設計・方針を先に提示し、だいさんから明示的な GO をもらってから実装する。Phase 単位でも、大きな設計変更でも同じ
@@ -36,11 +36,10 @@
 - 攻撃・戦闘要素を入れない。失敗演出は怖くない・痛くない
 - 外部通信なし。個人情報を扱わない
 
-## チケット・発注書の書き方
-- 場所: `docs/tickets/`。1チケット1ファイル、番号付き
-- Codexは画面を見られない前提で、配置座標・寸法・命名・受け入れ条件を具体的に書く
-- Blender発注書には: 用途／寸法（m）／ポリゴン予算／マテリアル／原点／前方向(+Z)／アニメ要否／出力ファイル名／プレビューPNG要求
-- 受け入れ条件に「Playwrightスモークのスクショで確認できること」を含める
+## チケットの書き方
+- 場所: `docs/tickets/`。1チケット1ファイル、番号付き。作業の単位と受け入れ条件を残すために使う（担当は Claude Code）
+- モデルのチケットには: 用途／寸法（m）／三角形の予算／色／原点／前方向(+Z)／アニメ要否／ファイル名
+- 受け入れ条件に「Playwrightスモークのスクショ、またはモデル確認ページで確認できること」を含める
 
 ## レビュー観点
 - 仕様（GAME_SPEC）との整合

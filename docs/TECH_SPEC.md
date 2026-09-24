@@ -17,7 +17,7 @@
 | UI | DOMオーバーレイ（HTML/CSS） | Three.js内でUIを組まない |
 | 配信（開発） | GitHub Pages | PWA |
 | 配信（ストア） | Capacitor でラップ | iOS/Android。Phase 5以降 |
-| テスト | Playwright（ヘッドレスブラウザでスモーク＋スクショ） | CIとCodex両方で使う |
+| テスト | Playwright（ヘッドレスブラウザでスモーク＋スクショ） | CI とローカルで使う |
 
 Godotは**採用しない**（決定理由: エージェント主導でエディタを触る人がおらず、電車は線路拘束のため物理エンジン主体の利点が薄い。物理演出はRapierで同等を実現）。
 
@@ -94,8 +94,8 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
 - Blender は **ヘッドレス実行のみ**（`blender -b --python <script>`）。手作業造形はしない
 - 各モデルは `assets/blender/<name>.py` の生成スクリプトから作る。再現可能にする
 - 出力: `public/models/<name>.glb` ＋ 確認用プレビュー `assets/previews/<name>.png`（CPU Cyclesの低サンプル）
-- 発注書（Claude → Codex）に含める項目: 用途、寸法（m単位、電車の車両幅を基準）、ポリゴン予算、マテリアル（単色・フラット基本）、原点位置、前方向（+Z）、アニメーション要否、命名
-- 絵柄: `docs/WORLD_ART_DIRECTION.md` を正本とする。C案の強めデフォルメ、形態写実度4 / 10、単色寄りの材質を基準にし、構造・厚み・接合を省略しない。実在車両の連想を避ける
+- 作り方・予算・絵柄は `docs/ASSET_PIPELINE.md`。一覧と予算は `assets/models.json`（`npm run build` が確認する）
+- 絵柄の正本は `assets/concepts/` の承認済みデザイン。実在車両の連想を避ける
 - 単位: 1 unit = 1 m。線路ゲージ 1.5 m・車両 12×3×3.6 m を全モデルの基準にする（§9）
 
 ---
@@ -103,12 +103,9 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
 ## 5. 開発パイプライン
 
 ```
-Claude Code（主導）
-  仕様→チケット・発注書を書く。Codexの成果物をレビュー。CIと基盤を維持
-    ↓ チケット（Issue / docs/tickets/）
-Codex（実装）
-  Blenderスクリプト実行 → .glb + PNG コミット
-  Three.js実装 → Playwrightでスモーク（起動・数秒走行・スクショ）→ PR
+Claude Code（設計・実装）
+  仕様・設計 → だいさんの GO → 実装（コード、Blender スクリプト → .glb + PNG）
+  Playwright でスモーク（起動・走行・スクショ）→ PR
     ↓ push
 GitHub Actions
   Vite ビルド → Playwrightスモーク（スクショをアーティファクト化）→ GitHub Pages デプロイ
@@ -117,8 +114,7 @@ GitHub Actions
   iPad で実プレイ → 感想を Claude Code へ
 ```
 
-- チケットには「何をどこに配置するか」まで具体的に書く（Codexは画面を見られない前提）
-- Codex向けの規約は `AGENTS.md`、Claude Code向けは `CLAUDE.md`
+- 進め方の規約は `CLAUDE.md`。2026-09-24 までは Codex に実装を発注していた（`archive/codex/`）
 
 ---
 
@@ -152,12 +148,11 @@ GitHub Actions
 ```
 /
   CLAUDE.md
-  AGENTS.md
   docs/
     GAME_SPEC.md
     TECH_SPEC.md
     POC_PLAN.md
-    tickets/          # Codex向けチケット・発注書
+    tickets/          # 作業チケット
   src/
     rail/ train/ actions/ physics/ stage/ mission/ gimmick/ ui/ save/ audio/ debug/
     stages/           # ステージJSON

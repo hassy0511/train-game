@@ -29,7 +29,7 @@
 - [x] 性能予算の初期値、動作保証最低端末 → `docs/TECH_SPEC.md` §6（目標端末: iPad Pro 2018）
 - [x] ステージJSONスキーマ v1 → `docs/STAGE_SCHEMA.md`
 
-設計案と分担: `docs/PHASE0_DESIGN.md`。Codex への発注: `docs/tickets/0001`, `0002`
+設計案と分担: `docs/PHASE0_DESIGN.md`。チケット: `docs/tickets/0001`, `0002`（当時は Codex に発注。今は Claude Code が担当）
 
 確認: iPad Safari で 60fps 近く出るか。タッチ操作が親指で扱えるか。
 
