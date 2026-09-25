@@ -169,6 +169,8 @@ test('stage 1-3 full run: island hops, the whistle pad, upside down, the updraft
     tris: Number(document.getElementById('app')?.dataset.trisMax),
   }));
   console.log(`1-3 budget: draw calls ${budget.draws} / 200, triangles ${budget.tris} / 100000`);
+  expect(budget.draws).toBeLessThanOrEqual(200);
+  expect(budget.tris).toBeLessThanOrEqual(100000);
   await page.locator('#card-button').click();
   // The map: the rail runs on to chapter 2. 2-1 is next (it bounces); 2-2 is still a "?" that only wiggles.
   await expect(page.locator('#map')).toBeVisible();

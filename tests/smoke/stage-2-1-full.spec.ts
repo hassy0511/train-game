@@ -190,6 +190,8 @@ test('stage 2-1 full run: the springy bough, rolling nuts, the squirrel, upside 
     tris: Number(document.getElementById('app')?.dataset.trisMax),
   }));
   console.log(`2-1 budget: draw calls ${budget.draws} / 200, triangles ${budget.tris} / 100000`);
+  expect(budget.draws).toBeLessThanOrEqual(200);
+  expect(budget.tris).toBeLessThanOrEqual(100000);
   await page.locator('#card-button').click();
   await expect(page.locator('#map')).toBeVisible();
   await expect(page.locator('[data-link="2-1>2-2"]')).toHaveClass(/is-laid/);

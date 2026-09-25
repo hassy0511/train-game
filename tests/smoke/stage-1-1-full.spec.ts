@@ -153,6 +153,8 @@ test('stage 1-1 full run: all three missions and the ending', async ({ page }) =
     tris: Number(document.getElementById('app')?.dataset.trisMax),
   }));
   console.log(`1-1 budget: draw calls ${budget.draws} / 200, triangles ${budget.tris} / 100000`);
+  expect(budget.draws).toBeLessThanOrEqual(200);
+  expect(budget.tris).toBeLessThanOrEqual(100000);
   // "つづく" opens the map: the rail to 1-2 grows in and 1-2 bounces; tapping it goes on (no title).
   await page.locator('#card-button').click();
   await expect(page.locator('#map')).toBeVisible();
