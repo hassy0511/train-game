@@ -31,10 +31,13 @@ export function createDoorButton(root: HTMLElement): DoorButton {
         onPress();
       };
       button.hidden = false;
+      // Waiting for this tap is the only way on: make it hard to miss.
+      button.dataset.glow = '1';
     },
     hide(): void {
       handler = null;
       button.hidden = true;
+      button.dataset.glow = '0';
     },
   };
 }

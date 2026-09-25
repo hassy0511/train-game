@@ -19,7 +19,7 @@ import type {
   StationDef,
 } from '../stage/types';
 import { param } from '../gimmick/zones';
-import { FALL, JUMP, LEVER_NOTCHES, LIGHT, PASSENGER_SECONDS, REWIND_DISTANCE } from '../train/params';
+import { DOOR_REMIND_SECONDS, FALL, JUMP, LEVER_NOTCHES, LIGHT, PASSENGER_SECONDS, REWIND_DISTANCE } from '../train/params';
 import type { JunctionSide, Train } from '../train/train';
 import { StopMonitor, type GaugeState, type StopGrade } from './station-stop';
 
@@ -27,6 +27,8 @@ import { StopMonitor, type GaugeState, type StopGrade } from './station-stop';
 export interface MissionPorts extends CutscenePorts {
   /** Say something without blocking (queued). */
   sayAsync(text: string, who?: Speaker): void;
+  /** Drop every line still queued or showing (something more urgent is about to be said). */
+  hush(): void;
   toast(text: string, kind: StopGrade): void;
   showDoorButton(onPress: () => void): void;
   hideDoorButton(): void;
@@ -56,6 +58,8 @@ type DefaultLine =
   | 'catDanger'
   | 'catDangerAfter'
   | 'doorsOpenLever'
+  | 'doorAsk'
+  | 'doorsClosedLever'
   | 'jumpStopped'
   | 'fellShort'
   | 'fellNoJump'
@@ -75,6 +79,8 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   catDanger: 'あぶない！',
   catDangerAfter: 'びっくりした〜。もういっかい！',
   doorsOpenLever: 'ドアが あいてるよ！',
+  doorAsk: 'ドアの ボタンを おして、ドアを あけよう！',
+  doorsClosedLever: 'さきに ドアを あけよう！',
   jumpStopped: 'はしりながら おしてね',
   fellShort: 'もうちょっと はやく！',
   fellNoJump: 'ジャンプ わすれてた！',
@@ -115,6 +121,8 @@ export class MissionRunner {
   /** Jump pads: shown for a few seconds after a whistle; `index` into gimmicks[]. */
   private readonly pads: { index: number; railId: string; at: number; seconds: number; range: number; left: number; hinted: boolean }[];
   private movingSaid = false;
+  /** In the 'doors' phase: false while waiting for the door button, true once the doors are open. */
+  private doorsOpen = false;
   private hintsFired = new Set<number>();
   private resolveDrive: ((outcome: DriveOutcome) => void) | null = null;
   private lines: MissionLines = {};
@@ -414,7 +422,9 @@ export class MissionRunner {
 
   /** Lever moved while locked: explain why. */
   onLeverRejected(): void {
-    if (this.phase === 'doors') this.ports.sayAsync(this.lines.doorsOpenLever ?? DEFAULT_LINES.doorsOpenLever);
+    if (this.phase !== 'doors') return;
+    if (this.doorsOpen) this.ports.sayAsync(this.lines.doorsOpenLever ?? DEFAULT_LINES.doorsOpenLever);
+    else this.ports.sayAsync(this.lines.doorsClosedLever ?? DEFAULT_LINES.doorsClosedLever);
   }
 
   private onWhistle(): void {
@@ -504,6 +514,8 @@ export class MissionRunner {
 
   private async fail(outcome: FailOutcome, station: StationDef): Promise<void> {
     const reason = outcome.reason;
+    // The train is stopped and the lever is locked until the rewind: say why now, not after older lines.
+    this.ports.hush();
     this.events.post({ type: 'fail', reason });
     const scary = reason === 'cat' || reason === 'dino';
     this.ports.cameraFx(scary ? 1 : 0.5, 1);
@@ -536,8 +548,27 @@ export class MissionRunner {
 
   private async doors(step: MissionStep, station: StationDef): Promise<void> {
     this.phase = 'doors';
+    this.doorsOpen = false;
     this.train.lockInput('doors');
-    await new Promise<void>((resolve) => this.ports.showDoorButton(resolve));
+    // Nothing moves until the door button is tapped: ask for it, and keep asking.
+    const ask = this.lines.doorAsk ?? DEFAULT_LINES.doorAsk;
+    let pressed = false;
+    const press = new Promise<void>((resolve) =>
+      this.ports.showDoorButton(() => {
+        pressed = true;
+        resolve();
+      }),
+    );
+    this.ports.sayAsync(ask);
+    void (async () => {
+      while (!pressed) {
+        await this.ports.wait(DOOR_REMIND_SECONDS);
+        if (!pressed) this.ports.sayAsync(ask);
+      }
+    })();
+    await press;
+    this.ports.hush();
+    this.doorsOpen = true;
     this.ports.hideDoorButton();
     this.ports.autoCamera('side');
     this.events.post({ type: 'door', open: true, stationId: station.id });
@@ -572,8 +603,10 @@ export class MissionRunner {
     if (this.lines.doorClosed) this.ports.sayAsync(this.lines.doorClosed);
     await this.ports.wait(0.4);
     this.ports.autoCamera(null);
-    this.phase = 'idle';
-    this.train.unlockInput();
+    this.doorsOpen = false;
+    // Stay put until the next drive() unlocks: a train rolling between missions has no one watching it.
+    this.phase = 'stopped';
+    this.train.lockInput('stopped');
   }
 
   private async cutscene(id: string): Promise<void> {

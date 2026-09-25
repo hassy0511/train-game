@@ -232,7 +232,19 @@ async function boot(): Promise<void> {
   let fpsFrames = 0;
   let fps = 0;
 
+  let frameErrors = 0;
   const frame = (now: number): void => {
+    // Schedule first: an error in one frame must never stop the game for good (it would look frozen).
+    requestAnimationFrame(frame);
+    try {
+      tick(now);
+    } catch (err) {
+      frameErrors += 1;
+      app.dataset.frameErrors = String(frameErrors);
+      if (frameErrors <= 5) console.error('frame error', err);
+    }
+  };
+  const tick = (now: number): void => {
     const dt = Math.min((now - last) / 1000, MAX_DT);
     last = now;
     simTime += dt;
@@ -292,8 +304,6 @@ async function boot(): Promise<void> {
       app.dataset.neck = runner.bigDinoNeck;
     }
     debug?.update(fps);
-
-    requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
 
@@ -324,6 +334,7 @@ async function boot(): Promise<void> {
   const ports: MissionPorts = {
     say: (text, who) => bubbles.say(text, who),
     sayAsync: (text, who) => void bubbles.say(text, who),
+    hush: () => bubbles.clear(),
     card: (title, button, icon) => {
       audio.playCard();
       return showCard(uiEl, title, button, icon);

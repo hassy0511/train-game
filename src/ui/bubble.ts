@@ -4,6 +4,8 @@ import { BUBBLE_SECONDS } from '../train/params';
 export interface Bubbles {
   /** Shows the line and resolves when tapped or after the timeout. Lines queue up in order. */
   say(text: string, who?: Speaker): Promise<void>;
+  /** Drops the line showing and every queued one (their promises resolve right away). */
+  clear(): void;
 }
 
 const SPEAKER_CLASS: Record<Speaker, string> = { partner: 'is-partner', amanojaku: 'is-amanojaku', passenger: 'is-passenger' };
@@ -23,6 +25,8 @@ export function createBubbles(root: HTMLElement, partnerName: string): Bubbles {
   root.appendChild(el);
 
   let queue: Promise<void> = Promise.resolve();
+  /** Bumped by clear(): queued lines from an older generation are skipped. */
+  let generation = 0;
   let dismiss: (() => void) | null = null;
   el.addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -48,8 +52,13 @@ export function createBubbles(root: HTMLElement, partnerName: string): Bubbles {
 
   return {
     say(line, who = 'partner'): Promise<void> {
-      queue = queue.then(() => showOne(line, who));
+      const g = generation;
+      queue = queue.then(() => (g === generation ? showOne(line, who) : undefined));
       return queue;
+    },
+    clear(): void {
+      generation += 1;
+      dismiss?.();
     },
   };
 }

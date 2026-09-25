@@ -64,6 +64,9 @@ export const REWIND_DISTANCE = 80;
 export const PASSENGER_SECONDS = 1.5;
 
 /** Seconds a speech bubble stays unless tapped. */
+/** While the game waits for the door button, the partner repeats the ask this often (s). */
+export const DOOR_REMIND_SECONDS = 8;
+
 export const BUBBLE_SECONDS = 3.5;
 
 /** Emergency stop: seconds to reach 0 from any speed. */
