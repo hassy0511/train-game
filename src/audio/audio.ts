@@ -1,14 +1,26 @@
 /** Synthesized sound effects (no audio assets, fully original). The context unlocks on the first tap. */
 export class AudioEngine {
   private ctx: AudioContext | null = null;
+  /** Every sound effect goes through this gain (the "こうかおん" setting). */
+  private sfx: GainNode | null = null;
+  private sfxLevel = 1;
 
   unlock(): void {
     if (!this.ctx) {
       const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctor) return;
       this.ctx = new Ctor();
+      this.sfx = this.ctx.createGain();
+      this.sfx.gain.value = this.sfxLevel;
+      this.sfx.connect(this.ctx.destination);
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
+  }
+
+  /** Sound-effect volume, 0..1 (applies to sounds started from now on and to ones still playing). */
+  setSoundVolume(gain: number): void {
+    this.sfxLevel = gain;
+    if (this.sfx) this.sfx.gain.value = gain;
   }
 
   /** A two-tone steam-whistle-like chord with a soft attack and a short tail. */
@@ -26,7 +38,7 @@ export class AudioEngine {
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(1800, now);
     master.connect(filter);
-    filter.connect(ctx.destination);
+    filter.connect(this.sfx ?? ctx.destination);
 
     for (const base of [392, 523]) {
       const osc = ctx.createOscillator();
@@ -61,7 +73,7 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(gain, now + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
     osc.connect(g);
-    g.connect(ctx.destination);
+    g.connect(this.sfx ?? ctx.destination);
     osc.start(now);
     osc.stop(now + seconds + 0.05);
   }

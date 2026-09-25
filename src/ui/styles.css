@@ -945,3 +945,178 @@ body {
   padding: 10px 24px;
   font-size: 20px;
 }
+
+/* ---- pause (src/ui/pause.ts) ---- */
+.pause-button {
+  position: absolute;
+  top: calc(var(--safe-top) + 12px);
+  right: calc(var(--safe-right) + 16px);
+  width: 52px;
+  height: 52px;
+  border: none;
+  border-radius: 50%;
+  background: var(--panel);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.pause-button svg {
+  width: 26px;
+  height: 26px;
+  fill: var(--ink);
+}
+
+.pause-menu {
+  z-index: 20;
+}
+
+/* ---- settings (src/ui/settings.ts), opened from the gear on the title ---- */
+.gear-button {
+  position: absolute;
+  top: calc(var(--safe-top) + 14px);
+  right: calc(var(--safe-right) + 16px);
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.gear-button svg {
+  width: 32px;
+  height: 32px;
+  fill: #6b7a8a;
+}
+
+.settings {
+  z-index: 30;
+  background: #1e2e44;
+}
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.settings-label {
+  width: 190px;
+  text-align: right;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.settings-choices {
+  display: flex;
+  gap: 10px;
+}
+
+.settings-choice {
+  min-width: 120px;
+  padding: 12px 18px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.settings-choice[aria-pressed='true'] {
+  background: #fff8e1;
+  color: var(--ink);
+  border-color: #ffd166;
+}
+
+/* ---- left-handed layout ("レバーの ばしょ: みぎ"): everything thumb-driven swaps sides ---- */
+#app.is-left-handed .lever {
+  left: auto;
+  right: calc(var(--safe-right) + 18px);
+}
+
+#app.is-left-handed .lever-track,
+#app.is-left-handed .lever-detent {
+  left: auto;
+  right: 0;
+}
+
+#app.is-left-handed .lever-knob {
+  left: auto;
+  right: -6px;
+}
+
+#app.is-left-handed .lever-label {
+  left: auto;
+  right: 74px;
+}
+
+#app.is-left-handed .action-buttons {
+  right: auto;
+  left: calc(var(--safe-left) + 22px);
+  grid-template-areas:
+    'camera light'
+    'whistle jump';
+}
+
+#app.is-left-handed #door {
+  right: auto;
+  left: calc(100% + 18px);
+}
+
+#app.is-left-handed .camera-menu {
+  right: auto;
+  left: calc(var(--safe-left) + 22px);
+}
+
+#app.is-left-handed .bubble {
+  right: auto;
+  left: calc(var(--safe-left) + 130px);
+}
+
+#app.is-left-handed #ui:has(#jump:not([hidden])) .bubble,
+#app.is-left-handed #ui:has(#light:not([hidden])) .bubble {
+  right: auto;
+  left: calc(var(--safe-left) + 250px);
+}
+
+#app.is-left-handed .bubble::after {
+  right: auto;
+  left: -14px;
+  border-left-color: transparent;
+  border-right-color: var(--panel);
+}
+
+#app.is-left-handed .bubble.is-amanojaku::after {
+  border-left-color: transparent;
+  border-right-color: #e8dcf5;
+}
+
+#app.is-left-handed .bubble.is-passenger::after {
+  border-left-color: transparent;
+  border-right-color: #fff4d6;
+}
+
+#app.is-left-handed .cargo-strip {
+  left: auto;
+  right: calc(var(--safe-right) + 16px);
+}
+
+#app.is-left-handed .pause-button {
+  right: auto;
+  left: calc(var(--safe-left) + 16px);
+}

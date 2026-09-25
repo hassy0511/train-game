@@ -1,5 +1,7 @@
 export type TitleChoice = 'start' | 'continue';
 
+const GEAR = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 2h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9L2 13.7v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8z"/><circle cx="12" cy="12" r="3.4" fill="#fff"/></svg>`;
+
 export interface TitleOptions {
   /** Label of the "continue" button (e.g. "つづきから（きょうりゅうの たに）"); omitted = no button. */
   continueLabel?: string;
@@ -7,6 +9,8 @@ export interface TitleOptions {
   onMap?: () => void;
   /** Opens the picture book; omitted = no button. */
   onZukan?: () => void;
+  /** Opens the settings (the gear in the corner); omitted = no gear. */
+  onSettings?: () => void;
 }
 
 /** Title screen. Resolves with the button the player tapped. */
@@ -41,6 +45,16 @@ export function showTitle(root: HTMLElement, title: string, options: TitleOption
     stamp.className = 'build-stamp';
     stamp.textContent = `build ${__BUILD_ID__}`;
     el.append(h, buttons, stamp);
+    if (options.onSettings) {
+      const gear = document.createElement('button');
+      gear.type = 'button';
+      gear.id = 'title-settings';
+      gear.className = 'gear-button';
+      gear.setAttribute('aria-label', 'せってい');
+      gear.innerHTML = GEAR;
+      gear.addEventListener('click', options.onSettings);
+      el.appendChild(gear);
+    }
     root.appendChild(el);
   });
 }
