@@ -25,6 +25,9 @@ import { createCameraButton } from './ui/camera-button';
 import { createStopGauge } from './ui/stop-gauge';
 import { createJumpButton, createLightButton } from './ui/ability-buttons';
 import { showZukan } from './ui/zukan';
+import { loadSettings, saveSettings, VOLUME_GAIN, type Settings } from './core/settings';
+import { showSettings } from './ui/settings';
+import { createPause } from './ui/pause';
 import { linkKey, showMap, type MapChoice, type MapIsland } from './ui/map';
 import world from './world/world.json';
 import type { WorldFile } from './world/types';
@@ -133,6 +136,17 @@ async function boot(): Promise<void> {
     new Promise((resolve) => waiters.push({ at: simTime + seconds, resolve }));
 
   const fx: CameraFx = { dip: 0, shake: 0 };
+  // Settings from the title's gear: sound volume, calmer camera, left-handed layout.
+  let settings: Settings = loadSettings();
+  const applySettings = (): void => {
+    audio.setSoundVolume(VOLUME_GAIN[settings.sound]);
+    app.classList.toggle('is-left-handed', settings.leftHanded);
+    app.dataset.calm = settings.calm ? '1' : '0';
+  };
+  /** Screen shake and dips are dropped with "がめんの ゆれ: へらす". */
+  const shakeScale = (): number => (settings.calm ? 0 : 1);
+  applySettings();
+  let paused = false;
   let runner: MissionRunner | null = null;
 
   const ui = createUi(uiEl, {
@@ -227,7 +241,7 @@ async function boot(): Promise<void> {
   });
 
   train.events.on('hardBrake', () => {
-    fx.dip = Math.max(fx.dip, 0.5);
+    fx.dip = Math.max(fx.dip, 0.5 * shakeScale());
     audio.playSqueal();
     if (hasMissions) void bubbles.say('わわっ！');
   });
@@ -281,6 +295,12 @@ async function boot(): Promise<void> {
   const tick = (now: number): void => {
     const dt = Math.min((now - last) / 1000, MAX_DT);
     last = now;
+    app.dataset.paused = paused ? '1' : '0';
+    if (paused) {
+      // Game time stands still; keep drawing so a resize or the returning view stay right.
+      view.update(0, train.getPose(), fx);
+      return;
+    }
     simTime += dt;
     for (let i = waiters.length - 1; i >= 0; i--) {
       if (simTime >= waiters[i].at) {
@@ -353,6 +373,13 @@ async function boot(): Promise<void> {
           if (choice.kind === 'stage') goToStage(choice.id);
         });
       },
+      onSettings: () => {
+        showSettings(uiEl, settings, (changed) => {
+          settings = changed;
+          saveSettings(settings);
+          applySettings();
+        });
+      },
       onZukan: () => {
         void loadAllRecords().then((all) => {
           const found = loadProgress().records;
@@ -389,8 +416,8 @@ async function boot(): Promise<void> {
     setCargo: (p, parcel) => cargo.set(p, parcel),
     fade,
     cameraFx: (dip, shake) => {
-      fx.dip = Math.max(fx.dip, dip);
-      fx.shake = Math.max(fx.shake, shake);
+      fx.dip = Math.max(fx.dip, dip * shakeScale());
+      fx.shake = Math.max(fx.shake, shake * shakeScale());
       audio.playBoing();
     },
     resetLever: () => ui.lever.setNotch(STOP_NOTCH),
@@ -415,10 +442,23 @@ async function boot(): Promise<void> {
     if (e.type === 'door') audio.playDoor(e.open);
   });
 
+  // "||" in the corner: stop the game, go on, or leave for the map.
+  const pause = createPause(uiEl, {
+    onPause: (p) => {
+      paused = p;
+    },
+    onMap: async () => {
+      const choice = await openMap(uiEl, { next: next?.id, closeLabel: 'もどる' });
+      if (choice.kind === 'stage') goToStage(choice.id);
+    },
+  });
+  pause.show();
+
   runner = new MissionRunner(stage, train, whistle, events, ports);
   runner.knowAbilities(abilities);
   runner.setLight(lightOn);
   await runner.run();
+  pause.hide();
   addToProgress('cleared', [stage.file.id]);
   addToProgress('abilities', stage.file.unlocks);
   // Back to the map: the rail to the next island grows in, and the child taps it to go on.
