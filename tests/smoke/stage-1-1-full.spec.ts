@@ -154,7 +154,8 @@ test('stage 1-1 full run: all three missions and the ending', async ({ page }) =
   await expect(page.locator('.map-island[data-island="1-2"]')).toHaveClass(/is-next/);
   await page.waitForTimeout(1600);
   await page.screenshot({ path: resolve(OUT, '16-map.png') });
-  await page.locator('.map-island[data-island="1-2"]').click();
+  // The next island bounces, so Playwright never sees it "stable": tap it directly.
+  await page.locator('.map-island[data-island="1-2"]').dispatchEvent('click');
   await page.waitForURL(/stage=1-2/, { timeout: 30_000 });
   await expect(page.locator('#app')).toHaveAttribute('data-stage', '1-2', { timeout: 90_000 });
   await expect(page.locator('#title-screen')).toHaveCount(0);
