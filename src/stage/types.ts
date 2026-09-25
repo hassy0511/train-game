@@ -184,7 +184,10 @@ export type MissionLines = Partial<
     | 'recordFound'
     // v1.3
     | 'padGone'
-    | 'padAppear',
+    | 'padAppear'
+    // v1.4
+    | 'doorAsk'
+    | 'doorsClosedLever',
     string
   >
 >;

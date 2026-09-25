@@ -62,9 +62,20 @@ async function driveTo(page: Page, at: number, opts: { whistleAt?: number } = {}
   await expect(page.locator('#toast')).toBeVisible({ timeout: 20_000 });
 }
 
-async function doors(page: Page, shot?: string): Promise<void> {
+async function doors(page: Page, shot?: string, checkAsk = false): Promise<void> {
   const door = page.locator('#door');
   await expect(door).toBeVisible({ timeout: 20_000 });
+  // The game waits for this tap: the button glows and the partner asks for it.
+  await expect(door).toHaveAttribute('data-glow', '1');
+  if (checkAsk) {
+    const bubble = page.locator('#bubble');
+    const deadline = Date.now() + 30_000;
+    while (!((await bubble.getAttribute('data-line')) ?? '').includes('ドアの ボタン')) {
+      if (Date.now() > deadline) throw new Error('no door ask line');
+      if (await bubble.isVisible()) await bubble.dispatchEvent('pointerdown');
+      await page.waitForTimeout(150);
+    }
+  }
   // The phase attribute is written once per frame; wait for it before pressing so the
   // "doors finished" wait below cannot pass on a stale value from the previous frame.
   await expect(page.locator('#app')).toHaveAttribute('data-phase', 'doors', { timeout: 10_000 });
@@ -105,7 +116,7 @@ test('stage 1-1 full run: all three missions and the ending', async ({ page }) =
   await tapUntil(page, '#card');
   await expect(page.locator('#card')).toContainText('なかまを のせて');
   await page.locator('#card-button').click();
-  await doors(page, '12b-sakura-boarding.png');
+  await doors(page, '12b-sakura-boarding.png', true);
   await expect(page.locator('#cargo')).toHaveAttribute('data-passengers', '2');
   await driveTo(page, 425);
   await doors(page);
