@@ -43,6 +43,16 @@ test('stage 1-1: title, opening, and a graded stop at the first station', async 
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
   await expect(page.locator('#title-screen')).toBeVisible();
   await page.screenshot({ path: resolve(OUT, '10-title.png') });
+  // The map from the title: a fresh save has only 1-1 open; 1-2 is locked and only wiggles.
+  await page.locator('#title-map').click();
+  await expect(page.locator('#map')).toBeVisible();
+  await expect(page.locator('.map-island[data-island="1-1"]')).not.toHaveClass(/is-locked/);
+  await expect(page.locator('.map-island[data-island="1-2"]')).toHaveClass(/is-locked/);
+  await page.locator('.map-island[data-island="1-2"]').click();
+  await expect(page.locator('#map')).toBeVisible();
+  await page.screenshot({ path: resolve(OUT, '10b-map.png') });
+  await page.locator('#map-close').click();
+  await expect(page.locator('#map')).toHaveCount(0);
   await page.locator('#title-start').click();
 
   // Opening: caption, partner lines with camera moves, the badge card, then the mission 1 card.

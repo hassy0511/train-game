@@ -1,0 +1,357 @@
+{
+  "_doc": "The world map (docs/PHASE4_DESIGN.md). Islands are placed in % of the map area (x from the left, y from the top). An island without a stage file yet is shown as a '?' silhouette. `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees.",
+  "chapters": [
+    {
+      "id": 1,
+      "title": "1しょう はじまり"
+    },
+    {
+      "id": 2,
+      "title": "2しょう いきものの せかい"
+    }
+  ],
+  "islands": [
+    {
+      "id": "1-1",
+      "chapter": 1,
+      "x": 18,
+      "y": 68,
+      "diorama": {
+        "base": "island-b",
+        "rail": {
+          "radius": 11
+        },
+        "camera": {
+          "yaw": 30,
+          "pitch": 32
+        },
+        "items": [
+          {
+            "model": "hq",
+            "at": [
+              0,
+              -1
+            ],
+            "rotY": 0,
+            "scale": 0.4
+          },
+          {
+            "model": "house-a",
+            "at": [
+              -16,
+              5
+            ],
+            "rotY": 70,
+            "scale": 0.55
+          },
+          {
+            "model": "house-b",
+            "at": [
+              16,
+              6
+            ],
+            "rotY": -60,
+            "scale": 0.55
+          },
+          {
+            "model": "shop",
+            "at": [
+              -15,
+              -6
+            ],
+            "rotY": 100,
+            "scale": 0.55
+          },
+          {
+            "model": "tower",
+            "at": [
+              16,
+              -7
+            ],
+            "rotY": 0,
+            "scale": 0.45
+          },
+          {
+            "model": "tree-a",
+            "at": [
+              -6,
+              13
+            ],
+            "rotY": 0,
+            "scale": 0.8
+          },
+          {
+            "model": "tree-b",
+            "at": [
+              5,
+              -12.5
+            ],
+            "rotY": 40,
+            "scale": 0.8
+          },
+          {
+            "model": "tree-a",
+            "at": [
+              -4,
+              -12
+            ],
+            "rotY": 0,
+            "scale": 0.7
+          },
+          {
+            "model": "train-proto",
+            "at": [
+              11,
+              2
+            ],
+            "rotY": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "1-2",
+      "chapter": 1,
+      "x": 46,
+      "y": 44,
+      "diorama": {
+        "base": "island-b",
+        "rail": {
+          "radius": 11
+        },
+        "camera": {
+          "yaw": 25,
+          "pitch": 30
+        },
+        "items": [
+          {
+            "model": "cliff-a",
+            "at": [
+              -13,
+              -8
+            ],
+            "rotY": 20,
+            "scale": 0.5
+          },
+          {
+            "model": "dino-large-body",
+            "at": [
+              0,
+              -3
+            ],
+            "rotY": 90,
+            "scale": 0.8
+          },
+          {
+            "model": "dino-large-neck",
+            "at": [
+              0,
+              -3
+            ],
+            "rotY": 90,
+            "scale": 0.8,
+            "local": [
+              0,
+              8.0,
+              4.8
+            ]
+          },
+          {
+            "model": "dino-mid-sleep",
+            "at": [
+              -14,
+              8
+            ],
+            "rotY": 60,
+            "scale": 0.8
+          },
+          {
+            "model": "cycad",
+            "at": [
+              15,
+              -8
+            ],
+            "rotY": 0
+          },
+          {
+            "model": "fern-a",
+            "at": [
+              -5,
+              14
+            ],
+            "rotY": 0
+          },
+          {
+            "model": "fern-b",
+            "at": [
+              16,
+              7
+            ],
+            "rotY": 50
+          },
+          {
+            "model": "rock-a",
+            "at": [
+              7,
+              14
+            ],
+            "rotY": 0
+          },
+          {
+            "model": "dino-egg",
+            "at": [
+              -17,
+              -1
+            ],
+            "rotY": 0
+          },
+          {
+            "model": "train-proto",
+            "at": [
+              11,
+              2
+            ],
+            "rotY": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "1-3",
+      "chapter": 1,
+      "x": 72,
+      "y": 22,
+      "diorama": {
+        "base": "island-b",
+        "rail": {
+          "radius": 11
+        },
+        "camera": {
+          "yaw": 25,
+          "pitch": 28
+        },
+        "items": [
+          {
+            "model": "cloud-b",
+            "at": [
+              -12,
+              -9
+            ],
+            "rotY": 0,
+            "lift": 4
+          },
+          {
+            "model": "cloud-a",
+            "at": [
+              14,
+              -10
+            ],
+            "rotY": 30,
+            "lift": 7
+          },
+          {
+            "model": "weathervane",
+            "at": [
+              0,
+              -2
+            ],
+            "rotY": 20,
+            "scale": 3
+          },
+          {
+            "model": "jump-pad",
+            "at": [
+              -11,
+              2
+            ],
+            "rotY": 0,
+            "scale": 1.2
+          },
+          {
+            "model": "updraft-ring",
+            "at": [
+              0,
+              11
+            ],
+            "rotY": 90
+          },
+          {
+            "model": "sky-buoy",
+            "at": [
+              16,
+              6
+            ],
+            "rotY": 0,
+            "scale": 2.5
+          },
+          {
+            "model": "sky-buoy",
+            "at": [
+              -16,
+              -4
+            ],
+            "rotY": 0,
+            "scale": 2.5
+          },
+          {
+            "model": "cloud-crystal",
+            "at": [
+              -5,
+              5
+            ],
+            "rotY": 0,
+            "scale": 3
+          },
+          {
+            "model": "train-proto",
+            "at": [
+              11,
+              2
+            ],
+            "rotY": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "2-1",
+      "chapter": 2,
+      "x": 88,
+      "y": 52
+    },
+    {
+      "id": "2-2",
+      "chapter": 2,
+      "x": 76,
+      "y": 80
+    },
+    {
+      "id": "2-3",
+      "chapter": 2,
+      "x": 52,
+      "y": 82
+    }
+  ],
+  "links": [
+    [
+      "1-1",
+      "1-2"
+    ],
+    [
+      "1-2",
+      "1-3"
+    ],
+    [
+      "1-3",
+      "2-1"
+    ],
+    [
+      "2-1",
+      "2-2"
+    ],
+    [
+      "2-2",
+      "2-3"
+    ]
+  ]
+}

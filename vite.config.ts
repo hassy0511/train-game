@@ -43,6 +43,7 @@ function serviceWorker(): Plugin {
         ...modelManifest.map((name) => `models/${name}.glb`),
         'manifest.webmanifest',
         ...readdirSync('public/icons').map((file) => `icons/${file}`),
+        ...readdirSync('public/map').map((file) => `map/${file}`),
       ];
       const precache = ['./', ...built.filter((file) => file !== 'index.html'), ...fromPublic];
       const source = readFileSync('src/pwa/sw-template.js', 'utf8')

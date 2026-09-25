@@ -164,6 +164,12 @@ test('stage 1-3 full run: island hops, the whistle pad, upside down, the updraft
   const progress = await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
   expect(progress.records).toEqual(expect.arrayContaining(['cloud-crystal', 'weathervane']));
   await page.locator('#card-button').click();
+  // The map: the rail runs on to chapter 2's "?" island, which only wiggles; back to the title.
+  await expect(page.locator('#map')).toBeVisible();
+  await expect(page.locator('[data-link="1-3>2-1"]')).toHaveClass(/is-laid/);
+  await page.locator('.map-island[data-island="2-1"]').click();
+  await expect(page.locator('#map')).toBeVisible();
+  await page.locator('#map-close').click();
   await page.waitForURL((url) => !url.search.includes('stage=1-3'), { timeout: 30_000 });
   console.log('smoke 1-3 full: cleared');
   expect(errors).toEqual([]);

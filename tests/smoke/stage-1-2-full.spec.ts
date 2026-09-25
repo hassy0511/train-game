@@ -177,7 +177,11 @@ test('stage 1-2 full run: jumps, a fall, dinosaurs, a dead end, the light, recor
   expect(progress.abilities).toEqual(expect.arrayContaining(['jump', 'light']));
   expect(progress.records).toEqual(expect.arrayContaining(['dino-egg', 'footprints']));
   await page.locator('#card-button').click();
-  await page.waitForURL((url) => !url.search.includes('stage=1-2'), { timeout: 30_000 });
+  // The map: records 2 of 3 here (the third needs a later ability), and on to 1-3.
+  await expect(page.locator('#map')).toBeVisible();
+  await expect(page.locator('.map-island[data-island="1-2"] .map-badge')).toHaveText('きろく 2/3 ？');
+  await page.locator('.map-island[data-island="1-3"]').click();
+  await page.waitForURL(/stage=1-3/, { timeout: 30_000 });
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
   expect(saved.cleared).toContain('1-2');
   console.log('smoke 1-2 full: cleared');

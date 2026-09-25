@@ -11,9 +11,11 @@ export interface Progress {
   abilities: AbilityId[];
   /** Record ids found (the picture book). */
   records: string[];
+  /** World-map links ("from>to") whose rail has already been drawn in (the growing rail plays once). */
+  mapLinks: string[];
 }
 
-const empty = (): Progress => ({ schema: SCHEMA, cleared: [], abilities: [], records: [] });
+const empty = (): Progress => ({ schema: SCHEMA, cleared: [], abilities: [], records: [], mapLinks: [] });
 
 /** Reads the saved progress. Storage can be missing or blocked (private mode); then it starts empty. */
 export function loadProgress(): Progress {
@@ -27,6 +29,7 @@ export function loadProgress(): Progress {
       cleared: Array.isArray(data.cleared) ? data.cleared.filter((v) => typeof v === 'string') : [],
       abilities: Array.isArray(data.abilities) ? (data.abilities.filter((v) => typeof v === 'string') as AbilityId[]) : [],
       records: Array.isArray(data.records) ? data.records.filter((v) => typeof v === 'string') : [],
+      mapLinks: Array.isArray(data.mapLinks) ? data.mapLinks.filter((v) => typeof v === 'string') : [],
     };
   } catch {
     return empty();
@@ -42,7 +45,7 @@ export function saveProgress(progress: Progress): void {
 }
 
 /** Adds items to a list field and saves. Returns true when something new was added. */
-export function addToProgress(field: 'cleared' | 'abilities' | 'records', items: string[]): boolean {
+export function addToProgress(field: 'cleared' | 'abilities' | 'records' | 'mapLinks', items: string[]): boolean {
   const progress = loadProgress();
   const list = progress[field] as string[];
   const fresh = items.filter((item) => !list.includes(item));

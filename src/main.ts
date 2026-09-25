@@ -25,6 +25,9 @@ import { createCameraButton } from './ui/camera-button';
 import { createStopGauge } from './ui/stop-gauge';
 import { createJumpButton, createLightButton } from './ui/ability-buttons';
 import { showZukan } from './ui/zukan';
+import { linkKey, showMap, type MapChoice, type MapIsland } from './ui/map';
+import world from './world/world.json';
+import type { WorldFile } from './world/types';
 
 const app = document.getElementById('app') as HTMLElement;
 const viewEl = document.getElementById('view') as HTMLElement;
@@ -66,6 +69,37 @@ async function nextStage(cleared: string[], after?: string): Promise<{ id: strin
 function registerOffline(): void {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((err: unknown) => console.info('offline cache off:', err));
+}
+
+/**
+ * The world map, from the stages and the save. The rail to a newly opened island grows in once (the links
+ * shown are saved right away, so leaving early does not replay it).
+ */
+async function openMap(root: HTMLElement, options: { next?: string; closeLabel?: string }): Promise<MapChoice> {
+  const file = world as unknown as WorldFile;
+  const progress = loadProgress();
+  const islands: MapIsland[] = [];
+  for (const island of file.islands) {
+    const stage = await peekStage(island.id);
+    if (!stage) {
+      islands.push({ id: island.id, title: null, unlocked: false, cleared: false, recordsFound: 0, recordsTotal: 0, needsLater: false });
+      continue;
+    }
+    const missing = stage.records.filter((r) => !progress.records.includes(r.id));
+    islands.push({
+      id: island.id,
+      title: stage.title,
+      unlocked: stage.unlock.requires.every((r) => progress.cleared.includes(r)),
+      cleared: progress.cleared.includes(island.id),
+      recordsFound: stage.records.length - missing.length,
+      recordsTotal: stage.records.length,
+      needsLater: missing.some((r) => r.requires !== null && !progress.abilities.includes(r.requires)),
+    });
+  }
+  const laid = file.links.filter(([from]) => progress.cleared.includes(from)).map(([from, to]) => linkKey(from, to));
+  const fresh = laid.filter((key) => !progress.mapLinks.includes(key));
+  addToProgress('mapLinks', fresh);
+  return showMap(root, file, { islands, laid, fresh, ...options });
 }
 
 /** Opens a stage straight into play (no title). */
@@ -314,6 +348,11 @@ async function boot(): Promise<void> {
   if (!params.has('go')) {
     const choice = await showTitle(uiEl, GAME_TITLE, {
       continueLabel: next && next.id !== stageId ? `つづきから（${next.title}）` : undefined,
+      onMap: () => {
+        void openMap(uiEl, { next: next?.id, closeLabel: 'もどる' }).then((choice) => {
+          if (choice.kind === 'stage') goToStage(choice.id);
+        });
+      },
       onZukan: () => {
         void loadAllRecords().then((all) => {
           const found = loadProgress().records;
@@ -382,8 +421,10 @@ async function boot(): Promise<void> {
   await runner.run();
   addToProgress('cleared', [stage.file.id]);
   addToProgress('abilities', stage.file.unlocks);
+  // Back to the map: the rail to the next island grows in, and the child taps it to go on.
   const after = await nextStage(loadProgress().cleared, stage.file.id);
-  if (after) goToStage(after.id);
+  const choice = await openMap(uiEl, { next: after?.id, closeLabel: 'タイトルへ' });
+  if (choice.kind === 'stage') goToStage(choice.id);
   else location.href = location.pathname;
 }
 

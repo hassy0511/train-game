@@ -3,6 +3,8 @@ export type TitleChoice = 'start' | 'continue';
 export interface TitleOptions {
   /** Label of the "continue" button (e.g. "つづきから（きょうりゅうの たに）"); omitted = no button. */
   continueLabel?: string;
+  /** Opens the world map; omitted = no button. */
+  onMap?: () => void;
   /** Opens the picture book; omitted = no button. */
   onZukan?: () => void;
 }
@@ -33,6 +35,7 @@ export function showTitle(root: HTMLElement, title: string, options: TitleOption
     };
     add('title-start', 'はじめる', pick('start'), !!options.continueLabel);
     if (options.continueLabel) add('title-continue', options.continueLabel, pick('continue'));
+    if (options.onMap) add('title-map', 'ちず', options.onMap, true);
     if (options.onZukan) add('title-zukan', 'ずかん', options.onZukan, true);
     const stamp = document.createElement('div');
     stamp.className = 'build-stamp';
