@@ -43,6 +43,8 @@ export interface MissionPorts extends CutscenePorts {
   revealJunction(side: JunctionSide): void;
   /** A record was found (already saved). */
   recordFound(record: RecordDef): void;
+  /** Stage clear: the fanfare just before the clear card. */
+  fanfare(): void;
   /** Something nearby reacts to the whistle right now: make the whistle button glow. */
   whistleHint(on: boolean): void;
 }
@@ -210,6 +212,7 @@ export class MissionRunner {
 
     if (file.ending) await this.cutscene(file.ending);
     this.phase = 'clear';
+    this.ports.fanfare();
     await this.ports.card(`${file.title}\nクリア！`, 'つづく');
   }
 
