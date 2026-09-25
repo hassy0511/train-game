@@ -140,6 +140,7 @@ async function boot(): Promise<void> {
   let settings: Settings = loadSettings();
   const applySettings = (): void => {
     audio.setSoundVolume(VOLUME_GAIN[settings.sound]);
+    audio.setMusicVolume(VOLUME_GAIN[settings.music]);
     app.classList.toggle('is-left-handed', settings.leftHanded);
     app.dataset.calm = settings.calm ? '1' : '0';
   };
@@ -296,6 +297,7 @@ async function boot(): Promise<void> {
     const dt = Math.min((now - last) / 1000, MAX_DT);
     last = now;
     app.dataset.paused = paused ? '1' : '0';
+    app.dataset.music = audio.musicId ?? '';
     if (paused) {
       // Game time stands still; keep drawing so a resize or the returning view stay right.
       view.update(0, train.getPose(), fx);
@@ -366,6 +368,8 @@ async function boot(): Promise<void> {
   const progress = loadProgress();
   const next = await nextStage(progress.cleared);
   if (!params.has('go')) {
+    // The title's music box (it starts with the first tap: iPad keeps sound locked until then).
+    audio.playMusic('title');
     const choice = await showTitle(uiEl, GAME_TITLE, {
       continueLabel: next && next.id !== stageId ? `つづきから（${next.title}）` : undefined,
       onMap: () => {
@@ -396,6 +400,7 @@ async function boot(): Promise<void> {
     }
   }
   audio.unlock();
+  audio.playMusic(stage.file.environment.bgm);
 
   const ports: MissionPorts = {
     say: (text, who) => bubbles.say(text, who),
@@ -435,8 +440,9 @@ async function boot(): Promise<void> {
     whistleHint: (on) => ui.whistle.setGlow(on),
     recordFound: (record) => {
       toast.show(`みつけた！\n${record.name}`, 'perfect');
-      audio.playStop('perfect');
+      audio.playRecord();
     },
+    fanfare: () => audio.playFanfare(),
   };
   events.on('event', (e) => {
     if (e.type === 'door') audio.playDoor(e.open);
@@ -446,6 +452,7 @@ async function boot(): Promise<void> {
   const pause = createPause(uiEl, {
     onPause: (p) => {
       paused = p;
+      audio.setMusicPaused(p);
     },
     onMap: async () => {
       const choice = await openMap(uiEl, { next: next?.id, closeLabel: 'もどる' });
@@ -463,6 +470,7 @@ async function boot(): Promise<void> {
   addToProgress('abilities', stage.file.unlocks);
   // Back to the map: the rail to the next island grows in, and the child taps it to go on.
   const after = await nextStage(loadProgress().cleared, stage.file.id);
+  audio.playMusic('title');
   const choice = await openMap(uiEl, { next: after?.id, closeLabel: 'タイトルへ' });
   if (choice.kind === 'stage') goToStage(choice.id);
   else location.href = location.pathname;

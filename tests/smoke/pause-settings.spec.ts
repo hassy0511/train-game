@@ -17,6 +17,9 @@ test('settings from the title gear, and the pause menu in play', async ({ page }
   const app = page.locator('#app');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
 
+  // The title asks for its music box (it plays once the first tap unlocks sound).
+  await expect(app).toHaveAttribute('data-music', 'title');
+
   // Settings: quieter sounds, calm camera, lever on the right. Each tap applies and is saved at once.
   await page.locator('#title-settings').click();
   await expect(page.locator('#settings')).toBeVisible();
@@ -38,6 +41,8 @@ test('settings from the title gear, and the pause menu in play', async ({ page }
 
   // Into the stage: the lever sits on the right, the buttons on the left.
   await page.locator('#title-start').click();
+  // The stage's own song (environment.bgm).
+  await expect(app).toHaveAttribute('data-music', 'town');
   const lever = await page.locator('#lever').boundingBox();
   const whistle = await page.locator('#whistle').boundingBox();
   expect(lever && whistle && lever.x > whistle.x).toBe(true);

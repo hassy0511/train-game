@@ -1,3 +1,4 @@
+import { SONGS } from '../audio/songs';
 import type { Placement, StageFile } from './types';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
@@ -106,6 +107,9 @@ export function validateStageFile(raw: unknown): StageFile {
   }
   if (env.ground !== null && (!isObject(env.ground) || !isNumber(env.ground.y) || !isNumber(env.ground.size))) {
     fail('"environment.ground" must be null or {y, size, color}');
+  }
+  if (env.bgm !== null && (typeof env.bgm !== 'string' || !(env.bgm in SONGS))) {
+    fail(`"environment.bgm" must be null or a song in src/audio/songs.ts (${Object.keys(SONGS).join(', ')})`);
   }
   if (env.fall !== undefined && env.fall !== 'dark' && env.fall !== 'cloud') fail('"environment.fall" must be dark or cloud');
   if (env.cloudSea !== undefined && (!isObject(env.cloudSea) || !isNumber(env.cloudSea.y))) fail('"environment.cloudSea" needs y');

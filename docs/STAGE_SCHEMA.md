@@ -42,7 +42,7 @@ interface Environment {
   fog: { color: string; near: number; far: number } | null;
   lighting: "day" | "evening" | "night" | "cave";  // ライトのプリセット名
   ground: { y: number; size: number; color: string } | null;   // 平らな地面。null なら地面なし
-  bgm: string | null;                              // public/audio/<name>.mp3。Phase 4 まで null
+  bgm: string | null;                              // 曲の名前（src/audio/songs.ts の town / valley / sky / title）。null = 音楽なし
 }
 
 interface Rail {

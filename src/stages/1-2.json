@@ -29,7 +29,7 @@
       "size": 1800,
       "color": "#9cbf62"
     },
-    "bgm": null
+    "bgm": "valley"
   },
   "start": {
     "railId": "main",

@@ -1,5 +1,12 @@
-/** Synthesized sound effects (no audio assets, fully original). The context unlocks on the first tap. */
+import { MusicPlayer } from './music';
+
+/** Synthesized sound effects and music (no audio assets, fully original). The context unlocks on the first tap. */
 export class AudioEngine {
+  private music: MusicPlayer | null = null;
+  /** The song asked for, started as soon as the context exists (iPad needs a tap first). */
+  private song: string | null = null;
+  private musicLevel = 1;
+  private musicPaused = false;
   private ctx: AudioContext | null = null;
   /** Every sound effect goes through this gain (the "こうかおん" setting). */
   private sfx: GainNode | null = null;
@@ -13,8 +20,59 @@ export class AudioEngine {
       this.sfx = this.ctx.createGain();
       this.sfx.gain.value = this.sfxLevel;
       this.sfx.connect(this.ctx.destination);
+      this.music = new MusicPlayer(this.ctx, this.ctx.destination);
+      this.music.setVolume(this.musicLevel);
+      this.music.setPaused(this.musicPaused);
+      if (this.song) this.music.play(this.song);
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
+  }
+
+  /** Plays a song from src/audio/songs.ts (null = silence). Asking again for the playing song does nothing. */
+  playMusic(id: string | null): void {
+    this.song = id;
+    if (!this.music) return;
+    if (id) this.music.play(id);
+    else this.music.stop();
+  }
+
+  /** Music volume, 0..1 (0 = off). */
+  setMusicVolume(gain: number): void {
+    this.musicLevel = gain;
+    this.music?.setVolume(gain);
+  }
+
+  /** Holds the music (the pause menu). */
+  setMusicPaused(paused: boolean): void {
+    this.musicPaused = paused;
+    this.music?.setPaused(paused);
+  }
+
+  /** The song playing or waiting for the first tap. */
+  get musicId(): string | null {
+    return this.song;
+  }
+
+  /** Stage clear: a short rising fanfare. */
+  playFanfare(): void {
+    const notes: [number, number][] = [
+      [523, 0],
+      [659, 120],
+      [784, 240],
+      [1047, 380],
+    ];
+    for (const [f, delay] of notes) window.setTimeout(() => this.tone(f, delay === 380 ? 0.6 : 0.18, 'triangle', 0.18), delay);
+  }
+
+  /** A record found: a sparkly three-note arpeggio. */
+  playRecord(): void {
+    for (const [f, delay] of [
+      [1175, 0],
+      [1568, 90],
+      [2093, 180],
+    ] as [number, number][]) {
+      window.setTimeout(() => this.tone(f, 0.35, 'sine', 0.12), delay);
+    }
   }
 
   /** Sound-effect volume, 0..1 (applies to sounds started from now on and to ones still playing). */

@@ -11,6 +11,7 @@ export interface EnvironmentDef {
   fog: { color: string; near: number; far: number } | null;
   lighting: 'day' | 'evening' | 'night' | 'cave';
   ground: { y: number; size: number; color: string } | null;
+  /** Song id in src/audio/songs.ts (Phase 4), or null for silence. */
   bgm: string | null;
   /** v1.3: how a fall looks: "dark" (default, fade to black) or "cloud" (caught by a cloud, fade to white). */
   fall?: 'dark' | 'cloud';
