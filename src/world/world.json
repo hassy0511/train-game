@@ -317,7 +317,101 @@
       "id": "2-1",
       "chapter": 2,
       "x": 88,
-      "y": 52
+      "y": 52,
+      "diorama": {
+        "base": "island-b",
+        "rail": {
+          "radius": 11
+        },
+        "camera": {
+          "yaw": 25,
+          "pitch": 28
+        },
+        "items": [
+          {
+            "model": "tree-trunk",
+            "at": [
+              0,
+              -2
+            ],
+            "rotY": 0,
+            "scale": 0.22
+          },
+          {
+            "model": "canopy",
+            "at": [
+              0,
+              -2
+            ],
+            "rotY": 0,
+            "scale": 0.55,
+            "lift": 17
+          },
+          {
+            "model": "canopy",
+            "at": [
+              -15,
+              -8
+            ],
+            "rotY": 40,
+            "scale": 0.3,
+            "lift": 2
+          },
+          {
+            "model": "squirrel",
+            "at": [
+              -14,
+              6
+            ],
+            "rotY": 60,
+            "scale": 3
+          },
+          {
+            "model": "acorn",
+            "at": [
+              -9,
+              9
+            ],
+            "rotY": 0,
+            "scale": 1.6
+          },
+          {
+            "model": "acorn",
+            "at": [
+              -5,
+              12
+            ],
+            "rotY": 30,
+            "scale": 1.3
+          },
+          {
+            "model": "mushroom",
+            "at": [
+              15,
+              -7
+            ],
+            "rotY": 0,
+            "scale": 2.2
+          },
+          {
+            "model": "mushroom",
+            "at": [
+              16,
+              7
+            ],
+            "rotY": 0,
+            "scale": 1.6
+          },
+          {
+            "model": "train-proto",
+            "at": [
+              11,
+              2
+            ],
+            "rotY": 0
+          }
+        ]
+      }
     },
     {
       "id": "2-2",

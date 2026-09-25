@@ -44,7 +44,7 @@ export interface TrainEvents extends Record<string, unknown> {
   fell: { gap: GapDef; railId: string; short: boolean };
 }
 
-export type JumpResult = 'ok' | 'stopped' | 'cooldown' | 'air' | 'locked';
+export type JumpResult = 'ok' | 'stopped' | 'cooldown' | 'air' | 'locked' | 'bough';
 
 /** A jump arc in space: bogies between `from` and `from + length` on `railId` are lifted. */
 interface JumpArc {
@@ -83,6 +83,10 @@ export class Train {
   speedScale = 1;
   /** An updraft pushes the train up to this speed (m/s) while the lever is on a running notch; 0 = none. */
   boostSpeed = 0;
+  /** A bending bough under the train: how far (m) the rail hangs below rest at `s` on `railId`. */
+  sagAt: ((railId: string, s: number) => number) | null = null;
+  /** On a springy bough the jump button does nothing (the bough throws the train itself). */
+  jumpBlocked = false;
 
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
@@ -159,7 +163,7 @@ export class Train {
   }
 
   /** Where the lead bogie is (m along the current rail): the point that falls into a gap. */
-  private get bogieS(): number {
+  get bogieS(): number {
     return this.frontS - FALL.bogieLead;
   }
 
@@ -187,7 +191,7 @@ export class Train {
 
   /** True when a jump started now clears the next gap ahead (the button glows). */
   get jumpWouldClear(): boolean {
-    if (this.state.speed < JUMP.minSpeed || this.airborne || this.jumpCooldown > 0 || this.falling) return false;
+    if (this.state.speed < JUMP.minSpeed || this.airborne || this.jumpCooldown > 0 || this.falling || this.jumpBlocked) return false;
     const gap = this.nextGap(JUMP.hintDistance);
     if (!gap || this.bogieS >= gap.from) return false;
     return this.bogieS + this.jumpDistance() >= gap.to + JUMP.landingMargin;
@@ -198,6 +202,7 @@ export class Train {
     if (this.ended || this.lockReason !== null || this.emergency || this.falling) return 'locked';
     if (this.airborne) return 'air';
     if (this.jumpCooldown > 0) return 'cooldown';
+    if (this.jumpBlocked) return 'bough';
     if (this.state.speed < JUMP.minSpeed) return 'stopped';
     const distance = this.jumpDistance();
     this.arcs.push({ railId: this.state.railId, from: this.bogieS, length: distance, height: JUMP.height });
@@ -217,6 +222,17 @@ export class Train {
     const distance = Math.max(plain, needed);
     this.arcs.push({ railId: this.state.railId, from: this.bogieS, length: distance, height: PAD_JUMP.height });
     this.events.emit('jumped', { distance });
+    return true;
+  }
+
+  /**
+   * A springy bough throws the train: a jump of `length` m (lead bogie) and `height` m from here, whatever the
+   * gap ahead (too slow = too short, and the train falls). Returns false when it cannot jump now.
+   */
+  launch(length: number, height: number): boolean {
+    if (this.ended || this.emergency || this.falling || this.airborne || this.state.speed < JUMP.minSpeed) return false;
+    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length, height });
+    this.events.emit('jumped', { distance: length });
     return true;
   }
 
@@ -471,8 +487,12 @@ export class Train {
     // The car rides the arc at its center and keeps only a hint of the arc's slope, so the cab view
     // stays on the horizon ("ぴょん" like a toy, not a ski jump). Falling tips it forward.
     const hc = this.arcLift(s);
-    const hf = hc + JUMP_PITCH * (this.arcLift(s + TRAIN.bogieOffset) - hc) - this.fallDrop(true);
-    const hr = hc + JUMP_PITCH * (this.arcLift(s - TRAIN.bogieOffset) - hc) - this.fallDrop(false);
+    const sag = this.sagAt;
+    const id = this.state.railId;
+    const sf = sag ? sag(id, s + TRAIN.bogieOffset) : 0;
+    const sr = sag ? sag(id, s - TRAIN.bogieOffset) : 0;
+    const hf = hc + JUMP_PITCH * (this.arcLift(s + TRAIN.bogieOffset) - hc) - this.fallDrop(true) - sf;
+    const hr = hc + JUMP_PITCH * (this.arcLift(s - TRAIN.bogieOffset) - hc) - this.fallDrop(false) - sr;
     this.front.copy(front.position).addScaledVector(front.up, hf);
     this.rear.copy(rear.position).addScaledVector(rear.up, hr);
     position.addVectors(this.front, this.rear).multiplyScalar(0.5);

@@ -180,15 +180,39 @@ function painted(geometry: BufferGeometry, color: Color): BufferGeometry {
   return geometry;
 }
 
+/** A stretch of rail built elsewhere (a springy bough bends its own track). */
+export interface TrackSkip {
+  railId: string;
+  from: number;
+  to: number;
+}
+
+const skipped = (skips: TrackSkip[], s: number): boolean => skips.some((k) => s > k.from && s < k.to);
+
+/** Track (rails, ballast, sleepers) of one rail between `from` and `to` as one vertex-coloured geometry. */
+export function buildTrack(rail: Rail, from: number, to: number): BufferGeometry | null {
+  const sleeper = new BoxGeometry(2.4, 0.15, 0.25);
+  const geometry = buildChunk(rail, samplePoints(rail), from, to, sleeper, []);
+  sleeper.dispose();
+  return geometry;
+}
+
 /** One piece of track: rails, ballast and sleepers of `rail` between `from` and `to`, merged into one geometry. */
-function buildChunk(rail: Rail, samples: number[], from: number, to: number, sleeper: BoxGeometry): BufferGeometry | null {
+function buildChunk(
+  rail: Rail,
+  samples: number[],
+  from: number,
+  to: number,
+  sleeper: BoxGeometry,
+  skips: TrackSkip[],
+): BufferGeometry | null {
   const railData: GeometryData = { positions: [], indices: [] };
   const ballastData: GeometryData = { positions: [], indices: [] };
   for (let index = 0; index < samples.length - 1; index += 1) {
     const startS = samples[index];
     const endS = samples[index + 1];
     if (startS < from || startS >= to) continue;
-    if (isInGap(rail, (startS + endS) / 2)) continue;
+    if (isInGap(rail, (startS + endS) / 2) || skipped(skips, (startS + endS) / 2)) continue;
     const start = rail.frameAt(startS);
     const end = rail.frameAt(endS);
     addRailSegment(railData, start, end, -RAIL_HALF_GAUGE);
@@ -199,7 +223,7 @@ function buildChunk(rail: Rail, samples: number[], from: number, to: number, sle
   if (railData.indices.length) parts.push(painted(makeGeometry(railData), RAIL_COLOR));
   if (ballastData.indices.length) parts.push(painted(makeGeometry(ballastData), BALLAST_COLOR));
   for (let s = Math.ceil(from / SLEEPER_STEP) * SLEEPER_STEP; s < Math.min(to, rail.length + 1e-6); s += SLEEPER_STEP) {
-    if (isInGap(rail, s)) continue;
+    if (isInGap(rail, s) || skipped(skips, s)) continue;
     parts.push(painted(sleeper.clone().applyMatrix4(frameMatrix(rail.frameAt(s), 0.225)), SLEEPER_COLOR));
   }
   if (parts.length === 0) return null;
@@ -210,7 +234,7 @@ function buildChunk(rail: Rail, samples: number[], from: number, to: number, sle
 }
 
 /** Generates the track (in culled pieces) plus buffer-stop placements. */
-export function buildRailScene(network: RailNetwork): RailScene {
+export function buildRailScene(network: RailNetwork, skips: TrackSkip[] = []): RailScene {
   const group = new Group();
   group.name = 'rail-network';
   const material = new MeshLambertMaterial({ vertexColors: true });
@@ -222,7 +246,7 @@ export function buildRailScene(network: RailNetwork): RailScene {
     const pieces = Math.max(1, Math.ceil(rail.length / CHUNK));
     for (let i = 0; i < pieces; i++) {
       const to = i === pieces - 1 ? rail.length + 1 : (i + 1) * CHUNK;
-      const geometry = buildChunk(rail, samples, i * CHUNK, to, sleeper);
+      const geometry = buildChunk(rail, samples, i * CHUNK, to, sleeper, skips.filter((k) => k.railId === rail.id));
       if (!geometry) continue;
       const mesh = new Mesh(geometry, material);
       mesh.name = `${rail.id}-track-${i}`;

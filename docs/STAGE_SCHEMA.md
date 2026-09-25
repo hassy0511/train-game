@@ -380,3 +380,31 @@ type LineKey = /* v1.3 */ | 'doorAsk' | 'doorsClosedLever';
 
 - ドアを待つ間、ドアボタンは光る（ジャンプボタンと同じ光り方）。
 - 乗り降りが終わったあとは、次に走り出すまでレバーは動かない（ミッションの切り替わりで、見張りのない電車が走らないように）。
+
+## 8. v1.5 の追加（2-1、2026-09-25）
+
+`schemaVersion` は 1 のまま。追加はすべて省略可。実例は `src/stages/2-1.json`、設計は `docs/PHASE5_DESIGN.md` §4。
+
+```ts
+interface EnvironmentDef {
+  // ...
+  fall?: 'dark' | 'cloud' | 'leaf';   // "leaf" = 大きな葉っぱで受け止めて、緑にふわっと変わって戻る
+  bgm: string | null;                 // 曲の名前（v1 からの欄）。2-1 は "forest"
+}
+
+type LineKey = /* v1.4 */ | 'nutHit' | 'nutNear' | 'boughJump' | 'squirrelNear' | 'squirrelDropped';
+// nutHit = 実にぶつかった（既定「ぽこん！ きのみに ぶつかった〜」）／nutNear = 実が転がり出した
+// boughJump = しなる枝の上でジャンプを押した（既定「えだが とばして くれるよ！」）
+// squirrelNear = 実を持ったリスが見えた／squirrelDropped = 汽笛でリスが実を落とした
+```
+
+仕掛け（`gimmicks[]`）:
+| type | 動き | params（既定値） |
+|---|---|---|
+| `bough` | しなる枝。`railId` の `from`（幹側、固定）〜`to`（先）が、電車の速さに応じてたわみ、先頭の台車が `to` に来ると跳ね上げる（飛距離 = 速さ × 1.6 秒 × `launch`）。`to` の直後に `gaps[]` の切れ目を置く。枝の上ではジャンプボタンは押せない。枝の線路は画面側で別に作ってたわませる | `{ sag: 2.5, launch: 1.8, height: 6 }` |
+
+人やもの（`actors[]`、`onRail` で置く）:
+| type | 動き | params（既定値） |
+|---|---|---|
+| `nut` | 転がる木の実。先頭が `trigger` m まで来ると `at` から電車の方へ転がり出す。先頭の台車が実に届いたとき空中なら越えられ、地上なら「ぽこん」で `at − trigger − 30` へ戻る。越えられる瞬間はジャンプボタンが光る | `{ trigger: 80, speed: 5, range: 160 }` |
+| `squirrel` | 実を持ったリス（線路の上 6 m）。先頭が `whistleRange` m 以内（`drop` m より遠い）で汽笛ボタンが光り、汽笛で実を線路の外へ落とす。鳴らさずに `drop` m まで来ると実を `at` の線路の上に落とす（止まった実。ジャンプで越える。ぶつかると `at − 80` へ戻る） | `{ whistleRange: 70, drop: 28 }` |

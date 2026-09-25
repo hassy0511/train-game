@@ -18,6 +18,7 @@ import { showCard } from './ui/cards';
 import { createDoorButton } from './ui/door-button';
 import { createFade } from './ui/fade';
 import { param, zoneAt } from './gimmick/zones';
+import { BoughSystem } from './gimmick/bough';
 import { showTitle } from './ui/title';
 import { createToast } from './ui/toast';
 import { CAMERA_LABELS, CAMERA_MODES, createSceneView, type CameraFx, type CameraMode } from './view';
@@ -202,7 +203,9 @@ async function boot(): Promise<void> {
   const caption = createCaption(uiEl);
   const cargo = createCargoStrip(uiEl);
   const toast = createToast(uiEl);
-  const fade = createFade(uiEl, stage.file.environment.fall === 'cloud' ? '#ffffff' : '#000000');
+  /** What a fall fades to: black, a white cloud (1-3) or a green leaf (2-1). */
+  const FALL_COLORS = { dark: '#000000', cloud: '#ffffff', leaf: '#d6efb4' } as const;
+  const fade = createFade(uiEl, FALL_COLORS[stage.file.environment.fall ?? 'dark']);
   const doorButton = createDoorButton(actionButtons);
 
   // Camera: the player picks a mode; the game may override it for a moment (doors, cutscenes).
@@ -245,6 +248,20 @@ async function boot(): Promise<void> {
     fx.dip = Math.max(fx.dip, 0.5 * shakeScale());
     audio.playSqueal();
     if (hasMissions) void bubbles.say('わわっ！');
+  });
+
+  // Springy boughs (2-1): they bend under the train and throw it at the tip.
+  const boughs = new BoughSystem(
+    stage.file.gimmicks,
+    train,
+    (index, sag) => view.onStageEvent({ type: 'bough', index, sag }),
+    () => {
+      audio.playJump();
+      events.post({ type: 'jump' });
+    },
+  );
+  events.on('event', (e) => {
+    if (e.type === 'rewind') boughs.reset();
   });
 
   const startPose = train.getPose();
@@ -335,9 +352,10 @@ async function boot(): Promise<void> {
     app.dataset.updraft = updraft ? '1' : '0';
 
     train.update(dt);
+    boughs.update(dt);
     whistle.update(dt);
     ui.whistle.setProgress(whistle.progress);
-    jumpButton.set(train.jumpProgress, train.jumpWouldClear, train.state.speed < JUMP.minSpeed);
+    jumpButton.set(train.jumpProgress, train.jumpWouldClear || (runner?.jumpHint ?? false), train.state.speed < JUMP.minSpeed);
     runner?.update(dt);
 
     const pose = train.getPose();

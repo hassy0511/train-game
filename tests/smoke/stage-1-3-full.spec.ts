@@ -170,13 +170,15 @@ test('stage 1-3 full run: island hops, the whistle pad, upside down, the updraft
   }));
   console.log(`1-3 budget: draw calls ${budget.draws} / 200, triangles ${budget.tris} / 100000`);
   await page.locator('#card-button').click();
-  // The map: the rail runs on to chapter 2's "?" island, which only wiggles; back to the title.
+  // The map: the rail runs on to chapter 2. 2-1 is next (it bounces); 2-2 is still a "?" that only wiggles.
   await expect(page.locator('#map')).toBeVisible();
   await expect(page.locator('[data-link="1-3>2-1"]')).toHaveClass(/is-laid/);
-  await page.locator('.map-island[data-island="2-1"]').click();
+  await expect(page.locator('.map-island[data-island="2-1"]')).toHaveClass(/is-next/);
+  await page.locator('.map-island[data-island="2-2"]').click();
   await expect(page.locator('#map')).toBeVisible();
-  await page.locator('#map-close').click();
-  await page.waitForURL((url) => !url.search.includes('stage=1-3'), { timeout: 30_000 });
+  await page.screenshot({ path: resolve(OUT, '38-map-chapter2.png') });
+  await page.locator('.map-island[data-island="2-1"]').dispatchEvent('click');
+  await page.waitForURL(/stage=2-1/, { timeout: 30_000 });
   console.log('smoke 1-3 full: cleared');
   expect(errors).toEqual([]);
 });

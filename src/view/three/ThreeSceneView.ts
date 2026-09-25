@@ -23,6 +23,7 @@ import type { TrainPose } from '../../train/types';
 import type { CameraFx, SceneView } from '../SceneView';
 import { cameraTarget, makeCameraTarget, smoothCamera, type CameraMode } from '../camera-rig';
 import { buildGapPits, buildJumpDevice, buildLightBeam, Flocks, JunctionSigns, SkyGimmicks } from './abilities';
+import { ForestGimmicks } from './forest';
 import { ActorLayer } from './actors';
 import { addEnvironment, SKY_RADIUS } from './environment';
 import { ModelLibrary } from './models';
@@ -69,6 +70,8 @@ export class ThreeSceneView implements SceneView {
   private signs: JunctionSigns | null = null;
   private flocks: Flocks | null = null;
   private sky3: SkyGimmicks | null = null;
+  private forest: ForestGimmicks | null = null;
+  private boughSkips: { railId: string; from: number; to: number }[] = [];
   private baseFog: { near: number; far: number } | null = null;
   private readonly lightBeam = buildLightBeam();
   private jumpDevice: Object3D | null = null;
@@ -87,7 +90,14 @@ export class ThreeSceneView implements SceneView {
     this.sky = addEnvironment(this.scene, stage.file.environment);
 
     this.network = network;
-    const rails = buildRailScene(network);
+    // Springy boughs bend their own track (ForestGimmicks); the rest of the line is built here.
+    const boughSkips = stage.file.gimmicks.flatMap((g) =>
+      g.type === 'bough' && g.railId !== undefined && g.from !== undefined && g.to !== undefined
+        ? [{ railId: g.railId, from: g.from, to: g.to }]
+        : [],
+    );
+    this.boughSkips = boughSkips;
+    const rails = buildRailScene(network, boughSkips);
     this.rails = rails.group;
     this.scene.add(rails.group);
 
@@ -121,6 +131,8 @@ export class ThreeSceneView implements SceneView {
     this.scene.add(this.flocks.group);
     this.sky3 = new SkyGimmicks(stage);
     this.scene.add(this.sky3.group);
+    this.forest = new ForestGimmicks(stage);
+    this.scene.add(this.forest.group);
     const fog = stage.file.environment.fog;
     this.baseFog = fog ? { near: fog.near, far: fog.far } : null;
     if (fog && this.sky) {
@@ -141,6 +153,7 @@ export class ThreeSceneView implements SceneView {
       this.signs.init(),
       this.flocks.init(this.models),
       this.sky3.init(this.models),
+      this.forest.init(this.models),
     ]);
     const trainInstance = trainModel.clone(true);
     trainInstance.name = 'train-proto';
@@ -198,7 +211,7 @@ export class ThreeSceneView implements SceneView {
       // Gaps were added to the rail; rebuild the track meshes without the cut piece.
       const oldRails = this.rails;
       oldRails.removeFromParent();
-      const rebuilt = buildRailScene(this.network);
+      const rebuilt = buildRailScene(this.network, this.boughSkips);
       this.rails = rebuilt.group;
       this.scene.add(rebuilt.group);
       this.disposeDetachedObject(oldRails);
@@ -207,6 +220,7 @@ export class ThreeSceneView implements SceneView {
     if (event.type === 'door') this.setDoor(event.open, event.stationId);
     if (event.type === 'light') this.lightBeam.visible = event.on;
     this.sky3?.onStageEvent(event);
+    this.forest?.onEvent(event);
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
     if (event.type === 'ability' && event.id === 'jump' && !this.jumpDevice) {
       this.jumpDevice = new Object3D();
@@ -302,6 +316,7 @@ export class ThreeSceneView implements SceneView {
     this.updateRailCutEffects(dt);
     this.signs?.update(dt, this.clock);
     this.flocks?.update(dt);
+    this.forest?.update(dt);
     this.sky3?.update(dt, pose.railId, pose.s + TRAIN.length / 2, this.scene.fog as Fog | null, this.baseFog);
     if (this.sky3 && this.sky) {
       const uniforms = (this.sky.material as ShaderMaterial).uniforms;
