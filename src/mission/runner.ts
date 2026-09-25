@@ -2,6 +2,7 @@ import { Vector3 } from 'three';
 import type { Whistle } from '../actions/whistle';
 import { CatActor } from '../actors/cat';
 import { LargeDino, makeDino, MidDino, SmallDino, type Dino } from '../actors/dino';
+import { RollingNut, Squirrel } from '../actors/nut';
 import { addToProgress, loadProgress } from '../core/progress';
 import type { StageEventBus } from '../core/stage-events';
 import { runCutscene, type CutscenePorts } from '../cutscene/runner';
@@ -70,7 +71,10 @@ type DefaultLine =
   | 'deadEnd'
   | 'recordFound'
   | 'padGone'
-  | 'padAppear';
+  | 'padAppear'
+  | 'nutHit'
+  | 'boughJump'
+  | 'squirrelDropped';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -92,6 +96,9 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   recordFound: 'みつけた！',
   padGone: 'あれ？ ジャンプだいが きえてる… きてきを ならしてみよう！',
   padAppear: 'でた！ だいに のって！',
+  nutHit: 'ぽこん！ きのみに ぶつかった〜',
+  boughJump: 'えだが とばして くれるよ！',
+  squirrelDropped: 'リスが きのみを おとした！ いまの うちに！',
 };
 
 /** Lever labels by jump hint, for the partner's "つぎの きれめは ふつう で とべる". */
@@ -114,6 +121,8 @@ export class MissionRunner {
   private stop: StopMonitor | null = null;
   private cats: CatActor[] = [];
   private dinos: Dino[] = [];
+  private readonly nuts: RollingNut[];
+  private readonly squirrels: Squirrel[];
   private lightOn = false;
   private readonly gapHints = new Set<GapDef>();
   private readonly signLines = new Set<string>();
@@ -140,6 +149,8 @@ export class MissionRunner {
     this.groundY = stage.file.environment.ground?.y ?? null;
     this.cats = stage.actors.filter((a) => a.type === 'cat').map((a) => new CatActor(a, train));
     this.dinos = stage.actors.map((a) => makeDino(a, train)).filter((d): d is Dino => d !== null);
+    this.nuts = stage.actors.filter((a) => a.type === 'nut').map((a) => new RollingNut(a, train));
+    this.squirrels = stage.actors.filter((a) => a.type === 'squirrel').map((a) => new Squirrel(a, train));
     this.pads = stage.file.gimmicks.flatMap((g, index) =>
       g.type === 'jump-pad' && g.railId !== undefined && g.from !== undefined
         ? [{ index, railId: g.railId, at: g.from, seconds: param(g, 'seconds', 8), range: param(g, 'range', 60), left: 0, hinted: false }]
@@ -165,7 +176,14 @@ export class MissionRunner {
 
   /** The jump button was pressed while stopped or otherwise refused. */
   onJumpRefused(reason: string): void {
-    if (reason === 'stopped' && this.phase === 'driving') this.ports.sayAsync(this.lines.jumpStopped ?? DEFAULT_LINES.jumpStopped);
+    if (this.phase !== 'driving') return;
+    if (reason === 'stopped') this.ports.sayAsync(this.lines.jumpStopped ?? DEFAULT_LINES.jumpStopped);
+    if (reason === 'bough') this.ports.sayAsync(this.lines.boughJump ?? DEFAULT_LINES.boughJump);
+  }
+
+  /** A nut ahead can be jumped right now (the jump button glows). */
+  get jumpHint(): boolean {
+    return this.phase === 'driving' && (this.nuts.some((n) => n.jumpHint) || this.squirrels.some((s) => s.jumpHint));
   }
 
   /** Abilities the player already has on entering the stage (saved, or inherited when opened directly). */
@@ -299,10 +317,49 @@ export class MissionRunner {
         return;
       }
     }
+    for (const nut of this.nuts) {
+      const o = nut.update(dt);
+      if (!o) continue;
+      const id = nut.actor.id;
+      if (o.kind === 'roll') {
+        this.events.post({ type: 'nut', id, state: 'roll', railId: nut.railId, at: nut.at, speed: o.speed });
+        if (this.lines.nutNear) this.ports.sayAsync(this.lines.nutNear);
+      } else if (o.kind === 'danger') {
+        this.train.emergencyStop();
+        this.events.post({ type: 'nut', id, state: 'bonk', railId: nut.railId, at: nut.s });
+        this.finishDrive({ kind: 'fail', reason: 'nut', rewind: { railId: nut.railId, at: nut.at - nut.params.trigger - 30 } });
+        return;
+      }
+    }
+    for (const squirrel of this.squirrels) {
+      const o = squirrel.update();
+      if (!o) continue;
+      const id = squirrel.actor.id;
+      if (o.kind === 'near') {
+        if (this.lines.squirrelNear) this.ports.sayAsync(this.lines.squirrelNear);
+      } else if (o.kind === 'drop-rail') {
+        this.events.post({ type: 'squirrel', id, state: 'drop-rail' });
+        this.events.post({ type: 'nut', id, state: 'rest', railId: squirrel.railId, at: squirrel.at });
+      } else if (o.kind === 'danger') {
+        this.train.emergencyStop();
+        this.events.post({ type: 'nut', id, state: 'bonk', railId: squirrel.railId, at: squirrel.at });
+        this.finishDrive({ kind: 'fail', reason: 'nut', rewind: { railId: squirrel.railId, at: squirrel.at - REWIND_DISTANCE } });
+        return;
+      }
+    }
   }
 
   /** Puts every actor back where it waits (start of the stage and after a rewind). */
   private resetActors(): void {
+    for (const nut of this.nuts) {
+      nut.reset();
+      this.events.post({ type: 'nut', id: nut.actor.id, state: 'reset', railId: nut.railId, at: nut.at });
+    }
+    for (const squirrel of this.squirrels) {
+      squirrel.reset();
+      this.events.post({ type: 'squirrel', id: squirrel.actor.id, state: 'hold' });
+      this.events.post({ type: 'nut', id: squirrel.actor.id, state: 'hide', railId: squirrel.railId, at: squirrel.at });
+    }
     for (const dino of this.dinos) {
       dino.reset();
       const id = dino.actor.id;
@@ -339,6 +396,7 @@ export class MissionRunner {
         this.events.post({ type: 'jump' });
       }
     }
+    if (this.squirrels.some((s) => s.inWhistleRange)) glow = true;
     this.ports.whistleHint(glow);
   }
 
@@ -447,6 +505,12 @@ export class MissionRunner {
         this.events.post({ type: 'partner:emote', kind: 'jump' });
       }
     }
+    for (const squirrel of this.squirrels) {
+      if (!squirrel.onWhistle()) continue;
+      this.events.post({ type: 'squirrel', id: squirrel.actor.id, state: 'drop-side' });
+      this.ports.sayAsync(this.lines.squirrelDropped ?? DEFAULT_LINES.squirrelDropped);
+      this.events.post({ type: 'partner:emote', kind: 'jump' });
+    }
     for (const dino of this.dinos) {
       if (!dino.onWhistle() || !(dino instanceof MidDino)) continue;
       const position = this.lateralPosition(dino.railId, dino.at, dino.params.fleeLateral);
@@ -522,7 +586,7 @@ export class MissionRunner {
     this.events.post({ type: 'fail', reason });
     const scary = reason === 'cat' || reason === 'dino';
     this.ports.cameraFx(scary ? 1 : 0.5, 1);
-    const key: DefaultLine = reason === 'cat' ? 'catDanger' : reason === 'dino' ? 'dinoDanger' : reason;
+    const key: DefaultLine = reason === 'cat' ? 'catDanger' : reason === 'dino' ? 'dinoDanger' : reason === 'nut' ? 'nutHit' : reason;
     await this.ports.say(this.lines[key] ?? DEFAULT_LINES[key], 'partner');
     if (reason === 'cat') await this.ports.say(this.lines.catDangerAfter ?? DEFAULT_LINES.catDangerAfter, 'partner');
     if (reason === 'dino') await this.ports.say(this.lines.dangerAfter ?? DEFAULT_LINES.dangerAfter, 'partner');
@@ -631,7 +695,7 @@ export class MissionRunner {
   }
 }
 
-type FailReason = 'tooFast' | 'overshoot' | 'cat' | 'dino' | 'fellShort' | 'fellNoJump' | 'deadEnd';
+type FailReason = 'tooFast' | 'overshoot' | 'cat' | 'dino' | 'fellShort' | 'fellNoJump' | 'deadEnd' | 'nut';
 interface FailOutcome {
   kind: 'fail';
   reason: FailReason;

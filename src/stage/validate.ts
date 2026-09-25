@@ -111,7 +111,7 @@ export function validateStageFile(raw: unknown): StageFile {
   if (env.bgm !== null && (typeof env.bgm !== 'string' || !(env.bgm in SONGS))) {
     fail(`"environment.bgm" must be null or a song in src/audio/songs.ts (${Object.keys(SONGS).join(', ')})`);
   }
-  if (env.fall !== undefined && env.fall !== 'dark' && env.fall !== 'cloud') fail('"environment.fall" must be dark or cloud');
+  if (env.fall !== undefined && !['dark', 'cloud', 'leaf'].includes(String(env.fall))) fail('"environment.fall" must be dark, cloud or leaf');
   if (env.cloudSea !== undefined && (!isObject(env.cloudSea) || !isNumber(env.cloudSea.y))) fail('"environment.cloudSea" needs y');
 
   const rails = requireArray(raw, 'rails');
@@ -243,7 +243,7 @@ export function validateStageFile(raw: unknown): StageFile {
 
   requireArray(raw, 'gimmicks').forEach((g, i) => {
     if (!isObject(g) || !isString(g.type)) fail(`gimmicks[${i}]: "type" is required`);
-    const zoned = ['camera', 'updraft', 'fog', 'jump-pad'];
+    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough'];
     if (zoned.includes(g.type)) {
       if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`gimmicks[${i}] ${g.type}: needs a known railId and "from"`);
       if (g.type !== 'jump-pad' && (!isNumber(g.to) || (g.to as number) <= (g.from as number))) fail(`gimmicks[${i}] ${g.type}: needs "to" after "from"`);

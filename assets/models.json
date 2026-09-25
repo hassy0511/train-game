@@ -1,6 +1,6 @@
 {
   "_doc": "Every GLB in public/models: the script that builds it, its triangle budget and file-size limit. Checked by scripts/check-models.mjs (runs in `npm run build`).",
-  "_pending": { "ticket": "0006", "note": "Drawn in code (src/view/three/sky-placeholders.ts) until the models are built.", "models": ["island-a", "island-b", "island-c", "island-flip", "island-flip-cap", "cloud-a", "cloud-b", "cloud-bounce", "cloud-wall", "jump-pad", "updraft-ring", "sky-buoy", "weathervane", "cloud-crystal"] },
+  "_pending": { "ticket": "0006, 0007", "note": "Drawn in code until the models are built: 0006 sky set (src/view/three/sky-placeholders.ts), 0007 giant tree set (src/view/three/forest-placeholders.ts).", "models": ["island-a", "island-b", "island-c", "island-flip", "island-flip-cap", "cloud-a", "cloud-b", "cloud-bounce", "cloud-wall", "jump-pad", "updraft-ring", "sky-buoy", "weathervane", "cloud-crystal", "tree-trunk", "canopy", "branch-log", "leaf-pad", "acorn", "acorn-big", "squirrel", "squirrel-nest", "mushroom", "bough-slab", "bough-slab-cap"] },
   "partner": { "script": "partner.py", "triangles": 5600, "kb": 350 },
   "amanojaku": { "script": "amanojaku.py", "triangles": 8200, "kb": 350 },
   "cat-stand": { "script": "cat-stand.py", "triangles": 5500, "kb": 350 },

@@ -14,7 +14,7 @@ export type StageEvent =
   | { type: 'goal'; stationId: string | null }
   | { type: 'partner:emote'; kind: Emote }
   | { type: 'stop'; grade: 'perfect' | 'ok' }
-  | { type: 'fail'; reason: 'tooFast' | 'overshoot' | 'cat' | 'dino' | 'fellShort' | 'fellNoJump' | 'deadEnd' }
+  | { type: 'fail'; reason: 'tooFast' | 'overshoot' | 'cat' | 'dino' | 'fellShort' | 'fellNoJump' | 'deadEnd' | 'nut' }
   | { type: 'rewind' }
   /** The player has this ability (at load and when it is learned). */
   | { type: 'ability'; id: AbilityId }
@@ -24,7 +24,16 @@ export type StageEvent =
   | { type: 'sign:reveal'; junctionId: string }
   | { type: 'record:found'; id: string }
   /** A jump pad shows (for `seconds`, blinking at the end) or hides again. `index` is its place in gimmicks[]. */
-  | { type: 'pad'; index: number; visible: boolean; seconds?: number };
+  | { type: 'pad'; index: number; visible: boolean; seconds?: number }
+  /** v1.5: a bough's tip hangs `sag` m below rest (negative = springing up). `index` is its place in gimmicks[]. */
+  | { type: 'bough'; index: number; sag: number }
+  /**
+   * v1.5: a nut. "roll": rolls from `at` towards the train at `speed` m/s (starting now); "rest": lies still at
+   * `at`; "bonk": the train bumped it (it bounces off the rail); "hide": gone; "reset": back where it waits.
+   */
+  | { type: 'nut'; id: string; state: 'roll' | 'rest' | 'bonk' | 'hide' | 'reset'; railId: string; at: number; speed?: number }
+  /** v1.5: a squirrel holding a nut over the rail: "hold", "drop-side" (whistled: off the rail), "drop-rail". */
+  | { type: 'squirrel'; id: string; state: 'hold' | 'drop-side' | 'drop-rail' };
 
 export class StageEventBus extends Emitter<{ event: StageEvent }> {
   post(event: StageEvent): void {

@@ -79,6 +79,27 @@ export const SONGS: Record<string, Song> = {
     ],
   },
 
+  // 2-1 おおきなきのくに: a bouncy waltz, marimba with a little flute answering.
+  forest: {
+    id: 'forest',
+    title: 'おおきな き',
+    bpm: 132,
+    stepsPerBeat: 2,
+    tracks: [
+      {
+        voice: 'wood',
+        notes:
+          'G4:2 B4:1 D5:1 B4:2 | C5:2 E5:2 C5:2 | B4:1 A4:1 G4:2 B4:2 | A4:6 | G4:2 B4:1 D5:1 G5:2 | F#5:2 E5:1 D5:1 E5:2 | D5:2 C5:1 B4:1 A4:2 | G4:6',
+      },
+      { voice: 'lead', gain: 0.6, notes: '-:6 | -:2 G5:2 E5:2 | -:6 | -:2 C5:2 D5:2 | -:6 | A5:2 G5:2 -:2 | F#5:2 E5:2 F#5:2 | G5:4 -:2' },
+      {
+        voice: 'bass',
+        notes: 'G2:2 D3:2 B2:2 | C3:2 G2:2 E3:2 | G2:2 D3:2 B2:2 | D3:2 A2:2 F#2:2 | G2:2 D3:2 B2:2 | D3:2 A2:2 F#2:2 | A2:2 E3:2 D3:2 | G2:6',
+      },
+      { voice: 'drums', gain: 0.5, notes: `${repeat('k:2 h:2 h:2', 7)} | k:2 s:2 k:2` },
+    ],
+  },
+
   // 1-3 くものうえ: floating 6/8, high bells over a soft pad.
   sky: {
     id: 'sky',

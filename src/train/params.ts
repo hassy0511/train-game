@@ -108,6 +108,13 @@ export const JUMP = {
 /** Jump pad: double the normal distance, higher, and always far enough to land past the next gap (+extra m). */
 export const PAD_JUMP = { scale: 2, height: 7, extra: 4 } as const;
 
+/**
+ * A springy bough (2-1): how far its tip hangs under a fast train (m), how far it throws the train (× speed ×
+ * JUMP.airTime) and how high, and the spring that bends it (stiffness 1/s², damping 1/s, upward kick at the throw).
+ * Stage JSON may override sag, launch and height per bough.
+ */
+export const BOUGH = { sag: 2.5, launch: 1.8, height: 6, stiffness: 40, damping: 5, kick: 9, fullSpeed: 22 } as const;
+
 /** How fast (m/s²) an updraft speeds the train up. */
 export const UPDRAFT_ACCELERATION = 6;
 

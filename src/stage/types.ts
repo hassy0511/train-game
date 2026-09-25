@@ -14,7 +14,7 @@ export interface EnvironmentDef {
   /** Song id in src/audio/songs.ts (Phase 4), or null for silence. */
   bgm: string | null;
   /** v1.3: how a fall looks: "dark" (default, fade to black) or "cloud" (caught by a cloud, fade to white). */
-  fall?: 'dark' | 'cloud';
+  fall?: 'dark' | 'cloud' | 'leaf';
   /** v1.3: a soft sea of clouds far below (stages in the sky). */
   cloudSea?: { y: number };
 }
@@ -186,6 +186,12 @@ export type MissionLines = Partial<
     // v1.3
     | 'padGone'
     | 'padAppear'
+    // v1.5
+    | 'nutHit'
+    | 'nutNear'
+    | 'boughJump'
+    | 'squirrelNear'
+    | 'squirrelDropped'
     // v1.4
     | 'doorAsk'
     | 'doorsClosedLever',
