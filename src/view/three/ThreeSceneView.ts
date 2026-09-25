@@ -25,6 +25,7 @@ import { cameraTarget, makeCameraTarget, smoothCamera, type CameraMode } from '.
 import { buildGapPits, buildJumpDevice, buildLightBeam, Flocks, JunctionSigns, SkyGimmicks } from './abilities';
 import { ForestGimmicks } from './forest';
 import { ActorLayer } from './actors';
+import { bakeModel } from './bake';
 import { addEnvironment, SKY_RADIUS } from './environment';
 import { ModelLibrary } from './models';
 import { addModelPlacements, addProps } from './props';
@@ -155,12 +156,15 @@ export class ThreeSceneView implements SceneView {
       this.sky3.init(this.models),
       this.forest.init(this.models),
     ]);
-    const trainInstance = trainModel.clone(true);
+    // The train, cars and partner only ever move as a whole (door bands, the light beam and the jump unit are
+    // objects of their own), so each draws baked, in one call.
+    const trainInstance = (bakeModel(trainModel) ?? trainModel).clone(true);
     trainInstance.name = 'train-proto';
     this.train.add(trainInstance);
-    for (const car of this.cars) car.add(carModel.clone(true));
+    const carTemplate = bakeModel(carModel) ?? carModel;
+    for (const car of this.cars) car.add(carTemplate.clone(true));
 
-    const partner = partnerModel.clone(true);
+    const partner = (bakeModel(partnerModel) ?? partnerModel).clone(true);
     partner.name = 'partner';
     partner.position.set(-0.9, 1.6, 4.6);
     this.train.add(partner);

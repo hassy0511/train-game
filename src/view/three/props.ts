@@ -2,6 +2,7 @@ import { InstancedMesh, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from 'thr
 import type { BufferGeometry, Group, Material } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { ResolvedProp } from '../../stage/types';
+import { bakeModel } from './bake';
 import type { ModelLibrary } from './models';
 
 export interface ModelPlacement {
@@ -17,8 +18,8 @@ export interface SourceMesh {
 }
 
 const unitScale = new Vector3(1, 1, 1);
-/** Size (m) of the ground cells props are batched by. */
-const CELL = 150;
+/** Size (m) of the ground cells props are batched by (a baked model costs one draw call per cell, so cells can be small). */
+const CELL = 75;
 
 const merged = new WeakMap<Group, SourceMesh[]>();
 
@@ -26,13 +27,21 @@ const merged = new WeakMap<Group, SourceMesh[]>();
 const layout = (g: BufferGeometry): string => `${Object.keys(g.attributes).sort().join(',')}|${g.index ? 'i' : 'n'}`;
 
 /**
- * The template's meshes, with every group of parts that share a material merged into one (static props only):
- * a model built from many small parts in one colour, like a cloud of spheres, becomes one draw call.
+ * The template's meshes for static props: the baked model (one mesh per material family) when it can be baked,
+ * otherwise every group of parts that share a material merged into one, so a model built from many small parts
+ * in one colour, like a cloud of spheres, still becomes one draw call.
  */
 export function sourceMeshes(template: Group): SourceMesh[] {
   const cached = merged.get(template);
   if (cached) return cached;
   template.updateMatrixWorld(true);
+  const baked = bakeModel(template);
+  if (baked) {
+    // Baked meshes sit at the root (relative to its transform), which the template's own matrix puts back.
+    const out = baked.children.map((mesh) => ({ mesh: mesh as Mesh, matrix: template.matrixWorld.clone() }));
+    merged.set(template, out);
+    return out;
+  }
   const groups = new Map<string, SourceMesh[]>();
   template.traverse((object: Object3D) => {
     if (!(object instanceof Mesh) || Array.isArray(object.material)) return;
@@ -63,7 +72,7 @@ export function sourceMeshes(template: Group): SourceMesh[] {
   return out;
 }
 
-function placementMatrix(placement: ModelPlacement, target: Matrix4): Matrix4 {
+export function placementMatrix(placement: ModelPlacement, target: Matrix4): Matrix4 {
   unitScale.setScalar(placement.scale);
   return target.compose(placement.position, placement.quaternion, unitScale);
 }

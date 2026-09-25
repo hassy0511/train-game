@@ -19,6 +19,7 @@ import {
   Quaternion,
   Shape,
   ShapeGeometry,
+  Sphere,
   Vector3,
 } from 'three';
 import type { StageEvent } from '../../core/stage-events';
@@ -27,7 +28,7 @@ import type { RailNetwork } from '../../rail/types';
 import { resolvePlacement } from '../../stage/loader';
 import type { JunctionDef, StageData } from '../../stage/types';
 import type { ModelLibrary } from './models';
-import { addModelPlacements, sourceMeshes, type ModelPlacement } from './props';
+import { addModelPlacements, sourceMeshes, type ModelPlacement, type SourceMesh } from './props';
 
 /** Dark "pit" strips on the ground under rail gaps, so a missing piece of rail reads as a hole. */
 export function buildGapPits(network: RailNetwork, groundY: number | null): Group {
@@ -230,6 +231,28 @@ interface FlockParams {
   speed: number;
 }
 
+/** Birds fly in lanes -LANES … LANES around the circle, each lane wider and higher than the next. */
+const LANES = 4;
+const LANE_WIDTH = 3;
+const LANE_RISE = 1.5;
+/** How far a bird bobs up and down (m), and the largest bird scale. */
+const BOB = 1.2;
+const MAX_SCALE = 1.25;
+
+/** A fixed sphere around everywhere a flock can be: the whole circle, every lane, the bobbing, the widest bird. */
+function flockBounds(flock: FlockParams, parts: SourceMesh[]): Sphere {
+  let bird = 0;
+  for (const part of parts) {
+    const geometry = part.mesh.geometry as BufferGeometry;
+    geometry.computeBoundingSphere();
+    const sphere = geometry.boundingSphere?.clone().applyMatrix4(part.matrix);
+    if (sphere) bird = Math.max(bird, sphere.center.length() + sphere.radius);
+  }
+  const across = flock.radius + LANES * LANE_WIDTH;
+  const up = LANES * LANE_RISE + BOB;
+  return new Sphere(new Vector3(...flock.center), Math.hypot(across, up) + bird * MAX_SCALE);
+}
+
 /** Flyers circling over the stage (`gimmicks[].type === 'flock'`). Visual only. */
 export class Flocks {
   readonly group = new Group();
@@ -249,19 +272,23 @@ export class Flocks {
       const flock = gimmick.params as unknown as FlockParams;
       const template = await models.load(flock.model);
       const batch = this.batches.length;
-      const meshes = sourceMeshes(template).map((source) => {
+      const sources = sourceMeshes(template);
+      const bounds = flockBounds(flock, sources);
+      const meshes = sources.map((source) => {
         const mesh = new InstancedMesh(source.mesh.geometry, source.mesh.material as Material, flock.count);
         mesh.name = `flock:${flock.model}`;
-        // The flock wheels over a wide circle: skip per-frame bounds and never cull it.
-        mesh.frustumCulled = false;
+        // Bounds fixed around the whole circle (never recomputed per frame), so a flock behind the camera is skipped.
+        mesh.boundingSphere = bounds;
+        mesh.frustumCulled = true;
         this.group.add(mesh);
         return { mesh, matrix: source.matrix };
       });
       this.batches.push({ meshes });
       for (let i = 0; i < flock.count; i++) {
         const object = new Object3D();
-        object.scale.setScalar(0.8 + ((i * 37) % 10) / 20);
-        this.birds.push({ object, flock, phase: (i / flock.count) * Math.PI * 2 * 0.35 + i * 0.13, lane: ((i * 53) % 9) - 4, batch, slot: i });
+        object.scale.setScalar(0.8 + (((i * 37) % 10) / 9) * (MAX_SCALE - 0.8));
+        const lane = ((i * 53) % (2 * LANES + 1)) - LANES;
+        this.birds.push({ object, flock, phase: (i / flock.count) * Math.PI * 2 * 0.35 + i * 0.13, lane, batch, slot: i });
       }
     }
   }
@@ -271,10 +298,10 @@ export class Flocks {
     for (const bird of this.birds) {
       const { center, radius, speed } = bird.flock;
       const a = this.time * speed + bird.phase;
-      const r = radius + bird.lane * 3;
+      const r = radius + bird.lane * LANE_WIDTH;
       bird.object.position.set(
         center[0] + Math.cos(a) * r,
-        center[1] + bird.lane * 1.5 + Math.sin(this.time * 0.9 + bird.phase * 3) * 1.2,
+        center[1] + bird.lane * LANE_RISE + Math.sin(this.time * 0.9 + bird.phase * 3) * BOB,
         center[2] + Math.sin(a) * r,
       );
       // Face along the circle, banking into the turn.
