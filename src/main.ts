@@ -8,7 +8,7 @@ import { ABILITY_NAMES, MissionRunner, type MissionPorts } from './mission/runne
 import { PhysicsWorld } from './physics/world';
 import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/loader';
 import type { AbilityId } from './stage/types';
-import { JUMP, LIGHT, SPEED_LABELS, STOP_NOTCH } from './train/params';
+import { JUMP, LIGHT, RESOLUTION_MIN_FPS, RESOLUTION_SLOW_SECONDS, RESOLUTION_STEPS, SPEED_LABELS, STOP_NOTCH } from './train/params';
 import { Train } from './train/train';
 import { createUi } from './ui';
 import { createBubbles } from './ui/bubble';
@@ -261,7 +261,14 @@ async function boot(): Promise<void> {
     if (!hasMissions) ui.overlays.showEnd();
   });
 
-  const resize = (): void => view.resize(viewEl.clientWidth, viewEl.clientHeight, window.devicePixelRatio);
+  // Render resolution: the device's pixel ratio, capped by the current step (lowered on a slow device).
+  let resolutionStep = 0;
+  let slowSeconds = 0;
+  const pixelRatio = (): number => Math.min(window.devicePixelRatio, RESOLUTION_STEPS[resolutionStep]);
+  const resize = (): void => {
+    view.resize(viewEl.clientWidth, viewEl.clientHeight, pixelRatio());
+    app.dataset.pixelRatio = String(pixelRatio());
+  };
   window.addEventListener('resize', resize);
   resize();
 
@@ -280,6 +287,9 @@ async function boot(): Promise<void> {
   let fpsAccum = 0;
   let fpsFrames = 0;
   let fps = 0;
+  // The heaviest frame seen (draw calls, triangles), for the smoke tests' budget log (TECH_SPEC §6).
+  let drawsMax = 0;
+  let trisMax = 0;
 
   let frameErrors = 0;
   const frame = (now: number): void => {
@@ -343,9 +353,28 @@ async function boot(): Promise<void> {
     fpsFrames += 1;
     if (fpsAccum >= 0.5) {
       fps = fpsFrames / fpsAccum;
+      // Too slow for RESOLUTION_SLOW_SECONDS in a row: draw fewer pixels (one step at a time).
+      slowSeconds = fps < RESOLUTION_MIN_FPS && !document.hidden ? slowSeconds + fpsAccum : 0;
+      if (slowSeconds >= RESOLUTION_SLOW_SECONDS && resolutionStep < RESOLUTION_STEPS.length - 1) {
+        const before = pixelRatio();
+        resolutionStep += 1;
+        slowSeconds = 0;
+        if (pixelRatio() < before) {
+          resize();
+          console.info(`render resolution ${before} → ${pixelRatio()} (fps ${fps.toFixed(0)})`);
+        }
+      }
       fpsAccum = 0;
       fpsFrames = 0;
       app.dataset.fps = fps.toFixed(0);
+      const stats = view.getStats();
+      if (stats) {
+        drawsMax = Math.max(drawsMax, stats.drawCalls);
+        trisMax = Math.max(trisMax, stats.triangles);
+        app.dataset.draws = String(stats.drawCalls);
+        app.dataset.drawsMax = String(drawsMax);
+        app.dataset.trisMax = String(trisMax);
+      }
     }
     app.dataset.time = simTime.toFixed(2);
     app.dataset.s = train.state.s.toFixed(1);

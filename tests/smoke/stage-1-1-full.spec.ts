@@ -147,6 +147,12 @@ test('stage 1-1 full run: all three missions and the ending', async ({ page }) =
   await page.screenshot({ path: resolve(OUT, '15-clear.png') });
   console.log('smoke 1-1 full: cleared');
 
+  // Rendering budget (TECH_SPEC §6): the heaviest frame of the whole run.
+  const budget = await page.evaluate(() => ({
+    draws: Number(document.getElementById('app')?.dataset.drawsMax),
+    tris: Number(document.getElementById('app')?.dataset.trisMax),
+  }));
+  console.log(`1-1 budget: draw calls ${budget.draws} / 200, triangles ${budget.tris} / 100000`);
   // "つづく" opens the map: the rail to 1-2 grows in and 1-2 bounces; tapping it goes on (no title).
   await page.locator('#card-button').click();
   await expect(page.locator('#map')).toBeVisible();

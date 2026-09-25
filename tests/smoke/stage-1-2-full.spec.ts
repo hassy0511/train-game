@@ -176,6 +176,12 @@ test('stage 1-2 full run: jumps, a fall, dinosaurs, a dead end, the light, recor
   const progress = await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
   expect(progress.abilities).toEqual(expect.arrayContaining(['jump', 'light']));
   expect(progress.records).toEqual(expect.arrayContaining(['dino-egg', 'footprints']));
+  // Rendering budget (TECH_SPEC §6): the heaviest frame of the whole run.
+  const budget = await page.evaluate(() => ({
+    draws: Number(document.getElementById('app')?.dataset.drawsMax),
+    tris: Number(document.getElementById('app')?.dataset.trisMax),
+  }));
+  console.log(`1-2 budget: draw calls ${budget.draws} / 200, triangles ${budget.tris} / 100000`);
   await page.locator('#card-button').click();
   // The map: records 2 of 3 here (the third needs a later ability), and on to 1-3.
   await expect(page.locator('#map')).toBeVisible();
