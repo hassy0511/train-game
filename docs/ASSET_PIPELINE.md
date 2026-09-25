@@ -43,6 +43,6 @@
 | 街 | house-a/b/c、shop、tower、hq、crossing-gate、crossing-sign、parcel、goal-flag、rock | `town.py` |
 | 木 | tree-a、tree-b | `tree-a.py`、`tree-b.py` |
 | 恐竜の谷（1-2） | fern-a/b、cycad、cliff-a/b（壁パネル、端は x=±6 で平ら）、rock-a/b、boulder、direction-sign（矢印はゲームが描く）、jump-unit、dino-egg、footprint-slab | `valley.py` |
-| 恐竜の谷の生き物 | dino-mid-sleep / dino-mid-stand、dino-small-walk、dino-large-body ＋ dino-large-neck（首は付け根が原点）、ptero | `dinos.py` |
+| 恐竜の谷の生き物 | dino-mid-sleep / dino-mid-stand、dino-small-walk、dino-large-body ＋ dino-large-neck（首は付け根が原点）、ptero、ptero-far（群れ用の遠景版。絵なしの 2 色・400 三角形以下） | `dinos.py` |
 
 名前の `-proto` は、ゲームのコードが参照している名前なので残している（中身は本番用）。

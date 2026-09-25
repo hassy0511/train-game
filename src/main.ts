@@ -366,6 +366,12 @@ async function boot(): Promise<void> {
     fx.shake = Math.max(0, fx.shake - dt * 2.5);
     view.update(dt, pose, fx);
     ui.hud.setSpeedWord(SPEED_LABELS[train.state.notch]);
+    // Every frame, so the budget check sees the heaviest one (one render per frame; cheap to read).
+    const stats = view.getStats();
+    if (stats) {
+      drawsMax = Math.max(drawsMax, stats.drawCalls);
+      trisMax = Math.max(trisMax, stats.triangles);
+    }
 
     fpsAccum += dt;
     fpsFrames += 1;
@@ -385,10 +391,7 @@ async function boot(): Promise<void> {
       fpsAccum = 0;
       fpsFrames = 0;
       app.dataset.fps = fps.toFixed(0);
-      const stats = view.getStats();
       if (stats) {
-        drawsMax = Math.max(drawsMax, stats.drawCalls);
-        trisMax = Math.max(trisMax, stats.triangles);
         app.dataset.draws = String(stats.drawCalls);
         app.dataset.drawsMax = String(drawsMax);
         app.dataset.trisMax = String(trisMax);
