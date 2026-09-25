@@ -147,8 +147,15 @@ test('stage 1-1 full run: all three missions and the ending', async ({ page }) =
   await page.screenshot({ path: resolve(OUT, '15-clear.png') });
   console.log('smoke 1-1 full: cleared');
 
-  // "つづく" goes straight on to 1-2 (no title), where the opening plays.
+  // "つづく" opens the map: the rail to 1-2 grows in and 1-2 bounces; tapping it goes on (no title).
   await page.locator('#card-button').click();
+  await expect(page.locator('#map')).toBeVisible();
+  await expect(page.locator('[data-link="1-1>1-2"]')).toHaveClass(/is-growing/);
+  await expect(page.locator('.map-island[data-island="1-2"]')).toHaveClass(/is-next/);
+  await page.waitForTimeout(1600);
+  await page.screenshot({ path: resolve(OUT, '16-map.png') });
+  // The next island bounces, so Playwright never sees it "stable": tap it directly.
+  await page.locator('.map-island[data-island="1-2"]').dispatchEvent('click');
   await page.waitForURL(/stage=1-2/, { timeout: 30_000 });
   await expect(page.locator('#app')).toHaveAttribute('data-stage', '1-2', { timeout: 90_000 });
   await expect(page.locator('#title-screen')).toHaveCount(0);

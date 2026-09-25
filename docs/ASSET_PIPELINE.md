@@ -11,6 +11,7 @@
 - 出力: `public/models/<名前>.glb` と `assets/previews/<名前>.png`
 - 一覧と予算: `assets/models.json`（スクリプト、三角形の上限、ファイルサイズの上限）。`npm run build` のたびに `scripts/check-models.mjs` が全モデルを確認する（一覧との一致、予算、原点が床にあるか、ステージ JSON が参照するモデルがあるか、閉じた部品が裏返っていないか）。スモークテストの `tests/smoke/model-culling.spec.ts` は全モデルを 32 方向から「ゲームと同じ表だけ描画」と「両面描画」で撮り比べ、ゲームで消えてしまう部品（裏返ったデカール・屋根など）があると落ちる
 - 確認: `https://hassy0511.github.io/train-game/models.html?model=<名前>`、並べて比べるときは `?compare=<名前>,<名前>`
+- 地図の島の絵（`public/map/<ステージ>.png`）は、モデルを島の上に並べて描いたもの。モデルを足したり直したりしたら `node scripts/render-map.mjs` で描き直す（並べ方は `src/world/world.json` の `diorama`。`docs/PHASE4_DESIGN.md` §3）
 
 ## 2. 共通のルール
 - 単位 1 = 1 m。+Y が上、+Z が前（顔・正面・進行方向）。原点は底面の中心（例外は各スクリプトの冒頭に書く。車両は車体中心の真下、ホームは線路側の縁）
