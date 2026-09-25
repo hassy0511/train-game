@@ -1,15 +1,16 @@
 import {
   BoxGeometry,
   BufferGeometry,
+  Color,
   Float32BufferAttribute,
   Group,
-  InstancedMesh,
   Matrix4,
   Mesh,
   MeshLambertMaterial,
   Quaternion,
   Vector3,
 } from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Rail, RailFrame, RailNetwork } from '../../rail/types';
 import type { ModelPlacement } from './props';
 
@@ -22,6 +23,14 @@ const BALLAST_TOP_HALF_WIDTH = 1.6;
 const BALLAST_BOTTOM_HALF_WIDTH = 2.2;
 const BALLAST_TOP_DEPTH = 0.3;
 const BALLAST_BOTTOM_DEPTH = 0.6;
+/**
+ * Track is built in pieces this long (m), each one mesh (rails, ballast and sleepers in vertex colours), so the
+ * pieces behind the camera or past the fog are culled instead of drawing the whole line every frame.
+ */
+const CHUNK = 100;
+const RAIL_COLOR = new Color('#6E6E6E');
+const BALLAST_COLOR = new Color('#A89F91');
+const SLEEPER_COLOR = new Color('#6B4E2E');
 
 interface GeometryData {
   positions: number[];
@@ -95,9 +104,26 @@ function isInGap(rail: Rail, s: number): boolean {
   return rail.gaps.some((gap) => s >= gap.from && s <= gap.to);
 }
 
+/** Longest track segment on a straight (m); curves keep the 1 m samples. */
+const MAX_STEP = 4;
+/** A sample is kept once the rail has turned (or tilted) this much since the last kept one (radians). */
+const KEEP_ANGLE = 0.035;
+
 function samplePoints(rail: Rail): number[] {
   const samples = [0, rail.length];
-  for (let s = SAMPLE_STEP; s < rail.length; s += SAMPLE_STEP) samples.push(s);
+  // Walk in SAMPLE_STEP steps and keep only the points where the rail bends: straights become long segments.
+  let last = rail.frameAt(0);
+  let lastS = 0;
+  for (let s = SAMPLE_STEP; s < rail.length; s += SAMPLE_STEP) {
+    const frame = rail.frameAt(s);
+    const next = rail.frameAt(Math.min(rail.length, s + SAMPLE_STEP));
+    const turned = Math.max(frame.tangent.angleTo(last.tangent), frame.up.angleTo(last.up), next.tangent.angleTo(last.tangent));
+    if (s - lastS >= MAX_STEP || turned > KEEP_ANGLE) {
+      samples.push(s);
+      last = frame;
+      lastS = s;
+    }
+  }
   for (const gap of rail.gaps) {
     samples.push(Math.max(0, Math.min(rail.length, gap.from)));
     samples.push(Math.max(0, Math.min(rail.length, gap.to)));
@@ -144,40 +170,63 @@ function frameMatrix(frame: RailFrame, depth: number): Matrix4 {
   return new Matrix4().compose(position, quaternion, new Vector3(1, 1, 1));
 }
 
-/** Generates batched rail, sleeper and ballast meshes plus buffer-stop placements. */
+/** Paints every vertex of `geometry` one colour (for merging parts that share one vertex-colour material). */
+function painted(geometry: BufferGeometry, color: Color): BufferGeometry {
+  if (geometry.getAttribute('uv')) geometry.deleteAttribute('uv');
+  const count = geometry.getAttribute('position').count;
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) colors.set([color.r, color.g, color.b], i * 3);
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  return geometry;
+}
+
+/** One piece of track: rails, ballast and sleepers of `rail` between `from` and `to`, merged into one geometry. */
+function buildChunk(rail: Rail, samples: number[], from: number, to: number, sleeper: BoxGeometry): BufferGeometry | null {
+  const railData: GeometryData = { positions: [], indices: [] };
+  const ballastData: GeometryData = { positions: [], indices: [] };
+  for (let index = 0; index < samples.length - 1; index += 1) {
+    const startS = samples[index];
+    const endS = samples[index + 1];
+    if (startS < from || startS >= to) continue;
+    if (isInGap(rail, (startS + endS) / 2)) continue;
+    const start = rail.frameAt(startS);
+    const end = rail.frameAt(endS);
+    addRailSegment(railData, start, end, -RAIL_HALF_GAUGE);
+    addRailSegment(railData, start, end, RAIL_HALF_GAUGE);
+    addBallastSegment(ballastData, start, end);
+  }
+  const parts: BufferGeometry[] = [];
+  if (railData.indices.length) parts.push(painted(makeGeometry(railData), RAIL_COLOR));
+  if (ballastData.indices.length) parts.push(painted(makeGeometry(ballastData), BALLAST_COLOR));
+  for (let s = Math.ceil(from / SLEEPER_STEP) * SLEEPER_STEP; s < Math.min(to, rail.length + 1e-6); s += SLEEPER_STEP) {
+    if (isInGap(rail, s)) continue;
+    parts.push(painted(sleeper.clone().applyMatrix4(frameMatrix(rail.frameAt(s), 0.225)), SLEEPER_COLOR));
+  }
+  if (parts.length === 0) return null;
+  const merged = mergeGeometries(parts);
+  for (const part of parts) part.dispose();
+  merged?.computeBoundingSphere();
+  return merged;
+}
+
+/** Generates the track (in culled pieces) plus buffer-stop placements. */
 export function buildRailScene(network: RailNetwork): RailScene {
   const group = new Group();
   group.name = 'rail-network';
-  const railMaterial = new MeshLambertMaterial({ color: '#6E6E6E' });
-  const ballastMaterial = new MeshLambertMaterial({ color: '#A89F91' });
-  const sleeperMaterial = new MeshLambertMaterial({ color: '#6B4E2E' });
-  const sleeperMatrices: Matrix4[] = [];
+  const material = new MeshLambertMaterial({ vertexColors: true });
+  const sleeper = new BoxGeometry(2.4, 0.15, 0.25);
   const bufferStops: ModelPlacement[] = [];
 
   for (const rail of network.rails.values()) {
-    const railData: GeometryData = { positions: [], indices: [] };
-    const ballastData: GeometryData = { positions: [], indices: [] };
     const samples = samplePoints(rail);
-    for (let index = 0; index < samples.length - 1; index += 1) {
-      const startS = samples[index];
-      const endS = samples[index + 1];
-      if (isInGap(rail, (startS + endS) / 2)) continue;
-      const start = rail.frameAt(startS);
-      const end = rail.frameAt(endS);
-      addRailSegment(railData, start, end, -RAIL_HALF_GAUGE);
-      addRailSegment(railData, start, end, RAIL_HALF_GAUGE);
-      addBallastSegment(ballastData, start, end);
-    }
-
-    const rails = new Mesh(makeGeometry(railData), railMaterial);
-    rails.name = `${rail.id}-rails`;
-    group.add(rails);
-    const ballast = new Mesh(makeGeometry(ballastData), ballastMaterial);
-    ballast.name = `${rail.id}-ballast`;
-    group.add(ballast);
-
-    for (let s = 0; s <= rail.length; s += SLEEPER_STEP) {
-      if (!isInGap(rail, s)) sleeperMatrices.push(frameMatrix(rail.frameAt(s), 0.225));
+    const pieces = Math.max(1, Math.ceil(rail.length / CHUNK));
+    for (let i = 0; i < pieces; i++) {
+      const to = i === pieces - 1 ? rail.length + 1 : (i + 1) * CHUNK;
+      const geometry = buildChunk(rail, samples, i * CHUNK, to, sleeper);
+      if (!geometry) continue;
+      const mesh = new Mesh(geometry, material);
+      mesh.name = `${rail.id}-track-${i}`;
+      group.add(mesh);
     }
 
     if (rail.end.type === 'buffer') {
@@ -191,16 +240,6 @@ export function buildRailScene(network: RailNetwork): RailScene {
       });
     }
   }
-
-  const sleepers = new InstancedMesh(
-    new BoxGeometry(2.4, 0.15, 0.25),
-    sleeperMaterial,
-    sleeperMatrices.length,
-  );
-  sleepers.name = 'sleepers';
-  sleeperMatrices.forEach((matrix, index) => sleepers.setMatrixAt(index, matrix));
-  sleepers.instanceMatrix.needsUpdate = true;
-  group.add(sleepers);
-
+  sleeper.dispose();
   return { group, bufferStops };
 }

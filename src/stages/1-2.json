@@ -1657,7 +1657,7 @@
       "type": "flock",
       "params": {
         "model": "ptero",
-        "count": 10,
+        "count": 7,
         "center": [30, 48, 330],
         "radius": 70,
         "speed": 0.1
@@ -1667,7 +1667,7 @@
       "type": "flock",
       "params": {
         "model": "ptero",
-        "count": 8,
+        "count": 6,
         "center": [-5, 55, 1050],
         "radius": 60,
         "speed": -0.08

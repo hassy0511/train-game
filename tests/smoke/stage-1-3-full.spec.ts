@@ -163,6 +163,12 @@ test('stage 1-3 full run: island hops, the whistle pad, upside down, the updraft
   await page.screenshot({ path: resolve(OUT, '37-clear.png') });
   const progress = await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
   expect(progress.records).toEqual(expect.arrayContaining(['cloud-crystal', 'weathervane']));
+  // Rendering budget (TECH_SPEC §6): the heaviest frame of the whole run.
+  const budget = await page.evaluate(() => ({
+    draws: Number(document.getElementById('app')?.dataset.drawsMax),
+    tris: Number(document.getElementById('app')?.dataset.trisMax),
+  }));
+  console.log(`1-3 budget: draw calls ${budget.draws} / 200, triangles ${budget.tris} / 100000`);
   await page.locator('#card-button').click();
   // The map: the rail runs on to chapter 2's "?" island, which only wiggles; back to the title.
   await expect(page.locator('#map')).toBeVisible();

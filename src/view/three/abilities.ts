@@ -8,6 +8,9 @@ import {
   Float32BufferAttribute,
   Fog,
   Group,
+  InstancedMesh,
+  type Material,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   Object3D,
@@ -24,7 +27,7 @@ import type { RailNetwork } from '../../rail/types';
 import { resolvePlacement } from '../../stage/loader';
 import type { JunctionDef, StageData } from '../../stage/types';
 import type { ModelLibrary } from './models';
-import { addModelPlacements, type ModelPlacement } from './props';
+import { addModelPlacements, sourceMeshes, type ModelPlacement } from './props';
 
 /** Dark "pit" strips on the ground under rail gaps, so a missing piece of rail reads as a hole. */
 export function buildGapPits(network: RailNetwork, groundY: number | null): Group {
@@ -230,7 +233,10 @@ interface FlockParams {
 /** Flyers circling over the stage (`gimmicks[].type === 'flock'`). Visual only. */
 export class Flocks {
   readonly group = new Group();
-  private readonly birds: { object: Object3D; flock: FlockParams; phase: number; lane: number }[] = [];
+  /** Each bird is a pose; a flock draws as one instanced batch per model part. */
+  private readonly birds: { object: Object3D; flock: FlockParams; phase: number; lane: number; batch: number; slot: number }[] = [];
+  private readonly batches: { meshes: { mesh: InstancedMesh; matrix: Matrix4 }[] }[] = [];
+  private readonly scratch = new Matrix4();
   private time = 0;
 
   constructor(private readonly stage: StageData) {
@@ -242,11 +248,20 @@ export class Flocks {
       if (gimmick.type !== 'flock') continue;
       const flock = gimmick.params as unknown as FlockParams;
       const template = await models.load(flock.model);
+      const batch = this.batches.length;
+      const meshes = sourceMeshes(template).map((source) => {
+        const mesh = new InstancedMesh(source.mesh.geometry, source.mesh.material as Material, flock.count);
+        mesh.name = `flock:${flock.model}`;
+        // The flock wheels over a wide circle: skip per-frame bounds and never cull it.
+        mesh.frustumCulled = false;
+        this.group.add(mesh);
+        return { mesh, matrix: source.matrix };
+      });
+      this.batches.push({ meshes });
       for (let i = 0; i < flock.count; i++) {
-        const object = template.clone(true);
+        const object = new Object3D();
         object.scale.setScalar(0.8 + ((i * 37) % 10) / 20);
-        this.group.add(object);
-        this.birds.push({ object, flock, phase: (i / flock.count) * Math.PI * 2 * 0.35 + i * 0.13, lane: ((i * 53) % 9) - 4 });
+        this.birds.push({ object, flock, phase: (i / flock.count) * Math.PI * 2 * 0.35 + i * 0.13, lane: ((i * 53) % 9) - 4, batch, slot: i });
       }
     }
   }
@@ -265,7 +280,12 @@ export class Flocks {
       // Face along the circle, banking into the turn.
       const dir = Math.sign(speed) || 1;
       bird.object.rotation.set(0, Math.atan2(-Math.sin(a) * dir, Math.cos(a) * dir), -0.25 * dir, 'YXZ');
+      bird.object.updateMatrix();
+      for (const part of this.batches[bird.batch].meshes) {
+        part.mesh.setMatrixAt(bird.slot, this.scratch.multiplyMatrices(bird.object.matrix, part.matrix));
+      }
     }
+    for (const batch of this.batches) for (const part of batch.meshes) part.mesh.instanceMatrix.needsUpdate = true;
   }
 }
 

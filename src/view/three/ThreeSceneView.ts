@@ -24,10 +24,13 @@ import type { CameraFx, SceneView } from '../SceneView';
 import { cameraTarget, makeCameraTarget, smoothCamera, type CameraMode } from '../camera-rig';
 import { buildGapPits, buildJumpDevice, buildLightBeam, Flocks, JunctionSigns, SkyGimmicks } from './abilities';
 import { ActorLayer } from './actors';
-import { addEnvironment } from './environment';
+import { addEnvironment, SKY_RADIUS } from './environment';
 import { ModelLibrary } from './models';
 import { addModelPlacements, addProps } from './props';
 import { buildDetachedRailPiece, buildRailScene } from './rail-mesh';
+
+/** The camera draws this far past the stage fog's far end (m). */
+const FOG_CULL_MARGIN = 40;
 
 interface DoorVisual {
   group: Group;
@@ -120,6 +123,13 @@ export class ThreeSceneView implements SceneView {
     this.scene.add(this.sky3.group);
     const fog = stage.file.environment.fog;
     this.baseFog = fog ? { near: fog.near, far: fog.far } : null;
+    if (fog && this.sky) {
+      // Past the fog nothing shows, so stop drawing there (the track and prop pieces beyond are culled); the sky
+      // dome shrinks to stay inside the camera's reach.
+      this.camera.far = Math.min(this.camera.far, fog.far + FOG_CULL_MARGIN);
+      this.camera.updateProjectionMatrix();
+      this.sky.scale.setScalar(Math.min(1, (this.camera.far * 0.95) / SKY_RADIUS));
+    }
 
     const [trainModel, carModel, partnerModel] = await Promise.all([
       this.models.load('train-proto'),

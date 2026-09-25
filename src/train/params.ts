@@ -64,6 +64,14 @@ export const REWIND_DISTANCE = 80;
 export const PASSENGER_SECONDS = 1.5;
 
 /** Seconds a speech bubble stays unless tapped. */
+/**
+ * Render resolution (max pixels per CSS pixel), stepped down one at a time while the frame rate stays below
+ * RESOLUTION_MIN_FPS for RESOLUTION_SLOW_SECONDS (a slower iPad keeps moving smoothly). Never raised again.
+ */
+export const RESOLUTION_STEPS = [2, 1.5, 1.25, 1] as const;
+export const RESOLUTION_MIN_FPS = 45;
+export const RESOLUTION_SLOW_SECONDS = 3;
+
 /** While the game waits for the door button, the partner repeats the ask this often (s). */
 export const DOOR_REMIND_SECONDS = 8;
 

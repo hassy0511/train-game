@@ -13,7 +13,7 @@ import {
 } from 'three';
 import type { EnvironmentDef } from '../../stage/types';
 
-const SKY_RADIUS = 550;
+export const SKY_RADIUS = 550;
 
 const skyVertexShader = `
 varying vec3 vDirection;

@@ -20,6 +20,8 @@ export interface DebugContext {
  * This module is only imported behind `import.meta.env.DEV`, so it never ships in production.
  */
 export function installDebug(ctx: DebugContext): { update(fps: number): void } {
+  // Dev only: lets a browser console (or a probe script) look at the scene.
+  Object.assign(window, { __debugView: ctx.view, __debugTrain: ctx.train });
   const panel = document.createElement('div');
   panel.className = 'debug-panel';
   ctx.uiRoot.appendChild(panel);
