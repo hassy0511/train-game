@@ -104,9 +104,26 @@ function isInGap(rail: Rail, s: number): boolean {
   return rail.gaps.some((gap) => s >= gap.from && s <= gap.to);
 }
 
+/** Longest track segment on a straight (m); curves keep the 1 m samples. */
+const MAX_STEP = 4;
+/** A sample is kept once the rail has turned (or tilted) this much since the last kept one (radians). */
+const KEEP_ANGLE = 0.035;
+
 function samplePoints(rail: Rail): number[] {
   const samples = [0, rail.length];
-  for (let s = SAMPLE_STEP; s < rail.length; s += SAMPLE_STEP) samples.push(s);
+  // Walk in SAMPLE_STEP steps and keep only the points where the rail bends: straights become long segments.
+  let last = rail.frameAt(0);
+  let lastS = 0;
+  for (let s = SAMPLE_STEP; s < rail.length; s += SAMPLE_STEP) {
+    const frame = rail.frameAt(s);
+    const next = rail.frameAt(Math.min(rail.length, s + SAMPLE_STEP));
+    const turned = Math.max(frame.tangent.angleTo(last.tangent), frame.up.angleTo(last.up), next.tangent.angleTo(last.tangent));
+    if (s - lastS >= MAX_STEP || turned > KEEP_ANGLE) {
+      samples.push(s);
+      last = frame;
+      lastS = s;
+    }
+  }
   for (const gap of rail.gaps) {
     samples.push(Math.max(0, Math.min(rail.length, gap.from)));
     samples.push(Math.max(0, Math.min(rail.length, gap.to)));

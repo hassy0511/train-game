@@ -21,7 +21,7 @@ export interface DebugContext {
  */
 export function installDebug(ctx: DebugContext): { update(fps: number): void } {
   // Dev only: lets a browser console (or a probe script) look at the scene.
-  (window as unknown as { __debugView?: SceneView }).__debugView = ctx.view;
+  Object.assign(window, { __debugView: ctx.view, __debugTrain: ctx.train });
   const panel = document.createElement('div');
   panel.className = 'debug-panel';
   ctx.uiRoot.appendChild(panel);
