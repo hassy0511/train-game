@@ -127,8 +127,9 @@ export function fastForwardCutscene(
   events: StageEventBus,
   ports: Pick<CutscenePorts, 'learn'>,
 ): void {
-  // Figures brought on in these steps: posted once, where their last move leaves them (a spawn loads its model
-  // first, so a move or a remove posted right after it could come too early). Ones taken off again never show.
+  // Figures brought on in these steps: posted once, where their last move leaves them. Ones taken off again never
+  // show. (A spawn loads its model first; for one posted before a "▶▶", ActorsView holds a move until it is in and
+  // drops it when a remove overtakes it.)
   const spawned = new Map<string, Extract<StageEvent, { type: 'actor:spawn' }>>();
   for (const step of steps) {
     if ('spawn' in step) {

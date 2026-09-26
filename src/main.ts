@@ -857,7 +857,7 @@ async function boot(): Promise<void> {
   runner.knowAbilities(abilities);
   runner.setLight(lightOn);
   if (resumeFrom > 0) {
-    runner.prepareResume(resumeFrom);
+    runner.prepareResume(resumeFrom, resume ?? undefined);
     // The train stands at another station now: the camera jumps there instead of flying over the stage.
     applyCamera(true);
   }

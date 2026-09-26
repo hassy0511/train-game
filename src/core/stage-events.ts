@@ -39,7 +39,11 @@ export type StageEvent =
         // v1.8: back from a record's side track (not a failure: no dip, no shake)
         | 'spur';
     }
-  | { type: 'rewind' }
+  /**
+   * Back to a station after a failure (or a resume). `boarded`: passengers who already got on this run, per station
+   * id; they are not put back on the platform.
+   */
+  | { type: 'rewind'; boarded?: Record<string, number> }
   /** The player has this ability (at load and when it is learned). */
   | { type: 'ability'; id: AbilityId }
   | { type: 'light'; on: boolean }

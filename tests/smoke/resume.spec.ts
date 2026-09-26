@@ -24,7 +24,8 @@ interface Save {
   cleared: string[];
   abilities: string[];
   mapLinks: string[];
-  resume?: { stage: string; mission: number };
+  records?: string[];
+  resume?: { stage: string; mission: number; stops?: number; perfect?: number; found?: string[] };
 }
 
 /** Puts the save in before the game reads it (only into an empty storage, so reloads keep what the game saved). */
@@ -246,6 +247,14 @@ test('resume 2-2 in place: grass grown, the flowers passed in bloom, the passeng
   await expect(app).toHaveAttribute('data-bridges', '0,0,0');
   await expect(page.locator('#cargo')).toHaveAttribute('data-passengers', '2');
   await page.screenshot({ path: resolve(OUT, '93-resume-2-2-m2.png') });
+  // From the side: the clover platform is empty (the two who got on in mission 1 are not waiting there again).
+  await page.locator('#card-button').click();
+  await waitDriving(page);
+  await page.locator('#camera').dispatchEvent('pointerdown');
+  await page.locator('.camera-tile[data-mode="side"]').dispatchEvent('pointerdown');
+  await expect(app).toHaveAttribute('data-camera', 'side');
+  await waitGame(page, 2);
+  await page.screenshot({ path: resolve(OUT, '93b-resume-2-2-m2-platform.png') });
   expect(errors).toEqual([]);
 });
 
@@ -258,7 +267,9 @@ test('resume 2-3 mission 3 (the countdown) to the clear: "▶▶" on the ending,
     cleared: ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3'],
     abilities: ['whistle', 'jump', 'light'],
     mapLinks: ALL_LINKS,
-    resume: { stage: '2-3', mission: 2 },
+    // Found in the missions before (this playthrough): the clear card counts them with the ones to come.
+    records: ['sulfur-crystal'],
+    resume: { stage: '2-3', mission: 2, stops: 4, perfect: 2, found: ['sulfur-crystal'] },
   });
   await page.goto('/?stage=2-3');
   await ready(page, '2-3');
@@ -331,7 +342,12 @@ test('resume 2-3 mission 3 (the countdown) to the clear: "▶▶" on the ending,
   await expect(skip).toBeHidden();
   await expect(page.locator('#card-button')).not.toHaveClass(/is-guarded/, { timeout: 5_000 });
   await page.screenshot({ path: resolve(OUT, '96-skip-clear-card.png') });
-  expect((await saved(page)).resume).toEqual({ stage: '2-3', mission: 2 });
+  // The stops and the record of the missions before the resume are on the card (2 stops came after it).
+  const stops = page.locator('#reward-stops');
+  expect(Number(await stops.getAttribute('data-perfect'))).toBeGreaterThanOrEqual(2);
+  await expect(stops.locator('.reward-text')).toHaveText(/^ぴたっ！ \d+かい$/);
+  await expect(page.locator('.reward-record[data-record="sulfur-crystal"]')).toHaveClass(/is-fresh/);
+  expect((await saved(page)).resume).toEqual({ stage: '2-3', mission: 2, stops: 4, perfect: 2, found: ['sulfur-crystal'] });
   await page.locator('#card-button').click();
 
   // Cleared: the resume is forgotten; the title offers the map again (everything is cleared).
@@ -347,9 +363,37 @@ test('resume 2-3 mission 3 (the countdown) to the clear: "▶▶" on the ending,
   expect(errors).toEqual([]);
 });
 
-test('"▶▶" only on a stage cleared before: 1-1 opening skipped to the first card, then a resume is written', async ({ page }) => {
+/** Taps lines and captions away until a card with `text` is up (a card closing just before does not count). */
+async function tapUntilCard(page: Page, text: string, timeoutMs = 90_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  const card = page.locator('#card');
+  while (Date.now() < deadline) {
+    if ((await card.isVisible()) && ((await card.textContent()) ?? '').includes(text)) return;
+    if (await page.locator('#bubble').isVisible()) await page.locator('#bubble').dispatchEvent('pointerdown');
+    if (await page.locator('#caption').isVisible()) await page.locator('#caption').dispatchEvent('click');
+    await page.waitForTimeout(150);
+  }
+  throw new Error(`timed out waiting for the card "${text}"`);
+}
+
+/** 1-1 mission 1 from its card: to the cherry station, up to its "できた！" card (left up). */
+async function mission1(page: Page): Promise<void> {
+  await tapUntilCard(page, 'はじめての うんてん');
+  await page.locator('#card-button').click();
+  await waitDriving(page);
+  await setNotch(page, SLOW);
+  await waitFor(page, 'loop', 155 - FRONT - 4.5);
+  await setNotch(page, STOP);
+  await expect(page.locator('#toast')).toBeVisible({ timeout: 20_000 });
+  await tapUntil(page, '#card');
+  await expect(page.locator('#card')).toContainText('できた');
+}
+
+test('"▶▶" only on a stage cleared before; the resume moves on only on the stage being worked through', async ({ page }) => {
+  test.setTimeout(900_000);
   const errors = watchErrors(page);
   const app = page.locator('#app');
+  const skip = page.locator('#skip');
   // Not cleared yet: no "▶▶" through the opening.
   await page.goto('/?stage=1-1');
   await ready(page, '1-1');
@@ -359,14 +403,52 @@ test('"▶▶" only on a stage cleared before: 1-1 opening skipped to the first 
   await tapUntil(page, '#card');
   await expect(page.locator('#card')).toContainText('にゅうたい');
   expect(await seen()).toBe(false);
+  await page.locator('#card-button').click();
 
-  // Cleared before: "▶▶" over the caption, tapped twice.
+  // Mission 1 to the cherry station; once it is done, the resume is at mission 2 with its stop.
+  await mission1(page);
+  expect((await saved(page)).resume).toBeUndefined();
+  await page.locator('#card-button').click();
+  await expect(page.locator('#card')).toContainText('なかまを のせて', { timeout: 30_000 });
+  const written = (await saved(page)).resume;
+  expect(written).toMatchObject({ stage: '1-1', mission: 1, stops: 1 });
+  expect(written?.perfect).toBeLessThanOrEqual(1);
+  expect(await seen()).toBe(false);
+
+  // Started over (はじめから) with mission 3 saved: mission 1 done again does not take the resume back.
   await page.evaluate((key) => {
-    localStorage.setItem(key, JSON.stringify({ schema: 1, cleared: ['1-1'], abilities: ['whistle'], records: [], mapLinks: [] }));
+    const data = JSON.parse(localStorage.getItem(key) ?? '{}');
+    data.resume = { stage: '1-1', mission: 2, stops: 3, perfect: 1 };
+    localStorage.setItem(key, JSON.stringify(data));
+  }, KEY);
+  await page.goto('/?stage=1-1');
+  await ready(page, '1-1');
+  await expect(page.locator('#title-continue')).toHaveText('つづきから（1-1 ミッション 3）');
+  await page.locator('#title-start').click();
+  await tapUntil(page, '#card');
+  await expect(page.locator('#card')).toContainText('にゅうたい');
+  await page.locator('#card-button').click();
+  await mission1(page);
+  await page.locator('#card-button').click();
+  await expect(page.locator('#card')).toContainText('なかまを のせて', { timeout: 30_000 });
+  expect((await saved(page)).resume).toEqual({ stage: '1-1', mission: 2, stops: 3, perfect: 1 });
+
+  // Cleared before (back for the records) while 2-1 waits at mission 2: "▶▶" over the caption, tapped twice.
+  await page.evaluate((key) => {
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        schema: 1,
+        cleared: ['1-1', '1-2', '1-3'],
+        abilities: ['whistle', 'jump', 'light'],
+        records: [],
+        mapLinks: ['1-1>1-2', '1-2>1-3', '1-3>2-1'],
+        resume: { stage: '2-1', mission: 1 },
+      }),
+    );
   }, KEY);
   await page.goto('/?stage=1-1&go=1');
   await ready(page, '1-1');
-  const skip = page.locator('#skip');
   await expect(skip).toBeVisible({ timeout: 30_000 });
   await page.screenshot({ path: resolve(OUT, '97-skip-opening.png') });
   // Next to the camera and the pause button, the same size, not over them.
@@ -385,21 +467,12 @@ test('"▶▶" only on a stage cleared before: 1-1 opening skipped to the first 
   await expect(app).toHaveAttribute('data-camera', 'cab');
   await expect(page.locator('#card-button')).not.toHaveClass(/is-guarded/, { timeout: 5_000 });
   await page.screenshot({ path: resolve(OUT, '98-skip-first-card.png') });
-  expect((await saved(page)).resume).toBeUndefined();
-  await page.locator('#card-button').click();
 
-  // Mission 1 to the cherry station; its "できた！" card writes the resume at mission 2.
-  await waitDriving(page);
-  await setNotch(page, SLOW);
-  await waitFor(page, 'loop', 155 - FRONT - 4.5);
-  await setNotch(page, STOP);
-  await expect(page.locator('#toast')).toBeVisible({ timeout: 20_000 });
-  await tapUntil(page, '#card');
-  await expect(page.locator('#card')).toContainText('できた');
-  expect((await saved(page)).resume).toBeUndefined();
+  // Mission 1 of the replay done: 2-1's resume stays (a cleared stage never takes the one slot).
+  await mission1(page);
   await page.locator('#card-button').click();
-  await expect(page.locator('#card')).toContainText('なかまを のせて');
-  expect((await saved(page)).resume).toEqual({ stage: '1-1', mission: 1 });
+  await expect(page.locator('#card')).toContainText('なかまを のせて', { timeout: 30_000 });
+  expect((await saved(page)).resume).toEqual({ stage: '2-1', mission: 1 });
   await expect(skip).toBeHidden();
   expect(errors).toEqual([]);
 });

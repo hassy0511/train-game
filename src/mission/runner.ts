@@ -10,7 +10,7 @@ import type { SlopeSystem, SlopeZone } from '../gimmick/slope';
 import { Countdown, type CountdownView } from './countdown';
 import { FlowerBridges, type BridgeOutcome } from '../gimmick/flower-bridge';
 import { FragileBridges } from '../gimmick/fragile';
-import { addToProgress, loadProgress, setResume } from '../core/progress';
+import { addToProgress, advanceResume, loadProgress, type Resume } from '../core/progress';
 import type { StageEvent, StageEventBus } from '../core/stage-events';
 import { CutsceneSkip, fastForwardCutscene, runCutscene, type CutscenePorts } from '../cutscene/runner';
 import type {
@@ -271,8 +271,10 @@ export class MissionRunner {
   private readonly recordHints = new Set<string>();
   private readonly revealed = new Set<string>();
   private readonly found: Set<string>;
-  /** Records already found before this run (the clear card marks the new ones). */
-  private readonly foundBefore: ReadonlySet<string>;
+  /** Records already found before this run (the clear card marks the new ones; a resume brings its own back). */
+  private readonly foundBefore: Set<string>;
+  /** Passengers who got on so far this run, per station (a rewind does not put them back on the platform). */
+  private readonly boarded = new Map<string, number>();
   /** Graded stops this run, and how many of them were "ぴったり" (the clear card). */
   private stopsMade = 0;
   private perfectStops = 0;
@@ -540,9 +542,13 @@ export class MissionRunner {
    * woken cat or dinosaur behind the train is asleep again; nothing behind it matters any more). Call before
    * run(from), then snap the camera.
    */
-  prepareResume(from: number): void {
+  prepareResume(from: number, carried?: Pick<Resume, 'stops' | 'perfect' | 'found'>): void {
     const file = this.stage.file;
     if (from < 1 || from >= file.missions.length) throw new Error(`Cannot resume at mission ${from}`);
+    // The clear card counts the whole playthrough: the stops and records of the missions before come along.
+    this.stopsMade = carried?.stops ?? 0;
+    this.perfectStops = Math.min(carried?.perfect ?? 0, this.stopsMade);
+    for (const id of carried?.found ?? []) if (this.found.has(id)) this.foundBefore.delete(id);
     if (file.opening) this.fastForward(file.opening);
     let passengers = 0;
     let parcel = false;
@@ -550,6 +556,7 @@ export class MissionRunner {
       for (const step of file.missions[i].steps) {
         passengers = passengers - Math.min(step.alight ?? 0, passengers) + (step.board ?? 0);
         if (step.parcel) parcel = step.parcel === 'load';
+        if (step.board) this.boarded.set(step.stationId, (this.boarded.get(step.stationId) ?? 0) + step.board);
       }
       const done = file.missions[i].onComplete;
       if (done) this.fastForward(done);
@@ -571,7 +578,7 @@ export class MissionRunner {
     this.postButterflies();
     this.slopes?.reset();
     this.rocket?.reset();
-    this.events.post({ type: 'rewind' });
+    this.events.post({ type: 'rewind', boarded: Object.fromEntries(this.boarded) });
     this.ports.resetLever();
     this.ports.autoCamera(null);
     this.ports.fixedCamera(null);
@@ -639,9 +646,18 @@ export class MissionRunner {
       if (this.lines.complete) this.ports.sayAsync(this.lines.complete);
       this.events.post({ type: 'partner:emote', kind: 'cheer' });
       await this.ports.card('できた！', 'つぎへ');
-      // From here on "つづきから" starts at the next mission (the last one's end is the stage clear).
-      if (i + 1 < file.missions.length) setResume({ stage: file.id, mission: i + 1 });
       if (mission.onComplete) await this.cutscene(mission.onComplete);
+      // From here on "つづきから" starts at the next mission (the last one's end is the stage clear). Only after the
+      // cutscene: an ability it teaches (1-2's light) is not learned unseen by a resume.
+      if (i + 1 < file.missions.length) {
+        advanceResume({
+          stage: file.id,
+          mission: i + 1,
+          stops: this.stopsMade,
+          perfect: this.perfectStops,
+          found: [...this.found].filter((id) => !this.foundBefore.has(id)),
+        });
+      }
     }
 
     if (file.ending) await this.cutscene(file.ending);
@@ -1367,7 +1383,7 @@ export class MissionRunner {
     this.gapHints.clear();
     this.signLines.clear();
     this.revealed.clear();
-    this.events.post({ type: 'rewind' });
+    this.events.post({ type: 'rewind', boarded: Object.fromEntries(this.boarded) });
     this.ports.resetLever();
     this.ports.autoCamera(null);
     await this.ports.wait(0.3);
@@ -1406,6 +1422,7 @@ export class MissionRunner {
     const alight = Math.min(step.alight ?? 0, this.passengers);
     const board = step.board ?? 0;
     this.events.post({ type: 'passengers', stationId: station.id, board, alight });
+    if (board > 0) this.boarded.set(station.id, (this.boarded.get(station.id) ?? 0) + board);
     if (step.say) {
       this.ports.sayAsync(step.say, 'passenger');
       if (step.reply) this.ports.sayAsync(step.reply, 'partner');

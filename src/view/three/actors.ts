@@ -125,6 +125,13 @@ export class ActorLayer {
   readonly group = new Group();
   private readonly objects = new Map<string, Object3D>();
   private readonly objectModels = new Map<string, string>();
+  /**
+   * Per id, bumped by every place and remove: a place whose model is still loading when a later place or a remove
+   * for the same id comes is dropped (a cutscene's "▶▶" can take a figure off right after bringing it on).
+   */
+  private readonly generations = new Map<string, number>();
+  /** Spawns still loading their model: a move for that id waits for it. */
+  private readonly pendingSpawns = new Map<string, Promise<unknown>>();
   private readonly moving: ActorMove[] = [];
   private readonly passengerMoves: PassengerMove[] = [];
   private readonly passengers = new Set<Object3D>();
@@ -400,14 +407,16 @@ export class ActorLayer {
     disposePassengerMaterials(passenger);
   }
 
-  private async resetWaitingPassengers(): Promise<void> {
+  /** Everyone back where they wait at the start, but those in `boarded` (per station) who already got on. */
+  private async resetWaitingPassengers(boarded: Record<string, number> = {}): Promise<void> {
     this.passengerMoves.length = 0;
     for (const passenger of this.passengers) this.removePassenger(passenger);
     this.passengers.clear();
     this.waitingPassengers.clear();
 
     await Promise.all(
-      [...this.initialWaiting].map(async ([stationId, count]) => {
+      [...this.initialWaiting].map(async ([stationId, total]) => {
+        const count = Math.max(0, total - (boarded[stationId] ?? 0));
         const station = this.stations.find((candidate) => candidate.def.id === stationId);
         if (!station) return;
         const frame = stationFrame(station);
@@ -425,9 +434,18 @@ export class ActorLayer {
     );
   }
 
-  private async place(id: string, model: string, position: Vector3, quaternion: Quaternion): Promise<Object3D> {
+  private bumpGeneration(id: string): number {
+    const generation = (this.generations.get(id) ?? 0) + 1;
+    this.generations.set(id, generation);
+    return generation;
+  }
+
+  /** Puts `model` in as `id` (replacing what is there). Resolves to null when a later place or a remove won. */
+  private async place(id: string, model: string, position: Vector3, quaternion: Quaternion): Promise<Object3D | null> {
+    const generation = this.bumpGeneration(id);
     // Actors move and swap models only as a whole, so an untextured one can be drawn baked.
     const template = await this.models.load(model);
+    if (this.generations.get(id) !== generation) return null;
     const instance = (bakeModel(template) ?? template).clone(true);
     instance.name = id;
     instance.position.copy(position);
@@ -554,12 +572,20 @@ export class ActorLayer {
       case 'passengers':
         await this.animatePassengers(event.stationId, event.board, event.alight);
         break;
-      case 'actor:spawn':
-        await this.place(event.id, event.model, event.position, event.quaternion);
+      case 'actor:spawn': {
+        const placing = this.place(event.id, event.model, event.position, event.quaternion);
+        this.pendingSpawns.set(event.id, placing);
+        await placing;
+        if (this.pendingSpawns.get(event.id) === placing) this.pendingSpawns.delete(event.id);
         break;
-      case 'actor:move':
+      }
+      case 'actor:move': {
+        // Right after its spawn the figure may still be loading: it moves once it is there (unless removed).
+        const pending = this.pendingSpawns.get(event.id);
+        if (pending) await pending;
         this.move(event.id, event.position, event.seconds);
         break;
+      }
       case 'actor:state': {
         const object = this.objects.get(event.id);
         const swap = this.lookModels.get(event.id) ?? STATE_MODELS[this.actorTypes.get(event.id) ?? ''];
@@ -584,6 +610,8 @@ export class ActorLayer {
         break;
       }
       case 'actor:remove':
+        this.bumpGeneration(event.id);
+        this.pendingSpawns.delete(event.id);
         this.objects.get(event.id)?.removeFromParent();
         this.objects.delete(event.id);
         this.objectModels.delete(event.id);
@@ -625,7 +653,7 @@ export class ActorLayer {
           this.partner.position.copy(this.partnerBasePosition);
           this.partner.quaternion.copy(this.partnerBaseQuaternion);
         }
-        await this.resetWaitingPassengers();
+        await this.resetWaitingPassengers(event.boarded);
         break;
       default:
         break;
