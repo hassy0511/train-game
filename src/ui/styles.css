@@ -143,11 +143,12 @@ body {
   right: calc(var(--safe-right) + 22px);
   bottom: calc(var(--safe-bottom) + 26px);
   /* Up to four always-visible buttons in a 2×2 block under the right thumb: whistle and jump on the
-     bottom row, camera and light above. Hidden buttons leave their column empty (width 0). */
+     bottom row, light and rocket above (PHASE7 §1: the camera moved to the top corner). Hidden buttons leave
+     their cell empty; an empty column has width 0. */
   display: grid;
   grid-template-columns: auto auto;
   grid-template-areas:
-    'light camera'
+    'light rocket'
     'jump whistle';
   gap: 18px;
   align-items: center;
@@ -158,8 +159,8 @@ body {
   grid-area: whistle;
 }
 
-#camera {
-  grid-area: camera;
+#rocket {
+  grid-area: rocket;
 }
 
 #jump {
@@ -574,20 +575,28 @@ body {
   pointer-events: none;
 }
 
-/* ---- camera button ---- */
-.round-button .ring.is-camera {
-  background: #4f7fb0;
+/* ---- camera button: a small round one in the top corner, inside the pause button (PHASE7 §1) ---- */
+#camera.corner-button {
+  right: calc(var(--safe-right) + 80px);
+  /* A blue ring tells it apart from the plain white pause button next to it. */
+  box-shadow: inset 0 0 0 4px #4f7fb0, 0 3px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* ---- camera picker ---- */
-.round-button.is-open .face {
+#camera.corner-button svg {
+  width: 30px;
+  height: 30px;
+}
+
+#camera.corner-button.is-open {
   background: #dbe9f7;
 }
 
+/* ---- camera picker: opens under the corner, flush with the pause button's edge ---- */
 .camera-menu {
   position: absolute;
-  right: calc(var(--safe-right) + 22px);
-  bottom: calc(var(--safe-bottom) + 260px);
+  top: calc(var(--safe-top) + 76px);
+  bottom: auto;
+  right: calc(var(--safe-right) + 16px);
   display: flex;
   gap: 10px;
   padding: 10px;
@@ -946,11 +955,10 @@ body {
   font-size: 20px;
 }
 
-/* ---- pause (src/ui/pause.ts) ---- */
-.pause-button {
+/* ---- small round buttons in the top corner: pause (src/ui/pause.ts) and camera ---- */
+.corner-button {
   position: absolute;
   top: calc(var(--safe-top) + 12px);
-  right: calc(var(--safe-right) + 16px);
   width: 52px;
   height: 52px;
   border: none;
@@ -961,6 +969,16 @@ body {
   align-items: center;
   justify-content: center;
   padding: 0;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.corner-button:active {
+  transform: scale(0.94);
+}
+
+.pause-button {
+  right: calc(var(--safe-right) + 16px);
 }
 
 .pause-button svg {
@@ -1069,7 +1087,7 @@ body {
   right: auto;
   left: calc(var(--safe-left) + 22px);
   grid-template-areas:
-    'camera light'
+    'rocket light'
     'whistle jump';
 }
 
@@ -1080,7 +1098,12 @@ body {
 
 #app.is-left-handed .camera-menu {
   right: auto;
-  left: calc(var(--safe-left) + 22px);
+  left: calc(var(--safe-left) + 16px);
+}
+
+#app.is-left-handed #camera.corner-button {
+  right: auto;
+  left: calc(var(--safe-left) + 80px);
 }
 
 #app.is-left-handed .bubble {
@@ -1160,4 +1183,350 @@ body {
   to {
     opacity: 0.45;
   }
+}
+
+/* ---- 2-3 (v1.7): the rocket button, the countdown panel, lever marks, speed lines ---- */
+.round-button .ring.is-rocket {
+  --accent: #ff7a1a;
+  /* Three flames: a part of the ring each, coloured while it is left (--pip1..3 set by ability-buttons.ts). */
+  background: conic-gradient(
+    var(--pip1, var(--accent)) 0deg 112deg,
+    rgba(31, 42, 68, 0.35) 112deg 120deg,
+    var(--pip2, var(--accent)) 120deg 232deg,
+    rgba(31, 42, 68, 0.35) 232deg 240deg,
+    var(--pip3, var(--accent)) 240deg 352deg,
+    rgba(31, 42, 68, 0.35) 352deg 360deg
+  );
+}
+
+/* Burning: the ring runs down over the burn and the flame flickers; pressing does nothing then. */
+#rocket[data-boost='1'] .ring.is-rocket {
+  background: conic-gradient(#ffd166 calc(var(--cd) * 360deg), rgba(255, 255, 255, 0.25) 0);
+}
+
+#rocket[data-boost='1'] .face {
+  background: #fff1d6;
+}
+
+.icon-rocket .flame,
+.icon-rocket .flame-core {
+  transform-origin: 11px 16px;
+}
+
+#rocket[data-boost='1'] .icon-rocket .flame,
+#rocket[data-boost='1'] .icon-rocket .flame-core {
+  animation: rocket-flicker 0.12s ease-in-out infinite alternate;
+}
+
+@keyframes rocket-flicker {
+  from {
+    transform: scaleX(0.8);
+  }
+  to {
+    transform: scaleX(1.25);
+  }
+}
+
+.rocket-mark {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 30px;
+  height: 22px;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #5c7cfa;
+}
+
+.rocket-mark > * {
+  display: none;
+}
+
+.rocket-mark svg {
+  width: 22px;
+  height: 15px;
+}
+
+#rocket[data-mark='sleep'] .rocket-mark,
+#rocket[data-mark='bridge'] .rocket-mark,
+#rocket[data-mark='slide'] .rocket-mark,
+#rocket[data-mark='station'] .rocket-mark {
+  display: flex;
+}
+
+#rocket[data-mark='sleep'] .mark-sleep,
+#rocket[data-mark='bridge'] .mark-bridge,
+#rocket[data-mark='slide'] .mark-slide,
+#rocket[data-mark='station'] .mark-station {
+  display: block;
+}
+
+/* The lever does nothing while the rocket burns or on a slide: a mark on the knob says why. */
+.knob-mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  display: none;
+}
+
+.lever-knob[data-mark='rocket'] .mark-rocket,
+.lever-knob[data-mark='slide'] .mark-slide {
+  display: block;
+}
+
+.lever-knob[data-mark='rocket'] .mark-rocket {
+  animation: rocket-flicker 0.2s ease-in-out infinite alternate;
+}
+
+/*
+ * The countdown panel: top, left of the speed word (clear of the stop gauge and the corner buttons, and of the
+ * widest speed word, "きゅうブレーキ").
+ */
+.timer {
+  position: absolute;
+  top: calc(var(--safe-top) + 8px);
+  right: calc(50% + 104px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px 4px 8px;
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+
+#ui > .timer,
+#ui > .speed-lines {
+  pointer-events: none;
+}
+
+.timer-icon {
+  width: 44px;
+  height: 36px;
+  display: block;
+}
+
+.timer-art {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.timer-art .puff {
+  opacity: 0;
+}
+
+.timer-bar {
+  width: 110px;
+  height: 14px;
+  border-radius: 7px;
+  background: rgba(43, 58, 74, 0.15);
+  overflow: hidden;
+}
+
+.timer-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 7px;
+  background: linear-gradient(#ffc078, #ff922b);
+  transform-origin: left center;
+  transition: transform 0.25s linear;
+}
+
+.timer-num {
+  min-width: 44px;
+  text-align: right;
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* Ten seconds left: the volcano fidgets and puffs (no red, no blinking). */
+.timer[data-state='low'] .timer-art {
+  animation: volcano-fidget 0.5s ease-in-out infinite alternate;
+  transform-origin: 50% 100%;
+}
+
+.timer[data-state='low'] .timer-art .puff {
+  opacity: 1;
+}
+
+@keyframes volcano-fidget {
+  from {
+    transform: rotate(-5deg) scale(1);
+  }
+  to {
+    transform: rotate(5deg) scale(1.06);
+  }
+}
+
+.timer[data-state='safe'] {
+  background: #d3f9d8;
+}
+
+.timer[data-state='safe'] .timer-fill {
+  background: #51cf66;
+}
+
+.timer[data-state='safe'] .timer-num {
+  color: #2b8a3e;
+  font-size: 24px;
+}
+
+#app.is-left-handed .timer {
+  right: auto;
+  left: calc(50% + 104px);
+}
+
+@media (max-height: 500px) {
+  /* A short phone: the gauge (70vw wide) would reach under the corner camera button; sit it just below it. */
+  .stop-gauge {
+    top: calc(var(--safe-top) + 70px);
+  }
+
+  .timer {
+    padding: 3px 10px 3px 6px;
+    gap: 6px;
+  }
+
+  .timer-icon {
+    width: 32px;
+    height: 26px;
+  }
+
+  .timer-bar {
+    width: 60px;
+  }
+
+  .timer-num {
+    min-width: 34px;
+    font-size: 22px;
+  }
+
+  /* "セーフ！" alone (no band), so the wider word stays clear of the cargo strip in the corner. */
+  .timer[data-state='safe'] .timer-bar {
+    display: none;
+  }
+
+  .timer[data-state='safe'] .timer-num {
+    font-size: 18px;
+  }
+
+  .camera-tile {
+    width: 80px;
+    height: 72px;
+  }
+
+  /* A short phone: slightly smaller thumb buttons, so the camera tiles under the corner stay clear of them. */
+  .round-button {
+    width: 80px;
+    height: 80px;
+  }
+
+  .round-button .face {
+    inset: 6px;
+  }
+
+  .round-button .icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .round-button .label {
+    font-size: 13px;
+  }
+
+  .action-buttons {
+    gap: 12px;
+  }
+
+  .camera-tile svg {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+/* Speed lines along the screen edges while the rocket burns. */
+.speed-lines {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: none;
+}
+
+#app[data-burn='1'] .speed-lines {
+  display: block;
+}
+
+.speed-lines span {
+  position: absolute;
+  height: 3px;
+  width: 22%;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.7);
+  animation: speed-line 0.45s linear infinite;
+}
+
+.speed-lines span:nth-child(odd) {
+  left: -2%;
+}
+
+.speed-lines span:nth-child(even) {
+  right: -2%;
+  animation-name: speed-line-right;
+}
+
+.speed-lines span:nth-child(1) { top: 18%; animation-delay: 0s; }
+.speed-lines span:nth-child(2) { top: 24%; animation-delay: 0.1s; }
+.speed-lines span:nth-child(3) { top: 38%; animation-delay: 0.2s; }
+.speed-lines span:nth-child(4) { top: 44%; animation-delay: 0.3s; }
+.speed-lines span:nth-child(5) { top: 58%; animation-delay: 0.15s; }
+.speed-lines span:nth-child(6) { top: 64%; animation-delay: 0.05s; }
+.speed-lines span:nth-child(7) { top: 76%; animation-delay: 0.25s; }
+.speed-lines span:nth-child(8) { top: 82%; animation-delay: 0.35s; }
+
+@keyframes speed-line {
+  from {
+    transform: translateX(40%) scaleX(0.4);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-60%) scaleX(1);
+    opacity: 0;
+  }
+}
+
+@keyframes speed-line-right {
+  from {
+    transform: translateX(-40%) scaleX(0.4);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  to {
+    transform: translateX(60%) scaleX(1);
+    opacity: 0;
+  }
+}
+
+/* The volcano's "はっくしょーん！" over the scene (the smoke ring stays in view). */
+.caption.is-light {
+  background: transparent;
+  font-size: 56px;
+  text-shadow: 0 3px 0 #2b3a4a, 0 0 18px rgba(43, 58, 74, 0.8);
 }

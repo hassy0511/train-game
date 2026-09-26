@@ -20,6 +20,10 @@ export interface SceneView {
   onStageEvent(event: StageEvent): void;
   /** Switches the camera. `snap` skips the smooth transition. */
   setCamera(mode: CameraMode, snap?: boolean): void;
+  /** v1.7: a camera standing still at `at` looking at `lookAt` (world metres); null = back to the mode's camera. */
+  setFixedCamera(fixed: { at: [number, number, number]; lookAt: [number, number, number] } | null): void;
+  /** "がめんの ゆれ: へらす": no view changes that move the picture (e.g. the rocket's wider view). */
+  setCalm(calm: boolean): void;
   resize(width: number, height: number, devicePixelRatio: number): void;
   getStats(): { drawCalls: number; triangles: number } | null;
   /** For dev-only helpers (spline visualizer). May return null. */

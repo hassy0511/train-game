@@ -525,7 +525,123 @@
       "id": "2-3",
       "chapter": 2,
       "x": 52,
-      "y": 82
+      "y": 82,
+      "diorama": {
+        "base": "island-b",
+        "rail": {
+          "radius": 11
+        },
+        "camera": {
+          "yaw": 25,
+          "pitch": 28
+        },
+        "items": [
+          {
+            "model": "volcano",
+            "at": [
+              0,
+              0
+            ],
+            "rotY": 0,
+            "scale": 0.0265,
+            "scaleY": 2.5
+          },
+          {
+            "model": "cloud-a",
+            "at": [
+              0.3,
+              -0.3
+            ],
+            "rotY": 20,
+            "scale": 0.4,
+            "lift": 7.0
+          },
+          {
+            "model": "cloud-a",
+            "at": [
+              1.4,
+              -1.4
+            ],
+            "rotY": 70,
+            "scale": 0.26,
+            "lift": 9.4
+          },
+          {
+            "model": "mesa-a",
+            "at": [
+              -15.3,
+              -3.6
+            ],
+            "rotY": 90,
+            "scale": 0.045
+          },
+          {
+            "model": "observatory",
+            "at": [
+              -15.4,
+              -4.8
+            ],
+            "rotY": 80,
+            "scale": 0.42,
+            "lift": 2.16
+          },
+          {
+            "model": "old-bridge",
+            "at": [
+              -14.3,
+              1.5
+            ],
+            "rotY": 8,
+            "scale": 0.11,
+            "lift": 2.16
+          },
+          {
+            "model": "old-bridge",
+            "at": [
+              -14,
+              3.7
+            ],
+            "rotY": 8,
+            "scale": 0.11,
+            "lift": 2.16
+          },
+          {
+            "model": "pumice",
+            "at": [
+              15,
+              -6
+            ],
+            "rotY": 0,
+            "scale": 2.2
+          },
+          {
+            "model": "pumice",
+            "at": [
+              16.8,
+              5.5
+            ],
+            "rotY": 40,
+            "scale": 1.5
+          },
+          {
+            "model": "pumice",
+            "at": [
+              -6,
+              13
+            ],
+            "rotY": 70,
+            "scale": 1.2
+          },
+          {
+            "model": "train-proto",
+            "at": [
+              11,
+              2
+            ],
+            "rotY": 0
+          }
+        ]
+      }
     }
   ],
   "links": [

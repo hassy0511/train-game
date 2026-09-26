@@ -29,6 +29,8 @@ export interface WorldDiorama {
     at: [number, number];
     rotY?: number;
     scale?: number;
+    /** Extra stretch of the height only (× scale), e.g. the wide, low volcano so it reads as a mountain. */
+    scaleY?: number;
     /** Extra height (m), e.g. clouds hanging above. */
     lift?: number;
     /** Offset in the model's own (rotated, scaled) frame, e.g. a neck on its joint. */

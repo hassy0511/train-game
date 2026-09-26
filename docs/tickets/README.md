@@ -24,6 +24,7 @@
 | [0006](0006-blender-sky-islands-set.md) | Blender: 1-3 くものうえ のモデル一式 | Claude Code | 後回し（1-3 はコードの仮の形で遊べる。2026-09-24） |
 | [0007](0007-blender-giant-tree-set.md) | Blender: 2-1 おおきなきのくに のモデル一式 | Claude Code | 後回し（2-1 はコードの仮の形で遊べる。2026-09-25） |
 | [0008](0008-blender-meadow-set.md) | Blender: 2-2 むしのはらっぱ のモデル一式 | Claude Code | 後回し（2-2 はコードの仮の形で遊べる。2026-09-25） |
+| [0009](0009-blender-volcano-set.md) | Blender: 2-3 かざんのしま のモデル一式 | Claude Code | 後回し（2-3 はコードの仮の形で遊べる。2026-09-26） |
 
 ## 進め方
 1. 設計を示して、だいさんの GO をもらう（`CLAUDE.md` の GO ルール）

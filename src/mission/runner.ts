@@ -4,6 +4,10 @@ import { CatActor } from '../actors/cat';
 import { LargeDino, makeDino, MidDino, SmallDino, type Dino } from '../actors/dino';
 import { RollingNut, Squirrel } from '../actors/nut';
 import { Grasshopper } from '../actors/grasshopper';
+import { DroppingRock, ROCK_HIT_AFTER, RollingRock } from '../actors/rock';
+import type { RocketPress, RocketSystem } from '../gimmick/rocket';
+import type { SlopeSystem, SlopeZone } from '../gimmick/slope';
+import { Countdown, type CountdownView } from './countdown';
 import { FlowerBridges, type BridgeOutcome } from '../gimmick/flower-bridge';
 import { FragileBridges } from '../gimmick/fragile';
 import { addToProgress, loadProgress } from '../core/progress';
@@ -23,7 +27,18 @@ import type {
   StationDef,
 } from '../stage/types';
 import { param } from '../gimmick/zones';
-import { DOOR_REMIND_SECONDS, FALL, JUMP, LEVER_NOTCHES, LIGHT, PASSENGER_SECONDS, REWIND_DISTANCE } from '../train/params';
+import {
+  COUNTDOWN,
+  DOOR_REMIND_SECONDS,
+  FALL,
+  JUMP,
+  LEVER_NOTCHES,
+  LIGHT,
+  PASSENGER_SECONDS,
+  REFUSE_COOLDOWN,
+  REWIND_DISTANCE,
+  SLOPE,
+} from '../train/params';
 import type { JunctionSide, Train } from '../train/train';
 import { StopMonitor, type GaugeState, type StopGrade } from './station-stop';
 
@@ -33,6 +48,8 @@ export interface MissionPorts extends CutscenePorts {
   sayAsync(text: string, who?: Speaker): void;
   /** Drop every line still queued or showing (something more urgent is about to be said). */
   hush(): void;
+  /** v1.7: say this now, dropping the lines still queued or showing (a cue that is only useful on time). */
+  sayNow(text: string): void;
   toast(text: string, kind: StopGrade): void;
   showDoorButton(onPress: () => void): void;
   hideDoorButton(): void;
@@ -51,6 +68,14 @@ export interface MissionPorts extends CutscenePorts {
   fanfare(): void;
   /** Something nearby reacts to the whistle right now: make the whistle button glow. */
   whistleHint(on: boolean): void;
+  /** v1.7: play this song (a countdown's hurry music), or the stage's own song again (null). */
+  music(id: string | null): void;
+}
+
+/** v1.7: the rocket and the slopes (made by the caller: they also work on the test course, without a runner). */
+export interface MissionSystems {
+  rocket: RocketSystem;
+  slopes: SlopeSystem;
 }
 
 export type MissionPhase = 'idle' | 'driving' | 'stopped' | 'doors' | 'cutscene' | 'failing' | 'clear';
@@ -95,7 +120,18 @@ type DefaultLine =
   | 'fragileBoing'
   | 'fragileBoingAfter'
   | 'fragileClear'
-  | 'fellLight';
+  | 'fellLight'
+  | 'rocketLever'
+  | 'rocketEmpty'
+  | 'rocketQuiet'
+  | 'slip'
+  | 'slipEmpty'
+  | 'slipAfter'
+  | 'slipEmptyAfter'
+  | 'noBrakeLever'
+  | 'rockHit'
+  | 'timeSafe'
+  | 'timeUp';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -138,13 +174,26 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   fragileBoingAfter: 'いとの うえは ゆっくり ね',
   fragileClear: 'わたれた！ じょうず！',
   fellLight: 'ライトを けすと はやく なるよ！',
+  // v1.7 (2-3). Lines without a default here (steepNear, rocketReady, rocketGo, rocketAgain, noBrake, rockNear,
+  // rockDrop, timerStart, timeLow) are only said when the mission has them.
+  rocketLever: 'ロケット ちゅうは レバーが きかないよ',
+  rocketEmpty: 'からっぽ！ えきで まんたんに なるよ',
+  rocketQuiet: 'えきの ちかくは ロケット おやすみ',
+  slip: 'ずるずる〜… のぼれなかった',
+  slipEmpty: 'ずるずる〜… ロケットが たりない！',
+  slipAfter: 'ひかったら ロケットを おしてね',
+  slipEmptyAfter: 'ひかったら ロケットを おしてね',
+  noBrakeLever: 'つるつる〜！ レバーが きかない！',
+  rockHit: 'ぽこん！ いしに ぶつかった〜',
+  timeSafe: 'セーフ！',
+  timeUp: 'はっくしょーん！',
 };
 
 /** Lever labels by jump hint, for the partner's "つぎの きれめは ふつう で とべる". */
 const HINT_NOTCH: Record<NonNullable<GapDef['hint']>, number> = { normal: 3, fast: 4, max: 5 };
 
 /** Card titles for newly learned abilities. */
-export const ABILITY_NAMES: Partial<Record<AbilityId, string>> = { jump: 'ジャンプ', light: 'ライト', whistle: 'きてき' };
+export const ABILITY_NAMES: Partial<Record<AbilityId, string>> = { jump: 'ジャンプ', light: 'ライト', whistle: 'きてき', rocket: 'ロケット' };
 
 /**
  * Drives a stage: opening → missions (steps at stations) → ending.
@@ -165,6 +214,24 @@ export class MissionRunner {
   private readonly hoppers: Grasshopper[];
   private readonly bridges: FlowerBridges;
   private readonly fragiles: FragileBridges;
+  private readonly rollingRocks: RollingRock[];
+  private readonly droppingRocks: DroppingRock[];
+  private readonly rocket: RocketSystem | null;
+  private readonly slopes: SlopeSystem | null;
+  /** The countdown of the step being driven, if it has one. */
+  private countdown: Countdown | null = null;
+  /** Seconds the "セーフ！" panel still shows. */
+  private safeLeft = 0;
+  /** Where the train last stopped for a step (a countdown's time-up goes back there). */
+  private lastStop: { railId: string; at: number } | null = null;
+  /** Rocket lines: rocketReady / rocketGo once per mission (PHASE6 §5.1); rocketAgain counts glows per slope (reset on rewind). */
+  private rocketReadySaid = false;
+  private rocketGoSaid = false;
+  private rocketLeverSaid = false;
+  private noBrakeLeverSaid = false;
+  private readonly slopeGlows = new Map<number, number>();
+  /** Zone lines already said this try. */
+  private readonly zoneLines = new Set<string>();
   /** Reversed-sign junctions the train has once gone the wrong way at (the light button glows there after). */
   private readonly wrongTurns = new Set<string>();
   /** What the view was last told about each butterfly (state, place). */
@@ -181,6 +248,12 @@ export class MissionRunner {
   /** In the 'doors' phase: false while waiting for the door button, true once the doors are open. */
   private doorsOpen = false;
   private hintsFired = new Set<number>();
+  /** Game time while driving (s), for the refusal lines' cooldown. */
+  private clock = 0;
+  /** The last "not now" line (a refused rocket or jump press) and when it was said: a mashing child hears it once. */
+  private lastRefusal: { text: string; at: number } | null = null;
+  /** The next drive comes after a fail: the slopes and the rocket announce again once it starts. */
+  private rearm = false;
   private resolveDrive: ((outcome: DriveOutcome) => void) | null = null;
   private lines: MissionLines = {};
   private readonly groundY: number | null;
@@ -191,8 +264,14 @@ export class MissionRunner {
     private readonly whistle: Whistle,
     private readonly events: StageEventBus,
     private readonly ports: MissionPorts,
+    systems?: MissionSystems,
   ) {
     this.groundY = stage.file.environment.ground?.y ?? null;
+    this.rocket = systems?.rocket ?? null;
+    this.slopes = systems?.slopes ?? null;
+    this.rollingRocks = stage.actors.filter((a) => a.type === 'rock-roll').map((a) => new RollingRock(a, train));
+    this.droppingRocks = stage.actors.filter((a) => a.type === 'rock-drop').map((a) => new DroppingRock(a, train));
+    this.listenRocketAndSlopes();
     this.cats = stage.actors.filter((a) => a.type === 'cat').map((a) => new CatActor(a, train));
     this.dinos = stage.actors.map((a) => makeDino(a, train)).filter((d): d is Dino => d !== null);
     this.nuts = stage.actors.filter((a) => a.type === 'nut').map((a) => new RollingNut(a, train));
@@ -239,8 +318,19 @@ export class MissionRunner {
   /** The jump button was pressed while stopped or otherwise refused. */
   onJumpRefused(reason: string): void {
     if (this.phase !== 'driving') return;
-    if (reason === 'stopped') this.ports.sayAsync(this.lines.jumpStopped ?? DEFAULT_LINES.jumpStopped);
-    if (reason === 'bough') this.ports.sayAsync(this.lines.boughJump ?? DEFAULT_LINES.boughJump);
+    if (reason === 'stopped') this.sayRefusal(this.lines.jumpStopped ?? DEFAULT_LINES.jumpStopped);
+    if (reason === 'bough') this.sayRefusal(this.lines.boughJump ?? DEFAULT_LINES.boughJump);
+  }
+
+  /**
+   * A "not now" line for a refused press. The same line again within REFUSE_COOLDOWN s of game time is dropped, so
+   * mashing a grey button does not queue a copy per tap ahead of the lines that must come on time.
+   */
+  private sayRefusal(text: string): void {
+    const last = this.lastRefusal;
+    if (last && last.text === text && this.clock - last.at < REFUSE_COOLDOWN) return;
+    this.lastRefusal = { text, at: this.clock };
+    this.ports.sayAsync(text);
   }
 
   /** Test hooks and UI: the grasshopper riding on the roof (its id, or ""). */
@@ -284,9 +374,96 @@ export class MissionRunner {
     return false;
   }
 
-  /** A nut ahead can be jumped right now (the jump button glows). */
+  /** A nut or a dropped rock ahead can be jumped right now (the jump button glows). */
   get jumpHint(): boolean {
-    return this.phase === 'driving' && (this.nuts.some((n) => n.jumpHint) || this.squirrels.some((s) => s.jumpHint));
+    return (
+      this.phase === 'driving' &&
+      (this.nuts.some((n) => n.jumpHint) || this.squirrels.some((s) => s.jumpHint) || this.droppingRocks.some((r) => r.jumpHint))
+    );
+  }
+
+  /** v1.7: the countdown panel (null = hidden). */
+  get timer(): CountdownView | null {
+    const c = this.countdown;
+    if (!c || (c.state === 'safe' && this.safeLeft <= 0)) return null;
+    return c.view;
+  }
+
+  /** v1.7: the rocket button was pressed and did not fire: the partner says why (not for air / burning). */
+  onRocketRefused(result: RocketPress): void {
+    if (result.ok || this.phase !== 'driving') return;
+    switch (result.why) {
+      case 'empty':
+        this.sayRefusal(this.lines.rocketEmpty ?? DEFAULT_LINES.rocketEmpty);
+        break;
+      case 'zone': {
+        const text = result.zone?.pressLine ?? result.zone?.line;
+        if (text) this.sayRefusal(text);
+        break;
+      }
+      case 'slide':
+        this.sayRefusal(this.lines.noBrakeLever ?? DEFAULT_LINES.noBrakeLever);
+        break;
+      case 'station':
+        this.sayRefusal(this.lines.rocketQuiet ?? DEFAULT_LINES.rocketQuiet);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** v1.7: rocket and slope lines, and the slip fail. */
+  private listenRocketAndSlopes(): void {
+    this.train.events.on('rocketStarted', () => {
+      this.rocketLeverSaid = false;
+      if (this.phase !== 'driving' || this.rocketGoSaid) return;
+      this.rocketGoSaid = true;
+      if (this.lines.rocketGo) this.ports.sayAsync(this.lines.rocketGo);
+    });
+    this.train.events.on('slipped', ({ railId, s }) => {
+      if (this.phase !== 'driving') return;
+      const slope = this.slopes?.current ?? null;
+      const empty = this.rocket !== null && this.rocket.enabled && this.rocket.pips <= 0;
+      this.finishDrive({
+        kind: 'fail',
+        reason: 'slip',
+        line: empty ? 'slipEmpty' : 'slip',
+        rewind: slope?.rewind ?? { railId, at: s - SLOPE.rewindBefore },
+      });
+    });
+    this.rocket?.events.on('glow', ({ slope }) => {
+      if (this.phase !== 'driving' || !slope) return;
+      const count = (this.slopeGlows.get(slope.index) ?? 0) + 1;
+      this.slopeGlows.set(slope.index, count);
+      // "いまだ！" is only useful now: it replaces what is queued (the slope's own line 20 m earlier included).
+      if (count >= 2) {
+        if (this.lines.rocketAgain) this.ports.sayNow(this.lines.rocketAgain);
+      } else if (!this.rocketReadySaid) {
+        this.rocketReadySaid = true;
+        if (this.lines.rocketReady) this.ports.sayNow(this.lines.rocketReady);
+      }
+    });
+    this.rocket?.events.on('zone', (zone) => {
+      if (this.phase !== 'driving' || !zone.line) return;
+      const key = `rocket:${zone.index}`;
+      if (this.zoneLines.has(key)) return;
+      this.zoneLines.add(key);
+      this.ports.sayNow(zone.line);
+    });
+    this.slopes?.events.on('near', (zone: SlopeZone) => {
+      if (this.phase !== 'driving') return;
+      const text = zone.line ?? this.lines.steepNear;
+      if (text) this.ports.sayAsync(text);
+    });
+    this.slopes?.events.on('enter', (zone: SlopeZone) => {
+      if (zone.kind !== 'down') return;
+      this.noBrakeLeverSaid = false;
+      if (this.phase !== 'driving') return;
+      const key = `slope:${zone.index}`;
+      if (this.zoneLines.has(key)) return;
+      this.zoneLines.add(key);
+      if (this.lines.noBrake) this.ports.sayAsync(this.lines.noBrake);
+    });
   }
 
   /** Abilities the player already has on entering the stage (saved, or inherited when opened directly). */
@@ -316,6 +493,10 @@ export class MissionRunner {
       this.lines = mission.lines ?? {};
       this.movingSaid = false;
       this.hintsFired.clear();
+      this.rocketReadySaid = false;
+      this.rocketGoSaid = false;
+      this.slopeGlows.clear();
+      this.zoneLines.clear();
       await this.ports.card(`ミッション ${i + 1}\n${mission.title}`, 'スタート');
       if (this.lines.start) for (const line of this.lines.start.split('\n')) await this.ports.say(line, 'partner');
 
@@ -339,7 +520,10 @@ export class MissionRunner {
 
   /** Per-frame monitoring while driving. */
   update(dt: number): void {
+    if (this.safeLeft > 0) this.safeLeft = Math.max(0, this.safeLeft - dt);
     if (this.phase !== 'driving') return;
+    this.clock += dt;
+    if (this.updateCountdown(dt)) return;
     if (this.stop) this.ports.gauge(this.stop.gauge);
     if (!this.movingSaid && this.train.state.speed > 0) {
       this.movingSaid = true;
@@ -450,9 +634,86 @@ export class MissionRunner {
         return;
       }
     }
+    if (this.updateRocks(dt)) return;
     this.updateHoppers();
     this.updateBridges(dt);
     this.updateFragiles(dt);
+  }
+
+  /** v1.7: the countdown of this step. Returns true when time ran out (the drive ended). */
+  private updateCountdown(dt: number): boolean {
+    const c = this.countdown;
+    if (!c) return false;
+    const o = c.update(dt, this.train);
+    if (o === 'low') {
+      this.events.post({ type: 'countdown', state: 'low' });
+      if (this.lines.timeLow) this.ports.sayAsync(this.lines.timeLow);
+    } else if (o === 'safe') {
+      this.safeLeft = COUNTDOWN.safeShow;
+      this.events.post({ type: 'countdown', state: 'safe' });
+      this.events.post({ type: 'partner:emote', kind: 'cheer' });
+      this.ports.sayAsync(this.lines.timeSafe ?? DEFAULT_LINES.timeSafe);
+      if (c.def.music) this.ports.music(null);
+    } else if (o === 'up') {
+      this.events.post({ type: 'countdown', state: 'up' });
+      // The train stops under the sneeze (and a burning rocket ends with its puff), as in the other on-track fails.
+      this.train.emergencyStop();
+      this.finishDrive({ kind: 'fail', reason: 'timeUp', rewind: c.origin });
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * v1.7: rocks. A rolling one crosses like the young dinosaur (wait for it); a dropping one lands on the rail
+   * and stays (jump over it). Returns true when one was bumped (the drive ended).
+   */
+  private updateRocks(dt: number): boolean {
+    for (const rock of this.rollingRocks) {
+      const o = rock.step(dt);
+      if (!o) continue;
+      const base = { type: 'rock', id: rock.actor.id, kind: 'roll', railId: rock.railId, at: rock.at, lateral: rock.params.lateral } as const;
+      if (o.kind === 'near') {
+        this.events.post({ ...base, state: 'wobble' });
+        const text = rock.rock.say ?? this.lines.rockNear;
+        if (text) this.ports.sayNow(text);
+      } else if (o.kind === 'roll') {
+        this.events.post({ ...base, state: 'roll', seconds: o.seconds });
+      } else if (o.kind === 'danger') {
+        this.train.emergencyStop();
+        this.events.post({ ...base, state: 'bonk' });
+        this.finishDrive({
+          kind: 'fail',
+          reason: 'rock',
+          after: rock.rock.hitAfter ?? ROCK_HIT_AFTER.roll,
+          rewind: rock.rewind,
+        });
+        return true;
+      }
+    }
+    for (const rock of this.droppingRocks) {
+      const o = rock.update();
+      if (!o) continue;
+      const base = { type: 'rock', id: rock.actor.id, kind: 'drop', railId: rock.railId, at: rock.at } as const;
+      if (o.kind === 'shadow') {
+        this.events.post({ ...base, state: 'shadow' });
+      } else if (o.kind === 'drop') {
+        this.events.post({ ...base, state: 'drop' });
+        const text = rock.rock.say ?? this.lines.rockDrop;
+        if (text) this.ports.sayNow(text);
+      } else if (o.kind === 'danger') {
+        this.train.emergencyStop();
+        this.events.post({ ...base, state: 'bonk' });
+        this.finishDrive({
+          kind: 'fail',
+          reason: 'rock',
+          after: rock.rock.hitAfter ?? ROCK_HIT_AFTER.drop,
+          rewind: rock.rewind,
+        });
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Grasshoppers: one hops on (by itself or when whistled for), helps over its gap, and hops off. */
@@ -563,6 +824,14 @@ export class MissionRunner {
       squirrel.reset();
       this.events.post({ type: 'squirrel', id: squirrel.actor.id, state: 'hold' });
       this.events.post({ type: 'nut', id: squirrel.actor.id, state: 'hide', railId: squirrel.railId, at: squirrel.at });
+    }
+    for (const rock of this.rollingRocks) {
+      rock.reset();
+      this.events.post({ type: 'rock', id: rock.actor.id, kind: 'roll', state: 'wait', railId: rock.railId, at: rock.at, lateral: rock.params.lateral });
+    }
+    for (const rock of this.droppingRocks) {
+      rock.reset();
+      this.events.post({ type: 'rock', id: rock.actor.id, kind: 'drop', state: 'hide', railId: rock.railId, at: rock.at });
     }
     for (const dino of this.dinos) {
       dino.reset();
@@ -691,6 +960,17 @@ export class MissionRunner {
 
   /** Lever moved while locked: explain why. */
   onLeverRejected(): void {
+    if (this.phase === 'driving') {
+      // v1.7: the lever stays put while the rocket burns and on a slide; once per burn / slide.
+      if (this.train.rocketBurning && !this.rocketLeverSaid) {
+        this.rocketLeverSaid = true;
+        this.ports.sayAsync(this.lines.rocketLever ?? DEFAULT_LINES.rocketLever);
+      } else if (this.train.onSlide && !this.train.rocketBurning && !this.noBrakeLeverSaid) {
+        this.noBrakeLeverSaid = true;
+        this.ports.sayAsync(this.lines.noBrakeLever ?? DEFAULT_LINES.noBrakeLever);
+      }
+      return;
+    }
     if (this.phase !== 'doors') return;
     if (this.doorsOpen) this.ports.sayAsync(this.lines.doorsOpenLever ?? DEFAULT_LINES.doorsOpenLever);
     else this.ports.sayAsync(this.lines.doorsClosedLever ?? DEFAULT_LINES.doorsClosedLever);
@@ -732,6 +1012,11 @@ export class MissionRunner {
   }
 
   private catFleePosition(cat: CatActor): Vector3 {
+    if ((cat.actor.params as { look?: string }).look === 'seabird') {
+      // v1.7: a seabird flaps off up into the sky instead of walking aside.
+      const frame = this.stage.network.getRail(cat.railId).frameAt(cat.at);
+      return frame.position.clone().addScaledVector(frame.right, cat.params.fleeLateral * 3).addScaledVector(frame.up, 22);
+    }
     return this.lateralPosition(cat.railId, cat.at, cat.params.fleeLateral);
   }
 
@@ -756,6 +1041,7 @@ export class MissionRunner {
       this.train.state.speed === 0 &&
       this.train.state.railId === station.railId &&
       Math.abs(this.train.offsetTo(station.at)) <= new StopMonitor(this.train, station).rule.ok;
+    if (step.countdown && !alreadyHere) await this.startCountdown(step, station);
     // Drive until a graded stop; fails rewind and retry the same step.
     while (!alreadyHere) {
       this.events.post({ type: 'goal', stationId: station.id });
@@ -769,12 +1055,50 @@ export class MissionRunner {
       }
       await this.fail(outcome, station);
     }
+    this.endCountdown();
+    this.lastStop = { railId: station.railId, at: station.at };
     if ((step.board ?? 0) > 0 || (step.alight ?? 0) > 0 || step.parcel) await this.doors(step, station);
+  }
+
+  /** v1.7: "かざんが むずむず してる！" — then the time runs while driving to this step's station. */
+  private async startCountdown(step: MissionStep, station: StationDef): Promise<void> {
+    const def = step.countdown;
+    if (!def) return;
+    if (this.lines.timerStart) for (const line of this.lines.timerStart.split('\n')) await this.ports.say(line, 'partner');
+    const origin = this.lastStop ?? { railId: this.train.state.railId, at: this.train.frontS };
+    this.countdown = new Countdown(def, origin, station);
+    this.safeLeft = 0;
+    this.events.post({ type: 'countdown', state: 'run' });
+    if (def.music) this.ports.music(def.music);
+  }
+
+  /** v1.7: the step is done: put the panel away (and the song back if it never got beaten). */
+  private endCountdown(): void {
+    const c = this.countdown;
+    if (!c) return;
+    if (c.state !== 'safe') {
+      this.events.post({ type: 'countdown', state: 'off' });
+      if (c.def.music) this.ports.music(null);
+      this.countdown = null;
+    }
   }
 
   private drive(station: StationDef): Promise<DriveOutcome> {
     this.stop = new StopMonitor(this.train, station);
     this.phase = 'driving';
+    this.lastRefusal = null;
+    if (this.rearm) {
+      // The slopes and the rocket kept running through the fail's fade (announcing to no one while the phase was
+      // 'failing'): forget that, so the slope just ahead and the zone the train stands in are named on this try.
+      this.rearm = false;
+      this.slopes?.reset();
+      this.rocket?.reset();
+    }
+    // v1.7: the rocket fills up for every drive from a station, and rests near this one.
+    if (this.rocket) {
+      this.rocket.refill();
+      this.rocket.goal = { railId: station.railId, at: station.at };
+    }
     this.train.unlockInput();
     return new Promise((resolve) => {
       this.resolveDrive = resolve;
@@ -795,18 +1119,40 @@ export class MissionRunner {
     // The train is stopped and the lever is locked until the rewind: say why now, not after older lines.
     this.ports.hush();
     this.events.post({ type: 'fail', reason });
+    // v1.7: out of time, the volcano sneezes ("はっくしょーん！") and the steam wraps the train.
+    if (reason === 'timeUp') this.events.post({ type: 'sneeze' });
     const scary = reason === 'cat' || reason === 'dino';
-    // The silk bounces the train back softly: a dip, no shake.
-    this.ports.cameraFx(scary ? 1 : 0.5, reason === 'fragile' ? 0 : 1);
+    // The silk, a rock, a slip and the sneeze are soft: a small dip, no shake.
+    const soft = reason === 'fragile' || reason === 'rock' || reason === 'slip' || reason === 'timeUp';
+    this.ports.cameraFx(scary ? 1 : soft ? 0.3 : 0.5, soft ? 0 : 1);
     const key: DefaultLine = outcome.line ?? FAIL_LINES[reason] ?? (reason as DefaultLine);
-    await this.ports.say(this.lines[key] ?? DEFAULT_LINES[key], 'partner');
+    for (const line of (this.lines[key] ?? DEFAULT_LINES[key]).split('\n')) await this.ports.say(line, 'partner');
     if (reason === 'cat') await this.ports.say(this.lines.catDangerAfter ?? DEFAULT_LINES.catDangerAfter, 'partner');
     if (reason === 'dino') await this.ports.say(this.lines.dangerAfter ?? DEFAULT_LINES.dangerAfter, 'partner');
     if (reason === 'fragile') await this.ports.say(this.lines.fragileBoingAfter ?? DEFAULT_LINES.fragileBoingAfter, 'partner');
+    if (reason === 'slip') {
+      // After an empty gauge: the mission's advice for that ("save them for the slope"); else "press when it glows".
+      const after: DefaultLine = outcome.line === 'slipEmpty' ? 'slipEmptyAfter' : 'slipAfter';
+      await this.ports.say(this.lines[after] ?? DEFAULT_LINES[after], 'partner');
+    }
+    if (outcome.after) await this.ports.say(outcome.after, 'partner');
     await this.ports.fade(true, 0.4);
     // Rewind to a bit before whatever we failed at (the station, a cat or dinosaur, a gap, a junction).
     const target = outcome.rewind ?? { railId: station.railId, at: station.at - REWIND_DISTANCE };
     this.train.rewindTo(target.at, target.railId);
+    // v1.7: full flames again; the countdown goes back with the train (or starts over, with more time).
+    this.rocket?.refill();
+    this.rocket?.reset();
+    this.slopes?.reset();
+    this.rearm = true;
+    this.slopeGlows.clear();
+    this.zoneLines.clear();
+    const c = this.countdown;
+    if (c?.active) {
+      if (reason === 'timeUp') c.restartAfterTimeUp();
+      else c.restoreAt(target);
+      this.events.post({ type: 'countdown', state: 'run' });
+    }
     for (const cat of this.cats) cat.reset();
     for (const cat of this.cats) this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'sleep', position: cat.actor.position });
     this.resetActors(target);
@@ -904,6 +1250,7 @@ export class MissionRunner {
       },
     });
     this.ports.autoCamera(null);
+    this.ports.fixedCamera(null);
     this.phase = previous === 'driving' ? 'idle' : previous;
   }
 }
@@ -917,6 +1264,9 @@ const FAIL_LINES: Partial<Record<FailReason, DefaultLine>> = {
   hopper: 'hopperFell',
   bridge: 'bridgeFell',
   fragile: 'fragileBoing',
+  rock: 'rockHit',
+  slip: 'slip',
+  timeUp: 'timeUp',
 };
 const BRIDGE_LINES: Record<NonNullable<BridgeOutcome>['kind'], DefaultLine> = {
   near: 'butterflyNear',
@@ -931,6 +1281,8 @@ interface FailOutcome {
   reason: FailReason;
   /** Say this instead of the reason's line. */
   line?: DefaultLine;
+  /** Said after the reason's line (a rock's "hitAfter"). */
+  after?: string;
   /** Where to put the train front back; default: REWIND_DISTANCE before the station. */
   rewind?: { railId: string; at: number };
 }

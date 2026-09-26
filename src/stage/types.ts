@@ -1,7 +1,7 @@
 import type { Quaternion, Vector3 } from 'three';
 import type { RailNetwork } from '../rail/types';
 
-/** Stage JSON schema v1 (additions up to v1.2). See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
+/** Stage JSON schema v1 (additions up to v1.7). See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
 export type Vec3 = [number, number, number];
 
 export type AbilityId = 'whistle' | 'light' | 'jump' | 'rocket' | 'dive' | 'magnetLight' | 'reverse';
@@ -52,7 +52,20 @@ export interface RailDef {
   upMode?: 'fixed' | 'follow';
   /** v1.6: how the track looks: "rail" (default: rails, sleepers, ballast) or "silk" (spider-silk threads). */
   look?: 'rail' | 'silk';
+  /** v1.7: rock under the track, so a line along a slope does not float (looks only). */
+  base?: RailBaseDef;
   end: RailEndDef;
+}
+
+/**
+ * v1.7: the rock the track sits on. `depth`: the bed reaches this many metres down (default 3); `toGround`: it
+ * reaches the ground plane, wider at the bottom (a ridge). `skip`: stretches without it (an arch, a bridge).
+ */
+export interface RailBaseDef {
+  look: 'rock';
+  depth?: number;
+  toGround?: boolean;
+  skip?: { from: number; to: number }[];
 }
 
 export interface JunctionDef {
@@ -108,6 +121,8 @@ export type PropDef = Placement & {
   model: string;
   scale?: number;
   physics?: PhysicsType;
+  /** v1.7: a name a cutscene can refer to (cutRail "props": these fall with the cut track). */
+  tag?: string;
 };
 
 export type ReactsTo = 'whistle' | 'light' | 'none';
@@ -131,8 +146,28 @@ export type RecordDef = Placement & {
   note?: string;
 };
 
+/**
+ * v1.7: a countdown over one step's drive (2-3 M3). It starts when the drive to this step's station starts and stops
+ * once the train front passes `until` (default: the station's stop zone). Out of time: back to where the step started
+ * with `assist` s more per time-up (at most `assistMax` s more).
+ */
+export interface CountdownDef {
+  seconds: number;
+  until?: { railId: string; at: number };
+  /** Default COUNTDOWN.assist (10). */
+  assist?: number;
+  /** Default COUNTDOWN.assistMax (30). */
+  assistMax?: number;
+  /** The picture on the panel: "volcano" (default) or "clock". */
+  icon?: 'volcano' | 'clock';
+  /** Song while counting (src/audio/songs.ts); the stage's own song comes back afterwards. */
+  music?: string;
+}
+
 export interface MissionStep {
   stationId: string;
+  /** v1.7: a countdown while driving to this station. */
+  countdown?: CountdownDef;
   /** Passengers boarding here. */
   board?: number;
   /** Passengers alighting here. */
@@ -217,6 +252,27 @@ export type MissionLines = Partial<
     | 'fragileBoingAfter'
     | 'fragileClear'
     | 'fellLight'
+    // v1.7 (2-3)
+    | 'steepNear'
+    | 'rocketReady'
+    | 'rocketGo'
+    | 'rocketAgain'
+    | 'rocketLever'
+    | 'rocketEmpty'
+    | 'rocketQuiet'
+    | 'slip'
+    | 'slipEmpty'
+    | 'slipAfter'
+    | 'slipEmptyAfter'
+    | 'noBrake'
+    | 'noBrakeLever'
+    | 'rockNear'
+    | 'rockDrop'
+    | 'rockHit'
+    | 'timerStart'
+    | 'timeLow'
+    | 'timeSafe'
+    | 'timeUp'
     // v1.4
     | 'doorAsk'
     | 'doorsClosedLever',
@@ -260,11 +316,19 @@ export type CutsceneStep =
     }
   | { remove: string }
   | { wait: number }
-  | { cutRail: { railId: string; from: number; to: number } }
+  /**
+   * v1.7: `style` "fly" (default: a short piece flies up, the rival cutting the line) or "fall" (the whole cut
+   * stretch falls to the ground below, with the props tagged `props` on it).
+   */
+  | { cutRail: { railId: string; from: number; to: number; style?: 'fly' | 'fall'; props?: string } }
   | { card: { title: string; button: string; icon?: 'badge' } }
   | { emote: Emote }
   /** Switch the camera for the rest of the cutscene (restored afterwards). */
   | { camera: 'cab' | 'chase' | 'side' | 'top' }
+  /** v1.7: a camera standing still at `at`, looking at `lookAt` (world metres), for the rest of the cutscene. */
+  | { camera: 'fixed'; at: Vec3; lookAt: Vec3 }
+  /** v1.7: a screen effect. "sneeze": the volcano sneezes ("はっくしょーん！", a big smoke ring), 2.5 s. */
+  | { fx: 'sneeze' }
   /** Full-screen dark caption that fades after `seconds`. */
   | { caption: string; seconds?: number }
   /** v1.2: grant an ability (its button appears) and show the "learned" card. */
@@ -277,6 +341,42 @@ export interface GimmickDef {
   to?: number;
   params?: Record<string, unknown>;
 }
+
+/** v1.7: params of a "slope" gimmick (the stretch `from`–`to` of `railId`, judged at the train front). */
+export interface SlopeParams {
+  /** m/s² (required, not 0): negative = too steep to climb without the rocket; positive = a slide (no lever). */
+  pull: number;
+  /** Slide: its top speed (m/s). Default SLOPE.max (20). */
+  max?: number;
+  /** Uphill: where the train front goes back to after slipping. Default `from − 60` on the same rail. */
+  rewind?: { railId: string; at: number };
+  /** Uphill: said 60 m before it (default: the mission's steepNear). */
+  line?: string | null;
+  /** A sign at its start (sign-steep / sign-slide). Default true. */
+  sign?: boolean;
+}
+
+/** v1.7: params of a "rocket" gimmick (a stretch where the rocket rests, or where it glows). */
+export interface RocketZoneParams {
+  /** false = the rocket rests here (a press only says a line; a burn ends "ぷしゅっ"). Default true. */
+  allow?: boolean;
+  /** true = the button glows here (not with allow: false). Default false. */
+  glow?: boolean;
+  /** Mark on the button while resting here. Default "none". */
+  icon?: 'none' | 'sleep' | 'bridge';
+  /** Said once on entering; also said on a press when there is no pressLine. */
+  line?: string;
+  /** Said on a press here. */
+  pressLine?: string;
+}
+
+/**
+ * v1.7 actors (placed with onRail): "rock-roll" (params: startDistance, crossSeconds, dangerDistance, lateral, warn,
+ * rewind, say, hitAfter) and "rock-drop" (params: drop, warn, rewind, say, hitAfter). `rewind` is a place on the
+ * same rail (a number) or { railId, at }; default 80 m before the rock. A "cat" with params.look "seabird" is a
+ * seabird (it flies off when whistled).
+ */
+export type RockRewind = number | { railId: string; at: number };
 
 export interface StartDef {
   railId: string;
@@ -317,6 +417,10 @@ export interface ResolvedProp {
   quaternion: Quaternion;
   scale: number;
   physics: PhysicsType;
+  /** v1.7: see PropDef.tag. */
+  tag?: string;
+  /** Where it was placed along a rail, when it was. */
+  onRail?: { railId: string; at: number };
 }
 
 /** A record with its placement resolved. */

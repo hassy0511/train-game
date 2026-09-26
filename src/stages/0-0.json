@@ -22,7 +22,7 @@
     "lighting": "day",
     "ground": {
       "y": -0.6,
-      "size": 800,
+      "size": 1200,
       "color": "#7fc96f"
     },
     "bgm": null
@@ -93,6 +93,31 @@
         ],
         [
           270,
+          0,
+          180
+        ],
+        [
+          330,
+          0,
+          180
+        ],
+        [
+          390,
+          0,
+          180
+        ],
+        [
+          450,
+          0,
+          180
+        ],
+        [
+          510,
+          0,
+          180
+        ],
+        [
+          570,
           0,
           180
         ]
@@ -437,5 +462,15 @@
   ],
   "records": [],
   "missions": [],
-  "gimmicks": []
+  "gimmicks": [
+    { "type": "slope", "railId": "main", "from": 240, "to": 310, "params": { "pull": -6 } },
+    { "type": "slope", "railId": "main", "from": 350, "to": 410, "params": { "pull": 3, "max": 20 } },
+    {
+      "type": "rocket",
+      "railId": "main",
+      "from": 450,
+      "to": 520,
+      "params": { "allow": false, "icon": "sleep", "line": "しーっ… ロケットは おやすみ" }
+    }
+  ]
 }

@@ -301,4 +301,66 @@ export class AudioEngine {
     this.ping(freq, delay, 0.09, 'triangle', gain, freq * 0.9, 0.002);
     this.ping(freq * 2.76, delay, 0.035, 'sine', gain * 0.35, freq * 2.76, 0.001);
   }
+
+  /** v1.7: the rocket fires: "ぼぼぼ… しゅごー" (a low rumble rising into a rush). */
+  playRocket(): void {
+    for (let i = 0; i < 3; i++) window.setTimeout(() => this.tone(110 + i * 12, 0.12, 'square', 0.06, 90), i * 110);
+    window.setTimeout(() => this.tone(260, 1.4, 'sawtooth', 0.05, 900), 300);
+  }
+
+  /** v1.7: the rocket stops: "ぷしゅっ". */
+  playPuff(): void {
+    this.tone(1400, 0.22, 'triangle', 0.08, 300);
+  }
+
+  /** v1.7: slipping back down a slope: a sliding whistle going down ("ずるずる〜"). */
+  playSlip(): void {
+    this.tone(700, 1.1, 'sine', 0.12, 180);
+  }
+
+  /** v1.7: the volcano sneezes: "ぷしゅーっ… ぽふーん" (soft, not a bang). */
+  playSneeze(): void {
+    this.tone(500, 0.5, 'triangle', 0.08, 1100);
+    window.setTimeout(() => this.tone(180, 0.7, 'sine', 0.2, 70), 520);
+  }
+
+  /** v1.7: the volcano's everyday smoke ring: a small, soft "ぽふっ" (quiet: it comes every few seconds). */
+  playVolcanoPuff(): void {
+    this.ping(150, 0, 0.35, 'sine', 0.1, 75, 0.02);
+    this.ping(420, 0.02, 0.18, 'triangle', 0.03, 260, 0.01);
+  }
+
+  /** v1.7: a rolling rock about to go: "ぐらぐら" (low wooden rocking, left-right-left-right). */
+  playRockWobble(): void {
+    [0, 0.13, 0.26, 0.39].forEach((d, i) => this.knock(i % 2 ? 150 : 175, d, 0.14));
+  }
+
+  /** v1.7: a rock rolls across the rail for `seconds`: "ごろごろ" (low knocks that fade, at most 2 s). */
+  playRockRoll(seconds: number): void {
+    const len = Math.min(2, Math.max(0.4, seconds));
+    for (let d = 0, i = 0; d < len; d += 0.11, i++) this.knock([95, 110, 85, 120][i % 4], d, 0.16 * (1 - (0.6 * d) / len));
+  }
+
+  /** v1.7: the train bumps a rock: "ぽよん" (the fail boing, an octave higher and rounder). */
+  playRockBonk(): void {
+    this.tone(440, 0.4, 'triangle', 0.16, 220);
+    window.setTimeout(() => this.tone(330, 0.3, 'sine', 0.12, 520), 180);
+  }
+
+  /** v1.7: something small lands in the sea: "ぽちゃん" (a water drop: a quick rise, then a little bubble). */
+  playSplash(delay = 0): void {
+    this.ping(500, delay, 0.1, 'sine', 0.16, 1500, 0.003);
+    this.ping(1100, delay + 0.09, 0.16, 'sine', 0.07, 700, 0.003);
+  }
+
+  /** v1.7: the wobbly bridge goes: "がらがら… ぽちゃん" (wooden planks tumbling down, then the splash). */
+  playBridgeFall(): void {
+    for (let i = 0; i < 9; i++) this.knock(420 - i * 25 + (i % 2) * 40, i * 0.09, 0.14);
+    this.playSplash(1.1);
+  }
+
+  /** v1.7: a seabird takes off: "ぱたぱた" (soft wing flaps, no call). */
+  playFlap(): void {
+    for (let i = 0; i < 5; i++) this.ping(260 + (i % 2) * 30, i * 0.075, 0.05, 'triangle', 0.08 * (1 - i * 0.12), 180, 0.004);
+  }
 }

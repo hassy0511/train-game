@@ -19,7 +19,8 @@ const MODE_ICONS: Record<CameraMode, string> = {
 };
 
 /**
- * Always-visible camera button. Tapping it opens a row of four view tiles; tapping a tile
+ * Camera button: a small round one in the top corner, just inside the pause button (PHASE7 §1: the rocket took
+ * its seat among the thumb buttons). Tapping it opens a row of four view tiles under the corner; tapping a tile
  * picks that view and closes the row. Tapping the button again (or anywhere else) closes it.
  */
 export function createCameraButton(
@@ -29,10 +30,10 @@ export function createCameraButton(
 ): CameraButton {
   const button = document.createElement('button');
   button.id = 'camera';
-  button.className = 'round-button';
+  button.className = 'corner-button camera-button';
   button.type = 'button';
   button.setAttribute('aria-label', 'カメラ');
-  button.innerHTML = `<span class="ring is-camera"></span><span class="face">${ICON}<span class="label">カメラ</span></span>`;
+  button.innerHTML = ICON;
   root.appendChild(button);
 
   const menu = document.createElement('div');
@@ -55,7 +56,9 @@ export function createCameraButton(
     menu.appendChild(tile);
     tiles.set(mode, tile);
   }
-  root.parentElement?.appendChild(menu);
+  // First in the overlay, so everything shown over the game draws on top of the open tiles: the stop gauge (its
+  // stop line sits in the tiles' row), the speech bubble, the fade.
+  root.prepend(menu);
 
   const close = (): void => {
     menu.hidden = true;

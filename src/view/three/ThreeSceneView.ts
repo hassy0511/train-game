@@ -6,6 +6,7 @@ import {
   Material,
   Mesh,
   MeshBasicMaterial,
+  MeshLambertMaterial,
   NoToneMapping,
   Object3D,
   PerspectiveCamera,
@@ -25,15 +26,23 @@ import { cameraTarget, makeCameraTarget, smoothCamera, type CameraMode } from '.
 import { buildGapPits, buildJumpDevice, buildLightBeam, Flocks, JunctionSigns, SkyGimmicks } from './abilities';
 import { ForestGimmicks } from './forest';
 import { MeadowGimmicks } from './meadow';
+import { VolcanoGimmicks } from './volcano-gimmicks';
+import { slopeZones } from '../../gimmick/slope';
+import type { RailBaseDef, ResolvedProp } from '../../stage/types';
 import { ActorLayer } from './actors';
 import { bakeModel } from './bake';
 import { addEnvironment, SKY_RADIUS } from './environment';
 import { ModelLibrary } from './models';
 import { addModelPlacements, addProps } from './props';
-import { buildDetachedRailPiece, buildRailScene, type TrackLook } from './rail-mesh';
+import { buildDetachedRailPiece, buildRailScene, buildTrack, type TrackLook, type TrackLooks } from './rail-mesh';
 
 /** The camera draws this far past the stage fog's far end (m). */
 const FOG_CULL_MARGIN = 40;
+/**
+ * v1.7: a fixed (cutscene) camera is a wide shot from far out (2-3's ending, from the sea): while it is on, the
+ * fog and the draw distance reach this many times further, so the far side of the picture is not lost in the fog.
+ */
+const FIXED_CAMERA_REACH = 2.5;
 
 interface DoorVisual {
   group: Group;
@@ -45,6 +54,19 @@ interface RailCutEffect {
   materials: Material[];
   elapsed: number;
 }
+
+/** v1.7: a stretch of track (and the props tagged on it) falling into the sea below after a cut. */
+interface FallingPiece {
+  object: Object3D;
+  velocity: number;
+  spin: Vector3;
+  elapsed: number;
+  /** Disposed when done (the cut track); tagged props are only removed. */
+  own: boolean;
+}
+
+/** v1.7: a field-of-view boost (degrees) while the rocket burns. */
+const ROCKET_FOV = 6;
 
 /** Production Three.js view for the first-person train scene. */
 export class ThreeSceneView implements SceneView {
@@ -74,12 +96,26 @@ export class ThreeSceneView implements SceneView {
   private sky3: SkyGimmicks | null = null;
   private forest: ForestGimmicks | null = null;
   private meadow: MeadowGimmicks | null = null;
+  private volcano: VolcanoGimmicks | null = null;
+  /** v1.7: slope beds and rock bases, kept for rebuilding the track after a cut. */
+  private trackLooks: TrackLooks | undefined;
+  /** v1.7: props with a tag, each in its own group (a cut can drop them). */
+  private readonly taggedProps: { prop: ResolvedProp; group: Group }[] = [];
+  private readonly falling: FallingPiece[] = [];
+  private fovBoost = 0;
+  private fovTarget = 0;
+  /** "がめんの ゆれ: へらす": the rocket does not widen the view. */
+  private calm = false;
   private boughSkips: { railId: string; from: number; to: number }[] = [];
   private railLooks: Record<string, TrackLook> = {};
   private baseFog: { near: number; far: number } | null = null;
+  /** The camera's usual draw distance (set from the fog); a fixed camera draws further. */
+  private baseFar = 0;
   private readonly lightBeam = buildLightBeam();
   private jumpDevice: Object3D | null = null;
   private clock = 0;
+  /** v1.7: a cutscene camera standing still. */
+  private fixedCamera: { at: Vector3; lookAt: Vector3 } | null = null;
 
   async init(container: HTMLElement, stage: StageData, network: RailNetwork): Promise<void> {
     this.stage = stage;
@@ -103,7 +139,14 @@ export class ThreeSceneView implements SceneView {
     );
     this.boughSkips = [...boughSkips, ...MeadowGimmicks.trackSkips(stage)];
     this.railLooks = Object.fromEntries(stage.file.rails.flatMap((r) => (r.look && r.look !== 'rail' ? [[r.id, r.look]] : [])));
-    const rails = buildRailScene(network, this.boughSkips, this.railLooks);
+    const bases = new Map<string, RailBaseDef>();
+    for (const r of stage.file.rails) if (r.base) bases.set(r.id, r.base);
+    const slopes = slopeZones(stage.file.gimmicks);
+    this.trackLooks =
+      bases.size > 0 || slopes.length > 0
+        ? { bases, slopes, groundY: stage.file.environment.ground?.y ?? null }
+        : undefined;
+    const rails = buildRailScene(network, this.boughSkips, this.railLooks, this.trackLooks);
     this.rails = rails.group;
     this.scene.add(rails.group);
 
@@ -141,6 +184,16 @@ export class ThreeSceneView implements SceneView {
     this.scene.add(this.forest.group);
     this.meadow = new MeadowGimmicks(stage, this.train);
     this.scene.add(this.meadow.group);
+    this.volcano = new VolcanoGimmicks(stage, this.train);
+    this.scene.add(this.volcano.group);
+    // Tagged props stay separate so a cutscene can drop them (the old bridge's girders).
+    for (const prop of stage.props) {
+      if (!prop.tag) continue;
+      const group = new Group();
+      group.name = `tag:${prop.tag}`;
+      this.scene.add(group);
+      this.taggedProps.push({ prop, group });
+    }
     const fog = stage.file.environment.fog;
     this.baseFog = fog ? { near: fog.near, far: fog.far } : null;
     if (fog && this.sky) {
@@ -148,6 +201,7 @@ export class ThreeSceneView implements SceneView {
       // dome shrinks to stay inside the camera's reach.
       this.camera.far = Math.min(this.camera.far, fog.far + FOG_CULL_MARGIN);
       this.camera.updateProjectionMatrix();
+      this.baseFar = this.camera.far;
       this.sky.scale.setScalar(Math.min(1, (this.camera.far * 0.95) / SKY_RADIUS));
     }
 
@@ -155,7 +209,8 @@ export class ThreeSceneView implements SceneView {
       this.models.load('train-proto'),
       this.models.load('car-proto'),
       this.models.load('partner'),
-      addProps(props, stage.props, this.models),
+      addProps(props, stage.props.filter((p) => !p.tag), this.models),
+      ...this.taggedProps.map(({ prop, group }) => addProps(group, [prop], this.models)),
       addModelPlacements(bufferStops, rails.bufferStops, this.models),
       this.actors.init(stage.actors, stage.records),
       this.signs.init(),
@@ -163,6 +218,7 @@ export class ThreeSceneView implements SceneView {
       this.sky3.init(this.models),
       this.forest.init(this.models),
       this.meadow.init(this.models),
+      this.volcano.init(this.models),
     ]);
     // The train, cars and partner only ever move as a whole (door bands, the light beam and the jump unit are
     // objects of their own), so each draws baked, in one call.
@@ -209,7 +265,8 @@ export class ThreeSceneView implements SceneView {
 
   onStageEvent(event: StageEvent): void {
     if (event.type === 'rail:cut' && this.network && this.rails) {
-      const detached = buildDetachedRailPiece(this.network, event.railId, event.from, event.to);
+      if (event.style === 'fall') this.dropCutStretch(event.railId, event.from, event.to, event.props);
+      const detached = event.style === 'fall' ? null : buildDetachedRailPiece(this.network, event.railId, event.from, event.to);
       if (detached) {
         const materials = new Set<Material>();
         detached.traverse((object) => {
@@ -223,7 +280,7 @@ export class ThreeSceneView implements SceneView {
       // Gaps were added to the rail; rebuild the track meshes without the cut piece.
       const oldRails = this.rails;
       oldRails.removeFromParent();
-      const rebuilt = buildRailScene(this.network, this.boughSkips, this.railLooks);
+      const rebuilt = buildRailScene(this.network, this.boughSkips, this.railLooks, this.trackLooks);
       this.rails = rebuilt.group;
       this.scene.add(rebuilt.group);
       this.disposeDetachedObject(oldRails);
@@ -234,6 +291,9 @@ export class ThreeSceneView implements SceneView {
     this.sky3?.onStageEvent(event);
     this.forest?.onEvent(event);
     this.meadow?.onEvent(event);
+    this.volcano?.onEvent(event);
+    if (event.type === 'ability' && event.id === 'rocket') void this.volcano?.addRocketUnit(this.models);
+    if (event.type === 'rocket') this.fovTarget = event.state === 'burn' && !this.calm ? ROCKET_FOV : 0;
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
     if (event.type === 'sign:reset') this.signs?.reset(event.junctionId);
     if (event.type === 'ability' && event.id === 'jump' && !this.jumpDevice) {
@@ -244,6 +304,7 @@ export class ThreeSceneView implements SceneView {
       });
     }
     if (event.type === 'rewind') {
+      this.fovTarget = 0;
       this.signs?.reset();
       this.doorProgress = 0;
       this.doorTarget = 0;
@@ -279,6 +340,60 @@ export class ThreeSceneView implements SceneView {
     }
   }
 
+  /**
+   * v1.7 cut style "fall": the cut stretch of track, and the props tagged `tag` standing on it, fall into the
+   * sea below ("がらがら… ぽちゃん").
+   */
+  private dropCutStretch(railId: string, from: number, to: number, tag?: string): void {
+    const rail = this.network?.rails.get(railId);
+    if (!rail) return;
+    // The gap is already in the rail: build the piece as it was.
+    rail.removeGap(from, to);
+    const geometry = buildTrack(rail, from, to, this.railLooks[railId] ?? 'rail', this.trackLooks);
+    rail.addGap(from, to);
+    if (geometry) {
+      const mesh = new Mesh(geometry, new MeshLambertMaterial({ vertexColors: true }));
+      mesh.name = 'falling-track';
+      mesh.frustumCulled = false;
+      // Pivot about the stretch's middle so it tips as it falls.
+      const middle = rail.frameAt((from + to) / 2).position;
+      geometry.translate(-middle.x, -middle.y, -middle.z);
+      mesh.position.copy(middle);
+      this.scene.add(mesh);
+      this.falling.push({ object: mesh, velocity: 0, spin: new Vector3(0.25, 0, 0.35), elapsed: 0, own: true });
+    }
+    if (!tag) return;
+    for (const { prop, group } of this.taggedProps) {
+      if (prop.tag !== tag) continue;
+      if (prop.onRail && (prop.onRail.railId !== railId || prop.onRail.at < from - 1 || prop.onRail.at > to + 1)) continue;
+      // Tip about the prop's own place.
+      const pivot = new Group();
+      pivot.position.copy(prop.position);
+      this.scene.add(pivot);
+      group.position.sub(prop.position);
+      pivot.add(group);
+      const k = this.falling.length;
+      this.falling.push({ object: pivot, velocity: -1 - (k % 3), spin: new Vector3(0.3 * ((k % 2) * 2 - 1), 0, 0.4), elapsed: 0, own: false });
+    }
+  }
+
+  private updateFalling(dt: number): void {
+    const ground = this.stage?.file.environment.ground?.y ?? null;
+    for (let i = this.falling.length - 1; i >= 0; i--) {
+      const f = this.falling[i];
+      f.elapsed += dt;
+      f.velocity -= 9.8 * dt;
+      f.object.position.y += f.velocity * dt;
+      f.object.rotation.x += f.spin.x * dt;
+      f.object.rotation.z += f.spin.z * dt;
+      const gone = f.elapsed > 6 || (ground !== null && f.object.position.y < ground - 12);
+      if (!gone) continue;
+      if (f.own) this.disposeDetachedObject(f.object);
+      else f.object.removeFromParent();
+      this.falling.splice(i, 1);
+    }
+  }
+
   private updateRailCutEffects(dt: number): void {
     for (let index = this.railCutEffects.length - 1; index >= 0; index -= 1) {
       const effect = this.railCutEffects[index];
@@ -299,6 +414,43 @@ export class ThreeSceneView implements SceneView {
     this.cameraSnap = this.cameraSnap || snap;
   }
 
+  setFixedCamera(fixed: { at: [number, number, number]; lookAt: [number, number, number] } | null): void {
+    const was = this.fixedCamera !== null;
+    this.fixedCamera = fixed ? { at: new Vector3(...fixed.at), lookAt: new Vector3(...fixed.lookAt) } : null;
+    if (was !== (fixed !== null)) {
+      this.cameraSnap = true;
+      // Further out for the wide shot (the fog follows in update()). After it, the far plane comes back in with the
+      // easing fog (easeFarBack), never inside it: a far plane cut short of a thin fog shows a hard horizon.
+      if (fixed && this.baseFog && this.baseFar > 0) {
+        this.camera.far = this.baseFog.far * FIXED_CAMERA_REACH + FOG_CULL_MARGIN;
+        this.camera.updateProjectionMatrix();
+      }
+    }
+  }
+
+  /** After a fixed camera: the far plane shrinks back with the fog as it eases in (to the usual reach at the end). */
+  private easeFarBack(): void {
+    if (this.fixedCamera || this.baseFar <= 0 || this.camera.far <= this.baseFar) return;
+    const fog = this.scene.fog as Fog | null;
+    let far = Math.max(this.baseFar, (fog?.far ?? 0) + FOG_CULL_MARGIN);
+    if (far - this.baseFar < 1) far = this.baseFar;
+    if (far !== this.baseFar && far >= this.camera.far - 0.5) return;
+    this.camera.far = far;
+    this.camera.updateProjectionMatrix();
+  }
+
+  /** The stage fog, reaching further while a fixed camera is on. */
+  private fogReach(): { near: number; far: number } | null {
+    const fog = this.baseFog;
+    if (!fog || !this.fixedCamera) return fog;
+    return { near: fog.near * FIXED_CAMERA_REACH, far: fog.far * FIXED_CAMERA_REACH };
+  }
+
+  setCalm(calm: boolean): void {
+    this.calm = calm;
+    if (calm) this.fovTarget = 0;
+  }
+
   update(dt: number, pose: TrainPose, fx: CameraFx): void {
     if (!this.renderer) return;
     this.train.position.copy(pose.position);
@@ -315,13 +467,17 @@ export class ThreeSceneView implements SceneView {
     this.meadow?.rideSilk([this.train, ...this.cars]);
     silkDip.subVectors(this.train.position, silkDip);
 
-    cameraTarget(this.cameraMode, pose, this.camTarget);
-    smoothCamera(this.camCurrent, this.camTarget, dt, this.cameraSnap || this.cameraMode === 'cab');
+    if (this.fixedCamera) {
+      this.camTarget.position.copy(this.fixedCamera.at);
+      this.camTarget.lookAt.copy(this.fixedCamera.lookAt);
+      this.camTarget.up.set(0, 1, 0);
+    } else cameraTarget(this.cameraMode, pose, this.camTarget);
+    smoothCamera(this.camCurrent, this.camTarget, dt, this.cameraSnap || (this.cameraMode === 'cab' && !this.fixedCamera));
     this.cameraSnap = false;
     this.camera.position.copy(this.camCurrent.position);
     this.camera.up.copy(this.camCurrent.up);
     this.camera.lookAt(this.camCurrent.lookAt);
-    if (this.cameraMode === 'cab') {
+    if (this.cameraMode === 'cab' && !this.fixedCamera) {
       this.camera.position.add(silkDip);
       this.camera.position.y -= 0.35 * fx.dip;
       if (fx.shake > 0) {
@@ -336,8 +492,18 @@ export class ThreeSceneView implements SceneView {
     this.signs?.update(dt, this.clock);
     this.flocks?.update(dt);
     this.forest?.update(dt);
-    this.meadow?.update(dt, this.cameraMode === 'cab');
-    this.sky3?.update(dt, pose.railId, pose.s + TRAIN.length / 2, this.scene.fog as Fog | null, this.baseFog);
+    this.meadow?.update(dt, this.cameraMode === 'cab' && !this.fixedCamera);
+    this.volcano?.update(dt);
+    this.updateFalling(dt);
+    // A little wider view while the rocket burns (not a shake).
+    const fov = this.fovBoost + (this.fovTarget - this.fovBoost) * Math.min(1, dt * 4);
+    if (Math.abs(fov - this.fovBoost) > 1e-3) {
+      this.fovBoost = fov;
+      this.camera.fov = TRAIN.cabFovDeg + fov;
+      this.camera.updateProjectionMatrix();
+    }
+    this.sky3?.update(dt, pose.railId, pose.s + TRAIN.length / 2, this.scene.fog as Fog | null, this.fogReach());
+    this.easeFarBack();
     if (this.sky3 && this.sky) {
       const uniforms = (this.sky.material as ShaderMaterial).uniforms;
       if (uniforms.mist) uniforms.mist.value = this.sky3.mist;

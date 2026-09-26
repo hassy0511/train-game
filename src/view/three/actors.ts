@@ -36,6 +36,12 @@ const STATE_MODELS: Record<string, { sleep: string; awake: string }> = {
   cat: { sleep: 'cat-sleep', awake: 'cat-stand' },
   'dino-mid': { sleep: 'dino-mid-sleep', awake: 'dino-mid-stand' },
 };
+/** v1.7: a "cat" with params.look "seabird" is a seabird basking on the rail (it flaps off when whistled). */
+const SEABIRD_MODELS = { sleep: 'seabird-sleep', awake: 'seabird' };
+
+function isSeabird(actor: ResolvedActor): boolean {
+  return actor.type === 'cat' && (actor.params as { look?: string }).look === 'seabird';
+}
 /** Where the large dinosaur's neck joins its body (model space, m; NECK_PIVOT in assets/blender/dinos.py). */
 const NECK_PIVOT = new Vector3(0, 8.0, 4.8);
 const PLATFORM_CLEARANCE = 1.7;
@@ -138,6 +144,8 @@ export class ActorLayer {
   private sparkle: SparkleEffect | null = null;
   private train: Object3D | null = null;
   private readonly actorTypes = new Map<string, string>();
+  /** Actors whose look differs from their type's (a seabird "cat"). */
+  private readonly lookModels = new Map<string, { sleep: string; awake: string }>();
   private readonly necks = new Map<string, { neck: Object3D; down: boolean; t: number }>();
   private readonly records = new Map<string, ResolvedRecord>();
 
@@ -166,12 +174,19 @@ export class ActorLayer {
   }
 
   async init(actors: ResolvedActor[], records: ResolvedRecord[] = []): Promise<void> {
-    for (const actor of actors) this.actorTypes.set(actor.id, actor.type);
+    for (const actor of actors) {
+      this.actorTypes.set(actor.id, actor.type);
+      if (isSeabird(actor)) this.lookModels.set(actor.id, SEABIRD_MODELS);
+    }
+    // Nuts and squirrels are drawn by the forest gimmicks, grasshoppers by the meadow ones and rocks by the volcano
+    // ones (they move on their own).
+    const drawnElsewhere = new Set(['trigger', 'nut', 'squirrel', 'grasshopper', 'rock-roll', 'rock-drop']);
     await Promise.all(
       actors
-        // Nuts, squirrels (forest) and grasshoppers (meadow) are drawn by their gimmicks: they move on their own.
-        .filter((actor) => actor.type !== 'trigger' && actor.type !== 'nut' && actor.type !== 'squirrel' && actor.type !== 'grasshopper')
-        .map((actor) => this.place(actor.id, ACTOR_MODELS[actor.type] ?? actor.type, actor.position, actor.quaternion)),
+        .filter((actor) => !drawnElsewhere.has(actor.type))
+        .map((actor) =>
+          this.place(actor.id, this.lookModels.get(actor.id)?.sleep ?? ACTOR_MODELS[actor.type] ?? actor.type, actor.position, actor.quaternion),
+        ),
     );
     await Promise.all(actors.filter((a) => a.type === 'dino-large').map((a) => this.addNeck(a.id)));
     await Promise.all(
@@ -274,8 +289,9 @@ export class ActorLayer {
   }
 
   private async addCrossingGates(actors: ResolvedActor[]): Promise<void> {
+    // A seabird basks on an open line (a sea cliff), not at a level crossing: no gate for it.
     const placements = actors
-      .filter((actor) => actor.type === 'cat')
+      .filter((actor) => actor.type === 'cat' && !isSeabird(actor))
       .map((actor) => ({
         model: 'crossing-gate',
         position: actor.position.clone().add(new Vector3(-3, 0, 0).applyQuaternion(actor.quaternion)),
@@ -546,7 +562,7 @@ export class ActorLayer {
         break;
       case 'actor:state': {
         const object = this.objects.get(event.id);
-        const swap = STATE_MODELS[this.actorTypes.get(event.id) ?? ''];
+        const swap = this.lookModels.get(event.id) ?? STATE_MODELS[this.actorTypes.get(event.id) ?? ''];
         if (object && swap) {
           const want = event.state === 'awake' || event.state === 'flee' ? swap.awake : event.state === 'sleep' ? swap.sleep : null;
           if (want && this.objectModels.get(event.id) !== want) await this.place(event.id, want, object.position, object.quaternion);

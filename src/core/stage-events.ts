@@ -10,13 +10,29 @@ export type StageEvent =
   | { type: 'actor:spawn'; id: string; model: string; position: Vector3; quaternion: Quaternion }
   | { type: 'actor:move'; id: string; position: Vector3; seconds: number }
   | { type: 'actor:remove'; id: string }
-  | { type: 'rail:cut'; railId: string; from: number; to: number }
+  /** A rail was cut (a gap from `from` to `to`). v1.7: `style` "fall" drops the stretch and props tagged `props`. */
+  | { type: 'rail:cut'; railId: string; from: number; to: number; style?: 'fly' | 'fall'; props?: string }
   | { type: 'goal'; stationId: string | null }
   | { type: 'partner:emote'; kind: Emote }
   | { type: 'stop'; grade: 'perfect' | 'ok' }
   | {
       type: 'fail';
-      reason: 'tooFast' | 'overshoot' | 'cat' | 'dino' | 'fellShort' | 'fellNoJump' | 'deadEnd' | 'nut' | 'hopper' | 'bridge' | 'fragile';
+      reason:
+        | 'tooFast'
+        | 'overshoot'
+        | 'cat'
+        | 'dino'
+        | 'fellShort'
+        | 'fellNoJump'
+        | 'deadEnd'
+        | 'nut'
+        | 'hopper'
+        | 'bridge'
+        | 'fragile'
+        // v1.7 (2-3)
+        | 'rock'
+        | 'slip'
+        | 'timeUp';
     }
   | { type: 'rewind' }
   /** The player has this ability (at load and when it is learned). */
@@ -46,7 +62,33 @@ export type StageEvent =
   /** v1.6: flower bridge `index` opened (its petals now close the stream). */
   | { type: 'bridge'; index: number; open: boolean }
   /** v1.6: silk bridge `index` (gimmicks[]): calm, shaking under a too-fast train, or bouncing it back. */
-  | { type: 'fragile'; index: number; state: 'calm' | 'shake' | 'boing' };
+  | { type: 'fragile'; index: number; state: 'calm' | 'shake' | 'boing' }
+  /** v1.7: the rocket fired ("burn"), burnt out ("end") or was cut short in a quiet place ("puff", "ぷしゅっ"). */
+  | { type: 'rocket'; state: 'burn' | 'end' | 'puff' }
+  /** v1.7: the train stopped on an uphill and slips back ("ずるずる"), sand puffing from the wheels. */
+  | { type: 'slip' }
+  /**
+   * v1.7: a rock (actor `id`). Rolling ("rock-roll"): "wait" up the slope on the left, "wobble" (about to go),
+   * "roll" across the rail in `seconds`, "bonk" (the train bumped it; it hops off to the sea). Dropping
+   * ("rock-drop"): "hide" (up out of sight), "shadow" (its shadow on the rail), "drop" (falls onto the rail and
+   * stays), "bonk". `at`/`railId`: where it crosses or lands; `lateral`: the rolling rock's start/end side (m).
+   */
+  | {
+      type: 'rock';
+      id: string;
+      kind: 'roll' | 'drop';
+      state: 'wait' | 'wobble' | 'roll' | 'bonk' | 'hide' | 'shadow' | 'drop';
+      railId: string;
+      at: number;
+      lateral?: number;
+      seconds?: number;
+    }
+  /** v1.7: the volcano sneezes (a big smoke ring; the time-up and the ending). */
+  | { type: 'sneeze' }
+  /** v1.7: the volcano's everyday small smoke ring ("ぽふっ"), every VOLCANO_PUFF seconds. */
+  | { type: 'volcano:puff' }
+  /** v1.7: a countdown started ("run"), got low, was beaten ("safe"), ran out ("up") or was put away ("off"). */
+  | { type: 'countdown'; state: 'run' | 'low' | 'safe' | 'up' | 'off' };
 
 export class StageEventBus extends Emitter<{ event: StageEvent }> {
   post(event: StageEvent): void {
