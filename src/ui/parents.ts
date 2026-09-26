@@ -183,7 +183,13 @@ export function showParents(root: HTMLElement, options: ParentsOptions): void {
   root.appendChild(el);
 }
 
-/** A question over the page with "yes" and "やめる"; `onYes` runs on yes. */
+/**
+ * How long a question's "yes" stays hidden. The questions open centred under the finger that just tapped, so
+ * without it a quick double tap would answer both erase questions at once (a hidden button takes no tap).
+ */
+export const CONFIRM_GUARD_SECONDS = 0.8;
+
+/** A question over the page with "yes" and "やめる"; `onYes` runs on yes, which pops in after CONFIRM_GUARD_SECONDS. */
 function confirm(root: HTMLElement, question: string, yes: string, onYes: () => void): void {
   const box = document.createElement('div');
   box.className = 'parents-confirm';
@@ -204,7 +210,15 @@ function confirm(root: HTMLElement, question: string, yes: string, onYes: () => 
   ok.type = 'button';
   ok.className = 'parents-button is-danger parents-confirm-yes';
   ok.textContent = yes;
+  let open = false;
+  ok.classList.add('is-guarded');
+  window.setTimeout(() => {
+    open = true;
+    ok.classList.remove('is-guarded');
+    ok.classList.add('is-popping');
+  }, CONFIRM_GUARD_SECONDS * 1000);
   ok.addEventListener('click', () => {
+    if (!open || !box.isConnected) return;
     box.remove();
     onYes();
   });

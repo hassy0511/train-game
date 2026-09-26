@@ -254,11 +254,17 @@ test('おうちの かたへ: a long press opens it, erasing asks twice, the あ
   await page.locator('#title-settings').click();
   await expect(page.locator('#settings')).toBeVisible();
 
-  // A short tap (a child's) does nothing but show how it opens.
+  // How it opens is not shown until a short tap (a child who reads hiragana is not told).
+  await expect(page.locator('.parents-hold-hint')).toHaveCSS('opacity', '0');
+  // A short tap (a child's) does nothing but show how it opens, in kanji for the grown-up.
   await holdParents(page, 400);
   await page.waitForTimeout(2000);
   await expect(page.locator('#parents')).toHaveCount(0);
   await expect(page.locator('#settings-parents')).toHaveClass(/is-hinting/);
+  await expect(page.locator('.parents-hold-hint')).toHaveText('2秒 長押し');
+  await expect(page.locator('.parents-hold-hint')).toHaveCSS('opacity', '1');
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: resolve(OUT, '43a-parents-hint.png') });
   // Held for 2 seconds: it opens while still held.
   await page.locator('#settings-parents').dispatchEvent('pointerdown');
   await page.waitForTimeout(1500);
@@ -287,7 +293,27 @@ test('おうちの かたへ: a long press opens it, erasing asks twice, the あ
   await expect(page.locator('.parents-confirm')).toContainText('消しますか');
   await page.locator('.parents-confirm-yes').click();
   await expect(page.locator('.parents-confirm')).toContainText('ほんとうに');
+  await expect(page.locator('.parents-confirm-yes')).toBeVisible();
+  await page.waitForTimeout(800);
   await page.screenshot({ path: resolve(OUT, '44-parents-reset-twice.png') });
+  await page.locator('.parents-confirm-no').click();
+  await expect(page.locator('.parents-confirm')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('train-game.progress.v1'))).not.toBeNull();
+  // A quick double tap on the first "けす" (a child mashing) answers only the first question: the second one's
+  // "yes" is not there yet under the finger.
+  await page.locator('#parents-reset').click();
+  const firstYes = page.locator('.parents-confirm-yes');
+  await expect(firstYes).toBeVisible();
+  const at = (await firstYes.boundingBox())!;
+  const x = at.x + at.width / 2;
+  const y = at.y + at.height / 2;
+  await page.mouse.click(x, y);
+  await page.waitForTimeout(120);
+  await page.mouse.click(x, y);
+  await page.screenshot({ path: resolve(OUT, '44a-parents-double-tap.png') });
+  await expect(page.locator('.parents-confirm')).toContainText('ほんとうに');
+  await expect(page.locator('.parents-confirm')).toHaveCount(1);
+  expect(await page.evaluate(() => localStorage.getItem('train-game.progress.v1'))).not.toBeNull();
   await page.locator('.parents-confirm-no').click();
   await expect(page.locator('.parents-confirm')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('train-game.progress.v1'))).not.toBeNull();

@@ -91,7 +91,8 @@ export function showSettings(root: HTMLElement, current: Settings, onChange: (ne
 
 /**
  * "おうちの かたへ": opens only when held for PARENTS_HOLD_SECONDS (a ring fills while held). Letting go early, or
- * sliding off, starts over; a short tap only shows "ながおし してね".
+ * sliding off, starts over. How it opens ("2秒 長押し") is hidden until a short tap, and is in kanji for the
+ * grown-up: a child who reads hiragana is not told how to get in.
  */
 function parentsButton(onOpen: () => void): HTMLElement {
   const btn = document.createElement('button');
@@ -102,7 +103,7 @@ function parentsButton(onOpen: () => void): HTMLElement {
   btn.innerHTML = '<span class="parents-hold-ring" aria-hidden="true"></span><span class="parents-hold-label">おうちの かたへ</span>';
   const hint = document.createElement('span');
   hint.className = 'parents-hold-hint';
-  hint.textContent = '2びょう ながおし';
+  hint.textContent = '2秒 長押し';
   btn.appendChild(hint);
   let timer = 0;
   const stop = (): void => {
@@ -123,7 +124,7 @@ function parentsButton(onOpen: () => void): HTMLElement {
   btn.addEventListener('pointerup', () => {
     if (!timer) return;
     stop();
-    // Too short: say how it opens (a parent reads it; a child sees nothing happen).
+    // Too short: say how it opens (in kanji: a parent reads it, a child sees nothing they can read).
     btn.classList.add('is-hinting');
   });
   btn.addEventListener('pointercancel', stop);

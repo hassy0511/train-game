@@ -1679,7 +1679,7 @@ body {
 
 .parents-hold-hint {
   font-size: 13px;
-  opacity: 0.7;
+  opacity: 0;
 }
 
 .parents-hold.is-hinting .parents-hold-hint {
@@ -1830,6 +1830,16 @@ body {
   border-radius: 16px;
   background: #fff;
   text-align: center;
+}
+
+/* A question's "yes" pops in a moment after it (src/ui/parents.ts CONFIRM_GUARD_SECONDS): a double tap cannot
+   answer two questions. */
+.parents-confirm-yes.is-guarded {
+  visibility: hidden;
+}
+
+.parents-confirm-yes.is-popping {
+  animation: card-button-pop 0.25s ease-out;
 }
 
 .overlay.parents .parents-confirm-text {

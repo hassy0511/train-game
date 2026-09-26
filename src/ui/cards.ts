@@ -42,7 +42,7 @@ const pictures = new Set<string>(__ZUKAN_PICTURES__);
 /**
  * The clear card's row of rewards (PHASE7_FINISH §4 item 10): "ぴたっ！ 5かい" (or "とまれた！ 5かい" when none was
  * perfect: never a zero to feel bad about), and the stage's records as pictures, found ones in colour (new ones
- * pop), the rest as "？", with "きろく 2/3".
+ * pop), the rest as "？", with "きろく 2/3" (or "きろく さがしてみよう" while none is found: no zero there either).
  */
 function rewardsRow(rewards: CardRewards): HTMLElement {
   const row = document.createElement('div');
@@ -83,7 +83,8 @@ function rewardsRow(rewards: CardRewards): HTMLElement {
     });
     const text = document.createElement('span');
     text.className = 'reward-text';
-    text.textContent = `きろく ${found}/${rewards.records.length}`;
+    // None found on this island yet: no "0/3" either, just an invitation.
+    text.textContent = found > 0 ? `きろく ${found}/${rewards.records.length}` : 'きろく さがしてみよう';
     chip.append(icons, text);
     row.appendChild(chip);
   }
