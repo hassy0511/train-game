@@ -21,8 +21,12 @@ const RING = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
   <circle cx="28.8" cy="42.0" r="12" fill="#e76f51" stroke="#fff" stroke-width="4"/>
 </svg>`;
 
-/** Full-screen card with a title, an optional icon, and one button. Resolves on tap. */
-export function showCard(root: HTMLElement, title: string, button: string, icon?: CardIcon): Promise<void> {
+/**
+ * Full-screen card with a title, an optional icon, and one button. Resolves on tap. With `guardSeconds` the
+ * button pops in only after that long, so a child still tapping from before cannot close a once-only card
+ * (a chapter's end) before seeing it.
+ */
+export function showCard(root: HTMLElement, title: string, button: string, icon?: CardIcon, guardSeconds = 0): Promise<void> {
   return new Promise((resolve) => {
     const el = document.createElement('div');
     el.className = 'overlay card';
@@ -39,7 +43,17 @@ export function showCard(root: HTMLElement, title: string, button: string, icon?
     btn.className = 'big-button';
     btn.id = 'card-button';
     btn.textContent = button;
+    let open = guardSeconds <= 0;
+    if (!open) {
+      btn.classList.add('is-guarded');
+      window.setTimeout(() => {
+        open = true;
+        btn.classList.remove('is-guarded');
+        btn.classList.add('is-popping');
+      }, guardSeconds * 1000);
+    }
     btn.addEventListener('click', () => {
+      if (!open) return;
       el.remove();
       resolve();
     });

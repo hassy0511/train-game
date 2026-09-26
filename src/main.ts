@@ -47,7 +47,7 @@ import { showSettings } from './ui/settings';
 import { createPause } from './ui/pause';
 import { linkKey, showMap, type MapChoice, type MapFinale, type MapIsland, type MapTeaser } from './ui/map';
 import world from './world/world.json';
-import type { WorldFile } from './world/types';
+import type { WorldChapter, WorldFile } from './world/types';
 
 const app = document.getElementById('app') as HTMLElement;
 const viewEl = document.getElementById('view') as HTMLElement;
@@ -95,7 +95,7 @@ function registerOffline(): void {
  * The world map, from the stages and the save. The rail to a newly opened island grows in once (the links
  * shown are saved right away, so leaving early does not replay it). A chapter's closing rail is the exception
  * (docs/PHASE7_FINISH.md §3): its light and card play, and only once the card is closed is the link saved, so
- * leaving in the middle shows it again next time.
+ * leaving in the middle shows it again next time. It waits for the whole chapter to be cleared.
  */
 async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: string; closeLabel?: string }): Promise<MapChoice> {
   const file = world as unknown as WorldFile;
@@ -121,7 +121,13 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
   const laid = file.links
     .filter(([from, to]) => !to.startsWith('teaser:') && progress.cleared.includes(from))
     .map(([from, to]) => linkKey(from, to));
-  const fresh = laid.filter((key) => !progress.mapLinks.includes(key));
+  // A chapter's closing rail waits for the whole chapter (a stage opened on its own with ?stage= does not
+  // finish it): until then it is drawn but neither new nor saved, so its finale still plays the first time
+  // the chapter is really done.
+  const waiting = new Set(
+    file.chapters.filter((c) => c.finale && !chapterDone(file, c, progress.cleared)).map((c) => c.finale?.link),
+  );
+  const fresh = laid.filter((key) => !progress.mapLinks.includes(key) && !waiting.has(key));
   // The latest chapter whose closing rail is drawn now.
   const ending = [...file.chapters].reverse().find((c) => c.finale && fresh.includes(c.finale.link))?.finale;
   addToProgress('mapLinks', fresh.filter((key) => key !== ending?.link));
@@ -132,13 +138,28 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
     onShown: async () => {
       if (ending.ring) audio.playFanfare();
       else audio.playCard();
-      await showCard(root, ending.card, ending.button, ending.icon);
+      await showCard(root, ending.card, ending.button, ending.icon, FINALE_CARD_GUARD_SECONDS);
       addToProgress('mapLinks', [ending.link]);
     },
   };
-  const later = file.chapters.find((c) => c.teaser && progress.cleared.includes(c.teaser.after));
+  // The next chapter's "?" island, once the chapter its `after` island belongs to is done.
+  const later = file.chapters.find((c) => {
+    if (!c.teaser) return false;
+    const before = file.chapters.find((b) => b.id === file.islands.find((i) => i.id === c.teaser?.after)?.chapter);
+    return progress.cleared.includes(c.teaser.after) && !!before && chapterDone(file, before, progress.cleared);
+  });
   const teaser: MapTeaser | undefined = later?.teaser && { id: `teaser:${later.id}`, ...later.teaser };
   return showMap(root, file, { islands, laid, fresh, finale, teaser, ...options });
+}
+
+/** A chapter's end card: its button comes after this long (the map ignored taps until then; the child may still be tapping). */
+const FINALE_CARD_GUARD_SECONDS = 0.9;
+
+/** A chapter is done when all its islands are cleared, and every island of its ring (the ring's rails exist). */
+function chapterDone(file: WorldFile, chapter: WorldChapter, cleared: string[]): boolean {
+  const ids = file.islands.filter((i) => i.chapter === chapter.id).map((i) => i.id);
+  ids.push(...(chapter.finale?.ring ?? []));
+  return ids.length > 0 && ids.every((id) => cleared.includes(id));
 }
 
 /** Chapters with islands, and whether every one of their islands is cleared (the title's stars). */

@@ -495,11 +495,17 @@ test('stage 2-3 full run: the rocket, steep slopes and slides, rocks, the countd
   await expect(page.locator('#map')).toHaveAttribute('data-finale', 'done');
   expect((await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'))).mapLinks).toContain('2-3>1-1');
   const teaser = page.locator('.map-island.is-teaser');
+  const dotted = page.locator('[data-link="1-1>teaser:3"]');
   await expect(teaser).toBeVisible();
-  await expect(page.locator('[data-link="1-1>teaser:3"]')).toBeVisible();
-  await page.waitForTimeout(1_000); // it floats in
+  await expect(dotted).toBeVisible();
+  // It floats in (toBeVisible ignores opacity): wait for the fade-in to be really over before the picture.
+  await expect(teaser).not.toHaveClass(/is-appear/, { timeout: 20_000 });
+  await expect.poll(() => teaser.evaluate((e) => getComputedStyle(e).opacity)).toBe('1');
+  await dotted.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished.catch(() => undefined))));
+  await expect.poll(() => dotted.evaluate((e) => getComputedStyle(e).opacity)).toBe('1');
   await teaser.dispatchEvent('click');
   await expect(page.locator('.map-say')).toHaveText('つづきは また こんど！');
+  await page.locator('.map-say').evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished.catch(() => undefined))));
   await expect(page.locator('#map-close')).toHaveText('タイトルへ');
   await page.screenshot({ path: resolve(OUT, '73-map.png') });
   await page.locator('#map-close').click();

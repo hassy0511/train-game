@@ -388,9 +388,26 @@ body {
   color: #f2a900;
 }
 
-.card {
-  /* Over the map (30): the chapter's card shows up on it. */
+/* Over the map (30): a chapter's card shows up on it (it comes after the map in the same root). Only there, so
+   in a stage the pause menu (20) stays over any card. */
+.map ~ .card {
   z-index: 40;
+}
+
+/* A once-only card's button pops in a moment after the card (src/ui/cards.ts guardSeconds). */
+.card .big-button.is-guarded {
+  visibility: hidden;
+}
+
+.card .big-button.is-popping {
+  animation: card-button-pop 0.25s ease-out;
+}
+
+@keyframes card-button-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
 }
 
 .card h1 {
@@ -1081,10 +1098,6 @@ body {
   }
 }
 
-.map-island.is-teaser.is-wiggle {
-  animation: island-wiggle 0.4s ease-in-out;
-}
-
 .map-island.is-waiting,
 .map-link.is-waiting {
   opacity: 0;
@@ -1099,6 +1112,11 @@ body {
   animation:
     teaser-appear 0.9s ease-out,
     island-float 2.4s ease-in-out 0.9s infinite alternate;
+}
+
+/* After the fade-in (a tap also ends it): map.ts drops is-wiggle when it is over, so the float comes back. */
+.map-island.is-teaser.is-wiggle {
+  animation: island-wiggle 0.4s ease-in-out;
 }
 
 @keyframes fade-in-from-0 {

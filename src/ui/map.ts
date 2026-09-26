@@ -140,11 +140,19 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
 
     const info = new Map(options.islands.map((i) => [i.id, i]));
     const islandEls = new Map<string, HTMLButtonElement>();
+    // A wiggle is a one-off: its class goes when it ends, so the island's own motion (the "?" island floats)
+    // comes back. The same for the "?" island's fade-in.
     const wiggle = (btn: HTMLElement): void => {
-      btn.classList.remove('is-wiggle');
+      btn.classList.remove('is-wiggle', 'is-appear');
       void btn.offsetWidth;
       btn.classList.add('is-wiggle');
     };
+    area.addEventListener('animationend', (e) => {
+      const target = e.target as HTMLElement;
+      if (!target.classList.contains('map-island')) return;
+      if (e.animationName === 'island-wiggle') target.classList.remove('is-wiggle');
+      if (e.animationName === 'teaser-appear') target.classList.remove('is-appear');
+    });
     for (const island of world.islands) {
       const state = info.get(island.id);
       const btn = document.createElement('button');
