@@ -3,6 +3,10 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
+// PW_PORT lets two checkouts run their suites side by side.
+const port = Number(process.env.PW_PORT || 4173);
+// PW_OUTDIR serves another build folder than dist/ (a build made with `vite build --outDir <it>`).
+const outDir = process.env.PW_OUTDIR ? ` --outDir ${process.env.PW_OUTDIR}` : '';
 
 // Runs against the production build served by `vite preview` (base "/").
 export default defineConfig({
@@ -14,7 +18,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: `http://127.0.0.1:${port}`,
     // iPad Pro 11" landscape in CSS pixels; DPR 1 to keep software rendering fast.
     viewport: { width: 1194, height: 834 },
     deviceScaleFactor: 1,
@@ -30,9 +34,9 @@ export default defineConfig({
   webServer: {
     // Playwright inherits the package-script PATH, so the local Vite binary is
     // directly available. Avoid npx, which is absent in the bundled runtime.
-    command: 'vite preview --host 127.0.0.1 --port 4173 --strictPort',
+    command: `vite preview --host 127.0.0.1 --port ${port} --strictPort${outDir}`,
     cwd: resolve(here, '../..'),
-    url: 'http://127.0.0.1:4173',
+    url: `http://127.0.0.1:${port}`,
     stdout: 'ignore',
     stderr: 'pipe',
     reuseExistingServer: false,

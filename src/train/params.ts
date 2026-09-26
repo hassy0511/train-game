@@ -115,6 +115,34 @@ export const PAD_JUMP = { scale: 2, height: 7, extra: 4 } as const;
  */
 export const BOUGH = { sag: 2.5, launch: 1.8, height: 6, stiffness: 40, damping: 5, kick: 9, fullSpeed: 22 } as const;
 
+/**
+ * 2-2: a grasshopper riding on the roof. It hops on `hop` m before its leaf by itself, or when whistled within
+ * `whistleRange` m (until `passBy` m past); while it rides the jump goes `power` times as far and `height` m high.
+ */
+export const GRASSHOPPER = { hop: 25, whistleRange: 60, passBy: 8, power: 2, height: 8, readyDistance: 60 } as const;
+
+/**
+ * 2-2: a butterfly that follows the light and opens a flower bridge over a stream. It flies `lead` m ahead of the
+ * train front (pushed back to `minLead` when the train is faster than `maxSpeed`), catching up at `catchSpeed`;
+ * landing on the bud `bud` m before the stream opens it.
+ */
+export const FLOWER_BRIDGE = {
+  range: 40,
+  lead: 12,
+  minLead: 4,
+  maxSpeed: 8,
+  catchSpeed: 20,
+  bud: 12,
+  recover: 2,
+  closedWarn: 60,
+  bloomSeconds: 1.5,
+  /** After waiting once, it says "it waits" again only after following this long (s). */
+  waitAgainAfter: 3,
+} as const;
+
+/** 2-2: a sagging silk bridge. Faster than `maxSpeed` (+0.3) for `grace` s and it bounces the train back. */
+export const FRAGILE = { maxSpeed: 7.5, grace: 1.0, warn: 80, slack: 0.3 } as const;
+
 /** How fast (m/s²) an updraft speeds the train up. */
 export const UPDRAFT_ACCELERATION = 6;
 

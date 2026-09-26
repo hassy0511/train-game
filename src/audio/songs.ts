@@ -100,6 +100,37 @@ export const SONGS: Record<string, Song> = {
     ],
   },
 
+  // 2-2 むしのはらっぱ: a hopping 2/4, marimba leaping in fourths (grasshoppers), a bell sparkle every four
+  // bars (butterflies) that turns into a little answering line in the B part.
+  meadow: {
+    id: 'meadow',
+    title: 'はらっぱ ぴょこぴょこ',
+    bpm: 126,
+    stepsPerBeat: 2,
+    tracks: [
+      {
+        voice: 'wood',
+        notes:
+          'G4:1 -:1 B4:1 -:1 | D5:1 G5:1 D5:2 | E5:1 -:1 C5:1 -:1 | D5:4 | G4:1 -:1 B4:1 -:1 | D5:1 G5:1 A5:1 G5:1 | F#5:1 D5:1 E5:1 F#5:1 | G5:4 | ' +
+          'C5:1 E5:1 G5:2 | E5:1 C5:1 D5:2 | B4:1 D5:1 G5:2 | D5:1 B4:1 C5:2 | A4:1 C5:1 E5:1 G5:1 | F#5:1 A5:1 G5:1 F#5:1 | E5:1 D5:1 C5:1 A4:1 | G4:2 -:2',
+      },
+      {
+        voice: 'bell',
+        gain: 0.6,
+        notes:
+          '-:4 | -:4 | -:4 | -:2 B5:1 D6:1 | -:4 | -:4 | -:4 | -:2 D6:1 G6:1 | ' +
+          'G6:2 -:2 | -:4 | D6:2 -:2 | -:4 | E6:2 -:2 | -:4 | C6:1 B5:1 A5:1 -:1 | G5:2 -:2',
+      },
+      {
+        voice: 'bass',
+        notes:
+          'G2:1 -:1 D3:1 -:1 | G2:1 -:1 D3:1 -:1 | C3:1 -:1 G2:1 -:1 | D3:1 -:1 A2:1 -:1 | G2:1 -:1 D3:1 -:1 | G2:1 -:1 D3:1 -:1 | D3:1 -:1 A2:1 -:1 | G2:1 -:1 D3:1 -:1 | ' +
+          'C3:1 -:1 G2:1 -:1 | C3:1 -:1 G2:1 -:1 | G2:1 -:1 D3:1 -:1 | G2:1 -:1 D3:1 -:1 | A2:1 -:1 E3:1 -:1 | D3:1 -:1 A2:1 -:1 | C3:1 -:1 D3:1 -:1 | G2:2 -:2',
+      },
+      { voice: 'drums', gain: 0.45, notes: `${repeat('k:1 h:1 s:1 h:1', 15)} | k:1 -:1 k:1 -:1` },
+    ],
+  },
+
   // 1-3 くものうえ: floating 6/8, high bells over a soft pad.
   sky: {
     id: 'sky',

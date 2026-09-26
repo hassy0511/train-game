@@ -128,4 +128,12 @@ export class Rail implements RailApi {
   addGap(from: number, to: number): void {
     this.gaps.push({ from, to });
   }
+
+  /** Closes a gap at runtime (a flower bridge opened over it). Returns true when there was one. */
+  removeGap(from: number, to: number): boolean {
+    const i = this.gaps.findIndex((g) => g.from === from && g.to === to);
+    if (i < 0) return false;
+    this.gaps.splice(i, 1);
+    return true;
+  }
 }

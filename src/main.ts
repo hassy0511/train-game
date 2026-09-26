@@ -8,7 +8,7 @@ import { ABILITY_NAMES, MissionRunner, type MissionPorts } from './mission/runne
 import { PhysicsWorld } from './physics/world';
 import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/loader';
 import type { AbilityId } from './stage/types';
-import { JUMP, LIGHT, RESOLUTION_MIN_FPS, RESOLUTION_SLOW_SECONDS, RESOLUTION_STEPS, SPEED_LABELS, STOP_NOTCH } from './train/params';
+import { JUMP, LEVER_NOTCHES, LIGHT, RESOLUTION_MIN_FPS, RESOLUTION_SLOW_SECONDS, RESOLUTION_STEPS, SPEED_LABELS, STOP_NOTCH } from './train/params';
 import { Train } from './train/train';
 import { createUi } from './ui';
 import { createBubbles } from './ui/bubble';
@@ -150,6 +150,9 @@ async function boot(): Promise<void> {
   applySettings();
   let paused = false;
   let runner: MissionRunner | null = null;
+  // A following butterfly rings a tiny bell every 1.5 s (on the game clock, so a pause stops it too).
+  const butterfliesFollowing = new Set<number>();
+  let butterflyBellAt = 0;
 
   const ui = createUi(uiEl, {
     speedLabels: SPEED_LABELS,
@@ -171,7 +174,9 @@ async function boot(): Promise<void> {
     audio.unlock();
     const result = train.jump();
     if (result === 'ok') {
-      audio.playJump();
+      // With a grasshopper on the roof the jump goes "びよーん".
+      if (train.jumpBoost) audio.playHopperJump();
+      else audio.playJump();
       events.post({ type: 'jump' });
     } else runner?.onJumpRefused(result);
   });
@@ -357,6 +362,17 @@ async function boot(): Promise<void> {
     ui.whistle.setProgress(whistle.progress);
     jumpButton.set(train.jumpProgress, train.jumpWouldClear || (runner?.jumpHint ?? false), train.state.speed < JUMP.minSpeed);
     runner?.update(dt);
+    if (butterfliesFollowing.size > 0 && simTime >= butterflyBellAt) {
+      audio.playButterfly();
+      butterflyBellAt = simTime + 1.5;
+    }
+    if (runner) {
+      lightButton.setGlow(runner.lightHint);
+      jumpButton.setHopper(runner.hopperId !== '');
+      const hint = runner.leverHintSpeed;
+      // The notch the partner names (ゆっくり): judged on the plain notch speeds, so the light does not change it.
+      ui.lever.setHint(hint === null ? null : (fastestNotchUnder(hint, 1) ?? fastestNotchUnder(hint, train.speedScale)));
+    }
 
     const pose = train.getPose();
     physics.setTrainPose(pose.position, pose.quaternion);
@@ -408,6 +424,10 @@ async function boot(): Promise<void> {
       app.dataset.mission = String(runner.missionIndex);
       app.dataset.step = String(runner.stepIndex);
       app.dataset.neck = runner.bigDinoNeck;
+      app.dataset.hopper = runner.hopperId;
+      app.dataset.bridges = runner.bridgeFlags;
+      app.dataset.butterfly = runner.butterflyState;
+      app.dataset.fragile = runner.fragileStatus;
     }
     debug?.update(fps);
   };
@@ -453,7 +473,7 @@ async function boot(): Promise<void> {
   audio.playMusic(stage.file.environment.bgm);
 
   const ports: MissionPorts = {
-    say: (text, who) => bubbles.say(text, who),
+    say: (text, who, name) => bubbles.say(text, who, name),
     sayAsync: (text, who) => void bubbles.say(text, who),
     hush: () => bubbles.clear(),
     card: (title, button, icon) => {
@@ -496,6 +516,13 @@ async function boot(): Promise<void> {
   };
   events.on('event', (e) => {
     if (e.type === 'door') audio.playDoor(e.open);
+    if (e.type === 'hopper' && e.state === 'board') audio.playHopperBoard();
+    if (e.type === 'bridge' && e.open) audio.playBloom();
+    if (e.type === 'fragile' && e.state === 'shake') audio.playSilkShake();
+    if (e.type === 'butterfly') {
+      if (e.state === 'follow') butterfliesFollowing.add(e.index);
+      else butterfliesFollowing.delete(e.index);
+    }
   });
 
   // "||" in the corner: stop the game, go on, or leave for the map.
@@ -537,3 +564,12 @@ boot().catch((err: unknown) => {
   p.appendChild(msg);
   uiEl.appendChild(p);
 });
+
+/** The fastest notch whose speed (scaled by the light) is at most `limit` m/s: the lever's glowing hint. */
+function fastestNotchUnder(limit: number, scale: number): number | null {
+  let best: number | null = null;
+  LEVER_NOTCHES.forEach((n, i) => {
+    if (n.speed > 0 && n.speed * scale <= limit + 1e-6) best = i;
+  });
+  return best;
+}

@@ -6,7 +6,7 @@ import type { CameraMode } from '../view/camera-rig';
 
 /** What the cutscene runner needs from the UI. */
 export interface CutscenePorts {
-  say(text: string, who: Speaker): Promise<void>;
+  say(text: string, who: Speaker, name?: string): Promise<void>;
   card(title: string, button: string, icon?: 'badge'): Promise<void>;
   caption(text: string, seconds: number): Promise<void>;
   wait(seconds: number): Promise<void>;
@@ -27,14 +27,14 @@ export async function runCutscene(
   for (const step of steps) {
     if ('say' in step) {
       if (step.emote) events.post({ type: 'partner:emote', kind: step.emote });
-      await ports.say(step.say, step.who ?? 'partner');
+      await ports.say(step.say, step.who ?? 'partner', step.name);
     } else if ('spawn' in step) {
-      const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail } }, network, groundY);
+      const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail }, rotationY: step.rotationY }, network, groundY);
       events.post({ type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion });
     } else if ('move' in step) {
       const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail } }, network, groundY);
       events.post({ type: 'actor:move', id: step.move, position: t.position, seconds: step.seconds });
-      await ports.wait(step.seconds);
+      if (!step.nowait) await ports.wait(step.seconds);
     } else if ('remove' in step) {
       events.post({ type: 'actor:remove', id: step.remove });
     } else if ('wait' in step) {

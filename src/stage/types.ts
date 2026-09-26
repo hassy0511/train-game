@@ -34,6 +34,10 @@ export interface GapDef {
   hint?: JumpHint;
   /** v1.3: where the train front goes back to after falling here (default: 80 m before the gap). */
   rewind?: { railId: string; at: number };
+  /** v1.6: false = no dark pit drawn under it (a gap over water). Default true. */
+  pit?: boolean;
+  /** v1.6 (set by the loader): this gap is the stream a flower bridge (gimmicks[bridge]) closes. */
+  bridge?: number;
 }
 
 export interface RailDef {
@@ -46,6 +50,8 @@ export interface RailDef {
   deadEnd?: boolean;
   /** v1.3: "follow" = up turns with the rail's bends (vertical loops, riding upside down). Default "fixed". */
   upMode?: 'fixed' | 'follow';
+  /** v1.6: how the track looks: "rail" (default: rails, sleepers, ballast) or "silk" (spider-silk threads). */
+  look?: 'rail' | 'silk';
   end: RailEndDef;
 }
 
@@ -192,6 +198,25 @@ export type MissionLines = Partial<
     | 'boughJump'
     | 'squirrelNear'
     | 'squirrelDropped'
+    // v1.6 (2-2)
+    | 'hopperNear'
+    | 'hopperOn'
+    | 'hopperReady'
+    | 'hopperDone'
+    | 'hopperFell'
+    | 'butterflyNear'
+    | 'butterflyFollow'
+    | 'butterflyWait'
+    | 'butterflyFast'
+    | 'budClosed'
+    | 'bridgeOpen'
+    | 'bridgeFell'
+    | 'fragileNear'
+    | 'fragileShake'
+    | 'fragileBoing'
+    | 'fragileBoingAfter'
+    | 'fragileClear'
+    | 'fellLight'
     // v1.4
     | 'doorAsk'
     | 'doorsClosedLever',
@@ -217,9 +242,22 @@ export type Speaker = 'partner' | 'amanojaku' | 'passenger';
 export type Emote = 'jump' | 'tilt' | 'cheer';
 
 export type CutsceneStep =
-  | { say: string; who?: Speaker; emote?: Emote }
-  | { spawn: string; model: string; onRail: { railId: string; at: number; lateral?: number; heightFromRail?: number } }
-  | { move: string; onRail: { railId: string; at: number; lateral?: number; heightFromRail?: number }; seconds: number }
+  /** v1.6 `name`: the name shown on the bubble instead of the speaker's usual one (e.g. "くもさん"). */
+  | { say: string; who?: Speaker; emote?: Emote; name?: string }
+  | {
+      spawn: string;
+      model: string;
+      onRail: { railId: string; at: number; lateral?: number; heightFromRail?: number };
+      /** v1.6: turn it about the vertical (degrees; 180 faces back along the rail, towards the train). */
+      rotationY?: number;
+    }
+  | {
+      move: string;
+      onRail: { railId: string; at: number; lateral?: number; heightFromRail?: number };
+      seconds: number;
+      /** v1.6: go on to the next step at once (several things move together). */
+      nowait?: boolean;
+    }
   | { remove: string }
   | { wait: number }
   | { cutRail: { railId: string; from: number; to: number } }

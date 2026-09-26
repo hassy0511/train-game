@@ -11,6 +11,8 @@ export class AudioEngine {
   /** Every sound effect goes through this gain (the "こうかおん" setting). */
   private sfx: GainNode | null = null;
   private sfxLevel = 1;
+  /** Steps through a few notes of G major so the butterfly's bell does not repeat one pitch. */
+  private butterflyNote = 0;
 
   unlock(): void {
     if (!this.ctx) {
@@ -179,5 +181,124 @@ export class AudioEngine {
 
   playLight(on: boolean): void {
     this.tone(on ? 1200 : 700, 0.08, 'square', 0.06);
+  }
+
+  /** "ぴょこん": a grasshopper climbs onto the roof — a short rising tone, then a little wooden knock. */
+  playHopperBoard(): void {
+    this.tone(520, 0.12, 'sine', 0.16, 1040);
+    this.knock(700, 0.12, 0.16);
+  }
+
+  /**
+   * "びよーん": the grasshopper jump — the normal jump sound with a wobbling spring on top. Call it instead of
+   * playJump() while a grasshopper rides.
+   */
+  playHopperJump(): void {
+    this.playJump();
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const at = ctx.currentTime + 0.04;
+    const len = 0.7;
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(260, at);
+    osc.frequency.exponentialRampToValueAtTime(470, at + len);
+    // The spring: a vibrato that starts wide and quick, then settles.
+    const lfo = ctx.createOscillator();
+    lfo.frequency.setValueAtTime(15, at);
+    lfo.frequency.exponentialRampToValueAtTime(6, at + len);
+    const depth = ctx.createGain();
+    depth.gain.setValueAtTime(70, at);
+    depth.gain.exponentialRampToValueAtTime(3, at + len);
+    lfo.connect(depth);
+    depth.connect(osc.frequency);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 1600;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.14, at + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    osc.connect(lp);
+    lp.connect(g);
+    g.connect(this.sfx ?? ctx.destination);
+    osc.start(at);
+    lfo.start(at);
+    osc.stop(at + len + 0.05);
+    lfo.stop(at + len + 0.05);
+  }
+
+  /** A butterfly follows: one tiny, quiet bell. Meant to be called every ~1.5 s while it follows. */
+  playButterfly(): void {
+    const notes = [2349, 1976, 2637, 1976];
+    this.bell(notes[this.butterflyNote++ % notes.length], 0, 0.06, 0.45);
+  }
+
+  /** "ぱあっ": a flower opens — four bells rising, then a soft G major chord. */
+  playBloom(): void {
+    [784, 988, 1175, 1568].forEach((f, i) => this.bell(f, i * 0.08, 0.1, 0.7));
+    for (const f of [392, 494, 587, 784]) this.ping(f, 0.3, 1.3, 'triangle', 0.05, f, 0.08);
+  }
+
+  /** The silk bridge sways (going too fast): a small, soft "びよびよ". The fail itself is playBoing(). */
+  playSilkShake(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const at = ctx.currentTime;
+    const len = 0.5;
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(330, at);
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 9;
+    const depth = ctx.createGain();
+    depth.gain.value = 30;
+    lfo.connect(depth);
+    depth.connect(osc.frequency);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.08, at + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    osc.connect(g);
+    g.connect(this.sfx ?? ctx.destination);
+    osc.start(at);
+    lfo.start(at);
+    osc.stop(at + len + 0.05);
+    lfo.stop(at + len + 0.05);
+  }
+
+  /**
+   * One enveloped oscillator on the audio clock, `delay` s from now: a short attack to `gain`, then an
+   * exponential tail that is gone after `seconds`.
+   */
+  private ping(freq: number, delay: number, seconds: number, type: OscillatorType, gain: number, endFreq = freq, attack = 0.004): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const at = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, at);
+    if (endFreq !== freq) osc.frequency.exponentialRampToValueAtTime(endFreq, at + seconds);
+    g.gain.value = 0.0001;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(gain, at + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + seconds);
+    osc.connect(g);
+    g.connect(this.sfx ?? ctx.destination);
+    osc.start(at);
+    osc.stop(at + seconds + 0.05);
+  }
+
+  /** A small music-box bell (like the music's bell voice): a sine and a quiet partial two octaves up. */
+  private bell(freq: number, delay: number, gain: number, ring: number): void {
+    this.ping(freq, delay, ring, 'sine', gain);
+    this.ping(freq * 4, delay, ring * 0.3, 'sine', gain * 0.2, freq * 4, 0.002);
+  }
+
+  /** "こつん": a tiny woodblock — a quick, slightly falling body and an off-key click on top. */
+  private knock(freq: number, delay: number, gain: number): void {
+    this.ping(freq, delay, 0.09, 'triangle', gain, freq * 0.9, 0.002);
+    this.ping(freq * 2.76, delay, 0.035, 'sine', gain * 0.35, freq * 2.76, 0.001);
   }
 }

@@ -13,7 +13,7 @@ import { chromium } from '@playwright/test';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const [outDir, ...wanted] = process.argv.slice(2);
 if (!outDir) throw new Error('usage: node scripts/render-music.mjs <out-dir> [song ...]');
-const songs = wanted.length ? wanted : ['title', 'town', 'valley', 'sky'];
+const songs = wanted.length ? wanted : ['title', 'town', 'valley', 'sky', 'forest', 'meadow'];
 const PORT = 5198;
 
 const server = spawn(resolve(root, 'node_modules/.bin/vite'), ['--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {

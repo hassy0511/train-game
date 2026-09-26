@@ -87,6 +87,8 @@ export class Train {
   sagAt: ((railId: string, s: number) => number) | null = null;
   /** On a springy bough the jump button does nothing (the bough throws the train itself). */
   jumpBlocked = false;
+  /** A grasshopper riding on the roof (2-2): jumps go `power` times as far and `height` m high. */
+  jumpBoost: { power: number; height: number } | null = null;
 
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
@@ -180,7 +182,7 @@ export class Train {
 
   /** Distance the lead bogie would travel in a jump started now (with the glide to a near far edge). */
   private jumpDistance(): number {
-    const plain = this.state.speed * JUMP.airTime;
+    const plain = this.state.speed * JUMP.airTime * (this.jumpBoost?.power ?? 1);
     const gap = this.nextGap(plain);
     if (!gap) return plain;
     const landing = this.bogieS + plain;
@@ -205,7 +207,7 @@ export class Train {
     if (this.jumpBlocked) return 'bough';
     if (this.state.speed < JUMP.minSpeed) return 'stopped';
     const distance = this.jumpDistance();
-    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length: distance, height: JUMP.height });
+    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length: distance, height: this.jumpBoost?.height ?? JUMP.height });
     this.events.emit('jumped', { distance });
     return 'ok';
   }

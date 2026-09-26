@@ -37,7 +37,9 @@ export async function loadStage(id: string): Promise<StageData> {
   const load = stageModules[`../stages/${id}.json`];
   if (!load) throw new Error(`Unknown stage "${id}"`);
   const mod = (await load()) as { default: unknown };
-  const file = validateStageFile(mod.default);
+  // A copy: gaps opened and closed at run time (rail cuts, flower bridges) must not touch the loaded module.
+  const file = validateStageFile(structuredClone(mod.default));
+  addBridgeGaps(file);
   const network = buildRailNetwork(file);
   checkRanges(file, network);
   const groundY = file.environment.ground?.y ?? null;
@@ -74,6 +76,21 @@ export async function loadStage(id: string): Promise<StageData> {
   });
 
   return { file, network, props, actors, stations, records };
+}
+
+/**
+ * A flower bridge's stream is a gap on its rail until the butterfly opens it (v1.6). The loader adds it, with the
+ * bridge's own rewind point and no pit drawn under the water.
+ */
+function addBridgeGaps(file: StageFile): void {
+  file.gimmicks.forEach((g, index) => {
+    if (g.type !== 'flower-bridge' || g.railId === undefined || g.from === undefined || g.to === undefined) return;
+    const rail = file.rails.find((r) => r.id === g.railId);
+    if (!rail) return;
+    const butterflyAt = Number((g.params as { butterflyAt?: number } | undefined)?.butterflyAt ?? g.from - 100);
+    const rewindAt = Number((g.params as { rewindAt?: number } | undefined)?.rewindAt ?? butterflyAt - 60);
+    rail.gaps = [...(rail.gaps ?? []), { from: g.from, to: g.to, pit: false, bridge: index, rewind: { railId: g.railId, at: rewindAt } }];
+  });
 }
 
 function checkRanges(file: StageFile, network: RailNetwork): void {

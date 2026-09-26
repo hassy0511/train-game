@@ -2,6 +2,7 @@ import { BoxGeometry, Group, Mesh, MeshLambertMaterial } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { placeholderSize } from '../placeholder-sizes';
 import { buildForestPlaceholder } from './forest-placeholders';
+import { buildMeadowPlaceholder } from './meadow-placeholders';
 import { buildSkyPlaceholder } from './sky-placeholders';
 
 const PLACEHOLDER_COLORS: Record<string, number> = {
@@ -39,7 +40,7 @@ export class ModelLibrary {
     // Models that are not built yet (pending Blender tickets) get a flat box of the right size,
     // so stages stay playable and no 404 requests are made.
     if (!this.available.has(name)) {
-      const drawn = buildSkyPlaceholder(name) ?? buildForestPlaceholder(name);
+      const drawn = buildSkyPlaceholder(name) ?? buildForestPlaceholder(name) ?? buildMeadowPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(drawn ?? makePlaceholder(name));
       this.cache.set(name, placeholder);

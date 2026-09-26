@@ -1,6 +1,7 @@
 /**
  * Standalone model viewer (models.html): every .glb in public/models, one at a time, with orbit
- * controls. Used to review Blender deliveries on the iPad without playing a stage. No game code.
+ * controls. Used to review Blender deliveries on the iPad without playing a stage. Models that are not
+ * built yet ("_pending" in assets/models.json) show the stand-in the game draws in code, marked 「かり」.
  */
 import {
   AmbientLight,
@@ -18,14 +19,18 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import manifest from '../../assets/models.json';
+import { buildForestPlaceholder } from '../view/three/forest-placeholders';
+import { buildMeadowPlaceholder } from '../view/three/meadow-placeholders';
+import { buildSkyPlaceholder } from '../view/three/sky-placeholders';
 
 const GROUPS: [string, RegExp][] = [
   ['のりもの', /^(train|car)-/],
   ['しらべもの', /^(dino-egg|footprint)/],
-  ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird)/],
+  ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird|squirrel|grasshopper|butterfly|spider)/],
   ['えき・せんろ', /^(platform|station|stop|buffer|crossing|direction|jump|updraft|sky-buoy)/],
   ['たてもの', /^(house|shop|tower|hq)/],
-  ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud)/],
+  ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud|canopy|branch|bough|leaf|grass|clover|meadow|water|dandelion)/],
   ['こもの', /.*/],
 ];
 
@@ -64,6 +69,13 @@ const holder = new Group();
 scene.add(holder);
 const loader = new GLTFLoader();
 const base = import.meta.env.BASE_URL;
+const built = new Set<string>(__MODEL_MANIFEST__);
+/** The game's code-drawn stand-in for a model that is not built yet. */
+const drawn = (name: string): Group | null =>
+  buildSkyPlaceholder(name) ?? buildForestPlaceholder(name) ?? buildMeadowPlaceholder(name);
+const pending = manifest._pending.models.filter((n) => !built.has(n) && drawn(n) !== null);
+const load = async (name: string): Promise<Group> =>
+  built.has(name) ? (await loader.loadAsync(`${base}models/${name}.glb`)).scene : drawn(name)!;
 
 function resize(): void {
   const w = stage.clientWidth;
@@ -104,7 +116,7 @@ async function show(names: string[]): Promise<void> {
   holder.clear();
   grid?.removeFromParent();
 
-  const models = await Promise.all(names.map(async (n) => (await loader.loadAsync(`${base}models/${n}.glb`)).scene));
+  const models = await Promise.all(names.map(load));
   const widest = Math.max(...models.map((m) => new Box3().setFromObject(m).getSize(new Vector3()).x));
   const spacing = widest * 1.35;
   models.forEach((m, i) => {
@@ -131,7 +143,7 @@ async function show(names: string[]): Promise<void> {
   controls.update();
 }
 
-const names = [...__MODEL_MANIFEST__];
+const names = [...__MODEL_MANIFEST__, ...pending];
 const grouped = new Map<string, string[]>();
 for (const n of names) {
   const g = GROUPS.find(([, re]) => re.test(n))![0];
@@ -149,7 +161,7 @@ for (const [label] of GROUPS) {
     const b = document.createElement('button');
     b.type = 'button';
     b.dataset.model = n;
-    b.textContent = n;
+    b.textContent = built.has(n) ? n : `${n}（かり）`;
     b.addEventListener('click', () => void show([n]));
     listEl.appendChild(b);
   }

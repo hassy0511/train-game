@@ -51,7 +51,9 @@ export function addEnvironment(scene: Scene, environment: EnvironmentDef): Mesh 
         topColor: { value: new Color(environment.sky.top) },
         bottomColor: { value: new Color(environment.sky.bottom) },
         // Inside a fog stretch the sky whitens too (0 = clear, 1 = all mist).
-        mistColor: { value: new Color(environment.fog?.color ?? '#ffffff') },
+        // This shader writes its colour straight out (no sRGB encoding), so the mist colour goes in already
+        // encoded: at full mist the sky then matches the fogged scenery exactly (a tinted fog showed seams).
+        mistColor: { value: new Color(environment.fog?.color ?? '#ffffff').convertLinearToSRGB() },
         mist: { value: 0 },
       },
       vertexShader: skyVertexShader,
