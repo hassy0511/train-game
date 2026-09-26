@@ -25,8 +25,13 @@ export interface TitleOptions {
   lines?: readonly string[];
   /** Chapters so far with a star once all their islands are cleared ("1しょう ★ 2しょう ☆"); shown from the first star. */
   chapters?: { label: string; done: boolean }[];
-  /** Label of the "continue" button (e.g. "つづきから（きょうりゅうの たに）"); omitted = no button. */
+  /**
+   * Label of the "continue" button: a mission to go on from ("つづきから（2-1 ミッション 2）") or the next stage
+   * ("つづきから（きょうりゅうの たに）"); omitted = no button.
+   */
   continueLabel?: string;
+  /** Label of the "start" button (default "はじめる"; "はじめから（2-1）" when there is a mission to go on from). */
+  startLabel?: string;
   /** Every stage there is has been cleared: the map is the big button (to go back for the records). */
   allCleared?: boolean;
   /** Opens the world map; omitted = no button. */
@@ -90,7 +95,7 @@ export function showTitle(root: HTMLElement, title: string, options: TitleOption
       (key === primary ? main : buttons).appendChild(btn);
     };
     if (options.continueLabel) add('title-continue', 'continue', options.continueLabel, pick('continue'));
-    add('title-start', 'start', 'はじめる', pick('start'));
+    add('title-start', 'start', options.startLabel ?? 'はじめる', pick('start'));
     if (options.onMap) add('title-map', 'map', 'ちず', options.onMap);
     if (options.onZukan) add('title-zukan', 'zukan', 'ずかん', options.onZukan);
 

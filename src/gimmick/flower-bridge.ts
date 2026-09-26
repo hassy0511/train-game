@@ -182,6 +182,22 @@ export class FlowerBridges {
     return out;
   }
 
+  /**
+   * A resumed mission (PHASE7_FINISH §4 item 3): the bridges the way so far crossed are open, as they were when the
+   * mission before ended (they stay open for the whole stage). Returns the ones opened now.
+   */
+  openWhere(crossed: (railId: string, from: number, to: number) => boolean): Bridge[] {
+    const opened: Bridge[] = [];
+    for (const b of this.bridges) {
+      if (b.state === 'open' || !crossed(b.railId, b.from, b.to)) continue;
+      b.state = 'open';
+      b.s = b.from - b.bud;
+      this.openGap(b.railId, b.from, b.to);
+      opened.push(b);
+    }
+    return opened;
+  }
+
   /** After a rewind: a closed bridge's butterfly goes back to its flower, or waits just ahead of the train. */
   reset(): void {
     const front = this.train.frontS;

@@ -10,9 +10,9 @@ import type { SlopeSystem, SlopeZone } from '../gimmick/slope';
 import { Countdown, type CountdownView } from './countdown';
 import { FlowerBridges, type BridgeOutcome } from '../gimmick/flower-bridge';
 import { FragileBridges } from '../gimmick/fragile';
-import { addToProgress, loadProgress } from '../core/progress';
+import { addToProgress, loadProgress, setResume } from '../core/progress';
 import type { StageEvent, StageEventBus } from '../core/stage-events';
-import { runCutscene, type CutscenePorts } from '../cutscene/runner';
+import { CutsceneSkip, fastForwardCutscene, runCutscene, type CutscenePorts } from '../cutscene/runner';
 import type {
   AbilityId,
   GapDef,
@@ -290,6 +290,8 @@ export class MissionRunner {
   /** The next drive comes after a fail: the slopes and the rocket announce again once it starts. */
   private rearm = false;
   private resolveDrive: ((outcome: DriveOutcome) => void) | null = null;
+  /** The cutscene playing now can be skipped through this ("▶▶"); null outside cutscenes. */
+  private skip: CutsceneSkip | null = null;
   private lines: MissionLines = {};
   private readonly groundY: number | null;
 
@@ -517,13 +519,105 @@ export class MissionRunner {
     return this.stage.file.missions[this.missionIndex] ?? null;
   }
 
-  /** Runs the whole stage. Resolves when the clear card was dismissed. */
-  async run(): Promise<void> {
-    const file = this.stage.file;
-    this.resetActors();
-    if (file.opening) await this.cutscene(file.opening);
+  /** A cutscene is playing and has not been skipped yet (the "▶▶" may show). */
+  get canSkip(): boolean {
+    return this.phase === 'cutscene' && this.skip !== null && !this.skip.requested;
+  }
 
-    for (let i = 0; i < file.missions.length; i++) {
+  /** "▶▶" (PHASE7_FINISH §4 item 7): the rest of the cutscene playing now is fast-forwarded. */
+  skipCutscene(): boolean {
+    if (!this.canSkip) return false;
+    this.skip?.request();
+    return true;
+  }
+
+  /**
+   * Resume (PHASE7_FINISH §4 item 3): gets the stage ready to start at mission `from` (0-based, at least 1) as if
+   * the missions before had just been played. The opening and the cutscenes after those missions are
+   * fast-forwarded (cut rails, learned abilities, figures on and off); the train stands at the last station of the
+   * mission before, stopped, with the passengers and the parcel it would carry; the flower bridges on the way there
+   * are open (they stay open for the whole stage). Everything else waits as after a rewind to that station (a
+   * woken cat or dinosaur behind the train is asleep again; nothing behind it matters any more). Call before
+   * run(from), then snap the camera.
+   */
+  prepareResume(from: number): void {
+    const file = this.stage.file;
+    if (from < 1 || from >= file.missions.length) throw new Error(`Cannot resume at mission ${from}`);
+    if (file.opening) this.fastForward(file.opening);
+    let passengers = 0;
+    let parcel = false;
+    for (let i = 0; i < from; i++) {
+      for (const step of file.missions[i].steps) {
+        passengers = passengers - Math.min(step.alight ?? 0, passengers) + (step.board ?? 0);
+        if (step.parcel) parcel = step.parcel === 'load';
+      }
+      const done = file.missions[i].onComplete;
+      if (done) this.fastForward(done);
+    }
+    const steps = file.missions[from - 1].steps;
+    const station = this.station(steps[steps.length - 1].stationId);
+    const target = { railId: station.railId, at: station.at };
+    this.train.rewindTo(station.at, station.railId);
+    this.lastStop = target;
+    this.passengers = passengers;
+    this.parcel = parcel;
+    this.ports.setCargo(passengers, parcel);
+    this.resetActors(target);
+    // The flower bridges the way from the start to this station crosses must have bloomed.
+    const way = this.wayTo(target);
+    const crossed = (railId: string, from: number, to: number): boolean =>
+      way.some((leg) => leg.railId === railId && from >= leg.from && to <= leg.to);
+    for (const b of this.bridges.openWhere(crossed)) this.events.post({ type: 'bridge', index: b.index, open: true, instant: true });
+    this.postButterflies();
+    this.slopes?.reset();
+    this.rocket?.reset();
+    this.events.post({ type: 'rewind' });
+    this.ports.resetLever();
+    this.ports.autoCamera(null);
+    this.ports.fixedCamera(null);
+    this.phase = 'stopped';
+    this.train.lockInput('stopped');
+  }
+
+  /**
+   * The rails the way from the stage start to `target` runs along, as legs [from, to] (fewest rail changes, through
+   * junctions and merges). Empty when there is none.
+   */
+  private wayTo(target: { railId: string; at: number }): { railId: string; from: number; to: number }[] {
+    type Leg = { railId: string; from: number; to: number };
+    const file = this.stage.file;
+    const start = file.start;
+    const queue: { railId: string; enter: number; legs: Leg[] }[] = [{ railId: start.railId, enter: start.at, legs: [] }];
+    const seen = new Set<string>();
+    while (queue.length > 0) {
+      const { railId, enter, legs } = queue.shift() as (typeof queue)[number];
+      const key = `${railId}@${enter}`;
+      if (seen.has(key) || legs.length > 12) continue;
+      seen.add(key);
+      if (railId === target.railId && target.at >= enter) return [...legs, { railId, from: enter, to: target.at }];
+      const rail = this.stage.network.getRail(railId);
+      for (const j of file.junctions) {
+        if (j.railId !== railId || j.at < enter) continue;
+        for (const to of [j.left, j.right]) {
+          if (to !== undefined && to !== railId) queue.push({ railId: to, enter: 0, legs: [...legs, { railId, from: enter, to: j.at }] });
+        }
+      }
+      if (rail.end.type === 'merge') {
+        queue.push({ railId: rail.end.railId, enter: rail.end.railId === railId ? 0 : rail.end.at, legs: [...legs, { railId, from: enter, to: rail.length }] });
+      }
+    }
+    return [];
+  }
+
+  /** Runs the whole stage (from mission `from` after prepareResume). Resolves when the clear card was dismissed. */
+  async run(from = 0): Promise<void> {
+    const file = this.stage.file;
+    if (from === 0) {
+      this.resetActors();
+      if (file.opening) await this.cutscene(file.opening);
+    }
+
+    for (let i = from; i < file.missions.length; i++) {
       const mission = file.missions[i];
       this.missionIndex = i;
       this.lines = mission.lines ?? {};
@@ -545,6 +639,8 @@ export class MissionRunner {
       if (this.lines.complete) this.ports.sayAsync(this.lines.complete);
       this.events.post({ type: 'partner:emote', kind: 'cheer' });
       await this.ports.card('できた！', 'つぎへ');
+      // From here on "つづきから" starts at the next mission (the last one's end is the stage clear).
+      if (i + 1 < file.missions.length) setResume({ stage: file.id, mission: i + 1 });
       if (mission.onComplete) await this.cutscene(mission.onComplete);
     }
 
@@ -1348,16 +1444,41 @@ export class MissionRunner {
     this.phase = 'cutscene';
     this.train.lockInput('cutscene');
     this.ports.autoCamera('chase');
-    await runCutscene(steps, this.stage.network, this.groundY, this.events, {
-      ...this.ports,
-      unlock: async (ability) => {
-        this.grant(ability);
-        await this.ports.unlock(ability);
+    this.skip = new CutsceneSkip();
+    await runCutscene(
+      steps,
+      this.stage.network,
+      this.groundY,
+      this.events,
+      {
+        ...this.ports,
+        unlock: async (ability) => {
+          this.grant(ability);
+          await this.ports.unlock(ability);
+        },
+        learn: (ability) => {
+          this.grant(ability);
+          this.ports.learn(ability);
+        },
       },
-    });
+      this.skip,
+    );
+    this.skip = null;
     this.ports.autoCamera(null);
     this.ports.fixedCamera(null);
     this.phase = previous === 'driving' ? 'idle' : previous;
+  }
+
+  /** Applies at once what a cutscene leaves behind (a resume): see fastForwardCutscene. */
+  private fastForward(id: string): void {
+    const steps = this.stage.file.cutscenes?.[id];
+    if (!steps) throw new Error(`Unknown cutscene "${id}"`);
+    fastForwardCutscene(steps, this.stage.network, this.groundY, this.events, {
+      learn: (ability) => {
+        this.grant(ability);
+        this.ports.learn(ability);
+      },
+    });
   }
 }
 

@@ -13,6 +13,17 @@ export interface Progress {
   records: string[];
   /** World-map links ("from>to") whose rail has already been drawn in (the growing rail plays once). */
   mapLinks: string[];
+  /**
+   * PHASE7_FINISH §4 item 3: where to go on from ("つづきから"). `mission` is the 0-based index of the mission to
+   * start (at least 1: it starts at the last station of the mission before). Written when a mission's "できた！"
+   * card is closed, cleared when that stage is cleared. Optional, so the schema stays 1 and older saves load.
+   */
+  resume?: Resume;
+}
+
+export interface Resume {
+  stage: string;
+  mission: number;
 }
 
 const empty = (): Progress => ({ schema: SCHEMA, cleared: [], abilities: [], records: [], mapLinks: [] });
@@ -30,6 +41,7 @@ export function loadProgress(): Progress {
       abilities: Array.isArray(data.abilities) ? (data.abilities.filter((v) => typeof v === 'string') as AbilityId[]) : [],
       records: Array.isArray(data.records) ? data.records.filter((v) => typeof v === 'string') : [],
       mapLinks: Array.isArray(data.mapLinks) ? data.mapLinks.filter((v) => typeof v === 'string') : [],
+      ...(isResume(data.resume) ? { resume: { stage: data.resume.stage, mission: data.resume.mission } } : {}),
     };
   } catch {
     return empty();
@@ -54,6 +66,20 @@ export function addToProgress(field: 'cleared' | 'abilities' | 'records' | 'mapL
   list.push(...fresh);
   saveProgress(progress);
   return true;
+}
+
+function isResume(value: unknown): value is Resume {
+  const r = value as Partial<Resume> | null | undefined;
+  return !!r && typeof r.stage === 'string' && typeof r.mission === 'number' && Number.isInteger(r.mission) && r.mission >= 1;
+}
+
+/** Sets (or with null forgets) where to go on from ("つづきから") and saves. */
+export function setResume(resume: Resume | null): void {
+  const progress = loadProgress();
+  if (resume) progress.resume = { stage: resume.stage, mission: resume.mission };
+  else if (progress.resume) delete progress.resume;
+  else return;
+  saveProgress(progress);
 }
 
 /** Forgets the whole progress (the parents' page, "きろくを ぜんぶ けす"). Settings are kept apart and stay. */
