@@ -5,6 +5,7 @@ import {
   Float32BufferAttribute,
   Group,
   Material,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -18,8 +19,9 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { StageEvent } from '../../core/stage-events';
 import type { Emote, MissionDef, ResolvedActor, ResolvedRecord, ResolvedStation } from '../../stage/types';
 import { NECK_DOWN, NECK_UP } from './abilities';
+import { bakeModel, bakeTogether } from './bake';
 import type { ModelLibrary } from './models';
-import { addModelPlacements, type ModelPlacement } from './props';
+import { addModelPlacements, placementMatrix, type ModelPlacement } from './props';
 
 const ACTOR_MODELS: Record<string, string> = {
   cat: 'cat-sleep',
@@ -199,59 +201,76 @@ export class ActorLayer {
     const bounds = new Box3().setFromObject(platform);
     const platformLength = bounds.max.z - bounds.min.z;
     const clearance = PLATFORM_CLEARANCE + (this.models.has('platform') ? 0 : 2);
-    const placements: ModelPlacement[] = [];
-
-    for (const station of this.stations) {
-      const frame = stationFrame(station);
-      const platformPosition = station.position
-        .clone()
-        .addScaledVector(frame.side, clearance)
-        .addScaledVector(frame.forward, PLATFORM_OVERHANG - platformLength / 2);
-      placements.push({ model: 'platform', position: platformPosition, quaternion: station.quaternion, scale: 1 });
-      placements.push({
-        model: 'platform-roof',
-        position: platformPosition.clone().addScaledVector(frame.up, PLATFORM_HEIGHT),
-        quaternion: station.quaternion,
-        scale: 1,
-      });
-
-      const signQuaternion = station.quaternion
-        .clone()
-        .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), station.def.platformSide === 'left' ? -Math.PI / 2 : Math.PI / 2));
-      placements.push({
-        model: 'station-sign',
-        position: station.position
-          .clone()
-          .addScaledVector(frame.side, clearance + 2.1)
-          .addScaledVector(frame.forward, -4)
-          .addScaledVector(frame.up, PLATFORM_HEIGHT),
-        quaternion: signQuaternion,
-        scale: 1,
-      });
-      placements.push({ model: 'stop-line', position: station.position, quaternion: station.quaternion, scale: 1 });
-      placements.push({
-        model: 'stop-board',
-        position: station.position.clone().addScaledVector(frame.side, PLATFORM_CLEARANCE + 0.6),
-        quaternion: station.quaternion,
-        scale: 1,
-      });
-    }
 
     const stationObjects = new Group();
     stationObjects.name = 'stations';
     this.group.add(stationObjects);
-    // Keep stations as separately culled objects. Batching all four distant stations makes every
-    // platform render whenever one is visible, which costs more triangles than it saves here.
-    await Promise.all(
-      placements.map(async (placement, index) => {
-        const instance = (await this.models.load(placement.model)).clone(true);
-        instance.name = `${placement.model}:${index}`;
-        instance.position.copy(placement.position);
-        instance.quaternion.copy(placement.quaternion);
-        instance.scale.setScalar(placement.scale);
-        stationObjects.add(instance);
-      }),
+    // Each station's static parts are baked into one mesh, one draw call a station. Stations stay separately
+    // culled objects: batching all four distant stations makes every platform render whenever one is visible,
+    // which costs more triangles than it saves here.
+    await Promise.all(this.stations.map((station) => this.addStation(stationObjects, station, clearance, platformLength)));
+  }
+
+  private async addStation(target: Group, station: ResolvedStation, clearance: number, platformLength: number): Promise<void> {
+    const frame = stationFrame(station);
+    const placements: ModelPlacement[] = [];
+    const platformPosition = station.position
+      .clone()
+      .addScaledVector(frame.side, clearance)
+      .addScaledVector(frame.forward, PLATFORM_OVERHANG - platformLength / 2);
+    placements.push({ model: 'platform', position: platformPosition, quaternion: station.quaternion, scale: 1 });
+    placements.push({
+      model: 'platform-roof',
+      position: platformPosition.clone().addScaledVector(frame.up, PLATFORM_HEIGHT),
+      quaternion: station.quaternion,
+      scale: 1,
+    });
+
+    const signQuaternion = station.quaternion
+      .clone()
+      .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), station.def.platformSide === 'left' ? -Math.PI / 2 : Math.PI / 2));
+    placements.push({
+      model: 'station-sign',
+      position: station.position
+        .clone()
+        .addScaledVector(frame.side, clearance + 2.1)
+        .addScaledVector(frame.forward, -4)
+        .addScaledVector(frame.up, PLATFORM_HEIGHT),
+      quaternion: signQuaternion,
+      scale: 1,
+    });
+    placements.push({ model: 'stop-line', position: station.position, quaternion: station.quaternion, scale: 1 });
+    placements.push({
+      model: 'stop-board',
+      position: station.position.clone().addScaledVector(frame.side, PLATFORM_CLEARANCE + 0.6),
+      quaternion: station.quaternion,
+      scale: 1,
+    });
+
+    const templates = await Promise.all(placements.map((placement) => this.models.load(placement.model)));
+    // Baked in the station's own frame, so the merged vertices stay near the origin.
+    const toStation = new Matrix4().compose(station.position, station.quaternion, new Vector3(1, 1, 1)).invert();
+    const baked = bakeTogether(
+      placements.map((placement, index) => ({
+        template: templates[index],
+        matrix: toStation.clone().multiply(placementMatrix(placement, new Matrix4())),
+      })),
     );
+    if (baked) {
+      baked.name = `station:${station.def.id}`;
+      baked.position.copy(station.position);
+      baked.quaternion.copy(station.quaternion);
+      target.add(baked);
+      return;
+    }
+    placements.forEach((placement, index) => {
+      const instance = templates[index].clone(true);
+      instance.name = `${placement.model}:${station.def.id}`;
+      instance.position.copy(placement.position);
+      instance.quaternion.copy(placement.quaternion);
+      instance.scale.setScalar(placement.scale);
+      target.add(instance);
+    });
   }
 
   private async addCrossingGates(actors: ResolvedActor[]): Promise<void> {
@@ -391,8 +410,9 @@ export class ActorLayer {
   }
 
   private async place(id: string, model: string, position: Vector3, quaternion: Quaternion): Promise<Object3D> {
+    // Actors move and swap models only as a whole, so an untextured one can be drawn baked.
     const template = await this.models.load(model);
-    const instance = template.clone(true);
+    const instance = (bakeModel(template) ?? template).clone(true);
     instance.name = id;
     instance.position.copy(position);
     instance.quaternion.copy(quaternion);
@@ -559,7 +579,9 @@ export class ActorLayer {
           const station = this.stations.find((candidate) => candidate.def.id === event.stationId);
           if (station) {
             const frame = stationFrame(station);
-            const flag = (await this.models.load('goal-flag')).clone(true);
+            const flagModel = await this.models.load('goal-flag');
+            // It bobs and spins as a whole: baked, it is one draw call.
+            const flag = (bakeModel(flagModel) ?? flagModel).clone(true);
             flag.position
               .copy(station.position)
               .addScaledVector(frame.side, PLATFORM_CLEARANCE + 1.6)

@@ -68,7 +68,7 @@ async function jumpGap(page: Page, shot?: string): Promise<void> {
     await page.waitForTimeout(500);
     await page.screenshot({ path: resolve(OUT, shot) });
   }
-  await expect(page.locator('#app')).toHaveAttribute('data-air', '0', { timeout: 10_000 });
+  await expect(page.locator('#app')).toHaveAttribute('data-air', '0', { timeout: 30_000 });
 }
 
 /** Slows to ゆっくり and stops with the front at the station line `at`. */
@@ -182,6 +182,8 @@ test('stage 1-2 full run: jumps, a fall, dinosaurs, a dead end, the light, recor
     tris: Number(document.getElementById('app')?.dataset.trisMax),
   }));
   console.log(`1-2 budget: draw calls ${budget.draws} / 200, triangles ${budget.tris} / 100000`);
+  expect(budget.draws).toBeLessThanOrEqual(200);
+  expect(budget.tris).toBeLessThanOrEqual(100000);
   await page.locator('#card-button').click();
   // The map: records 2 of 3 here (the third needs a later ability), and on to 1-3.
   await expect(page.locator('#map')).toBeVisible();

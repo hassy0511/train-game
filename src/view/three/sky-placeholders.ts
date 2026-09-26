@@ -24,11 +24,12 @@ const CLOUD_SHADE = '#DCE9F5';
 const GOLD = '#FFD166';
 
 const materials = new Map<string, MeshLambertMaterial>();
-function mat(color: string, emissive = 0): MeshLambertMaterial {
-  const key = `${color}|${emissive}`;
+function mat(color: string, emissive = 0, double = false): MeshLambertMaterial {
+  const key = `${color}|${emissive}|${double}`;
   let m = materials.get(key);
   if (!m) {
     m = new MeshLambertMaterial({ color, flatShading: true });
+    if (double) m.side = DoubleSide;
     if (emissive) m.emissive = new Color(color).multiplyScalar(emissive);
     materials.set(key, m);
   }
@@ -76,10 +77,11 @@ function flipCap(): Group {
   const cap = mesh(new CylinderGeometry(r, r, 30, 20, 1, false, -Math.PI / 2, Math.PI), ROCK, 0, -r, 0);
   cap.rotation.z = Math.PI / 2;
   g.add(cap);
-  // Grass band on the curve (thin shell just outside the rock).
-  const band = mesh(new CylinderGeometry(r + 0.3, r + 0.3, 30.4, 20, 1, true, -Math.PI / 2, Math.PI), GRASS, 0, -r, 0);
+  // Grass band on the curve (thin shell just outside the rock). It is open, so it draws both faces; its own material
+  // keeps the shared GRASS one-sided, so island grass bakes together with the rock.
+  const band = new Mesh(new CylinderGeometry(r + 0.3, r + 0.3, 30.4, 20, 1, true, -Math.PI / 2, Math.PI), mat(GRASS, 0, true));
+  band.position.set(0, -r, 0);
   band.rotation.z = Math.PI / 2;
-  (band.material as MeshLambertMaterial).side = DoubleSide;
   g.add(band);
   return g;
 }

@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "smoke": "npm run build && playwright test -c tests/smoke/playwright.config.ts",
     "smoke:only": "playwright test -c tests/smoke/playwright.config.ts",
-    "check:models": "node scripts/check-models.mjs"
+    "check:models": "node scripts/check-models.mjs",
+    "budget": "node scripts/probe-budget.mjs"
   },
   "repository": {
     "type": "git",

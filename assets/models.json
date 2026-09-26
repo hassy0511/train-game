@@ -44,5 +44,6 @@
   "dino-small-walk": { "script": "dinos.py", "triangles": 5000, "kb": 350 },
   "dino-large-body": { "script": "dinos.py", "triangles": 6000, "kb": 350 },
   "dino-large-neck": { "script": "dinos.py", "triangles": 3000, "kb": 350, "origin": "joint" },
-  "ptero": { "script": "dinos.py", "triangles": 2500, "kb": 350 }
+  "ptero": { "script": "dinos.py", "triangles": 2500, "kb": 350 },
+  "ptero-far": { "script": "dinos.py", "triangles": 400, "kb": 30 }
 }
