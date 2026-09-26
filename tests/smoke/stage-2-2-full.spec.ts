@@ -106,6 +106,21 @@ async function camera(page: Page, mode: string): Promise<void> {
   await expect(page.locator('#app')).toHaveAttribute('data-camera', mode);
 }
 
+/**
+ * Turns the light on or off and waits until it is: the button ignores taps for 0.4 s of game time after a toggle,
+ * which on a slow machine can be longer than the test's own wait, so tap again until it takes.
+ */
+async function setLight(page: Page, on: boolean): Promise<void> {
+  const light = page.locator('#light');
+  const want = on ? '1' : '0';
+  const deadline = Date.now() + 30_000;
+  while ((await light.getAttribute('data-on')) !== want) {
+    if (Date.now() > deadline) throw new Error(`light did not turn ${on ? 'on' : 'off'}`);
+    await light.dispatchEvent('pointerdown');
+    await page.waitForTimeout(400);
+  }
+}
+
 async function bubbleSays(page: Page, text: string, timeoutMs = 60_000): Promise<void> {
   await expect(page.locator('#bubble')).toContainText(text, { timeout: timeoutMs });
 }
@@ -192,17 +207,17 @@ test('stage 2-2 full run: grasshoppers, butterflies and flower bridges, the silk
   console.log('2-2: fell into the stream without the flower bridge');
   await waitDriving(page);
   await setNotch(page, NORMAL);
-  await light.dispatchEvent('pointerdown');
+  await setLight(page, true);
   await expect(app).toHaveAttribute('data-butterfly', 'follow', { timeout: 30_000 });
   await page.waitForTimeout(1500);
   await page.screenshot({ path: resolve(OUT, '74-butterfly.png') });
   // Light off: it waits where it is (and the light button glows); light on again: it follows again.
   await page.waitForTimeout(500);
-  await light.dispatchEvent('pointerdown');
+  await setLight(page, false);
   await expect(app).toHaveAttribute('data-butterfly', 'hover', { timeout: 10_000 });
   await expect(light).toHaveAttribute('data-glow', '1', { timeout: 10_000 });
   await page.waitForTimeout(600);
-  await light.dispatchEvent('pointerdown');
+  await setLight(page, true);
   await expect(app).toHaveAttribute('data-butterfly', 'follow', { timeout: 10_000 });
   await expect(app).toHaveAttribute('data-bridges', '1,0,0', { timeout: 240_000 });
   // Light on at ふつう is just right for a butterfly: it never got flustered.
@@ -216,7 +231,7 @@ test('stage 2-2 full run: grasshoppers, butterflies and flower bridges, the silk
   // The second butterfly follows at once (the light is still on) and opens the second bridge.
   await expect(app).toHaveAttribute('data-bridges', '1,1,0', { timeout: 240_000 });
   await waitFor(page, 'main', 1850);
-  await light.dispatchEvent('pointerdown');
+  await setLight(page, false);
   await expect(light).toHaveAttribute('data-on', '0');
   await stopAt(page, 'main', 1960);
   await doors(page);
@@ -254,7 +269,7 @@ test('stage 2-2 full run: grasshoppers, butterflies and flower bridges, the silk
     return el?.dataset.rail === 'silk' && Number(el?.dataset.s) < 450;
   }, null, { timeout: 180_000 });
   await expect(light).toHaveAttribute('data-glow', '1', { timeout: 20_000 });
-  await light.dispatchEvent('pointerdown');
+  await setLight(page, true);
   await waitFor(page, 'silk', 470);
   console.log('2-2: back round the loop, the light showed the true thread');
 
@@ -268,7 +283,7 @@ test('stage 2-2 full run: grasshoppers, butterflies and flower bridges, the silk
   await expect(page.locator('.lever-detent[data-notch="2"]')).toHaveAttribute('data-hint', '1', { timeout: 30_000 });
   await waitFor(page, 'silk', 935);
   await expect(app).not.toHaveAttribute('data-phase', 'failing');
-  await light.dispatchEvent('pointerdown');
+  await setLight(page, false);
   await stopAt(page, 'silk', 1020);
   await card(page, 'できた！');
 
