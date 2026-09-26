@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -205,5 +205,117 @@ test('corner buttons and the rocket seat, lever left and right, iPad and small p
     await checkLayout(page, leftHanded, 667, 375, leftHanded ? 'corner-left-small.png' : 'corner-right-small.png');
   }
   await page.setViewportSize({ width: 1194, height: 834 });
+  expect(errors).toEqual([]);
+});
+
+/** Everything there is to have (read from the stage files and the world map): the fullest progress. */
+function fullProgress(): { schema: 1; cleared: string[]; abilities: string[]; records: string[]; mapLinks: string[] } {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+  const stages = readdirSync(resolve(root, 'src/stages'))
+    .filter((f) => f.endsWith('.json'))
+    .map((f) => JSON.parse(readFileSync(resolve(root, 'src/stages', f), 'utf8')) as { id: string; hidden?: boolean; unlocks: string[]; records: { id: string }[] })
+    .filter((s) => !s.hidden);
+  const world = JSON.parse(readFileSync(resolve(root, 'src/world/world.json'), 'utf8')) as { links: [string, string][] };
+  return {
+    schema: 1,
+    cleared: stages.map((s) => s.id),
+    abilities: [...new Set(stages.flatMap((s) => s.unlocks))],
+    records: stages.flatMap((s) => s.records.map((r) => r.id)),
+    mapLinks: world.links.filter(([, to]) => !to.startsWith('teaser:')).map(([from, to]) => `${from}>${to}`),
+  };
+}
+
+const sorted = (p: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(p).map(([k, v]) => [k, Array.isArray(v) ? [...v].sort() : v]));
+
+/** Holds "おうちの かたへ" for `ms`, then lets go. */
+async function holdParents(page: Page, ms: number): Promise<void> {
+  const hold = page.locator('#settings-parents');
+  await hold.dispatchEvent('pointerdown');
+  await page.waitForTimeout(ms);
+  await hold.dispatchEvent('pointerup');
+}
+
+test('おうちの かたへ: a long press opens it, erasing asks twice, the あいことば brings everything back', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  const full = fullProgress();
+  const app = page.locator('#app');
+  await page.goto('/?stage=1-1');
+  await page.evaluate((p) => {
+    localStorage.setItem('train-game.progress.v1', JSON.stringify(p));
+    localStorage.setItem('train-game.settings.v1', JSON.stringify({ music: 1, sound: 2, calm: false, leftHanded: false }));
+  }, full);
+  await page.goto('/?stage=1-1');
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  await page.locator('#title-settings').click();
+  await expect(page.locator('#settings')).toBeVisible();
+
+  // A short tap (a child's) does nothing but show how it opens.
+  await holdParents(page, 400);
+  await page.waitForTimeout(2000);
+  await expect(page.locator('#parents')).toHaveCount(0);
+  await expect(page.locator('#settings-parents')).toHaveClass(/is-hinting/);
+  // Held for 2 seconds: it opens while still held.
+  await page.locator('#settings-parents').dispatchEvent('pointerdown');
+  await page.waitForTimeout(1500);
+  await expect(page.locator('#parents')).toHaveCount(0);
+  await expect(page.locator('#parents')).toBeVisible({ timeout: 3000 });
+  await page.locator('#settings-parents').dispatchEvent('pointerup');
+  await expect(page.locator('#parents')).toContainText('どこにも送りません');
+  await expect(page.locator('#parents')).toContainText('ホーム画面に追加');
+  await expect(page.locator('#parents-build')).toContainText((await app.getAttribute('data-build')) ?? '?');
+
+  // The あいことば: 12 letters in three groups.
+  await page.locator('#parents-passcode-show').click();
+  const code = (await page.locator('#parents-passcode').textContent()) ?? '';
+  expect(code).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+  await page.screenshot({ path: resolve(OUT, '43-parents.png') });
+
+  // A mistyped one is caught and changes nothing.
+  const flip = (c: string) => (c === 'Z' ? 'Y' : 'Z');
+  await page.locator('#parents-passcode-input').fill(code.slice(0, 7) + flip(code[7]) + code.slice(8));
+  await page.locator('#parents-passcode-load').click();
+  await expect(page.locator('#parents-passcode-message')).toHaveClass(/is-error/);
+  await expect(page.locator('.parents-confirm')).toHaveCount(0);
+
+  // Erasing asks twice; "やめる" on the second question keeps everything.
+  await page.locator('#parents-reset').click();
+  await expect(page.locator('.parents-confirm')).toContainText('消しますか');
+  await page.locator('.parents-confirm-yes').click();
+  await expect(page.locator('.parents-confirm')).toContainText('ほんとうに');
+  await page.screenshot({ path: resolve(OUT, '44-parents-reset-twice.png') });
+  await page.locator('.parents-confirm-no').click();
+  await expect(page.locator('.parents-confirm')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('train-game.progress.v1'))).not.toBeNull();
+  // Now yes twice: the progress is gone, the settings stay, the game starts over from the title.
+  await page.locator('#parents-reset').click();
+  await page.locator('.parents-confirm-yes').click();
+  const erased = page.waitForEvent('load');
+  await page.locator('.parents-confirm-yes').click();
+  await erased;
+  expect(new URL(page.url()).search).toBe('');
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  expect(await page.evaluate(() => localStorage.getItem('train-game.progress.v1'))).toBeNull();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.settings.v1') ?? '{}'))).toMatchObject({ music: 1 });
+  await expect(page.locator('#title-chapters')).toHaveCount(0);
+
+  // The あいことば typed back in (small letters, spaces, O for 0 are all fine): everything comes back.
+  await page.locator('#title-settings').click();
+  await holdParents(page, 2300);
+  await expect(page.locator('#parents')).toBeVisible();
+  await page.locator('#parents-passcode-input').fill(` ${code.toLowerCase().replace(/-/g, ' ').replace(/0/g, 'o')} `);
+  await page.locator('#parents-passcode-load').click();
+  await expect(page.locator('.parents-confirm')).toContainText(`クリア ${full.cleared.length}`);
+  const restored = page.waitForEvent('load');
+  await page.locator('.parents-confirm-yes').click();
+  await restored;
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  const back = await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
+  expect(sorted(back)).toEqual(sorted(full));
+  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ★/);
   expect(errors).toEqual([]);
 });

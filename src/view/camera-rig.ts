@@ -60,6 +60,49 @@ export function cameraTarget(mode: CameraMode, pose: TrainPose, out: CameraTarge
   }
 }
 
+/**
+ * The title screen's camera (PHASE7_FINISH §4 item 6): it swings slowly to and fro around the standing train,
+ * looking at the middle of the consist from a little above. `radius` and `height` in m; it swings `swingDeg` either
+ * way of `centerDeg` (0 = the train's left side, as the side view; 90 = in front; 180 = its right side), one
+ * to-and-fro in `seconds`. A swing and not a full circle: at a station the platform and the buildings behind it
+ * stand close on one side.
+ */
+export interface OrbitCamera {
+  radius: number;
+  height: number;
+  centerDeg: number;
+  swingDeg: number;
+  seconds: number;
+  /** How far above the train's middle it looks (m): more lifts the view, so the train sits lower in the picture. */
+  lift: number;
+}
+
+/** The orbit's angle (radians) `t` seconds after it started: it starts in the middle, going toward the front. */
+export function orbitAngle(orbit: OrbitCamera, t: number): number {
+  const deg = orbit.centerDeg + orbit.swingDeg * Math.sin((t * Math.PI * 2) / orbit.seconds);
+  return (deg * Math.PI) / 180;
+}
+
+/** Where the orbiting title camera is at `angle` (radians from the train's left side, turning toward its front). */
+export function orbitTarget(pose: TrainPose, orbit: OrbitCamera, angle: number, out: CameraTarget): void {
+  FORWARD.set(0, 0, 1).applyQuaternion(pose.quaternion);
+  LEFT.set(1, 0, 0).applyQuaternion(pose.quaternion);
+  // Level circle: the train's own tilt (a slope) must not tip the horizon.
+  FORWARD.y = 0;
+  LEFT.y = 0;
+  FORWARD.normalize();
+  LEFT.normalize();
+  const consist = TRAIN.carSpacing * (TRAIN.carCount - 1);
+  out.lookAt.copy(pose.position).addScaledVector(FORWARD, -consist / 2);
+  out.position
+    .copy(out.lookAt)
+    .addScaledVector(LEFT, Math.cos(angle) * orbit.radius)
+    .addScaledVector(FORWARD, Math.sin(angle) * orbit.radius);
+  out.position.y += orbit.height;
+  out.lookAt.y += orbit.lift;
+  out.up.set(0, 1, 0);
+}
+
 /** Smoothly moves `current` toward `target` (frame-rate independent). */
 export function smoothCamera(current: CameraTarget, target: CameraTarget, dt: number, snap: boolean): void {
   if (snap) {

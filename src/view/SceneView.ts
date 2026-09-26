@@ -1,6 +1,6 @@
 import type { Scene } from 'three';
 import type { StageEvent } from '../core/stage-events';
-import type { CameraMode } from './camera-rig';
+import type { CameraMode, OrbitCamera } from './camera-rig';
 import type { RailNetwork } from '../rail/types';
 import type { StageData } from '../stage/types';
 import type { TrainPose } from '../train/types';
@@ -22,6 +22,11 @@ export interface SceneView {
   setCamera(mode: CameraMode, snap?: boolean): void;
   /** v1.7: a camera standing still at `at` looking at `lookAt` (world metres); null = back to the mode's camera. */
   setFixedCamera(fixed: { at: [number, number, number]; lookAt: [number, number, number] } | null): void;
+  /**
+   * The title screen's camera circling the standing train (null = back to the mode's camera, snapped). A fixed
+   * camera still wins over it.
+   */
+  setOrbit(orbit: OrbitCamera | null): void;
   /** "がめんの ゆれ: へらす": no view changes that move the picture (e.g. the rocket's wider view). */
   setCalm(calm: boolean): void;
   resize(width: number, height: number, devicePixelRatio: number): void;

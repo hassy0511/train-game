@@ -9,4 +9,4 @@ export function createSceneView(params: URLSearchParams): SceneView {
 }
 
 export type { CameraFx, SceneView } from './SceneView';
-export { CAMERA_LABELS, CAMERA_MODES, type CameraMode } from './camera-rig';
+export { CAMERA_LABELS, CAMERA_MODES, type CameraMode, type OrbitCamera } from './camera-rig';

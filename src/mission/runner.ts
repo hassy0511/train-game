@@ -43,6 +43,16 @@ import {
 import type { JunctionSide, Train } from '../train/train';
 import { StopMonitor, type GaugeState, type StopGrade } from './station-stop';
 
+/**
+ * What the clear card shows (PHASE7_FINISH §4 item 10): the graded stops of this run (`perfect` of them "ぴったり")
+ * and the stage's records in order, found (in the save) or not, `fresh` when found in this run.
+ */
+export interface ClearRewards {
+  stops: number;
+  perfect: number;
+  records: { id: string; name: string; found: boolean; fresh: boolean }[];
+}
+
 /** Everything the runner needs from the UI layer. */
 export interface MissionPorts extends CutscenePorts {
   /** Say something without blocking (queued). */
@@ -52,6 +62,8 @@ export interface MissionPorts extends CutscenePorts {
   /** v1.7: say this now, dropping the lines still queued or showing (a cue that is only useful on time). */
   sayNow(text: string): void;
   toast(text: string, kind: StopGrade): void;
+  /** The stage's clear card, with what went well this run (PHASE7_FINISH §4 item 10). */
+  clearCard(title: string, button: string, rewards: ClearRewards): Promise<void>;
   showDoorButton(onPress: () => void): void;
   hideDoorButton(): void;
   setCargo(passengers: number, parcel: boolean): void;
@@ -259,6 +271,11 @@ export class MissionRunner {
   private readonly recordHints = new Set<string>();
   private readonly revealed = new Set<string>();
   private readonly found: Set<string>;
+  /** Records already found before this run (the clear card marks the new ones). */
+  private readonly foundBefore: ReadonlySet<string>;
+  /** Graded stops this run, and how many of them were "ぴったり" (the clear card). */
+  private stopsMade = 0;
+  private perfectStops = 0;
   private readonly abilities: Set<AbilityId>;
   /** Jump pads: shown for a few seconds after a whistle; `index` into gimmicks[]. */
   private readonly pads: { index: number; railId: string; at: number; seconds: number; range: number; left: number; hinted: boolean }[];
@@ -317,6 +334,7 @@ export class MissionRunner {
     );
     const progress = loadProgress();
     this.found = new Set(progress.records);
+    this.foundBefore = new Set(progress.records);
     this.abilities = new Set(progress.abilities);
     whistle.onWhistle(() => this.onWhistle());
     train.events.on('fell', (e) => this.onFell(e.gap, e.railId, e.short));
@@ -533,7 +551,16 @@ export class MissionRunner {
     if (file.ending) await this.cutscene(file.ending);
     this.phase = 'clear';
     this.ports.fanfare();
-    await this.ports.card(`${file.title}\nクリア！`, 'つづく');
+    await this.ports.clearCard(`${file.title}\nクリア！`, 'つづく', {
+      stops: this.stopsMade,
+      perfect: this.perfectStops,
+      records: this.stage.records.map(({ def }) => ({
+        id: def.id,
+        name: def.name,
+        found: this.found.has(def.id),
+        fresh: this.found.has(def.id) && !this.foundBefore.has(def.id),
+      })),
+    });
   }
 
   /** Per-frame monitoring while driving. */
@@ -1122,6 +1149,8 @@ export class MissionRunner {
       this.events.post({ type: 'goal', stationId: station.id });
       const outcome = await this.drive(station);
       if (outcome.kind === 'stopped') {
+        this.stopsMade += 1;
+        if (outcome.grade === 'perfect') this.perfectStops += 1;
         this.ports.toast(outcome.grade === 'perfect' ? 'ぴったり！' : 'とまれた！', outcome.grade);
         this.events.post({ type: 'stop', grade: outcome.grade });
         this.ports.sayAsync(this.lines[outcome.grade] ?? DEFAULT_LINES[outcome.grade]);

@@ -33,11 +33,15 @@ const ROWS: Row<keyof Settings>[] = [
   },
 ] as Row<keyof Settings>[];
 
+/** How long "おうちの かたへ" must be held to open (a child's tap does nothing). */
+export const PARENTS_HOLD_SECONDS = 2;
+
 /**
  * Settings overlay (from the gear on the title screen). Every tap applies at once through `onChange`
- * (the caller saves and applies); "とじる" closes it.
+ * (the caller saves and applies); "とじる" closes it. With `onParents`, a small "おうちの かたへ" at the bottom opens
+ * the parents' page after a PARENTS_HOLD_SECONDS long press (PHASE7_FINISH §4 item 9).
  */
-export function showSettings(root: HTMLElement, current: Settings, onChange: (next: Settings) => void): void {
+export function showSettings(root: HTMLElement, current: Settings, onChange: (next: Settings) => void, onParents?: () => void): void {
   let settings = { ...current };
   const el = document.createElement('div');
   el.id = 'settings';
@@ -81,5 +85,49 @@ export function showSettings(root: HTMLElement, current: Settings, onChange: (ne
   close.textContent = 'とじる';
   close.addEventListener('click', () => el.remove());
   el.append(h, list, close);
+  if (onParents) el.appendChild(parentsButton(onParents));
   root.appendChild(el);
+}
+
+/**
+ * "おうちの かたへ": opens only when held for PARENTS_HOLD_SECONDS (a ring fills while held). Letting go early, or
+ * sliding off, starts over; a short tap only shows "ながおし してね".
+ */
+function parentsButton(onOpen: () => void): HTMLElement {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'settings-parents';
+  btn.className = 'parents-hold';
+  btn.style.setProperty('--hold', `${PARENTS_HOLD_SECONDS}s`);
+  btn.innerHTML = '<span class="parents-hold-ring" aria-hidden="true"></span><span class="parents-hold-label">おうちの かたへ</span>';
+  const hint = document.createElement('span');
+  hint.className = 'parents-hold-hint';
+  hint.textContent = '2びょう ながおし';
+  btn.appendChild(hint);
+  let timer = 0;
+  const stop = (): void => {
+    window.clearTimeout(timer);
+    timer = 0;
+    btn.classList.remove('is-holding');
+  };
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    stop();
+    btn.classList.remove('is-hinting');
+    btn.classList.add('is-holding');
+    timer = window.setTimeout(() => {
+      stop();
+      onOpen();
+    }, PARENTS_HOLD_SECONDS * 1000);
+  });
+  btn.addEventListener('pointerup', () => {
+    if (!timer) return;
+    stop();
+    // Too short: say how it opens (a parent reads it; a child sees nothing happen).
+    btn.classList.add('is-hinting');
+  });
+  btn.addEventListener('pointercancel', stop);
+  btn.addEventListener('pointerleave', stop);
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
+  return btn;
 }

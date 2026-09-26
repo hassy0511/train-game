@@ -248,6 +248,9 @@ export class WireSceneView implements SceneView {
   /** The dev wireframe view keeps following the train (a fixed cutscene camera is a Three.js view matter). */
   setFixedCamera(): void {}
 
+  /** The dev wireframe view keeps following the train on the title too. */
+  setOrbit(): void {}
+
   setCalm(): void {}
 
   update(dt: number, pose: TrainPose, fx: CameraFx): void {

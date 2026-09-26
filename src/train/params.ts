@@ -219,3 +219,10 @@ export const ROCK_SPLASH_SECONDS = 1.6;
  * countdown runs (the volcano gets fidgety), the first `first` s in (PHASE6 2-3 §6.5).
  */
 export const VOLCANO_PUFF = { every: 12, hurry: 4, first: 3 } as const;
+
+/**
+ * The title screen's camera swinging around the train standing at the start (PHASE7_FINISH §4 item 6): m, degrees
+ * either way, s for one to-and-fro. It swings on the side away from the start station's platform (main.ts), looking `lift` m
+ * above the train's middle so the train sits low, under the title. Slow on purpose: it is a backdrop, not a ride.
+ */
+export const TITLE_ORBIT = { radius: 30, height: 9, lift: 4.5, swingDeg: 28, seconds: 48 } as const;
