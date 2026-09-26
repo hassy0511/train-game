@@ -2,7 +2,8 @@
  * Dev tool (tools/zukan-render.html, driven by scripts/render-zukan.mjs): draws one record's model for the picture
  * book, a 256 px square on a transparent canvas. Not part of the game build.
  * `?record=<id>` renders that record (its `model`, from the stage JSON); `?list=1` only lists the records that have
- * a model (body data-list, JSON).
+ * a model (body data-list, JSON). `?model=<name>&yaw=<deg>&pitch=<deg>` renders any model the same way (the title's
+ * picture of the partner, public/title/pico.png).
  */
 import {
   Box3,
@@ -53,8 +54,8 @@ async function main(): Promise<void> {
     return;
   }
   const id = params.get('record') ?? '';
-  const record = records().find((r) => r.id === id);
-  if (!record?.model) throw new Error(`record "${id}" has no model`);
+  const modelName = params.get('model') ?? records().find((r) => r.id === id)?.model;
+  if (!modelName) throw new Error(`record "${id}" has no model`);
 
   const renderer = new WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.outputColorSpace = SRGBColorSpace;
@@ -73,10 +74,10 @@ async function main(): Promise<void> {
   scene.add(fill);
 
   const root = new Group();
-  root.add((await new ModelLibrary().load(record.model)).clone(true));
+  root.add((await new ModelLibrary().load(modelName)).clone(true));
   scene.add(root);
 
-  const view = VIEWS[id] ?? {};
+  const view = params.has('model') ? { yaw: Number(params.get('yaw') ?? 30), pitch: Number(params.get('pitch') ?? 22) } : (VIEWS[id] ?? {});
   const yaw = MathUtils.degToRad(view.yaw ?? 30);
   const pitch = MathUtils.degToRad(view.pitch ?? 22);
   const sphere = new Box3().setFromObject(root).getBoundingSphere(new Sphere());

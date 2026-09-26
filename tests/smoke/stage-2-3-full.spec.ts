@@ -14,13 +14,24 @@ const FAST = 4;
 
 async function tapUntil(page: Page, selector: string, timeoutMs = 90_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
+  // Waiting for a line: the bubble is tapped on only when it shows another line, checked and tapped in one go in the
+  // page (checked and tapped in two steps, a line coming up in between was tapped away unseen).
+  const line = /^#bubble:has-text\("(.+)"\)$/.exec(selector)?.[1];
   while (Date.now() < deadline) {
     if (await page.locator(selector).isVisible()) return;
-    if (await page.locator('#bubble').isVisible()) await page.locator('#bubble').dispatchEvent('pointerdown');
+    if (line !== undefined) {
+      await page.evaluate((text) => {
+        const bubble = document.getElementById('bubble');
+        if (bubble && !bubble.hidden && !(bubble.textContent ?? '').includes(text)) {
+          bubble.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+        }
+      }, line);
+    } else if (await page.locator('#bubble').isVisible()) await page.locator('#bubble').dispatchEvent('pointerdown');
     if (await page.locator('#caption').isVisible()) await page.locator('#caption').dispatchEvent('click');
     await page.waitForTimeout(150);
   }
-  throw new Error(`timed out waiting for ${selector}`);
+  const said = await page.evaluate(() => ((window as unknown as { __lines?: string[] }).__lines ?? []).slice(-8).join(' / '));
+  throw new Error(`timed out waiting for ${selector} (last lines: ${said})`);
 }
 
 async function card(page: Page, text: string, timeoutMs = 90_000): Promise<void> {
@@ -464,6 +475,16 @@ test('stage 2-3 full run: the rocket, steep slopes and slides, rocks, the countd
   await page.locator('#card-button').click();
   await tapUntil(page, '#card', 60_000);
   await expect(page.locator('#card')).toContainText('クリア');
+  // The clear card's rewards (PHASE7_FINISH §4 item 10): the stops of this run, and the island's records as
+  // pictures (the crystal found on the way pops in as new).
+  await expect(page.locator('#reward-stops .reward-text')).toHaveText(/^(ぴたっ！|とまれた！) \d+かい$/);
+  await expect(page.locator('#reward-records .reward-record')).toHaveCount(3);
+  await expect(page.locator('.reward-record.is-found.is-fresh[data-record="sulfur-crystal"] img')).toBeVisible();
+  const foundHere = await page.locator('#reward-records .reward-record.is-found').count();
+  await expect(page.locator('#reward-records')).toContainText(`きろく ${foundHere}/3`);
+  await page.locator('#card-rewards').evaluate((e) =>
+    Promise.all(e.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))),
+  );
   await page.screenshot({ path: resolve(OUT, '72-clear.png') });
 
   // The volcano puffed its everyday smoke rings along the way (every 12 s, every 4 s in the countdown).

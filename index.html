@@ -11,11 +11,151 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='6' width='24' height='18' rx='5' fill='%233fa7d6'/%3E%3Crect x='8' y='10' width='16' height='6' rx='2' fill='%231f2a44'/%3E%3Ccircle cx='10' cy='27' r='3' fill='%233a3f47'/%3E%3Ccircle cx='22' cy='27' r='3' fill='%233a3f47'/%3E%3C/svg%3E" />
     <title>ワンダーごうと ふしぎな せかい</title>
+    <!-- The loading screen (PHASE7_FINISH §4 item 5): CSS only, so it shows from the first paint, before any script.
+         main.ts removes it once the game is drawn (#app[data-ready]); the rules below also hide it then, or on an error. -->
+    <style>
+      #loading {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 26px;
+        background: linear-gradient(#4f9dff, #d9f1ff);
+        font-family: 'Hiragino Maru Gothic ProN', 'Rounded Mplus 1c', 'Yu Gothic UI', system-ui, sans-serif;
+        color: #fff;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      #app[data-ready='1'] ~ #loading,
+      #app[data-error='1'] ~ #loading {
+        display: none;
+      }
+      .loading-scene {
+        position: relative;
+        width: 320px;
+        height: 96px;
+        overflow: hidden;
+        -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+        mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+      }
+      /* The sleepers slide by under the train standing in the middle: it looks like it runs. */
+      .loading-track {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 6px;
+        height: 14px;
+        background:
+          linear-gradient(#f4f4f0, #f4f4f0) 0 3px / 100% 3px no-repeat,
+          repeating-linear-gradient(90deg, #a2805c 0 8px, transparent 8px 22px);
+        animation: loading-track 0.6s linear infinite;
+      }
+      @keyframes loading-track {
+        from {
+          background-position: 0 3px, 0 0;
+        }
+        to {
+          background-position: 0 3px, -22px 0;
+        }
+      }
+      .loading-train {
+        position: absolute;
+        left: 50%;
+        bottom: 17px;
+        display: flex;
+        gap: 5px;
+        transform: translateX(-50%);
+        animation: loading-bump 0.3s ease-in-out infinite alternate;
+      }
+      @keyframes loading-bump {
+        to {
+          transform: translateX(-50%) translateY(-2px);
+        }
+      }
+      .loading-car {
+        position: relative;
+        width: 74px;
+        height: 44px;
+        border-radius: 10px 10px 6px 6px;
+        background: linear-gradient(#f4f4f0 0 34%, #3fa7d6 34%);
+        box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.12);
+      }
+      .loading-car:last-child {
+        border-top-right-radius: 22px;
+      }
+      /* Windows: a row of little squares. */
+      .loading-car::before {
+        content: '';
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        top: 18px;
+        height: 11px;
+        background: repeating-linear-gradient(90deg, #1f2a44 0 12px, transparent 12px 17px);
+        border-radius: 2px;
+      }
+      /* Wheels. */
+      .loading-car::after {
+        content: '';
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        bottom: -7px;
+        height: 12px;
+        background:
+          radial-gradient(circle, #3a3f47 5px, transparent 6px) 0 0 / 14px 12px no-repeat,
+          radial-gradient(circle, #3a3f47 5px, transparent 6px) 100% 0 / 14px 12px no-repeat;
+      }
+      .loading-text {
+        font-size: 26px;
+        font-weight: 700;
+        text-shadow: 0 2px 0 rgba(0, 0, 0, 0.2);
+      }
+      .loading-dots::after {
+        content: '';
+        display: inline-block;
+        width: 1.6em;
+        text-align: left;
+        animation: loading-dots 1.2s steps(4, end) infinite;
+      }
+      @keyframes loading-dots {
+        0% {
+          content: '';
+        }
+        25% {
+          content: '・';
+        }
+        50% {
+          content: '・・';
+        }
+        75%,
+        100% {
+          content: '・・・';
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .loading-track,
+        .loading-train,
+        .loading-dots::after {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="app">
       <div id="view"></div>
       <div id="ui"></div>
+    </div>
+    <div id="loading" role="status" aria-live="polite">
+      <div class="loading-scene" aria-hidden="true">
+        <div class="loading-track"></div>
+        <div class="loading-train"><div class="loading-car"></div><div class="loading-car"></div><div class="loading-car"></div></div>
+      </div>
+      <div class="loading-text">よみこみちゅう<span class="loading-dots"></span></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

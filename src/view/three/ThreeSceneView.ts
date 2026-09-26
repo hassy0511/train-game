@@ -22,7 +22,7 @@ import type { StageData } from '../../stage/types';
 import { TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
 import type { CameraFx, SceneView } from '../SceneView';
-import { cameraTarget, makeCameraTarget, smoothCamera, type CameraMode } from '../camera-rig';
+import { cameraTarget, makeCameraTarget, orbitAngle, orbitTarget, smoothCamera, type CameraMode, type OrbitCamera } from '../camera-rig';
 import { buildGapPits, buildJumpDevice, buildLightBeam, Flocks, JunctionSigns, SkyGimmicks } from './abilities';
 import { ForestGimmicks } from './forest';
 import { MeadowGimmicks } from './meadow';
@@ -116,6 +116,9 @@ export class ThreeSceneView implements SceneView {
   private clock = 0;
   /** v1.7: a cutscene camera standing still. */
   private fixedCamera: { at: Vector3; lookAt: Vector3 } | null = null;
+  /** The title screen's camera swinging around the train, and how long it has been on (s). */
+  private orbit: OrbitCamera | null = null;
+  private orbitTime = 0;
 
   async init(container: HTMLElement, stage: StageData, network: RailNetwork): Promise<void> {
     this.stage = stage;
@@ -428,6 +431,12 @@ export class ThreeSceneView implements SceneView {
     }
   }
 
+  setOrbit(orbit: OrbitCamera | null): void {
+    this.orbit = orbit;
+    this.orbitTime = 0;
+    this.cameraSnap = true;
+  }
+
   /** After a fixed camera: the far plane shrinks back with the fog as it eases in (to the usual reach at the end). */
   private easeFarBack(): void {
     if (this.fixedCamera || this.baseFar <= 0 || this.camera.far <= this.baseFar) return;
@@ -471,13 +480,18 @@ export class ThreeSceneView implements SceneView {
       this.camTarget.position.copy(this.fixedCamera.at);
       this.camTarget.lookAt.copy(this.fixedCamera.lookAt);
       this.camTarget.up.set(0, 1, 0);
+    } else if (this.orbit) {
+      this.orbitTime += dt;
+      orbitTarget(pose, this.orbit, orbitAngle(this.orbit, this.orbitTime), this.camTarget);
     } else cameraTarget(this.cameraMode, pose, this.camTarget);
-    smoothCamera(this.camCurrent, this.camTarget, dt, this.cameraSnap || (this.cameraMode === 'cab' && !this.fixedCamera));
+    // The cab view and the title's orbit are exact every frame (no easing toward them).
+    const cab = this.cameraMode === 'cab' && !this.fixedCamera && !this.orbit;
+    smoothCamera(this.camCurrent, this.camTarget, dt, this.cameraSnap || cab || (!!this.orbit && !this.fixedCamera));
     this.cameraSnap = false;
     this.camera.position.copy(this.camCurrent.position);
     this.camera.up.copy(this.camCurrent.up);
     this.camera.lookAt(this.camCurrent.lookAt);
-    if (this.cameraMode === 'cab' && !this.fixedCamera) {
+    if (cab) {
       this.camera.position.add(silkDip);
       this.camera.position.y -= 0.35 * fx.dip;
       if (fx.shake > 0) {
@@ -492,7 +506,7 @@ export class ThreeSceneView implements SceneView {
     this.signs?.update(dt, this.clock);
     this.flocks?.update(dt);
     this.forest?.update(dt);
-    this.meadow?.update(dt, this.cameraMode === 'cab' && !this.fixedCamera);
+    this.meadow?.update(dt, cab);
     this.volcano?.update(dt);
     this.updateFalling(dt);
     // A little wider view while the rocket burns (not a shake).

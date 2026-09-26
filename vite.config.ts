@@ -33,7 +33,7 @@ const BUILD_ID = buildId();
 
 /**
  * Writes dist/sw.js: the service worker from src/pwa/sw-template.js with the list of files to cache on
- * install (the game page, its code, the stages, the models, icons, the map and picture-book pictures). The model
+ * install (the game page, its code, the stages, the models, icons, the map, title and picture-book pictures). The model
  * viewer (models.html) is left out.
  */
 function serviceWorker(): Plugin {
@@ -49,6 +49,7 @@ function serviceWorker(): Plugin {
         'manifest.webmanifest',
         ...readdirSync('public/icons').map((file) => `icons/${file}`),
         ...readdirSync('public/map').map((file) => `map/${file}`),
+        ...readdirSync('public/title').map((file) => `title/${file}`),
         ...zukanPictures.map((id) => `zukan/${id}.png`),
       ];
       const precache = ['./', ...built.filter((file) => file !== 'index.html'), ...fromPublic];

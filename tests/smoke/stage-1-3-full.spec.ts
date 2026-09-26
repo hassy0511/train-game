@@ -101,8 +101,9 @@ test('stage 1-3 full run: island hops, the whistle pad, upside down, the updraft
   await page.goto('/?stage=1-3');
   const app = page.locator('#app');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
-  await expect(page.locator('#jump')).toBeVisible(); // learned in 1-2 (opened directly, so inherited)
   await page.locator('#title-start').click();
+  // The driving controls wait under the title; then jump is there (learned in 1-2, opened directly so inherited).
+  await expect(page.locator('#jump')).toBeVisible();
   await card(page, 'しまから');
   await waitDriving(page);
 

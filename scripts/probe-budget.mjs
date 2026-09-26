@@ -9,6 +9,9 @@
  * frame is over budget.
  * Every camera is measured everywhere, also where a stage zone would pick the view for the player, so the probe
  * errs on the heavy side. The opening is not started: actors stand where the stage JSON puts them.
+ * The title screen's camera (PHASE7_FINISH §4 item 6: it swings around the train standing at the start) is measured
+ * first, as the camera "title", at TITLE_ANGLES on both sides of the train (the game uses the side away from the
+ * platform).
  * Runs the dev server, since the __debugView / __debugTrain handles only exist in dev builds.
  * Needs Playwright's Chromium (PW_CHROMIUM_PATH to reuse an installed one). BUDGET_ROWS=40 lists more objects.
  */
@@ -21,6 +24,14 @@ import { chromium } from '@playwright/test';
 const MAX_CALLS = 200;
 const MAX_TRIANGLES = 100_000;
 const CAMERAS = ['cab', 'chase', 'side', 'top'];
+/** The title camera's angles (degrees; 0 = the train's left, 180 = its right), its swing either way of both sides. */
+const TITLE_ANGLES = [-28, -14, 0, 14, 28, 152, 166, 180, 194, 208];
+/** The title camera's shape (src/train/params.ts TITLE_ORBIT, read from the source so the two stay the same). */
+const TITLE_ORBIT = (() => {
+  const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/train/params.ts'), 'utf8');
+  const body = src.match(/TITLE_ORBIT = \{([^}]*)\}/)?.[1] ?? '';
+  return Object.fromEntries([...body.matchAll(/(\w+):\s*([\d.]+)/g)].map(([, key, value]) => [key, Number(value)]));
+})();
 /** Spacing of the probe points along a rail (m), and the finer one near stations. */
 const STEP = 50;
 const STATION_STEP = 20;
@@ -120,6 +131,22 @@ function instrument() {
   };
 
   const frame = () => new Promise((done) => requestAnimationFrame(() => done()));
+  /** The title camera, standing at each angle in turn, with the train where it starts: one measured frame each. */
+  window.__probeTitle = async (orbit, angles) => {
+    const out = [];
+    for (const angle of angles) {
+      view.setOrbit({ ...orbit, centerDeg: angle, swingDeg: 0 });
+      tally = new Map();
+      await frame();
+      const { calls, triangles } = renderer.info.render;
+      out.push({ camera: 'title', angle, calls, tris: triangles, objects: [...tally] });
+      tally = null;
+    }
+    // The rest of the probe uses the game's own cameras.
+    view.setOrbit(null);
+    await frame();
+    return out;
+  };
   /** Puts the train at `s` on `railId` and returns one measured frame per camera. */
   window.__probeAt = async (railId, s, cameras) => {
     window.__debugTrain.rewindTo(s, railId);
@@ -170,7 +197,17 @@ try {
     await page.goto(`${origin}/?stage=${stage.id}`);
     await page.waitForSelector('#app[data-ready="1"]', { state: 'attached', timeout: 120_000 });
     const rails = await page.evaluate(instrument);
-    const byCamera = new Map(CAMERAS.map((camera) => [camera, { stage: stage.id, camera, frames: 0, calls: null, tris: null, worst: null }]));
+    const byCamera = new Map(['title', ...CAMERAS].map((camera) => [camera, { stage: stage.id, camera, frames: 0, calls: null, tris: null, worst: null }]));
+    const titleFrames = await page.evaluate(([orbit, angles]) => window.__probeTitle(orbit, angles), [TITLE_ORBIT, TITLE_ANGLES]);
+    for (const f of titleFrames) {
+      const frame = { ...f, stage: stage.id, rail: 'title', s: `${f.angle}°` };
+      const row = byCamera.get('title');
+      row.frames += 1;
+      if (!row.calls || f.calls > row.calls.calls) row.calls = frame;
+      if (!row.tris || f.tris > row.tris.tris) row.tris = frame;
+      if (!row.worst || load(f) > load(row.worst)) row.worst = frame;
+      if (over(f)) failures.push(frame);
+    }
     let points = 0;
     for (const rail of rails) {
       const stations = stage.stations.filter((station) => station.railId === rail.id);
@@ -188,7 +225,9 @@ try {
         }
       }
     }
-    console.log(`stage ${stage.id}: ${rails.map((r) => `${r.id} ${Math.round(r.length)} m`).join(', ')}; ${points} points × ${CAMERAS.length} cameras`);
+    console.log(
+      `stage ${stage.id}: ${rails.map((r) => `${r.id} ${Math.round(r.length)} m`).join(', ')}; ${points} points × ${CAMERAS.length} cameras, title camera × ${TITLE_ANGLES.length} angles`,
+    );
     for (const row of byCamera.values()) results.push({ ...row, stage: stage.id });
     await page.close();
   }

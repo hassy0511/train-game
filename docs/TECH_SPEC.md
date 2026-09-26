@@ -86,6 +86,9 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
 ### 進行セーブ
 - `unlockedStages`, `clearedMissions`, `abilities`, `records`, `settings`
 - スキーマにバージョン番号を持たせ、マイグレーション可能にする
+- 実装（2026-09-26）: `src/core/progress.ts`。localStorage の `train-game.progress.v1`（`cleared`・`abilities`・`records`・`mapLinks`）。設定は別の `train-game.settings.v1`（片方を消しても もう片方は残る）
+- 保存のたびに（1 回の起動で 1 回だけ）`navigator.storage.persist()` を頼む。Safari のタブは しばらく開かないと消されることがあるので、「おうちの かたへ」にホーム画面への追加を書く
+- **あいことば**: 進み具合ぜんぶを 12 文字（Crockford base32、`XXXX-XXXX-XXXX`）にして書き写し、あとで入れれば戻る。通信なし。1 文字めが版（v1）。v1 は 60 bit = 版 5 + 項目 34（6 ステージ・4 能力・18 記録・6 線路、1 項目 1 bit）+ 検査 21（FNV-1a）。版ごとに項目の並びを固定し、公開した版の並びは変えない。章やきろくが増えたら新しい版を足す（`pause-settings.spec.ts` がステージファイルと world.json の全部で往復を確かめるので、足し忘れると落ちる）
 
 ---
 
@@ -140,6 +143,7 @@ GitHub Actions
 - 見張り: `npm run budget`（`scripts/probe-budget.mjs`）で、全ステージ × 4 カメラ × 線路 50 m ごと（駅の前後 60 m は 20 m ごと）に 1 コマずつ描いて測る。一番重いコマとモデルごとの内訳を出し、予算を超えたら失敗にする
   - 開発サーバーで動かす（開発版だけにある `__debugView` / `__debugTrain` を使う）。約 2 分かかるので CI には入れず、ステージの PR の前に回す
   - 2026-09-25 の値: 一番重いのは 1-2 うしろから（9.2 万三角形）と 1-3 うしろから（82 回）。表は `docs/PHASE4_DESIGN.md` §6
+  - タイトルの カメラ（止まった電車の まわりを ゆっくり ゆれる、PHASE7_FINISH §4 の 6）も「title」として 測る。スタート地点で 電車の 両側 ±28° を 14° ごと
 - 重い端末では描画の細かさを自動で 2 → 1.5 → 1.25 → 1 と下げる（45 fps を 3 秒下回ったら 1 段）
 
 ---

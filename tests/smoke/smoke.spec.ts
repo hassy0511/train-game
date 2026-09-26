@@ -181,3 +181,57 @@ test('2-3 on the test course: the rocket, an uphill, a slide and a quiet zone', 
 
   expect(errors).toEqual([]);
 });
+
+test('loading screen until ready, then the title over the 3D: the camera swings round the train, and stays light', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  // Hold the physics engine back for a moment (the biggest download, fetched once the page has started): the
+  // CSS-only loading screen is what shows meanwhile.
+  let release = (): void => {};
+  const gate = new Promise<void>((done) => (release = done));
+  await page.route(/\/assets\/rapier-[^/]*\.js$/, async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await page.goto('/');
+  const loading = page.locator('#loading');
+  await expect(loading).toBeVisible();
+  await expect(loading).toContainText('よみこみちゅう');
+  await page.screenshot({ path: resolve(OUT, '05-loading.png') });
+  release();
+  const app = page.locator('#app');
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  await expect(loading).toHaveCount(0);
+
+  // The title shows 1-1 behind it: the orbiting camera, the scene drawn, the driving controls out of the way.
+  const title = page.locator('#title-screen');
+  await expect(title).toBeVisible();
+  await expect(app).toHaveAttribute('data-camera', 'orbit');
+  await expect(app).toHaveAttribute('data-title', '1');
+  await expect(page.locator('#lever')).toBeHidden();
+  await expect(page.locator('.title-line')).toHaveText(['ワンダーごうと', 'ふしぎな せかい']);
+  await expect(page.locator('.title-pico')).toBeVisible();
+  await expect(page.locator('.title-rail')).toBeVisible();
+  await expect(page.locator('#title-start')).toHaveClass(/is-primary/);
+  // The middle of the title is see-through (the train shows), and something is really drawn there.
+  await page.waitForFunction(() => Number(document.getElementById('app')?.dataset.draws) > 0, undefined, { timeout: 30_000 });
+  // Title load after a few seconds of swinging (TECH_SPEC §6: 200 draw calls, 100,000 triangles).
+  const t0 = Number(await app.getAttribute('data-time'));
+  await page.waitForFunction((t) => Number(document.getElementById('app')?.dataset.time) >= t + 4, t0, { timeout: 60_000 });
+  const load = await app.evaluate((el) => ({ fps: Number(el.dataset.fps), draws: Number(el.dataset.drawsMax), tris: Number(el.dataset.trisMax) }));
+  console.log(`title: fps ${load.fps}, heaviest frame ${load.draws} draws, ${load.tris} triangles`);
+  expect(load.draws).toBeLessThanOrEqual(200);
+  expect(load.tris).toBeLessThanOrEqual(100_000);
+  await page.screenshot({ path: resolve(OUT, '06-title-3d.png') });
+
+  // Into the stage: the camera comes back to the game's own and the controls show.
+  await page.locator('#title-start').click();
+  await expect(title).toHaveCount(0);
+  await expect(app).not.toHaveAttribute('data-camera', 'orbit');
+  await expect(app).not.toHaveAttribute('data-title', '1');
+  await expect(page.locator('#lever')).toBeVisible();
+  expect(errors).toEqual([]);
+});

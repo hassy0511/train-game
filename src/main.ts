@@ -1,7 +1,7 @@
 import './ui/styles.css';
 import { Whistle } from './actions/whistle';
 import { AudioEngine } from './audio/audio';
-import { GAME_TITLE, PARTNER_NAME } from './config';
+import { GAME_TITLE, GAME_TITLE_LINES, PARTNER_NAME } from './config';
 import { StageEventBus } from './core/stage-events';
 import { addToProgress, loadProgress } from './core/progress';
 import { ABILITY_NAMES, MissionRunner, type MissionPorts } from './mission/runner';
@@ -20,6 +20,7 @@ import {
   SLOPE,
   SPEED_LABELS,
   STOP_NOTCH,
+  TITLE_ORBIT,
   VOLCANO_PUFF,
 } from './train/params';
 import { Train } from './train/train';
@@ -44,6 +45,7 @@ import { SlopeSystem } from './gimmick/slope';
 import { showZukan } from './ui/zukan';
 import { loadSettings, saveSettings, VOLUME_GAIN, type Settings } from './core/settings';
 import { showSettings } from './ui/settings';
+import { showParents } from './ui/parents';
 import { createPause } from './ui/pause';
 import { linkKey, showMap, type MapChoice, type MapFinale, type MapIsland, type MapTeaser } from './ui/map';
 import world from './world/world.json';
@@ -322,11 +324,13 @@ async function boot(): Promise<void> {
   let zoneCamera: CameraMode | null = null;
   // v1.7: a cutscene's camera standing still (the ending's view from the sea).
   let fixedCamera: { at: Vec3; lookAt: Vec3 } | null = null;
+  // The title screen's camera circling the train (set while the title is up).
+  let orbiting = false;
   const applyCamera = (snap = false): void => {
     const mode = cameraOverride ?? zoneCamera ?? userCamera;
     view.setCamera(mode, snap);
     view.setFixedCamera(fixedCamera);
-    app.dataset.camera = fixedCamera ? 'fixed' : mode;
+    app.dataset.camera = fixedCamera ? 'fixed' : orbiting ? 'orbit' : mode;
     cameraButton.setMode(mode);
   };
   // In the top corner beside the pause button (PHASE7 §1), for every stage.
@@ -436,11 +440,28 @@ async function boot(): Promise<void> {
     ? (await import('./debug')).installDebug({ train, whistle, audio, view, network: stage.network, uiRoot: uiEl })
     : null;
 
+  // The title shows the stage behind it, the camera circling the train at its start (PHASE7_FINISH §4 item 6).
+  const titleShown = hasMissions && !params.has('go');
+  if (titleShown) {
+    orbiting = true;
+    // The driving controls wait under the title (it no longer covers the screen).
+    app.dataset.title = '1';
+    // On the side away from the platform the train stands at (1-1: the headquarters stand behind the platform).
+    const start = stage.file.start;
+    const platform = stage.file.stations.find((st) => st.railId === start.railId && Math.abs(st.at - start.at) < 30);
+    // platformSide is along the rail; the train runs against the rail when its direction is -1.
+    const platformOnTrainLeft = (platform?.platformSide === 'left') === start.direction >= 0;
+    view.setOrbit({ ...TITLE_ORBIT, centerDeg: platform && !platformOnTrainLeft ? 0 : 180 });
+    applyCamera(true);
+  }
+
   document.title = GAME_TITLE;
   app.dataset.stage = stage.file.id;
   app.dataset.build = __BUILD_ID__;
   console.info(`build ${__BUILD_ID__}`);
   app.dataset.ready = '1';
+  // index.html's loading screen (CSS only, shown from the first paint): gone now that the game is drawn.
+  document.getElementById('loading')?.remove();
   registerOffline();
 
   let last = performance.now();
@@ -608,23 +629,31 @@ async function boot(): Promise<void> {
 
   const progress = loadProgress();
   const next = await nextStage(progress.cleared);
-  if (!params.has('go')) {
+  if (titleShown) {
     // The title's music box (it starts with the first tap: iPad keeps sound locked until then).
     audio.playMusic('title');
     const choice = await showTitle(uiEl, GAME_TITLE, {
+      lines: GAME_TITLE_LINES,
       chapters: chapterStars(),
       continueLabel: next && next.id !== stageId ? `つづきから（${next.title}）` : undefined,
+      allCleared: !next && progress.cleared.length > 0,
       onMap: () => {
         void openMap(uiEl, audio, { next: next?.id, closeLabel: 'もどる' }).then((choice) => {
           if (choice.kind === 'stage') goToStage(choice.id);
         });
       },
       onSettings: () => {
-        showSettings(uiEl, settings, (changed) => {
-          settings = changed;
-          saveSettings(settings);
-          applySettings();
-        });
+        showSettings(
+          uiEl,
+          settings,
+          (changed) => {
+            settings = changed;
+            saveSettings(settings);
+            applySettings();
+          },
+          // "おうちの かたへ" (a 2-second press): a new or erased progress starts over from the title.
+          () => showParents(uiEl, { buildId: __BUILD_ID__, onProgressChanged: () => (location.href = location.pathname) }),
+        );
       },
       onZukan: () => {
         void loadAllRecords().then((all) => {
@@ -641,6 +670,10 @@ async function boot(): Promise<void> {
       goToStage(next.id);
       return;
     }
+    orbiting = false;
+    delete app.dataset.title;
+    view.setOrbit(null);
+    applyCamera(true);
   }
   audio.unlock();
   audio.playMusic(stage.file.environment.bgm);
@@ -661,6 +694,10 @@ async function boot(): Promise<void> {
     card: (title, button, icon) => {
       audio.playCard();
       return showCard(uiEl, title, button, icon);
+    },
+    clearCard: (title, button, rewards) => {
+      audio.playCard();
+      return showCard(uiEl, title, button, undefined, 0, rewards);
     },
     caption,
     wait: waitSeconds,
