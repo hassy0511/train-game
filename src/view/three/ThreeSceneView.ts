@@ -268,8 +268,12 @@ export class ThreeSceneView implements SceneView {
 
   onStageEvent(event: StageEvent): void {
     if (event.type === 'rail:cut' && this.network && this.rails) {
-      if (event.style === 'fall') this.dropCutStretch(event.railId, event.from, event.to, event.props);
-      const detached = event.style === 'fall' ? null : buildDetachedRailPiece(this.network, event.railId, event.from, event.to);
+      if (event.style === 'fall') {
+        if (event.instant) this.removeCutProps(event.railId, event.from, event.to, event.props);
+        else this.dropCutStretch(event.railId, event.from, event.to, event.props);
+      }
+      const detached =
+        event.style === 'fall' || event.instant ? null : buildDetachedRailPiece(this.network, event.railId, event.from, event.to);
       if (detached) {
         const materials = new Set<Material>();
         detached.traverse((object) => {
@@ -377,6 +381,16 @@ export class ThreeSceneView implements SceneView {
       pivot.add(group);
       const k = this.falling.length;
       this.falling.push({ object: pivot, velocity: -1 - (k % 3), spin: new Vector3(0.3 * ((k % 2) * 2 - 1), 0, 0.4), elapsed: 0, own: false });
+    }
+  }
+
+  /** A fast-forwarded "fall" cut: the props tagged `tag` on the stretch are simply gone (as after their fall). */
+  private removeCutProps(railId: string, from: number, to: number, tag?: string): void {
+    if (!tag) return;
+    for (const { prop, group } of this.taggedProps) {
+      if (prop.tag !== tag) continue;
+      if (prop.onRail && (prop.onRail.railId !== railId || prop.onRail.at < from - 1 || prop.onRail.at > to + 1)) continue;
+      group.removeFromParent();
     }
   }
 

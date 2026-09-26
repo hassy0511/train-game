@@ -1560,6 +1560,20 @@ body {
   z-index: 20;
 }
 
+/* ---- "▶▶" (PHASE7_FINISH §4 item 7): only during a cutscene of a stage cleared before, left of the camera ---- */
+.skip-button {
+  right: calc(var(--safe-right) + 144px);
+  /* Over the story caption (a full-screen overlay); the pause menu, the map and the cards stay above it. */
+  z-index: 15;
+  box-shadow: inset 0 0 0 4px #ffb703, 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+.skip-button svg {
+  width: 28px;
+  height: 28px;
+  fill: var(--ink);
+}
+
 /* ---- settings (src/ui/settings.ts), opened from the gear on the title ---- */
 .gear-button {
   position: absolute;
@@ -1930,6 +1944,11 @@ body {
 #app.is-left-handed .pause-button {
   right: auto;
   left: calc(var(--safe-left) + 16px);
+}
+
+#app.is-left-handed .skip-button {
+  right: auto;
+  left: calc(var(--safe-left) + 144px);
 }
 
 /* ---- 2-2: grasshopper jump, lever hint ---- */

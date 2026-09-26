@@ -10,8 +10,11 @@ export type StageEvent =
   | { type: 'actor:spawn'; id: string; model: string; position: Vector3; quaternion: Quaternion }
   | { type: 'actor:move'; id: string; position: Vector3; seconds: number }
   | { type: 'actor:remove'; id: string }
-  /** A rail was cut (a gap from `from` to `to`). v1.7: `style` "fall" drops the stretch and props tagged `props`. */
-  | { type: 'rail:cut'; railId: string; from: number; to: number; style?: 'fly' | 'fall'; props?: string }
+  /**
+   * A rail was cut (a gap from `from` to `to`). v1.7: `style` "fall" drops the stretch and props tagged `props`.
+   * `instant` (a fast-forwarded cutscene): shown as it ends up, with no piece flying or falling and no sound.
+   */
+  | { type: 'rail:cut'; railId: string; from: number; to: number; style?: 'fly' | 'fall'; props?: string; instant?: boolean }
   | { type: 'goal'; stationId: string | null }
   | { type: 'partner:emote'; kind: Emote }
   | { type: 'stop'; grade: 'perfect' | 'ok' }
@@ -36,7 +39,11 @@ export type StageEvent =
         // v1.8: back from a record's side track (not a failure: no dip, no shake)
         | 'spur';
     }
-  | { type: 'rewind' }
+  /**
+   * Back to a station after a failure (or a resume). `boarded`: passengers who already got on this run, per station
+   * id; they are not put back on the platform.
+   */
+  | { type: 'rewind'; boarded?: Record<string, number> }
   /** The player has this ability (at load and when it is learned). */
   | { type: 'ability'; id: AbilityId }
   | { type: 'light'; on: boolean }
@@ -61,8 +68,8 @@ export type StageEvent =
   | { type: 'hopper'; id: string; state: 'sit' | 'board' | 'off' }
   /** v1.6: a butterfly of flower bridge `index` (gimmicks[]): where it is along its rail and how it flies. */
   | { type: 'butterfly'; index: number; state: 'wait' | 'follow' | 'hover' | 'land' | 'open'; s: number; flustered: boolean }
-  /** v1.6: flower bridge `index` opened (its petals now close the stream). */
-  | { type: 'bridge'; index: number; open: boolean }
+  /** v1.6: flower bridge `index` opened (its petals now close the stream). `instant`: already open (a resume), no bloom. */
+  | { type: 'bridge'; index: number; open: boolean; instant?: boolean }
   /** v1.6: silk bridge `index` (gimmicks[]): calm, shaking under a too-fast train, or bouncing it back. */
   | { type: 'fragile'; index: number; state: 'calm' | 'shake' | 'boing' }
   /** v1.7: the rocket fired ("burn"), burnt out ("end") or was cut short in a quiet place ("puff", "ぷしゅっ"). */

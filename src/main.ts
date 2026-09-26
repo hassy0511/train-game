@@ -3,7 +3,7 @@ import { Whistle } from './actions/whistle';
 import { AudioEngine } from './audio/audio';
 import { GAME_TITLE, GAME_TITLE_LINES, PARTNER_NAME } from './config';
 import { StageEventBus } from './core/stage-events';
-import { addToProgress, loadProgress } from './core/progress';
+import { addToProgress, loadProgress, setResume, type Resume } from './core/progress';
 import { ABILITY_NAMES, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
 import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/loader';
@@ -40,6 +40,7 @@ import { createCameraButton } from './ui/camera-button';
 import { createStopGauge } from './ui/stop-gauge';
 import { createJumpButton, createLightButton, createRocketButton } from './ui/ability-buttons';
 import { createCountdownPanel } from './ui/countdown-panel';
+import { createSkipButton, type SkipButton } from './ui/skip-button';
 import { RocketSystem } from './gimmick/rocket';
 import { SlopeSystem } from './gimmick/slope';
 import { showZukan } from './ui/zukan';
@@ -174,10 +175,25 @@ function chapterStars(): { label: string; done: boolean }[] {
     .map((c) => ({ label: `${c.id}しょう`, done: c.islands.every((i) => cleared.includes(i.id)) }));
 }
 
-/** Opens a stage straight into play (no title). */
-function goToStage(id: string): void {
-  location.search = `?stage=${encodeURIComponent(id)}&go=1`;
+/** Opens a stage straight into play (no title); with `resume`, at the mission the save says to go on from. */
+function goToStage(id: string, resume = false): void {
+  location.search = `?stage=${encodeURIComponent(id)}&go=1${resume ? '&resume=1' : ''}`;
 }
+
+/** The saved mission to go on from ("つづきから"), if it still fits its stage (a later mission than the first). */
+async function savedResume(): Promise<Resume | null> {
+  const resume = loadProgress().resume;
+  if (!resume) return null;
+  const stage = await peekStage(resume.stage);
+  return stage && resume.mission < stage.missionCount ? resume : null;
+}
+
+/**
+ * A card coming within this long (ms) of a "▶▶" holds its button back for SKIP_CARD_GUARD_SECONDS: a child tapping
+ * "▶▶" twice, or tapping on after it, does not close the mission card unseen.
+ */
+const SKIP_CARD_WINDOW_MS = 1500;
+const SKIP_CARD_GUARD_SECONDS = 0.8;
 
 async function boot(): Promise<void> {
   const params = new URLSearchParams(location.search);
@@ -222,6 +238,10 @@ async function boot(): Promise<void> {
   applySettings();
   let paused = false;
   let runner: MissionRunner | null = null;
+  // "▶▶" on cutscenes (PHASE7_FINISH §4 item 7): only on a stage cleared before this run.
+  let skipButton: SkipButton | null = null;
+  const clearedBefore = loadProgress().cleared.includes(stage.file.id);
+  const cardUp = (): boolean => uiEl.querySelector('#card') !== null;
   // A following butterfly rings a tiny bell every 1.5 s (on the game clock, so a pause stops it too).
   const butterfliesFollowing = new Set<number>();
   let butterflyBellAt = 0;
@@ -620,6 +640,8 @@ async function boot(): Promise<void> {
       app.dataset.bridges = runner.bridgeFlags;
       app.dataset.butterfly = runner.butterflyState;
       app.dataset.fragile = runner.fragileStatus;
+      // Under a card (a cutscene's own, or a learned ability's) it waits: the card is the child's tap.
+      skipButton?.setVisible(clearedBefore && !paused && runner.canSkip && !cardUp());
     }
     debug?.update(fps);
   };
@@ -629,13 +651,22 @@ async function boot(): Promise<void> {
 
   const progress = loadProgress();
   const next = await nextStage(progress.cleared);
+  // "つづきから" (PHASE7_FINISH §4 item 3): a mission to go on from wins over the next stage.
+  const resume = await savedResume();
+  let resumeFrom = params.get('resume') === '1' && resume?.stage === stageId ? resume.mission : 0;
   if (titleShown) {
     // The title's music box (it starts with the first tap: iPad keeps sound locked until then).
     audio.playMusic('title');
     const choice = await showTitle(uiEl, GAME_TITLE, {
       lines: GAME_TITLE_LINES,
       chapters: chapterStars(),
-      continueLabel: next && next.id !== stageId ? `つづきから（${next.title}）` : undefined,
+      continueLabel: resume
+        ? `つづきから（${resume.stage} ミッション ${resume.mission + 1}）`
+        : next && next.id !== stageId
+          ? `つづきから（${next.title}）`
+          : undefined,
+      // Starting that stage over stays one tap away.
+      startLabel: resume ? `はじめから（${resume.stage}）` : undefined,
       allCleared: !next && progress.cleared.length > 0,
       onMap: () => {
         void openMap(uiEl, audio, { next: next?.id, closeLabel: 'もどる' }).then((choice) => {
@@ -666,8 +697,17 @@ async function boot(): Promise<void> {
         });
       },
     });
-    if (choice === 'continue' && next) {
+    if (choice === 'continue' && resume) {
+      if (resume.stage !== stageId) {
+        goToStage(resume.stage, true);
+        return;
+      }
+      resumeFrom = resume.mission;
+    } else if (choice === 'continue' && next) {
       goToStage(next.id);
+      return;
+    } else if (choice === 'start' && resume && resume.stage !== stageId) {
+      goToStage(resume.stage);
       return;
     }
     orbiting = false;
@@ -683,6 +723,8 @@ async function boot(): Promise<void> {
     stage.file.actors.filter((a) => a.type === 'cat' && (a.params as { look?: string } | undefined)?.look === 'seabird').map((a) => a.id),
   );
   let lastFailReason: string | null = null;
+  let skippedAt = -Infinity;
+  const skipGuard = (): number => (performance.now() - skippedAt < SKIP_CARD_WINDOW_MS ? SKIP_CARD_GUARD_SECONDS : 0);
   const ports: MissionPorts = {
     say: (text, who, name) => bubbles.say(text, who, name),
     sayAsync: (text, who) => void bubbles.say(text, who),
@@ -693,13 +735,18 @@ async function boot(): Promise<void> {
     },
     card: (title, button, icon) => {
       audio.playCard();
-      return showCard(uiEl, title, button, icon);
+      return showCard(uiEl, title, button, icon, skipGuard());
     },
     clearCard: (title, button, rewards) => {
       audio.playCard();
-      return showCard(uiEl, title, button, undefined, 0, rewards);
+      return showCard(uiEl, title, button, undefined, skipGuard(), rewards);
     },
     caption,
+    learn: (ability) => showAbility(ability),
+    interrupt: () => {
+      bubbles.clear();
+      caption.clear();
+    },
     wait: waitSeconds,
     toast: (text, kind) => {
       toast.show(text, kind);
@@ -749,7 +796,7 @@ async function boot(): Promise<void> {
   events.on('event', (e) => {
     if (e.type === 'door') audio.playDoor(e.open);
     if (e.type === 'hopper' && e.state === 'board') audio.playHopperBoard();
-    if (e.type === 'bridge' && e.open) audio.playBloom();
+    if (e.type === 'bridge' && e.open && !e.instant) audio.playBloom();
     if (e.type === 'fragile' && e.state === 'shake') audio.playSilkShake();
     if (e.type === 'butterfly') {
       if (e.state === 'follow') butterfliesFollowing.add(e.index);
@@ -787,7 +834,7 @@ async function boot(): Promise<void> {
       }
     }
     if (e.type === 'actor:state' && (e.state === 'awake' || e.state === 'flee') && seabirds.has(e.id)) audio.playFlap();
-    if (e.type === 'rail:cut' && e.style === 'fall') audio.playBridgeFall();
+    if (e.type === 'rail:cut' && e.style === 'fall' && !e.instant) audio.playBridgeFall();
   });
 
   // "||" in the corner: stop the game, go on, or leave for the map.
@@ -802,13 +849,22 @@ async function boot(): Promise<void> {
     },
   });
   pause.show();
+  skipButton = createSkipButton(uiEl, () => {
+    if (runner?.skipCutscene()) skippedAt = performance.now();
+  });
 
   runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes });
   runner.knowAbilities(abilities);
   runner.setLight(lightOn);
-  await runner.run();
+  if (resumeFrom > 0) {
+    runner.prepareResume(resumeFrom, resume ?? undefined);
+    // The train stands at another station now: the camera jumps there instead of flying over the stage.
+    applyCamera(true);
+  }
+  await runner.run(resumeFrom);
   pause.hide();
   addToProgress('cleared', [stage.file.id]);
+  if (loadProgress().resume?.stage === stage.file.id) setResume(null);
   addToProgress('abilities', stage.file.unlocks);
   // Back to the map: the rail to the next island grows in, and the child taps it to go on.
   const after = await nextStage(loadProgress().cleared, stage.file.id);

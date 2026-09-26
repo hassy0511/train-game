@@ -28,11 +28,20 @@ export async function loadAllRecords(): Promise<{ stageId: string; stageTitle: s
 }
 
 /** Title and required stages of a stage, without building it. */
-export async function peekStage(id: string): Promise<Pick<StageFile, 'id' | 'title' | 'unlock' | 'unlocks' | 'records'> | null> {
+export async function peekStage(
+  id: string,
+): Promise<(Pick<StageFile, 'id' | 'title' | 'unlock' | 'unlocks' | 'records'> & { missionCount: number }) | null> {
   const load = stageModules[`../stages/${id}.json`];
   if (!load) return null;
   const file = ((await load()) as { default: StageFile }).default;
-  return { id: file.id, title: file.title, unlock: file.unlock, unlocks: file.unlocks, records: file.records };
+  return {
+    id: file.id,
+    title: file.title,
+    unlock: file.unlock,
+    unlocks: file.unlocks,
+    records: file.records,
+    missionCount: file.missions.length,
+  };
 }
 
 export async function loadStage(id: string): Promise<StageData> {

@@ -13,6 +13,23 @@ export interface Progress {
   records: string[];
   /** World-map links ("from>to") whose rail has already been drawn in (the growing rail plays once). */
   mapLinks: string[];
+  /**
+   * PHASE7_FINISH §4 item 3: where to go on from ("つづきから"). `mission` is the 0-based index of the mission to
+   * start (at least 1: it starts at the last station of the mission before). Written once a mission is done (its
+   * "できた！" card and the cutscene after it), only for a stage not cleared yet and never lower than it was for
+   * that stage (see advanceResume); cleared when that stage is cleared. Optional, so the schema stays 1 and older
+   * saves load.
+   */
+  resume?: Resume;
+}
+
+export interface Resume {
+  stage: string;
+  mission: number;
+  /** What the missions before brought, for the clear card: graded stops, "ぴったり" ones, records found on the way. */
+  stops?: number;
+  perfect?: number;
+  found?: string[];
 }
 
 const empty = (): Progress => ({ schema: SCHEMA, cleared: [], abilities: [], records: [], mapLinks: [] });
@@ -30,6 +47,7 @@ export function loadProgress(): Progress {
       abilities: Array.isArray(data.abilities) ? (data.abilities.filter((v) => typeof v === 'string') as AbilityId[]) : [],
       records: Array.isArray(data.records) ? data.records.filter((v) => typeof v === 'string') : [],
       mapLinks: Array.isArray(data.mapLinks) ? data.mapLinks.filter((v) => typeof v === 'string') : [],
+      ...(isResume(data.resume) ? { resume: cleanResume(data.resume) } : {}),
     };
   } catch {
     return empty();
@@ -53,6 +71,52 @@ export function addToProgress(field: 'cleared' | 'abilities' | 'records' | 'mapL
   if (fresh.length === 0) return false;
   list.push(...fresh);
   saveProgress(progress);
+  return true;
+}
+
+function isResume(value: unknown): value is Resume {
+  const r = value as Partial<Resume> | null | undefined;
+  return !!r && typeof r.stage === 'string' && typeof r.mission === 'number' && Number.isInteger(r.mission) && r.mission >= 1;
+}
+
+const count = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
+
+/** A copy with only the known fields (the optional ones only when they make sense). */
+function cleanResume(r: Resume): Resume {
+  const stops = count(r.stops);
+  const perfect = count(r.perfect);
+  const found = Array.isArray(r.found) ? r.found.filter((v) => typeof v === 'string') : undefined;
+  return {
+    stage: r.stage,
+    mission: r.mission,
+    ...(stops !== undefined ? { stops } : {}),
+    ...(perfect !== undefined ? { perfect } : {}),
+    ...(found && found.length > 0 ? { found } : {}),
+  };
+}
+
+/** Sets (or with null forgets) where to go on from ("つづきから") and saves. */
+export function setResume(resume: Resume | null): void {
+  const progress = loadProgress();
+  if (resume) progress.resume = cleanResume(resume);
+  else if (progress.resume) delete progress.resume;
+  else return;
+  saveProgress(progress);
+}
+
+/**
+ * A mission is done: "つづきから" moves on to `resume`, unless that would lose a place worth more. There is one
+ * slot, and it belongs to the stage the child is working through: a replay of a cleared stage (going back for the
+ * records, where "▶▶" helps instead) never writes it, and starting the same stage over (はじめから, or its island on
+ * the map) never takes it back to an earlier mission. Returns whether it was written.
+ */
+export function advanceResume(resume: Resume): boolean {
+  const progress = loadProgress();
+  if (progress.cleared.includes(resume.stage)) return false;
+  const now = progress.resume;
+  if (now && now.stage === resume.stage && now.mission >= resume.mission) return false;
+  setResume(resume);
   return true;
 }
 

@@ -80,11 +80,25 @@ async function stopAt(page: Page, at: number, slowFrom = 55, brake = 4.5): Promi
   await expect(page.locator('#toast')).toBeVisible({ timeout: 20_000 });
 }
 
-/** Taps through the partner's bubbles until one says `text`. */
+/**
+ * Taps through the partner's bubbles until one says `text`. Every line said from the call on counts, not only the
+ * one up when it is read: on a slow machine a tap can land on a line that came up just after the read.
+ */
 async function waitLine(page: Page, text: string, timeoutMs = 20_000): Promise<void> {
   const bubble = page.locator('#bubble');
+  await page.evaluate(() => {
+    const w = window as unknown as { __heard?: string[]; __heardWatch?: MutationObserver };
+    w.__heard = [document.getElementById('bubble')?.dataset.line ?? ''];
+    if (w.__heardWatch) return;
+    w.__heardWatch = new MutationObserver(() => {
+      const line = document.getElementById('bubble')?.dataset.line;
+      if (line) w.__heard?.push(line);
+    });
+    w.__heardWatch.observe(document, { subtree: true, attributes: true, attributeFilter: ['data-line'] });
+  });
+  const heard = () => page.evaluate(() => ((window as unknown as { __heard?: string[] }).__heard ?? []).join('\n'));
   const deadline = Date.now() + timeoutMs;
-  while (!((await bubble.getAttribute('data-line')) ?? '').includes(text)) {
+  while (!(await heard()).includes(text)) {
     if (Date.now() > deadline) throw new Error(`no line "${text}"`);
     if (await bubble.isVisible()) await bubble.dispatchEvent('pointerdown');
     await page.waitForTimeout(120);

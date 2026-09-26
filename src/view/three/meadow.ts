@@ -357,7 +357,8 @@ export class MeadowGimmicks {
     }
     if (e.type === 'bridge' && e.open) {
       const bridge = this.bridges.get(e.index);
-      if (bridge && bridge.t < 0) bridge.t = 0;
+      // Already open (a resumed mission): straight to the end of the bloom.
+      if (bridge && bridge.t < 0) bridge.t = e.instant ? bridge.bloom : 0;
       return;
     }
     if (e.type === 'fragile') {
