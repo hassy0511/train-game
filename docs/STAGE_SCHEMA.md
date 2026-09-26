@@ -484,3 +484,99 @@ type LineKey = /* v1.5 */
 ほかの小さな直し（書き方は変わらない）:
 - 逆標識は、分かれ道を通ると見破りが消える（ループでもどってきたら、もう一度ライトで見破れる）。うその側へ行ったあとは、その分かれ道の 80 m 手前からライトボタンが光る（ライトが消えていれば）
 - 分かれ道の線路が地面より 2 m 以上高いと、標識は線路の高さに立つ
+
+## 10. v1.7 の追加（2-3、2026-09-25）
+
+`schemaVersion` は 1 のまま。追加はすべて省略可。設計は `docs/PHASE6_DESIGN.md` の「2-3」§5、ボタンの配置は `docs/PHASE7_FINISH.md` §1。
+全ステージ共通の数字は `src/train/params.ts` の `ROCKET`・`SLOPE`・`COUNTDOWN`・`ROCK_ROLL`・`ROCK_DROP`・`JUMP.maxSpeed`・`REFUSE_COOLDOWN`・`VOLCANO_PUFF`。
+
+```ts
+interface RailDef {
+  // ...
+  base?: { look: 'rock'; depth?: number; toGround?: boolean; skip?: { from: number; to: number }[] };
+  // 線路の下の岩（見た目だけ）。depth: 道床を下へ のばす（既定 3 m）。toGround: 地面まで のばす（下ほど広い台形 ＝「おね」）。
+  // skip: 岩を つけない所（アーチ・橋）。同じ線路のメッシュに頂点色で入るので、描画の回数は増えない
+}
+
+type PropDef = /* ... */ & { tag?: string };   // 寸劇の cutRail の props で まとめて落とすための名前
+
+interface MissionStep {
+  // ...
+  countdown?: {
+    seconds: number;                          // 持ち時間（> 0）
+    until?: { railId: string; at: number };   // 先頭が ここを通ったら セーフ。なければ その駅の停止ゾーン（停止線の 30 m 手前）
+    assist?: number;                          // 時間切れ 1 回ごとに ふやす秒（既定 10）
+    assistMax?: number;                       // ふやすのは ここまで（既定 30）
+    icon?: 'volcano' | 'clock';               // パネルの絵（既定 volcano）
+    music?: string;                           // 数えている間の曲（src/audio/songs.ts）。セーフで ステージの曲に戻る
+  };
+}
+
+type CutsceneStep = /* v1.6 */
+  | { cutRail: { railId; from; to; style?: 'fly' | 'fall'; props?: string } }   // fall = 切った線路と、tag が props の小物（線路の上に置いた物は from〜to の中だけ）が 下へ落ちる
+  | { camera: 'fixed'; at: Vec3; lookAt: Vec3 }                               // 動かないカメラ（寸劇の終わりで元に戻る）
+  | { fx: 'sneeze' };                                                          // 火山の くしゃみ（字幕「はっくしょーん！」、2.5 秒。けむりの わっかは props の volcano から）
+
+type LineKey = /* v1.6 */
+  | 'steepNear' | 'rocketReady' | 'rocketGo' | 'rocketAgain'
+  | 'rocketLever' | 'rocketEmpty' | 'rocketQuiet'
+  | 'slip' | 'slipEmpty' | 'slipAfter' | 'slipEmptyAfter' | 'noBrake' | 'noBrakeLever'
+  | 'rockNear' | 'rockDrop' | 'rockHit'
+  | 'timerStart' | 'timeLow' | 'timeSafe' | 'timeUp';
+// 'timerStart' と 'timeUp' は 改行で区切ると 順番に複数の吹き出しになる
+```
+
+せりふの既定（ステージに書かなければ これを言う。書いていない ほかのキーは だまる）:
+| キー | 場面 | 既定 |
+|---|---|---|
+| `rocketLever` | ロケット中に レバーを動かした（1 回の点火につき 1 回） | ロケット ちゅうは レバーが きかないよ |
+| `rocketEmpty` | つぶが 0 で押した | からっぽ！ えきで まんたんに なるよ |
+| `rocketQuiet` | 向かっている駅の 200 m 手前から／車止めの 150 m 手前から 押した | えきの ちかくは ロケット おやすみ |
+| `slip` / `slipEmpty` | のぼれずに ずるずる（つぶが 0 なら slipEmpty） | ずるずる〜… のぼれなかった／ずるずる〜… ロケットが たりない！ |
+| `slipAfter` | その あと（つぶが のこっていた とき） | ひかったら ロケットを おしてね |
+| `slipEmptyAfter` | つぶ 0 の ずるずるの あと | ひかったら ロケットを おしてね |
+| `noBrakeLever` | つるつるざかで レバーを動かした／押した（1 回） | つるつる〜！ レバーが きかない！ |
+| `rockHit` | 石に ぽこん | ぽこん！ いしに ぶつかった〜 |
+| `timeSafe` | カウントダウンに まにあった | セーフ！ |
+| `timeUp` | 時間切れ | はっくしょーん！ |
+間に合わないと意味がない一言（`rocketReady`・`rocketAgain`・`rockNear`／`rockDrop`（石の `say`）・`rocket` 区間の `line`）は、待っている吹き出しを消して すぐ出す。押しても出ないときの一言（ロケット・ジャンプ）は、同じ一言を `REFUSE_COOLDOWN` 3.5 秒の あいだ くりかえさない（連打しても 1 回）。
+既定なし: `steepNear`（のぼり坂の 60 m 手前。坂の `line` が あれば そちら。失敗で戻ったあとも もう一度）、`rocketReady`（ミッションで最初に光った。失敗で戻っても もう言わない）、`rocketGo`（ミッションで最初の点火）、`rocketAgain`（同じ坂で 2 回目に光った）、`noBrake`（つるつるざかに入った）、`rockNear`（ころがる石が ぐらぐら。石の `say` が あれば そちら）、`rockDrop`（石が落ちた。石の `say` が あれば そちら）、`timerStart`（数え始める前）、`timeLow`（のこり 10 秒）。
+
+能力 `rocket`（`"unlocks": ["rocket"]` と 寸劇の `{ "unlock": "rocket" }` で覚える）: ボタンは右手 2×2 の右上（`#rocket`）。カメラは いつも右上の角の小さい丸（`#camera`、一時停止の左）。
+- 押すと つぶを 1 こ使い、3 秒間 10 m/s² で 30 m/s まで加速（レバー・ライト・のぼり坂に関係なく。止まっていても使える）。その間 レバーは動かない。終わったら 5 m/s²（その段のブレーキが強ければ そちら）で レバーの速さへ戻る
+- つぶは 駅から走り出すとき と 失敗で戻ったとき に満タン（時間では たまらない）
+- 出ない所: `rocket` 区間の `allow: false`、つるつるざか、向かっている駅の 200 m 手前から（分岐は選んだほう、なければ既定のほうへ たどる）、車止めの 150 m 手前から。押しても一言いうだけで つぶは減らない。使っている途中で入ると「ぷしゅっ」と終わる（失敗ではない）
+- 光る: 次の のぼり坂の 40 m 手前から坂の上までで、いまの速さでは のぼりきれない（v²÷(2×減速) ＜ 残り＋2 m。減速は |pull|、レバーが速さより下なら その段のブレーキも足す）とき。または `glow: true` の区間の中
+- ジャンプ・ジャンプ台・しなる枝の飛距離は、ロケットで出た速さ（点火中と、そのあと レバーの速さへ戻るまで）のとき 22 m/s（`JUMP.maxSpeed`）で頭打ちにして計算する。上昇気流（1-3）の速さは そのまま数える（40 m の切れ目は それで越える）
+
+仕掛け（`gimmicks[]`、区間は線路 `railId` の `from`〜`to`、電車の先頭で判定）:
+| type | 動き | params（既定値） |
+|---|---|---|
+| `slope` | 坂。`pull` < 0 = きゅうな のぼり（レバーでは のぼれず 毎秒 \|pull\| m/s 遅くなる。ジャンプで 上を飛んだぶんも 着地で同じだけ遅くなる（v² − 2×\|pull\|×距離）。レバーが速さより下なら その段のブレーキも足す。止まると 1.2 秒で 6 m ずるずる下がって失敗 `slip` → `rewind` へ）。`pull` > 0 = つるつるざか（レバーは動かない。毎秒 pull m/s 速くなり `max` で止まる。max より速く入ったら 3 m/s² で max まで落ちる）。入口に札を自動で立てる（`sign-steep`／`sign-slide`、左 3.2 m）。道床の色が変わり、のぼりは 8 m おきに黄色い「＞」 | `{ pull: (必須、0 以外), max: 20, rewind: { railId: 同じ, at: from − 60 }, line: null, sign: true }` |
+| `bubbles` | 海から のぼる あわの柱（見た目だけ。2-3 の記録③の上）。区間なし | `{ position: [x, y, z]（必須。y は海面）, count: 14（1〜64）, height: 8, radius: 2.5 }` |
+| `rocket` | ロケットの区間。`allow: false` = おやすみ（ボタンに `icon` の印、入口に札 `sign-no-rocket` を自動で立てる）。`glow: true` = ここではボタンが光る。`line` は入ったとき 1 回（押したときも。`pressLine` が あれば そちら） | `{ allow: true, glow: false, icon: "none" \| "sleep" \| "bridge", line, pressLine }` |
+
+人やもの（`actors[]`、`onRail` で置く）:
+| type | 動き | params（既定値） |
+|---|---|---|
+| `rock-roll` | ころがる石（1-2 の子恐竜と同じ判定。空中でも こえられない）。`warn` m で山側（左）で ぐらぐら → `startDistance` m で ころがり出し、`crossSeconds` かけて 左 `lateral` m から 右 `lateral` m へ → 海へ ぽちゃん。よこぎる間に `dangerDistance` まで近づくと「ぽこん」（失敗 `rock`）。`warn` の中で `waitSpeed` m/s より おそく `waitSeconds` 秒 待っていても ころがり出す（「まって」で止まった子の ため） | `{ startDistance: 60, crossSeconds: 4.5, dangerDistance: 6, lateral: 9, warn: 90, waitSeconds: 1, waitSpeed: 1 }` |
+| `rock-drop` | おちて とまる石（2-1 のリスの「線路に落とす」だけ。汽笛は効かない）。`warn` m で線路に かげ → `drop` m で ぽよんと落ちて止まる（電車より前のときだけ）→ ジャンプで こえる（ジャンプボタンが光る） | `{ drop: 35, warn: 60 }` |
+石の共通 params: `rewind`（同じ線路の位置の数字、または `{ railId, at }`。既定 石の 80 m 手前）、`say`（その石だけの声かけ）、`hitAfter`（ぽこんの あとの一言。既定 ころがる石「ころころ いしは まってね」、おちる石「おちた いしは ジャンプで こえてね」）。
+`cat` に `params.look: "seabird"` を書くと うみどり（モデル `seabird-sleep`／`seabird`。汽笛で 空へ ぱたぱた飛んでいく）。
+
+カウントダウン（ステップの `countdown`）: その ステップの運転が始まるとき（前の駅のドアが閉まって `timerStart` を言い終えたあと）に数え始める。減るのは運転中だけ（一時停止・失敗の演出・ドア・寸劇の間は止まる）。パネル `#timer` は速さの札の左どなり（火山の絵・へっていく帯・のこり秒）。赤くしない・点滅しない。
+- セーフ: 先頭が `until` を通ったら（なければ 駅の停止ゾーン）。パネルは緑の「セーフ！」で 1.5 秒、`timeSafe`、曲が戻る
+- 時間切れ: 失敗 `timeUp`（火山の くしゃみ → 白く包む → `timeUp`）→ その ステップを始めた駅の停止線へ戻る（乗客は そのまま、つぶは満タン）。次の持ち時間は `seconds + min(assist × 時間切れの回数, assistMax)`
+- ほかの失敗: 5 m ごとに覚えた「その場所の のこり秒」＋3 秒に戻す（持ち時間は こえない。覚えがなければ満タン）
+- v1 の `MissionDef.timeLimit` は使わない
+
+読み込み時の検査（`src/stage/validate.ts` の `validateStageLayout`、線路の長さが要るもの）:
+- `slope`: `pull` ≠ 0。`from` は線路の始まりから 30 m 以上あと（自分の `rewind` を持つ坂は 8 m 以上あと ＝ ずるずるの 6 m ＋ 2 m）、`to` は終わりから 10 m 以上手前。区間の中に 停止線・分岐・合流・切れ目がない（切れ目は ずるずる下がる 6 m＋2 m 手前まで）。のぼり坂の `to` から 同じ線路で次に止まる駅の停止線まで 200 m 以上
+- 戻り先（坂・石・切れ目の `rewind`、既定の値も）が どの `slope` の中にもなく、ころがる石の `startDistance` の中にもない
+- `rocket`: `railId`・`from`・`to` がある。`allow: false` と `glow: true` は同時に書かない
+- `countdown`: `seconds` > 0。`until` の線路がある（位置も線路の中）。`assist`・`assistMax` ≥ 0。`music` は曲の名前
+- `bubbles`: `position` が 3 つの数。`count` は 1〜64 の整数、`height`・`radius` は 0 より大きい
+
+火山（`props` に `volcano` の モデルが ある ステージ）: ふだんは 12 秒ごと、カウントダウン中は 4 秒ごとに 小さい けむりの わっか「ぽふっ」を出す（`VOLCANO_PUFF`。くしゃみの 大きい わっかとは べつ）。
+
+テスト用のしるし（`#app` の data-*）: `data-has-rocket`（ロケットを持っている）、`data-rocket-pips`（のこりの つぶ）、`data-burn`（点火中 1）、`data-slope`（`up`／`down`／空）、`data-slip`（ずるずる中 1）、`data-timer`（のこり秒）、`data-timer-state`（`run`／`low`／`safe`／`up`／空）、`data-camera`（寸劇の動かないカメラは `fixed`）、`data-rocks`（石ごとの いまの ようす `rock-f:roll,…`）、`data-rail-cut`（寸劇で切った所 `kudari:765-865`）、`data-cutscene-actors`（寸劇で出ている人 `sakasa`）、`data-volcano-puffs`（火山の「ぽふっ」の回数）。`#rocket` には `data-glow`・`data-idle`・`data-boost`（点火中）・`data-pips`・`data-why`（出ない わけ: `empty`／`zone`／`slide`／`station`／`air`／`burn`／`locked`）・`data-mark`（`sleep`／`bridge`／`slide`／`station`）。レバーのつまみ `#lever-knob` の `data-mark`（`rocket`／`slide`）。

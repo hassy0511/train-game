@@ -24,7 +24,7 @@ export interface NutParams {
  * The lead bogie meets something at `s` on its rail: over it (airborne) is fine, on the ground it bumps.
  * Returns null while it is still ahead.
  */
-function meet(train: Train, s: number): 'over' | 'bump' | null {
+export function meet(train: Train, s: number): 'over' | 'bump' | null {
   if (train.bogieS < s - 0.3) return null;
   return train.airborne ? 'over' : 'bump';
 }
@@ -38,10 +38,12 @@ function secondsToMeet(train: Train, s: number, speed: number): number | null {
 }
 
 /** True when a jump started now has the lead bogie in the air as it meets the thing (the jump button glows). */
-function jumpNowClears(train: Train, s: number, speed: number): boolean {
+export function jumpNowClears(train: Train, s: number, speed: number): boolean {
   if (train.state.speed < JUMP.minSpeed || train.airborne) return false;
   const t = secondsToMeet(train, s, speed);
-  return t !== null && t > JUMP.airTime * 0.2 && t < JUMP.airTime * 0.8;
+  // A rocket-fast train's jump is capped in length (JUMP.maxSpeed), so it is in the air a little shorter.
+  const air = (JUMP.airTime * train.jumpSpeed) / train.state.speed;
+  return t !== null && t > air * 0.2 && t < air * 0.8;
 }
 
 /** A nut that rolls down the branch towards the train once it comes close. Jump over it. */
@@ -160,7 +162,8 @@ export class Squirrel {
     if (this.state === 'hold') {
       const d = this.train.distanceAhead(this.railId, this.at);
       if (d === null) return null;
-      if (d <= this.params.drop) {
+      // Only ahead of the train: a nut dropped behind it (after a rewind past it) would bump the train at once.
+      if (d <= this.params.drop && d > 0) {
         this.state = 'rail';
         return { kind: 'drop-rail' };
       }

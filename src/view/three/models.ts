@@ -4,6 +4,7 @@ import { placeholderSize } from '../placeholder-sizes';
 import { buildForestPlaceholder } from './forest-placeholders';
 import { buildMeadowPlaceholder } from './meadow-placeholders';
 import { buildSkyPlaceholder } from './sky-placeholders';
+import { buildVolcanoPlaceholder } from './volcano-placeholders';
 
 const PLACEHOLDER_COLORS: Record<string, number> = {
   tree: 0x4f9f5a,
@@ -40,7 +41,8 @@ export class ModelLibrary {
     // Models that are not built yet (pending Blender tickets) get a flat box of the right size,
     // so stages stay playable and no 404 requests are made.
     if (!this.available.has(name)) {
-      const drawn = buildSkyPlaceholder(name) ?? buildForestPlaceholder(name) ?? buildMeadowPlaceholder(name);
+      const drawn =
+        buildSkyPlaceholder(name) ?? buildForestPlaceholder(name) ?? buildMeadowPlaceholder(name) ?? buildVolcanoPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(drawn ?? makePlaceholder(name));
       this.cache.set(name, placeholder);

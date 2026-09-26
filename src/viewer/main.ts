@@ -23,14 +23,15 @@ import manifest from '../../assets/models.json';
 import { buildForestPlaceholder } from '../view/three/forest-placeholders';
 import { buildMeadowPlaceholder } from '../view/three/meadow-placeholders';
 import { buildSkyPlaceholder } from '../view/three/sky-placeholders';
+import { buildVolcanoPlaceholder } from '../view/three/volcano-placeholders';
 
 const GROUPS: [string, RegExp][] = [
-  ['のりもの', /^(train|car)-/],
+  ['のりもの', /^(train-|car-|rocket-unit)/],
   ['しらべもの', /^(dino-egg|footprint)/],
-  ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird|squirrel|grasshopper|butterfly|spider)/],
-  ['えき・せんろ', /^(platform|station|stop|buffer|crossing|direction|jump|updraft|sky-buoy)/],
-  ['たてもの', /^(house|shop|tower|hq)/],
-  ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud|canopy|branch|bough|leaf|grass|clover|meadow|water|dandelion)/],
+  ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird|squirrel|grasshopper|butterfly|spider|seabird)/],
+  ['えき・せんろ', /^(platform|station|stop|buffer|crossing|direction|jump|updraft|sky-buoy|sign-|old-bridge)/],
+  ['たてもの', /^(house|shop|tower|hq|observatory)/],
+  ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud|canopy|branch|bough|leaf|grass|clover|meadow|water|dandelion|volcano|mesa|pumice)/],
   ['こもの', /.*/],
 ];
 
@@ -72,7 +73,10 @@ const base = import.meta.env.BASE_URL;
 const built = new Set<string>(__MODEL_MANIFEST__);
 /** The game's code-drawn stand-in for a model that is not built yet. */
 const drawn = (name: string): Group | null =>
-  buildSkyPlaceholder(name) ?? buildForestPlaceholder(name) ?? buildMeadowPlaceholder(name);
+  buildSkyPlaceholder(name) ??
+  buildForestPlaceholder(name) ??
+  buildMeadowPlaceholder(name) ??
+  buildVolcanoPlaceholder(name);
 const pending = manifest._pending.models.filter((n) => !built.has(n) && drawn(n) !== null);
 const load = async (name: string): Promise<Group> =>
   built.has(name) ? (await loader.loadAsync(`${base}models/${name}.glb`)).scene : drawn(name)!;

@@ -15,6 +15,8 @@ import {
   UPDRAFT_ACCELERATION,
   JUNCTION_LOCK_DISTANCE,
   LEVER_NOTCHES,
+  ROCKET,
+  SLOPE,
   SPEED_NOTCHES,
   STOP_NOTCH,
   TRAIN,
@@ -42,6 +44,20 @@ export interface TrainEvents extends Record<string, unknown> {
   landed: void;
   /** The lead bogie ran into a gap. `short`: it jumped but not far enough; otherwise it never jumped. */
   fell: { gap: GapDef; railId: string; short: boolean };
+  /** 2-3: stopped on an uphill slope; the train starts slipping back ("ずるずる"). */
+  slipped: { railId: string; s: number };
+  /** 2-3: the rocket fired. */
+  rocketStarted: void;
+  /** 2-3: the rocket stopped: burnt out (`cut` false) or cut short ("ぷしゅっ": a quiet place, an emergency stop). */
+  rocketEnded: { cut: boolean };
+}
+
+/** 2-3: the slope under the train front (set every frame by the slope system). */
+export interface SlopeUnder {
+  /** m/s², negative = uphill (slows the train), positive = downhill (speeds it up). */
+  pull: number;
+  /** Downhill: the speed it runs up to (m/s). */
+  max: number;
 }
 
 export type JumpResult = 'ok' | 'stopped' | 'cooldown' | 'air' | 'locked' | 'bough';
@@ -89,6 +105,19 @@ export class Train {
   jumpBlocked = false;
   /** A grasshopper riding on the roof (2-2): jumps go `power` times as far and `height` m high. */
   jumpBoost: { power: number; height: number } | null = null;
+  /** 2-3: the slope under the train front, or null on the level. */
+  slope: SlopeUnder | null = null;
+  /** 2-3: seconds of rocket burn left (0 = not burning). */
+  private rocketLeft = 0;
+  /** 2-3: after a burn, slowing back to the lever's speed (at least ROCKET.settle m/s²). */
+  private settling = false;
+  /** 2-3: slipping back down an uphill: seconds so far and where the car center was when it started. */
+  private slipping: { t: number; from: number } | null = null;
+  /**
+   * v²·(m²/s²) an uphill took while the train flew up it (2·|pull|·metres flown), paid at landing: a jump does not
+   * climb a steep slope for free (PHASE6 §5.2).
+   */
+  private airClimb = 0;
 
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
@@ -157,6 +186,47 @@ export class Train {
     return this.falling !== null;
   }
 
+  /** 2-3: true while the rocket burns. */
+  get rocketBurning(): boolean {
+    return this.rocketLeft > 0;
+  }
+
+  /** 2-3: share of the burn still left (1 right after firing, 0 when not burning). */
+  get rocketRemaining(): number {
+    return Math.max(0, this.rocketLeft / ROCKET.burn);
+  }
+
+  /** 2-3: true while slipping back down an uphill ("ずるずる"). */
+  get isSlipping(): boolean {
+    return this.slipping !== null;
+  }
+
+  /** 2-3: on a downhill slide: the lever does nothing there. */
+  get onSlide(): boolean {
+    return this.slope !== null && this.slope.pull > 0;
+  }
+
+  /**
+   * 2-3: fires the rocket (the caller checks pips and quiet places). Refused while locked, stopping for danger,
+   * falling, slipping, in the air or already burning. Works from a standstill.
+   */
+  startRocket(): boolean {
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping) return false;
+    if (this.airborne || this.rocketLeft > 0) return false;
+    this.rocketLeft = ROCKET.burn;
+    this.settling = false;
+    this.events.emit('rocketStarted');
+    return true;
+  }
+
+  /** 2-3: cuts the burn short ("ぷしゅっ"): the train then slows back to the lever's speed. */
+  stopRocket(): void {
+    if (this.rocketLeft <= 0) return;
+    this.rocketLeft = 0;
+    this.settling = true;
+    this.events.emit('rocketEnded', { cut: true });
+  }
+
   /** 0 right after a jump, 1 when the next jump is allowed. */
   get jumpProgress(): number {
     if (this.airborne) return 0;
@@ -180,9 +250,20 @@ export class Train {
     return best;
   }
 
+  /**
+   * The speed a jump's distance is worked out from. While the rocket's push is in the speed (burning, or slowing
+   * back after it) it counts only up to JUMP.maxSpeed, so a rocket-fast train does not fly past the far edge when an
+   * earlier stage is played again. An updraft's speed (1-3, whose 40 m gap needs it) still counts in full, also
+   * when the rocket burns inside the updraft.
+   */
+  get jumpSpeed(): number {
+    if (this.rocketLeft <= 0 && !this.settling) return this.state.speed;
+    return Math.min(this.state.speed, Math.max(JUMP.maxSpeed, this.boostSpeed));
+  }
+
   /** Distance the lead bogie would travel in a jump started now (with the glide to a near far edge). */
   private jumpDistance(): number {
-    const plain = this.state.speed * JUMP.airTime * (this.jumpBoost?.power ?? 1);
+    const plain = this.jumpSpeed * JUMP.airTime * (this.jumpBoost?.power ?? 1);
     const gap = this.nextGap(plain);
     if (!gap) return plain;
     const landing = this.bogieS + plain;
@@ -201,7 +282,7 @@ export class Train {
 
   /** Starts a jump. Distance = speed × air time; the lever does nothing until the lead car lands. */
   jump(): JumpResult {
-    if (this.ended || this.lockReason !== null || this.emergency || this.falling) return 'locked';
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping) return 'locked';
     if (this.airborne) return 'air';
     if (this.jumpCooldown > 0) return 'cooldown';
     if (this.jumpBlocked) return 'bough';
@@ -218,7 +299,7 @@ export class Train {
    */
   padJump(): boolean {
     if (this.ended || this.emergency || this.falling || this.airborne || this.state.speed < JUMP.minSpeed) return false;
-    const plain = this.state.speed * JUMP.airTime * PAD_JUMP.scale;
+    const plain = this.jumpSpeed * JUMP.airTime * PAD_JUMP.scale;
     const gap = this.nextGap(plain + 40);
     const needed = gap ? gap.to + JUMP.landingMargin + PAD_JUMP.extra - this.bogieS : 0;
     const distance = Math.max(plain, needed);
@@ -238,9 +319,13 @@ export class Train {
     return true;
   }
 
-  /** Returns false when the controls are locked (the caller should tell the player why). */
+  /**
+   * Returns false when the controls are locked (the caller should tell the player why). The lever also stays put
+   * while the rocket burns and on a downhill slide (2-3), like in the air.
+   */
   setNotch(notch: number): boolean {
     if (this.ended || this.lockReason !== null || this.emergency || this.airborne || this.falling) return false;
+    if (this.rocketLeft > 0 || this.slipping || this.onSlide) return false;
     const next = Math.min(Math.max(Math.round(notch), 0), SPEED_NOTCHES.length - 1);
     if (next === HARD_BRAKE_NOTCH && this.state.notch !== HARD_BRAKE_NOTCH && this.state.speed > 3) {
       this.events.emit('hardBrake', { speed: this.state.speed });
@@ -249,10 +334,14 @@ export class Train {
     return true;
   }
 
-  /** Brakes hard to a stop regardless of the lever (danger ahead). Cleared by rewindTo(). */
+  /**
+   * Brakes hard to a stop regardless of the lever (danger ahead). Cleared by rewindTo(). A train that is already
+   * standing (e.g. time runs out at a station) keeps its notch, so the speed word still matches the lever.
+   */
   emergencyStop(): void {
+    this.stopRocket();
     this.emergency = true;
-    this.state.notch = 0;
+    if (this.state.speed > 0) this.state.notch = HARD_BRAKE_NOTCH;
   }
 
   /** Puts the train back with its front at `frontS` (on `railId`, default the current rail), stopped, lever at "stop". */
@@ -261,6 +350,11 @@ export class Train {
     if (railId) st.railId = railId;
     this.arcs = [];
     this.falling = null;
+    this.slipping = null;
+    this.airClimb = 0;
+    this.rocketLeft = 0;
+    this.settling = false;
+    this.slope = null;
     this.jumpCooldown = 0;
     st.s = this.wrap(frontS - TRAIN.length / 2);
     st.speed = 0;
@@ -289,6 +383,42 @@ export class Train {
     return d;
   }
 
+  /**
+   * Distance from the car front to `at` on `railId` along the way the train will go from here: through the junctions
+   * ahead (the side chosen, else the default) and merges. Null when that way does not reach it within a few rails.
+   */
+  routeDistance(railId: string, at: number): number | null {
+    const direct = this.distanceAhead(railId, at);
+    if (direct !== null) return direct;
+    let rail = this.currentRail;
+    // The front's position measured on `rail` (it may run past the rail's ends while following the route).
+    let front = this.frontS;
+    let ahead: JunctionDef[] = this.pending;
+    for (let hop = 0; hop < 6; hop++) {
+      const turn = ahead.find((j) => {
+        const side = j === this.announced && this.choice ? this.choice : j.default;
+        const to = j[side];
+        return to !== undefined && to !== rail.id;
+      });
+      if (turn) {
+        const side = turn === this.announced && this.choice ? this.choice : turn.default;
+        front -= turn.at;
+        rail = this.network.getRail(turn[side] as string);
+        if (rail.id === railId) return at - front;
+      } else if (rail.end.type === 'merge' && rail.end.railId !== rail.id) {
+        const entry = rail.end.at;
+        front = entry + front - rail.length;
+        rail = this.network.getRail(rail.end.railId);
+        if (rail.id === railId) return at >= entry ? at - front : null;
+      } else {
+        return null;
+      }
+      const center = front - TRAIN.length / 2;
+      ahead = this.junctions.filter((j) => j.railId === rail.id && j.at > center).sort((a, b) => a.at - b.at);
+    }
+    return null;
+  }
+
   /** Signed distance from the car FRONT to `at` on the current rail (loop-aware). */
   offsetTo(at: number): number {
     let d = at - this.frontS;
@@ -312,11 +442,9 @@ export class Train {
     this.choice = side;
   }
 
-  update(dt: number): void {
+  /** The lever's target speed and brake now (the automatic stop before a buffer / stop point included). */
+  private leverTarget(rail: Rail): { target: number; brake: number } {
     const st = this.state;
-    let rail = this.currentRail;
-    const wasAirborne = this.airborne;
-
     const notch = LEVER_NOTCHES[st.notch];
     let target: number = notch.speed * this.speedScale;
     let brake: number = notch.brake;
@@ -329,21 +457,83 @@ export class Train {
         brake = Math.max(brake, BRAKING);
       }
     }
+    return { target, brake };
+  }
+
+  /** How fast an uphill of `pull` (< 0) slows the train as it is now (m/s²): the same rule as update(). */
+  uphillDecel(pull: number): number {
+    const { target, brake } = this.leverTarget(this.currentRail);
+    return this.uphillRate(-pull, target, brake);
+  }
+
+  private uphillRate(pull: number, target: number, brake: number): number {
+    return this.settling ? Math.max(pull, ROCKET.settle, brake) : pull + (target < this.state.speed ? brake : 0);
+  }
+
+  update(dt: number): void {
+    const st = this.state;
+    let rail = this.currentRail;
+    const wasAirborne = this.airborne;
+
+    const lever = this.leverTarget(rail);
+    let target = lever.target;
+    const brake = lever.brake;
+
+    // The rocket burns for its time wherever the train is (in the air too), but only pushes on the rail.
+    const burning = this.rocketLeft > 0 && !this.falling && !this.emergency;
+    if (burning) {
+      this.rocketLeft = Math.max(0, this.rocketLeft - dt);
+      if (this.rocketLeft === 0) {
+        this.settling = true;
+        this.events.emit('rocketEnded', { cut: false });
+      }
+    }
+    const slope = this.slope;
+    if (this.settling && st.speed <= target + 1e-3) this.settling = false;
 
     if (this.falling) {
       // Slide on a little while sinking; the runner fades out and puts the train back.
       this.falling.t = Math.min(this.falling.t + dt, FALL.seconds);
       st.speed = Math.max(0, st.speed - st.speed * 1.8 * dt);
     } else if (wasAirborne) {
-      // Ballistic: the speed does not change in the air.
+      // Ballistic: the speed does not change in the air (the arc keeps its shape). Up a steep slope without the
+      // rocket, the climb is still paid, at landing (handleJump), as if the train had rolled the distance flown.
+      if (slope && slope.pull < 0 && !burning) this.airClimb += 2 * -slope.pull * st.speed * dt;
     } else if (this.emergency) {
       target = 0;
       const rate = Math.max(BRAKING, SPEED_NOTCHES[SPEED_NOTCHES.length - 1] / EMERGENCY_STOP_SECONDS);
       st.speed = Math.max(0, st.speed - rate * dt);
+    } else if (this.slipping) {
+      // "ずるずる": back down the slope a few metres, wheels spinning (the runner puts the train back).
+      this.slipping.t = Math.min(this.slipping.t + dt, SLOPE.slipSeconds);
+      const k = this.slipping.t / SLOPE.slipSeconds;
+      st.speed = 0;
+      st.s = this.slipping.from - SLOPE.slipBack * k * (2 - k);
+    } else if (burning) {
+      // Lever, light and uphill pull do not matter while the rocket pushes.
+      if (st.speed < ROCKET.speed) st.speed = Math.min(ROCKET.speed, st.speed + ROCKET.accel * dt);
+    } else if (slope && slope.pull > 0) {
+      // A slide: the lever does nothing; faster and faster up to its top speed.
+      if (st.speed > slope.max) st.speed = Math.max(slope.max, st.speed - SLOPE.overMax * dt);
+      else st.speed = Math.min(slope.max, st.speed + slope.pull * dt);
+      // Rocket speed carried onto the slide stays capped for jumps until the slide has slowed it to its top speed.
+      if (st.speed <= slope.max) this.settling = false;
+    } else if (slope && slope.pull < 0) {
+      // Too steep for the lever: it only slows down. Braking adds the notch's brake; after the rocket the pull
+      // (stronger than the settle) is what slows the train, as in the design's climb table (PHASE6 §7).
+      const rate = this.uphillRate(-slope.pull, target, brake);
+      st.speed = Math.max(0, st.speed - rate * dt);
+      if (st.speed === 0) {
+        this.slipping = { t: 0, from: st.s };
+        this.settling = false;
+        this.events.emit('slipped', { railId: st.railId, s: this.frontS });
+      }
     } else if (this.boostSpeed > target && st.notch > STOP_NOTCH) {
+      // An updraft takes over the speed (and its jumps count it in full).
+      this.settling = false;
       st.speed = Math.min(this.boostSpeed, st.speed + UPDRAFT_ACCELERATION * dt);
     } else if (st.speed < target) st.speed = Math.min(target, st.speed + ACCELERATION * dt);
-    else if (st.speed > target) st.speed = Math.max(target, st.speed - brake * dt);
+    else if (st.speed > target) st.speed = Math.max(target, st.speed - (this.settling ? Math.max(brake, ROCKET.settle) : brake) * dt);
 
     st.s += st.speed * dt * st.direction;
 
@@ -359,6 +549,7 @@ export class Train {
     if (wasAirborne && !airborne) {
       this.jumpCooldown = JUMP.cooldown;
       this.events.emit('landed');
+      if (this.airClimb > 0) this.payAirClimb();
     }
     if (!airborne && this.jumpCooldown > 0) this.jumpCooldown = Math.max(0, this.jumpCooldown - dt);
     // Forget arcs the last car has left behind.
@@ -370,7 +561,24 @@ export class Train {
     if (!gap) return;
     const short = this.arcs.some((a) => a.railId === this.state.railId && a.from + a.length > gap.from - 12);
     this.falling = { t: 0 };
+    this.stopRocket();
     this.events.emit('fell', { gap, railId: this.state.railId, short });
+  }
+
+  /**
+   * Landed after flying up a steep slope: the speed the climb took (v² − 2·|pull|·d, the same as rolling it). Out of
+   * speed, the train slips from where it came down; the arcs go, so the cars still over them do not rise again as
+   * it slides back along them.
+   */
+  private payAirClimb(): void {
+    const st = this.state;
+    st.speed = Math.sqrt(Math.max(0, st.speed * st.speed - this.airClimb));
+    this.airClimb = 0;
+    if (st.speed > 0 || this.slipping || this.emergency || !this.slope || this.slope.pull >= 0) return;
+    this.arcs = [];
+    this.slipping = { t: 0, from: st.s };
+    this.settling = false;
+    this.events.emit('slipped', { railId: st.railId, s: this.frontS });
   }
 
   /** Shifts jump arcs when the train's s is re-based (junction or merge). */

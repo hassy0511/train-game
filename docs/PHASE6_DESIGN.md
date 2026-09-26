@@ -789,13 +789,15 @@ tests/smoke/stage-2-2-full.spec.ts（2-1 の 通しテストと 同じ 助け関
   - おやすみ区間（`allow: false`）→ 区間の `line`
   - つるつるざかの上 →「つるつる〜！ レバーが きかない！」
   - いま向かっている駅の停止線の `stationQuiet` 200 m 手前から／車止めの 150 m 手前から →「えきの ちかくは ロケット おやすみ」
+  - 同じ一言は `REFUSE_COOLDOWN`（3.5 秒、吹き出し 1 つ分）の あいだ くりかえさない。連打しても 1 回だけ言い、あとから来る大事な一言（駅の「ゆっくり！」、橋の「セーフ！」など）を うしろに押しやらない（実装で決めた。ジャンプの「はしりながら おしてね」なども同じ）
 - 使っている途中で上の区間に入ると、「ぷしゅっ」と終わる（失敗にはしない）
 - つぶの回復: 駅から走り出すとき（`drive()` の始まり）と、失敗して戻ったときに満タン
 - 光る（`data-glow`）: 点火中でなく、つぶがあり、押せる場所で、次のどちらか
   - (a) いまの線路で次の のぼり坂の `glowAhead` 40 m 手前から坂の上までで、v²÷(2×|pull|) ＜ 坂の残り＋2 m（いまのままでは のぼりきれない）
   - (b) `glow: true` の `rocket` 区間の中
 - 光ったときの一言: ミッションで最初に光ったとき `rocketReady`。同じ坂で 2 回目に光ったとき `rocketAgain`。ミッションで最初に点火したとき `rocketGo`
-- 飛距離の頭打ち: ジャンプ・ジャンプ台・しなる枝の飛距離は、速さを `JUMP.maxSpeed` 22 m/s で頭打ちにして計算する（ロケットのまま 1-3 や 2-1 を遊び直しても飛びすぎない。案 1 が見つけた問題）
+- 間に合わないと意味がない一言（`rocketReady`・`rocketAgain`・石の ぐらぐら／おちた・`rocket` 区間の `line`）は、待っている吹き出しを消して すぐ出す（坂の 60 m 手前の一言の 20 m あとに光るので、並ばせると 坂に入ってから出てしまう。実装で決めた）
+- 飛距離の頭打ち: ジャンプ・ジャンプ台・しなる枝の飛距離は、速さを `JUMP.maxSpeed` 22 m/s で頭打ちにして計算する（ロケットのまま 1-3 や 2-1 を遊び直しても飛びすぎない。案 1 が見つけた問題）。頭打ちにするのはロケットで出た速さ（点火中と、そのあとレバーの速さへ戻るまで）だけ。上昇気流の速さはそのまま数える（1-3 の 40 m の切れ目は 30 m/s で越える作りのため。実装で決めた）
 - 見た目: 先頭車の屋根のうしろに短い つつ 2 本（`rocket-unit`）。点火中は黄・オレンジ・白の まるい けむり玉が ぽこぽこ出て、画面のはしにスピードの線が走り、視野が 6° 広がる（「がめんの ゆれ: へらす」ではゆらさない）。音は「ぼぼぼ… しゅごー」、終わりは「ぷしゅっ」
 - ボタン: 2×2 の右上（`grid-area: camera`）。まわりの輪を 3 つに区切り、残りの つぶだけ色をつける。点火中は輪が 3 秒で減っていく。アイコンは、まるいつつに ほのおが付いた絵（どこにもない形）で、ラベルは「ロケット」
 - カメラのボタン: `#app[data-has-rocket="1"]` のとき、2×2 から外れて右上の角へ移る（56 px の丸、一時停止の丸から 28 px 左）。ラベルはなしで、青い輪とカメラの絵だけ。一時停止（白い丸に ‖）と見分けやすくし、押しまちがえないように間をあける。視点のタイルは下向きに開く。左利きの設定では左上で左右反転
@@ -816,7 +818,8 @@ params の既定値: `allow: true`、`glow: false`、`icon: "none"`、`line`（�
 - **のぼり（`pull` がマイナス）＝ きゅうな さか**: レバーでは加速せず、毎秒 |pull| m/s ずつ遅くなる。レバーが速さより下なら、その段のブレーキも足す。ロケット中は坂の引っぱりを無視する。速さが 0 になったら「ずるずる〜」: Train が `slip` 状態になり、1.2 秒で 6 m うしろへ下がる（s を実際に減らす。速さは 0 のまま、車輪から砂けむり）。同時に `slipped` イベント → 失敗の理由 `slip` → 白く包んで `rewind`（既定は `from − 60`）へ戻し、つぶを満タンにする。つぶが 0 だったら `slipEmpty` を言う
 - **くだり（`pull` がプラス）＝ つるつるざか**: 毎秒 pull m/s ずつ速くなり、`max` で止まる。max より速く入ったら、3 m/s² で max まで落ちる。レバーは動かない（つまみに きらきらの印。1 回だけ `noBrakeLever`）。区間に入ったとき `noBrake` を 1 回言う。ロケットは使えず、点火中なら入口で終わる。区間を出ると、レバーの位置どおりに戻る
 - ゲームの急停止（石にぶつかった）は、どちらの坂でも最優先で効く
-- 先に言う: のぼり坂の 60 m 手前で、その坂の `line`（なければミッションの `steepNear`）を 1 回言う
+- 先に言う: のぼり坂の 60 m 手前で、その坂の `line`（なければミッションの `steepNear`）を 1 回言う。失敗して戻ったあとも、戻った所から もう一度言う（ちょうど 60 m 手前に戻る坂①・③でも）
+- ジャンプで のぼり坂を ただで のぼれない: 空中の あいだ速さは変わらないが、ロケットなしで のぼり坂の上を飛んだぶんは、着地で「転がって のぼった」のと同じだけ遅くなる（v² − 2×|pull|×飛んだ距離）。0 になったら、そこで ずるずる。連打でも のぼれない（実装で決めた。§7 の表は ジャンプしても そのまま）
 - 見た目: のぼりは、赤茶の道床に黄色い「＞＞」（8 m おき）と、ふもとの札 `sign-steep`。くだりは、白っぽい灰色の道床と、上の札 `sign-slide`。道床の色は `rail-mesh` の頂点色を区間で変える（描画の回数は増えない）
 - 速さの札: のぼり坂では いつもどおり。くだり坂は「つるつる〜」
 
@@ -851,8 +854,8 @@ params の既定値: `pull`（必須）、`max: 20`（くだり）、`rewind: { 
 共通の値: `COUNTDOWN = { lowAt: 10, sampleEvery: 5, restoreBonus: 3, safeShow: 1.5 }`
 
 #### 5.4 つかいまわし（新しいしくみに数えない小さな手直し）
-- **ころがる いし `rock-roll`**: 1-2 の `SmallDino` と同じ判定で、見た目だけ変える。空中でもこえられない。`warn` m で山の上の石が ぐらぐら（`rockNear`、なければ `params.say`）→ `startDistance` m で ころがり出し、`crossSeconds` かけて左（山）から右（海）へよこぎる → 海へ ぽちゃん、ぷかぷか浮く。よこぎっている間に先頭が `dangerDistance` まで来たら「ぽこん」（失敗の理由 `rock`）。既定は `{ startDistance: 60, crossSeconds: 4.5, dangerDistance: 6, lateral: 9, warn: 90 }`。平均 12 m/s 以下（ふつう）なら通ったあとに着き、はやい以上だと ぽこん
-- **おちて とまる いし `rock-drop`**: 2-1 の `Squirrel` の「線路に落とす」だけを使う。汽笛は効かない。`warn` m で線路に かげ → `drop` m で ぽよんと落ちて止まる（`rockDrop`、なければ `params.say`）→ ジャンプでこえる（ジャンプボタンが光る。木の実と同じ判定）。既定は `{ drop: 35, warn: 60 }`。**電車より うしろの石は落とさない（d > 0 のときだけ）**。いまのリスは、戻ったあとに うしろで落ちて、すぐ ぶつかる おそれがある
+- **ころがる いし `rock-roll`**: 1-2 の `SmallDino` と同じ判定で、見た目だけ変える。空中でもこえられない。`warn` m で山の上の石が ぐらぐら（その石の `params.say`、なければ `rockNear`）→ `startDistance` m で ころがり出し、`crossSeconds` かけて左（山）から右（海）へよこぎる → 海へ ぽちゃん、ぷかぷか浮く。よこぎっている間に先頭が `dangerDistance` まで来たら「ぽこん」（失敗の理由 `rock`）。既定は `{ startDistance: 60, crossSeconds: 4.5, dangerDistance: 6, lateral: 9, warn: 90, waitSeconds: 1, waitSpeed: 1 }`。平均 12 m/s 以下（ふつう）なら通ったあとに着き、はやい以上だと ぽこん。ピコが「まって」と言うので、`warn` の中で止まって（`waitSpeed` 1 m/s より おそく）`waitSeconds` 1 秒 待つと、`startDistance` より うしろでも ころがってくれる（60〜90 m で止まった子が 待ちぼうけに ならないように。実装で決めた）
+- **おちて とまる いし `rock-drop`**: 2-1 の `Squirrel` の「線路に落とす」だけを使う。汽笛は効かない。`warn` m で線路に かげ → `drop` m で ぽよんと落ちて止まる（その石の `params.say`、なければ `rockDrop`）→ ジャンプでこえる（ジャンプボタンが光る。木の実と同じ判定）。既定は `{ drop: 35, warn: 60 }`。**電車より うしろの石は落とさない（d > 0 のときだけ）**。いまのリスは、戻ったあとに うしろで落ちて、すぐ ぶつかる おそれがある
 - 石の共通 params: `rewind`（既定 `at − 80`）、`say`（その石だけの声かけ）、`hitAfter`（ぶつかったあとの一言。既定は ころがる石「ころころ いしは まってね」、おちる石「おちた いしは ジャンプで こえてね」）
 - 猫の見た目を変える: `cat` に `params.look: "seabird"` を足す（うみどりが線路で ひなたぼっこ。起きたら ぱたぱた飛んでいく）
 - 寸劇のカメラに `{ "camera": "fixed", "at": [x,y,z], "lookAt": [x,y,z] }` を足す（エンディングで、橋と火山と電車を 1 枚に入れるため）
@@ -861,10 +864,10 @@ params の既定値: `pull`（必須）、`max: 20`（くだり）、`rewind: { 
 - `fall: "cloud"`（白いゆげとして）、`fog`（わき道のゆげ）、`camera` 区間（さか①をうしろから）、分岐、乗客（調査員は `passenger` の配色ちがい。吹き出しの名前は今のまま「たんけんたいの なかま」）、`flock`（火山のまわりを回る うみどり。見た目だけ）
 
 #### 5.5 せりふのキー（v1.6 で足す。既定の言葉を持たせる）
-`steepNear` `rocketReady` `rocketGo` `rocketAgain` `rocketLever`（既定「ロケット ちゅうは レバーが きかないよ」）`rocketEmpty`（「からっぽ！ えきで まんたんに なるよ」）`rocketQuiet`（「えきの ちかくは ロケット おやすみ」）`slip`（「ずるずる〜… のぼれなかった」）`slipEmpty`（「ずるずる〜… ロケットが たりない！」）`slipAfter`（「ひかったら ロケットを おしてね」）`noBrake` `noBrakeLever`（「つるつる〜！ レバーが きかない！」）`rockNear` `rockDrop` `rockHit`（「ぽこん！ いしに ぶつかった〜」）`timerStart` `timeLow` `timeSafe`（「セーフ！」）`timeUp`（「はっくしょーん！」）。区間や石ごとの声は `params.line` と `params.say` に書く。
+`steepNear` `rocketReady` `rocketGo` `rocketAgain` `rocketLever`（既定「ロケット ちゅうは レバーが きかないよ」）`rocketEmpty`（「からっぽ！ えきで まんたんに なるよ」）`rocketQuiet`（「えきの ちかくは ロケット おやすみ」）`slip`（「ずるずる〜… のぼれなかった」）`slipEmpty`（「ずるずる〜… ロケットが たりない！」）`slipAfter`（「ひかったら ロケットを おしてね」）`slipEmptyAfter`（つぶ 0 の ずるずるの あと。既定は slipAfter と同じ）`noBrake` `noBrakeLever`（「つるつる〜！ レバーが きかない！」）`rockNear` `rockDrop` `rockHit`（「ぽこん！ いしに ぶつかった〜」）`timerStart` `timeLow` `timeSafe`（「セーフ！」）`timeUp`（「はっくしょーん！」）。区間や石ごとの声は `params.line` と `params.say` に書く。
 
 #### 5.6 読み込み時の検査（validate.ts に足す）
-- `slope`: `pull` が 0 でない。`from` が線路の始まりから 30 m 以上あと、`to` が終わりから 10 m 以上手前。区間の中に、停止線・分岐・合流・切れ目がない。のぼり坂の `to` から、同じ線路で次に止まる駅の停止線まで 200 m 以上（`ROCKET.stationQuiet`）
+- `slope`: `pull` が 0 でない。`from` が線路の始まりから 30 m 以上あと（自分の `rewind` を持つ坂は、ずるずるの 6 m ＋ 2 m ＝ 8 m 以上あとで よい。わき道の 12 のため）、`to` が終わりから 10 m 以上手前。区間の中に、停止線・分岐・合流・切れ目がない。のぼり坂の `to` から、同じ線路で次に止まる駅の停止線まで 200 m 以上（`ROCKET.stationQuiet`）
 - `rewind`（坂・石・切れ目）の戻り先が、どの `slope` の中にもない。ころがる石の `startDistance` の中にもない
 - `rocket`: `railId`・`from`・`to` がある。`allow: false` と `glow: true` は同時に書かない
 - `countdown`: `seconds > 0`。`until` がある線路が存在する。`assistMax ≥ 0`
@@ -927,11 +930,11 @@ params の既定値: `pull`（必須）、`max: 20`（くだり）、`rewind: { 
 | 960–1055 | みさき | 49 | →(−224, 370) | **みさきえき 1035**（左）。車止め |
 
 #### 6.5 地形と置くもの
-- `volcano`（中心 (0,0,0)）: すそは 半径 380 m で、そのまわり 380〜395 m は すなはま。ふちは 半径 100 m・高さ 100 m、火口の底は 86。ふもとは緑、中ほどは茶色、上は こい灰色。ふだんは 12 秒ごとに けむりの わっか「ぽふっ」を出し、カウントダウン中は 4 秒ごと
+- `volcano`（中心 (0,0,0)）: すそは 半径 380 m で、そのまわり 380〜395 m は すなはま。ふちは 半径 100 m・高さ 100 m、火口の底は 86。ふもとは緑、中ほどは茶色、上は こい灰色。ふだんは 12 秒ごとに けむりの わっか「ぽふっ」を出し、カウントダウン中は 4 秒ごと（`VOLCANO_PUFF`、params.ts。`volcano` の小物がある ステージだけ）
 - `mesa-a` はなれやま: 中心 (−532, 0, 165)、175 m × 140 m、上面 48（線路は 48.6 で、道床がのる）。行きと帰りの線路と U ターンが上にのり、おねは x −445 の辺から入り、橋は x −455 の辺から出る
-- `mesa-b` みさき: 中心 (−268, 0, 308)、125 m × 155 m、上面 48、向きは 70°（みさきの線路に合わせる）
+- `mesa-b` みさき: 中心 (−266, 0, 308.5)、125 m × 155 m、上面 48、向きは 82°（みさきの線路より 12° まわして、橋のはしで 線路が まっすぐ のるように）
 - 線路の下: 本線とわき道は `base { look: "rock", depth: 3 }`。くだり線は `base { look: "rock", toGround: true, skip: [158–190, 390–1055] }`（はなれやま・橋・みさきは、それぞれのモデルが支える）
-- 入り江（おねと橋のあいだ、幅 約 120 m）は海。記録③の あわの柱は (−390, 0, 170)
+- 入り江（おねと橋のあいだ、幅 約 120 m）は海。記録③の あわの柱は (−390, 0, 170)（区間 `bubbles`、見た目だけ: `{ "type": "bubbles", "params": { "position": [-390, 0, 170], "count": 14, "height": 8, "radius": 2.5 } }`）
 - 岩場: `boulder` `rock-a` `rock-b` を いしのみちの山側に 12 こ、`cliff-a` `cliff-b` を がけとアーチに 6 こ。緑: `fern-a` `fern-b` `cycad` を 本線 150–900 のまわりに 約 50 こ
 - 見た目だけの うみどり（`flock`、`seabird`、8 羽）が火山のまわりを回る
 - エンディングのカメラ: at (−470, 75, 430)、lookAt (−286, 60, 261)。橋は −67°、火山は −43°、みさきの電車は −18° の方向で、どれも画面に入ることを計算で確かめた
@@ -1001,6 +1004,7 @@ M3 のカウントダウン区間（かんそくじょえき 450 → 橋のむ�
 ### 11. 地図
 - `world.json` の 2-3（x 52, y 82）に島の絵を描く。`volcano`（縮小）、`mesa-a`、`old-bridge`、`observatory`、`pumice`、`train-proto` を置く（2-1 と同じやり方、`node scripts/render-map.mjs`）
 - 2-2 をクリアすると線路がつながる（`links` に もうある）。2-3 をクリアすると、みさきから海へ線路がのびて、3 章の「？」の島（3-1。まだステージのファイルはない）につながる。章の見出し「3しょう みずと こおり」と、リンク `2-3 → 3-1` を足す
+- **まだ入れていない**（付録 D の だいさんの答え待ち）。スモークテストは「待ち」と記録して先へ進み、`world.json` に `2-3 → 3-1` が入ったら つながっていることを確かめる
 
 ### 12. 寸劇
 入り `opening`（1 場面 4 行まで）:
@@ -1050,7 +1054,7 @@ M2 の終わり `glimpse`:
 ---（spawn サカサ: kudari 1052、左 14 m、みさきの岩の上）（うしろから）
 ピコ: サカサー！ ありがとうー！（はねる）
 サカサ: ……こ、こんにちは〜！
-（move サカサ: kudari 1055、左 48 m、2.5 秒。みさきの岩のむこうへ → remove）
+（move サカサ: kudari 1054、左 29 m、1.6 秒で みさきの上を はしまで → 同じ所の 10 m 下へ 0.9 秒。みさきの岩のむこうへ おりて 見えなくなる → remove。はじめの「kudari 1055、左 48 m」は みさきの上から 17 m はみ出て 宙に うくので直した。layout-2-3.mjs が みさきの上に おさまることを確かめる）
 ピコ: …よし、いこう！ つぎの せかいへ！（ばんざい）
 （札「2しょう おしまい！」ボタン「つぎへ」）
 ```
@@ -1127,7 +1131,7 @@ noBrake（わき道のくだり）: つるつるざか！ ひゃっほー！
 rocketAgain: おそく なってきた… もういっかい！
 rocketEmpty: からっぽ！ えきで まんたんに なるよ
 slipEmpty: ずるずる〜… ロケットが たりない！
-slipAfter: こんどは さかまで とっておこう
+slipEmptyAfter（つぶ 0 の ずるずるの あと。ほかの ずるずるの あとは 既定の slipAfter）: こんどは さかまで とっておこう
 stationNear: かこうえきだ。ゆっくり！
 ヒント main 1740: あれ？ えきの かんばんが さかさま…
 complete: てっぺんだ！ かざんの なかが みえる！
@@ -1190,6 +1194,7 @@ rocketQuiet: えきの ちかくは ロケット おやすみ
 slip: ずるずる〜… のぼれなかった
 slipEmpty: ずるずる〜… ロケットが たりない！
 slipAfter: ひかったら ロケットを おしてね
+slipEmptyAfter: ひかったら ロケットを おしてね
 noBrakeLever: つるつる〜！ レバーが きかない！
 rockHit: ぽこん！ いしに ぶつかった〜
 timeSafe: セーフ！
@@ -1246,19 +1251,20 @@ tests/smoke/stage-2-3-full.spec.ts（test.setTimeout(1_200_000)。本番ビル�
    b. kudari 175 でスクショ 66-arch.png。
    c. kudari 300−FRONT で #rocket を押す → data-burn='0' のまま、pips='3'（駅の近くは おやすみ）。
    d. stopAt(kudari, 450) → doors → #cargo の乗客 1。
-   e. 時間切れ: #timer が見え、data-timer が 69〜70。レバーは STOP のまま待つ → data-timer-state='up' → スクショ 67-sneeze.png → waitDriving → data-rail='kudari'、data-s が 444±3、data-timer ≥ 79、乗客 1 のまま。
-   f. ほかの失敗で時間が戻る: FAST のまま F（kudari 612）へ → phase failing のときの data-timer を T1 として覚える → waitDriving → data-timer > T1。
+   e. 時間切れ: #timer が見え、data-timer が 69〜70。レバーは STOP のまま待つ → data-timer-state='low' と「はやく はやく」→ data-timer-state='up' → スクショ 67-sneeze.png → waitDriving → data-rail='kudari'、data-s が 444±3、data-timer ≥ 79、乗客 1 のまま。
+   f. ほかの失敗で時間が戻る: FAST のまま F（kudari 612）へ。とちゅう 戻り先（612 − 80 ＝ 532）を通ったときの data-timer を T0、phase failing のときを T1 として覚える → waitDriving → data-timer > T1、T0＋3 の ±1 秒、満タン（80）より少ない。
+   f2. 待てば ころがる: 戻った所（F の 80 m 手前）で レバーは STOP のまま → data-rocks に rock-f:roll（F が ひとりで ころがって いく）。
    g. 本番: NORMAL で F を通る → kudari 640−FRONT で FAST にし、#rocket が光ったら押す（スクショ 68-rocket-timer.png）→ kudari 800 で #rocket を押す → #bubble に「ぐらぐらばし」→ kudari 885 をこえたら data-timer-state='safe'、#timer に「セーフ」→ スクショ 69-safe.png → data-music='volcano'。
    h. stopAt(kudari, 1035) → doors（降りる。乗客 0）→ card「できた」。
-6. エンディング: #caption に「はっくしょーん」が出たらスクショ 70-sneeze-ending.png → tapUntil で進める → card「2しょう おしまい」→ スクショ 71-ending.png → つぎへ → card「クリア」→ スクショ 72-clear.png。
-7. progress: cleared に 2-3、abilities に rocket、records に pumice-float と sulfur-crystal。drawsMax と trisMax をログに出す（200 と 10 万の中）。
-8. 地図: #map が見え、[data-link="2-3>3-1"] が is-laid → #map-close。
+6. エンディング: #caption に「はっくしょーん」が出たらスクショ 70-sneeze-ending.png →「はしが おちちゃった」で data-rail-cut='kudari:765-865' → 「こんにちは」で data-cutscene-actors に sakasa、札が出たときには いない → tapUntil で進める → card「2しょう おしまい」→ スクショ 71-ending.png → つぎへ → card「クリア」→ スクショ 72-clear.png。
+7. progress: cleared に 2-3、abilities に rocket、records に pumice-float と sulfur-crystal。火山の「ぽふっ」が 10 回より多い（data-volcano-puffs）。drawsMax と trisMax をログに出す（200 と 10 万の中）。
+8. 地図: #map が見え、[data-link="2-3>3-1"] が is-laid → #map-close（§11 の とおり、world.json に入るまでは「待ち」と記録する）。
 9. errors（pageerror と console.error）が空。
 
 足すテスト:
 - smoke.spec.ts（0-0）: #rocket が見える／のぼり坂でロケットなし → 戻る／くだり坂でレバーが動かない／おやすみ区間で押しても data-burn=0。
-- pause-settings.spec.ts: 左利きの設定で、ロケットを持っていると #camera が画面の左上にあり、ロケットは 2×2 にある。
-- model-culling.spec.ts かモデル確認ページ: volcano, mesa-a, mesa-b, pumice, old-bridge, observatory, seabird, seabird-sleep, sign-steep, sign-slide, sign-no-rocket, sulfur-crystal, rocket-unit を models.html?model=<名前> で 1 つずつ開き、エラーが出ないこと。
+- pause-settings.spec.ts: 左利きの設定で、ロケットを持っていると #camera が画面の左上にあり、ロケットは 2×2 にある。開いた視点のタイルより 停止ゲージが上に描かれる（DOM の順）。カウントダウンの「セーフ！」が 荷物の列と 速さの札（いちばん長い「きゅうブレーキ」）に重ならない（iPad と 小さいスマホ）。
+- モデル確認ページ（stage-2-3-full.spec.ts の 2 つめの テスト）: volcano, mesa-a, mesa-b, pumice, old-bridge, observatory, seabird, seabird-sleep, sign-steep, sign-slide, sign-no-rocket, sulfur-crystal, rocket-unit を models.html?model=<名前> で 1 つずつ開き、エラーが出ないこと。
 
 ### 付録 D: あとで見直すこと（2-3）
 

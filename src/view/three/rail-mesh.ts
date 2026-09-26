@@ -4,6 +4,7 @@ import {
   Color,
   Float32BufferAttribute,
   Group,
+  LOD,
   Matrix4,
   Mesh,
   MeshLambertMaterial,
@@ -12,6 +13,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Rail, RailFrame, RailNetwork } from '../../rail/types';
+import type { RailBaseDef } from '../../stage/types';
 import type { ModelPlacement } from './props';
 
 const SAMPLE_STEP = 1;
@@ -28,6 +30,11 @@ const BALLAST_BOTTOM_DEPTH = 0.6;
  * pieces behind the camera or past the fog are culled instead of drawing the whole line every frame.
  */
 const CHUNK = 100;
+/**
+ * Past this distance (m, camera to a piece's centre) a piece of steel track is drawn without its sleepers: they are
+ * about a pixel wide there and make up most of the track's triangles (2-3's island shows most of its 3 km at once).
+ */
+const SLEEPER_LOD_DISTANCE = 300;
 const RAIL_COLOR = new Color('#6E6E6E');
 /** How a rail is drawn: steel rails on ballast, or (2-2) two spider-silk threads with thin cross threads. */
 export type TrackLook = 'rail' | 'silk';
@@ -41,6 +48,32 @@ const SILK_SUPPORT_LATERAL = 9;
 const SILK_SUPPORT_RISE = 14;
 const BALLAST_COLOR = new Color('#A89F91');
 const SLEEPER_COLOR = new Color('#6B4E2E');
+/** v1.7 (2-3): the bed of a steep uphill (red-brown with yellow ">>"), of a slide (pale grey), and rock under the track. */
+const STEEP_BALLAST_COLOR = new Color('#A45C3D');
+const SLIDE_BALLAST_COLOR = new Color('#D6DBE0');
+const CHEVRON_COLOR = new Color('#FFD43B');
+const ROCK_BASE_COLOR = new Color('#8C7B6B');
+const CHEVRON_STEP = 8;
+/** A base reaching the ground widens by this much per metre of height (a ridge). */
+const BASE_SPREAD = 0.5;
+/**
+ * A ridge's foot bulges out by up to this share of its spread, varying along it, so its sides are rock faces
+ * catching the light differently, not one flat wall; its colour runs from dark at the foot to light at the top.
+ */
+const RIDGE_BULGE = 0.35;
+const RIDGE_FOOT_COLOR = new Color('#6F5D4E');
+const RIDGE_TOP_COLOR = new Color('#A8927A');
+const RIDGE_COLOR_HEIGHT = 60;
+
+/**
+ * v1.7: how parts of the track look — slopes (bed colour, arrows) and the rock bed under a rail (`rails[].base`).
+ * Drawn into the same vertex-coloured track pieces, so no extra draw calls.
+ */
+export interface TrackLooks {
+  slopes: { railId: string; from: number; to: number; kind: 'up' | 'down' }[];
+  bases: Map<string, RailBaseDef>;
+  groundY: number | null;
+}
 
 interface GeometryData {
   positions: number[];
@@ -199,15 +232,18 @@ export interface TrackSkip {
 
 const skipped = (skips: TrackSkip[], s: number): boolean => skips.some((k) => s > k.from && s < k.to);
 
-/** Track (rails, ballast, sleepers) of one rail between `from` and `to` as one vertex-coloured geometry. */
-export function buildTrack(rail: Rail, from: number, to: number, look: TrackLook = 'rail'): BufferGeometry | null {
+/**
+ * Track (rails, ballast, sleepers) of one rail between `from` and `to` as one vertex-coloured geometry. `look`:
+ * steel rails or (2-2) silk; `looks` (v1.7): slope beds and the rock base, for steel rails.
+ */
+export function buildTrack(rail: Rail, from: number, to: number, look: TrackLook = 'rail', looks?: TrackLooks): BufferGeometry | null {
   // Exactly [from, to]: both ends are sample points even when no gap ends there (a flower bridge's gap is already
   // gone when its track is built), so the piece meets the rest of the line without a hole or an overlap.
   const end = Math.min(to, rail.length);
   const samples = [from, ...samplePoints(rail).filter((s) => s > from + 1e-6 && s < end - 1e-6), end];
   if (look === 'silk') return buildSilkChunk(rail, samples, from, to, []);
   const sleeper = new BoxGeometry(2.4, 0.15, 0.25);
-  const geometry = buildChunk(rail, samples, from, to, sleeper, []);
+  const geometry = buildChunk(rail, samples, from, to, sleeper, [], looks);
   sleeper.dispose();
   return geometry;
 }
@@ -303,6 +339,84 @@ function buildSilkChunk(rail: Rail, samples: number[], from: number, to: number,
   return painted(makeGeometry(data), SILK_COLOR);
 }
 
+/** Adds a quad whose front faces `facing` (the winding is picked to match). */
+function addQuadFacing(data: GeometryData, a: Vector3, b: Vector3, c: Vector3, d: Vector3, facing: Vector3): void {
+  const n = new Vector3().subVectors(b, a).cross(new Vector3().subVectors(c, a));
+  if (n.dot(facing) >= 0) addQuad(data, a, b, c, d);
+  else addQuad(data, a, d, c, b);
+}
+
+/** Which slope (v1.7) a track position is on, if any. */
+function slopeKindAt(looks: TrackLooks | undefined, railId: string, s: number): 'up' | 'down' | null {
+  if (!looks) return null;
+  for (const z of looks.slopes) if (z.railId === railId && s >= z.from && s <= z.to) return z.kind;
+  return null;
+}
+
+const DOWN = new Vector3(0, -1, 0);
+
+/** v1.7: rock under one track segment, from the ballast's bottom edges down `depth` m or to the ground. */
+function addBaseSegment(data: GeometryData, start: RailFrame, end: RailFrame, base: RailBaseDef, groundY: number | null, capStart: boolean, capEnd: boolean): void {
+  const edge = (f: RailFrame, side: number): Vector3 => point(f, side * BALLAST_BOTTOM_HALF_WIDTH, BALLAST_BOTTOM_DEPTH);
+  const foot = (f: RailFrame, side: number): Vector3 | null => {
+    const top = edge(f, side);
+    if (base.toGround) {
+      if (groundY === null || top.y - groundY <= 0.05) return null;
+      const h = top.y - groundY;
+      const bulge = 1 + RIDGE_BULGE * rockHash(top.x, top.z);
+      const out = new Vector3(f.right.x, 0, f.right.z).normalize().multiplyScalar(side * h * BASE_SPREAD * bulge);
+      return new Vector3(top.x + out.x, groundY, top.z + out.z);
+    }
+    return top.clone().addScaledVector(DOWN, base.depth ?? 3);
+  };
+  const sl = foot(start, -1);
+  const sr = foot(start, 1);
+  const el = foot(end, -1);
+  const er = foot(end, 1);
+  if (!sl || !sr || !el || !er) return;
+  const tsl = edge(start, -1);
+  const tsr = edge(start, 1);
+  const tel = edge(end, -1);
+  const ter = edge(end, 1);
+  addQuadFacing(data, tsr, sr, er, ter, start.right);
+  addQuadFacing(data, tsl, tel, el, sl, start.right.clone().negate());
+  if (!base.toGround) addQuadFacing(data, sl, el, er, sr, DOWN);
+  if (capStart) addQuadFacing(data, tsl, tsr, sr, sl, start.tangent.clone().negate());
+  if (capEnd) addQuadFacing(data, tel, ter, er, el, end.tangent);
+}
+
+/** A repeatable 0…1 number for a place (the same on every load, and for both segments sharing a point). */
+function rockHash(x: number, z: number): number {
+  const v = Math.sin(Math.round(x * 10) * 12.9898 + Math.round(z * 10) * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+/** v1.7: a ridge's colours, per vertex: dark at the foot, light at the top, each point a little different. */
+function paintedRidge(geometry: BufferGeometry, groundY: number): BufferGeometry {
+  const position = geometry.getAttribute('position');
+  const colors = new Float32Array(position.count * 3);
+  const c = new Color();
+  for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i);
+    const y = position.getY(i);
+    const z = position.getZ(i);
+    c.copy(RIDGE_FOOT_COLOR).lerp(RIDGE_TOP_COLOR, Math.min(1, Math.max(0, (y - groundY) / RIDGE_COLOR_HEIGHT)));
+    c.multiplyScalar(0.9 + 0.18 * rockHash(z, x));
+    colors.set([c.r, c.g, c.b], i * 3);
+  }
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  return geometry;
+}
+
+/** v1.7: a yellow ">" on the sleepers of a steep uphill, pointing up the slope. */
+function addChevron(data: GeometryData, frame: RailFrame): void {
+  const at = (lateral: number, along: number): Vector3 =>
+    frame.position.clone().addScaledVector(frame.right, lateral).addScaledVector(frame.tangent, along).addScaledVector(frame.up, -0.13);
+  for (const side of [-1, 1]) {
+    addQuadFacing(data, at(0, 0.45), at(side * 0.22, 0.45), at(side * 0.8, -0.35), at(side * 0.58, -0.35), frame.up);
+  }
+}
+
 /** One piece of track: rails, ballast and sleepers of `rail` between `from` and `to`, merged into one geometry. */
 function buildChunk(
   rail: Rail,
@@ -311,27 +425,14 @@ function buildChunk(
   to: number,
   sleeper: BoxGeometry,
   skips: TrackSkip[],
+  looks?: TrackLooks,
 ): BufferGeometry | null {
-  const railData: GeometryData = { positions: [], indices: [] };
-  const ballastData: GeometryData = { positions: [], indices: [] };
-  for (let index = 0; index < samples.length - 1; index += 1) {
-    const startS = samples[index];
-    const endS = samples[index + 1];
-    if (startS < from || startS >= to) continue;
-    if (isInGap(rail, (startS + endS) / 2) || skipped(skips, (startS + endS) / 2)) continue;
-    const start = rail.frameAt(startS);
-    const end = rail.frameAt(endS);
-    addRailSegment(railData, start, end, -RAIL_HALF_GAUGE);
-    addRailSegment(railData, start, end, RAIL_HALF_GAUGE);
-    addBallastSegment(ballastData, start, end);
-  }
-  const parts: BufferGeometry[] = [];
-  if (railData.indices.length) parts.push(painted(makeGeometry(railData), RAIL_COLOR));
-  if (ballastData.indices.length) parts.push(painted(makeGeometry(ballastData), BALLAST_COLOR));
-  for (let s = Math.ceil(from / SLEEPER_STEP) * SLEEPER_STEP; s < Math.min(to, rail.length + 1e-6); s += SLEEPER_STEP) {
-    if (isInGap(rail, s) || skipped(skips, s)) continue;
-    parts.push(painted(sleeper.clone().applyMatrix4(frameMatrix(rail.frameAt(s), 0.225)), SLEEPER_COLOR));
-  }
+  const { bed, sleepers } = buildChunkParts(rail, samples, from, to, sleeper, skips, looks);
+  return mergeParts([...bed, ...sleepers]);
+}
+
+/** Merges vertex-coloured parts into one geometry (with its bounding sphere) and disposes of the parts. */
+function mergeParts(parts: BufferGeometry[]): BufferGeometry | null {
   if (parts.length === 0) return null;
   const merged = mergeGeometries(parts);
   for (const part of parts) part.dispose();
@@ -339,8 +440,120 @@ function buildChunk(
   return merged;
 }
 
-/** Generates the track (in culled pieces) plus buffer-stop placements. `looks`: rails not drawn as steel rails. */
-export function buildRailScene(network: RailNetwork, skips: TrackSkip[] = [], looks: Record<string, TrackLook> = {}): RailScene {
+/** The parts of one piece of track: the bed (rails, ballast, slope marks, rock base) and the sleepers. */
+function buildChunkParts(
+  rail: Rail,
+  samples: number[],
+  from: number,
+  to: number,
+  sleeper: BoxGeometry,
+  skips: TrackSkip[],
+  looks?: TrackLooks,
+): { bed: BufferGeometry[]; sleepers: BufferGeometry[] } {
+  const railData: GeometryData = { positions: [], indices: [] };
+  const ballastData: GeometryData = { positions: [], indices: [] };
+  // v1.7: slope beds in their own colours, arrows, and the rock bed under the rail.
+  const steepData: GeometryData = { positions: [], indices: [] };
+  const slideData: GeometryData = { positions: [], indices: [] };
+  const chevronData: GeometryData = { positions: [], indices: [] };
+  const baseData: GeometryData = { positions: [], indices: [] };
+  const base = looks?.bases.get(rail.id);
+  const hasBase = (s: number): boolean =>
+    !!base && !isInGap(rail, s) && !skipped(skips, s) && !(base.skip ?? []).some((k) => s > k.from && s < k.to);
+  for (let index = 0; index < samples.length - 1; index += 1) {
+    const startS = samples[index];
+    const endS = samples[index + 1];
+    if (startS < from || startS >= to) continue;
+    const mid = (startS + endS) / 2;
+    if (isInGap(rail, mid) || skipped(skips, mid)) continue;
+    const start = rail.frameAt(startS);
+    const end = rail.frameAt(endS);
+    addRailSegment(railData, start, end, -RAIL_HALF_GAUGE);
+    addRailSegment(railData, start, end, RAIL_HALF_GAUGE);
+    const kind = slopeKindAt(looks, rail.id, mid);
+    addBallastSegment(kind === 'up' ? steepData : kind === 'down' ? slideData : ballastData, start, end);
+    if (base && hasBase(mid)) {
+      const before = index === 0 ? -1 : (samples[index - 1] + startS) / 2;
+      const after = index + 2 < samples.length ? (endS + samples[index + 2]) / 2 : rail.length + 1;
+      addBaseSegment(baseData, start, end, base, looks?.groundY ?? null, !hasBase(before), !hasBase(after));
+    }
+  }
+  if (looks) {
+    for (const z of looks.slopes) {
+      if (z.railId !== rail.id || z.kind !== 'up') continue;
+      for (let s = z.from + CHEVRON_STEP / 2; s < z.to; s += CHEVRON_STEP) {
+        if (s >= from && s < to && !isInGap(rail, s) && !skipped(skips, s)) addChevron(chevronData, rail.frameAt(s));
+      }
+    }
+  }
+  const parts: BufferGeometry[] = [];
+  if (railData.indices.length) parts.push(painted(makeGeometry(railData), RAIL_COLOR));
+  if (ballastData.indices.length) parts.push(painted(makeGeometry(ballastData), BALLAST_COLOR));
+  if (steepData.indices.length) parts.push(painted(makeGeometry(steepData), STEEP_BALLAST_COLOR));
+  if (slideData.indices.length) parts.push(painted(makeGeometry(slideData), SLIDE_BALLAST_COLOR));
+  if (chevronData.indices.length) parts.push(painted(makeGeometry(chevronData), CHEVRON_COLOR));
+  if (baseData.indices.length) {
+    const groundY = looks?.groundY ?? null;
+    const geometry = makeGeometry(baseData);
+    parts.push(base?.toGround && groundY !== null ? paintedRidge(geometry, groundY) : painted(geometry, ROCK_BASE_COLOR));
+  }
+  const sleepers: BufferGeometry[] = [];
+  for (let s = Math.ceil(from / SLEEPER_STEP) * SLEEPER_STEP; s < Math.min(to, rail.length + 1e-6); s += SLEEPER_STEP) {
+    if (isInGap(rail, s) || skipped(skips, s)) continue;
+    sleepers.push(painted(sleeper.clone().applyMatrix4(frameMatrix(rail.frameAt(s), 0.225)), SLEEPER_COLOR));
+  }
+  return { bed: parts, sleepers };
+}
+
+/**
+ * A piece of steel track as a level of detail: with its sleepers near the camera, without them past
+ * SLEEPER_LOD_DISTANCE (one draw call either way). The geometries are centred on the piece, which sits there.
+ */
+function buildTrackPiece(
+  rail: Rail,
+  samples: number[],
+  from: number,
+  to: number,
+  sleeper: BoxGeometry,
+  skips: TrackSkip[],
+  material: MeshLambertMaterial,
+  name: string,
+  looks?: TrackLooks,
+): LOD | null {
+  const { bed, sleepers } = buildChunkParts(rail, samples, from, to, sleeper, skips, looks);
+  if (bed.length === 0 && sleepers.length === 0) return null;
+  const bare = bed.length ? mergeGeometries(bed) : null;
+  const full = mergeParts([...bed, ...sleepers]);
+  if (!full) return null;
+  const center = full.boundingSphere?.center.clone() ?? new Vector3();
+  full.translate(-center.x, -center.y, -center.z);
+  full.computeBoundingSphere();
+  const lod = new LOD();
+  lod.name = name;
+  lod.position.copy(center);
+  const near = new Mesh(full, material);
+  near.name = name;
+  lod.addLevel(near, 0);
+  if (bare) {
+    bare.translate(-center.x, -center.y, -center.z);
+    bare.computeBoundingSphere();
+    const far = new Mesh(bare, material);
+    far.name = name;
+    lod.addLevel(far, SLEEPER_LOD_DISTANCE);
+  }
+  return lod;
+}
+
+/**
+ * Generates the track (in culled pieces) plus buffer-stop placements. `railLooks`: rails not drawn as steel rails
+ * (2-2 silk); `looks` (v1.7): slope beds and rock bases.
+ */
+export function buildRailScene(
+  network: RailNetwork,
+  skips: TrackSkip[] = [],
+  railLooks: Record<string, TrackLook> = {},
+  looks?: TrackLooks,
+): RailScene {
   const group = new Group();
   group.name = 'rail-network';
   const material = new MeshLambertMaterial({ vertexColors: true });
@@ -353,13 +566,16 @@ export function buildRailScene(network: RailNetwork, skips: TrackSkip[] = [], lo
     for (let i = 0; i < pieces; i++) {
       const to = i === pieces - 1 ? rail.length + 1 : (i + 1) * CHUNK;
       const railSkips = skips.filter((k) => k.railId === rail.id);
-      const geometry =
-        looks[rail.id] === 'silk'
-          ? buildSilkChunk(rail, samples, i * CHUNK, to, railSkips)
-          : buildChunk(rail, samples, i * CHUNK, to, sleeper, railSkips);
+      const name = `${rail.id}-track-${i}`;
+      if (railLooks[rail.id] !== 'silk') {
+        const piece = buildTrackPiece(rail, samples, i * CHUNK, to, sleeper, railSkips, material, name, looks);
+        if (piece) group.add(piece);
+        continue;
+      }
+      const geometry = buildSilkChunk(rail, samples, i * CHUNK, to, railSkips);
       if (!geometry) continue;
       const mesh = new Mesh(geometry, material);
-      mesh.name = `${rail.id}-track-${i}`;
+      mesh.name = name;
       group.add(mesh);
     }
 

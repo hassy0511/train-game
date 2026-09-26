@@ -17,7 +17,7 @@ export function createPause(root: HTMLElement, handlers: PauseHandlers): PauseCo
   const button = document.createElement('button');
   button.type = 'button';
   button.id = 'pause';
-  button.className = 'pause-button';
+  button.className = 'corner-button pause-button';
   button.setAttribute('aria-label', 'いちじ ていし');
   button.innerHTML = ICON;
   button.hidden = true;

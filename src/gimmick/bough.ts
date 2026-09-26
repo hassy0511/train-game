@@ -85,7 +85,7 @@ export class BoughSystem {
       b.y += b.v * dt;
       if (!b.thrown && railId === b.railId && bogie >= b.to - 1.5 && bogie < b.to + 1 && !train.airborne) {
         b.thrown = true;
-        const length = train.state.speed * JUMP.airTime * b.launch;
+        const length = train.jumpSpeed * JUMP.airTime * b.launch;
         if (train.launch(length, b.height)) {
           b.v -= BOUGH.kick;
           this.onThrow();

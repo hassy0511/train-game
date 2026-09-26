@@ -111,14 +111,17 @@ export class SmallDino extends Dino {
     this.elapsed = 0;
   }
 
+  /** Starts across now. */
+  protected startCrossing(): { kind: 'cross'; seconds: number } {
+    this.state = 'crossing';
+    this.elapsed = 0;
+    return { kind: 'cross', seconds: this.params.crossSeconds };
+  }
+
   update(dt: number): DinoOutcome {
     const d = this.distance();
     if (d === null) return null;
-    if (this.state === 'waiting' && d <= this.params.startDistance && d > 0) {
-      this.state = 'crossing';
-      this.elapsed = 0;
-      return { kind: 'cross', seconds: this.params.crossSeconds };
-    }
+    if (this.state === 'waiting' && d <= this.params.startDistance && d > 0) return this.startCrossing();
     if (this.state !== 'crossing') return null;
     this.elapsed += dt;
     if (this.elapsed >= this.params.crossSeconds) {

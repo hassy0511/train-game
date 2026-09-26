@@ -61,6 +61,7 @@ async function build(diorama: WorldDiorama | null, models: ModelLibrary): Promis
     const scale = item.scale ?? 1;
     const rot = MathUtils.degToRad(item.rotY ?? 0);
     model.scale.setScalar(scale);
+    if (item.scaleY) model.scale.y *= item.scaleY;
     model.rotation.y = rot;
     const local = new Vector3(...(item.local ?? [0, 0, 0])).multiplyScalar(scale).applyAxisAngle(new Vector3(0, 1, 0), rot);
     model.position.set(item.at[0] + local.x, (item.lift ?? 0) + local.y, item.at[1] + local.z);

@@ -77,6 +77,12 @@ export const DOOR_REMIND_SECONDS = 8;
 
 export const BUBBLE_SECONDS = 3.5;
 
+/**
+ * v1.7: a refused press (a grey rocket or jump button) says why; the same line again within this many seconds of
+ * game time is dropped, so mashing does not queue a copy per tap (one bubble's time).
+ */
+export const REFUSE_COOLDOWN = BUBBLE_SECONDS;
+
 /** Emergency stop: seconds to reach 0 from any speed. */
 export const EMERGENCY_STOP_SECONDS = 0.5;
 
@@ -103,6 +109,12 @@ export const JUMP = {
   landingMargin: 1,
   /** The partner names the right notch this far before a gap. */
   hintDistance: 60,
+  /**
+   * 2-3: while the rocket's push is in the speed, jump, jump-pad and bough distances count it only up to this
+   * (m/s), so a rocket-fast train does not fly past the far edge when an earlier stage is played again (an
+   * updraft's speed still counts in full: 1-3 needs it).
+   */
+  maxSpeed: 22,
 } as const;
 
 /** Jump pad: double the normal distance, higher, and always far enough to land past the next gap (+extra m). */
@@ -155,3 +167,48 @@ export const FALL = { bogieLead: 2, seconds: 0.8, depth: 3.5 } as const;
 /** Light: toggled; caps the speed while on and reveals reversed things and records nearby. */
 export const LIGHT = { speedScale: 0.7, revealDistance: 40, recordDistance: 25, cooldown: 0.4 } as const;
 
+
+/**
+ * 2-3: the rocket. Each press uses one of `pips` flames and pushes the train at `accel` m/s² up to `speed` m/s for
+ * `burn` s, whatever the lever, the light or an uphill pull. Afterwards it slows back to the lever's speed at
+ * `settle` m/s² (or the notch's own brake when that is stronger). The button glows `glowAhead` m before an uphill
+ * the train cannot climb as it is. It rests `stationQuiet` m before the stop line of the station the train is
+ * heading to and `bufferQuiet` m before a buffer stop.
+ */
+export const ROCKET = { pips: 3, burn: 3, speed: 30, accel: 10, settle: 5, glowAhead: 40, stationQuiet: 200, bufferQuiet: 150 } as const;
+
+/**
+ * 2-3: slopes (gimmicks "slope"). Uphill ("steep", pull < 0): the lever cannot climb it; stopped on it the train
+ * slips `slipBack` m back in `slipSeconds` s and is put back `rewindBefore` m before the slope. Downhill ("slide",
+ * pull > 0): the lever does nothing and the train speeds up to `max` m/s (coming in faster it slows at `overMax`
+ * m/s²). The partner names an uphill `nearDistance` m before it.
+ */
+export const SLOPE = { slipBack: 6, slipSeconds: 1.2, overMax: 3, nearDistance: 60, rewindBefore: 60, max: 20 } as const;
+
+/**
+ * 2-3: a countdown on a mission step. `lowAt` s left: the volcano fidgets. Where the train was is noted every
+ * `sampleEvery` m; after another fail the time goes back to what it was there, plus `restoreBonus` s. "セーフ！"
+ * shows for `safeShow` s. After each time-up the next try has `assist` s more, at most `assistMax` s more.
+ */
+export const COUNTDOWN = { lowAt: 10, sampleEvery: 5, restoreBonus: 3, safeShow: 1.5, assist: 10, assistMax: 30 } as const;
+
+/**
+ * 2-3: a rolling rock (actors "rock-roll", the young dinosaur's rule with a rock's look). It wobbles `warn` m
+ * ahead, starts rolling across when the train front is `startDistance` m away and takes `crossSeconds` s from
+ * `lateral` m left to `lateral` m right. Reaching it within `dangerDistance` m while it rolls is a "ぽこん". A train
+ * waiting within `warn` m, slower than `waitSpeed` m/s for `waitSeconds` s, sees it roll by too (the partner says
+ * "まって": waiting further back than `startDistance` must not leave it wobbling for ever).
+ */
+export const ROCK_ROLL = { startDistance: 60, crossSeconds: 4.5, dangerDistance: 6, lateral: 9, warn: 90, waitSeconds: 1, waitSpeed: 1 } as const;
+
+/** 2-3: a dropping rock (actors "rock-drop"): a shadow `warn` m ahead, then it drops onto the rail `drop` m ahead. */
+export const ROCK_DROP = { drop: 35, warn: 60 } as const;
+
+/** 2-3: how long a rock takes to hop off into the sea after rolling across or being bumped (s; view and "ぽちゃん"). */
+export const ROCK_SPLASH_SECONDS = 1.6;
+
+/**
+ * 2-3: a stage with a "volcano" prop puffs a small smoke ring ("ぽふっ") every `every` s, every `hurry` s while a
+ * countdown runs (the volcano gets fidgety), the first `first` s in (PHASE6 2-3 §6.5).
+ */
+export const VOLCANO_PUFF = { every: 12, hurry: 4, first: 3 } as const;

@@ -1,8 +1,10 @@
 import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
 import { buildRailNetwork } from '../rail/network';
 import type { RailNetwork } from '../rail/types';
-import type { Placement, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
-import { validateStageFile } from './validate';
+import { rocketZones } from '../gimmick/rocket';
+import { slopeZones } from '../gimmick/slope';
+import type { Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
+import { validateStageFile, validateStageLayout } from './validate';
 
 // One chunk per stage file; stages load lazily.
 const stageModules = import.meta.glob('../stages/*.json');
@@ -42,11 +44,20 @@ export async function loadStage(id: string): Promise<StageData> {
   addBridgeGaps(file);
   const network = buildRailNetwork(file);
   checkRanges(file, network);
+  validateStageLayout(file, network);
   const groundY = file.environment.ground?.y ?? null;
 
-  const props: ResolvedProp[] = file.props.map((p) => {
+  const props: ResolvedProp[] = [...file.props, ...autoSigns(file)].map((p) => {
     const t = resolvePlacement(p, network, groundY);
-    return { model: p.model, position: t.position, quaternion: t.quaternion, scale: p.scale ?? 1, physics: p.physics ?? 'none' };
+    return {
+      model: p.model,
+      position: t.position,
+      quaternion: t.quaternion,
+      scale: p.scale ?? 1,
+      physics: p.physics ?? 'none',
+      tag: p.tag,
+      onRail: 'onRail' in p ? { railId: p.onRail.railId, at: p.onRail.at } : undefined,
+    };
   });
 
   const actors: ResolvedActor[] = file.actors.map((a) => {
@@ -91,6 +102,21 @@ function addBridgeGaps(file: StageFile): void {
     const rewindAt = Number((g.params as { rewindAt?: number } | undefined)?.rewindAt ?? butterflyAt - 60);
     rail.gaps = [...(rail.gaps ?? []), { from: g.from, to: g.to, pit: false, bridge: index, rewind: { railId: g.railId, at: rewindAt } }];
   });
+}
+
+/** Signs a slope or a rocket rest stretch puts up by itself at its start (v1.7): on the left, facing the train. */
+const AUTO_SIGN = { lateral: -3.2, heightFromRail: -0.5 } as const;
+
+function autoSigns(file: StageFile): PropDef[] {
+  const sign = (model: string, railId: string, at: number): PropDef => ({
+    model,
+    onRail: { railId, at, lateral: AUTO_SIGN.lateral, heightFromRail: AUTO_SIGN.heightFromRail },
+    rotationY: 180,
+  });
+  const out: PropDef[] = [];
+  for (const z of slopeZones(file.gimmicks)) if (z.sign) out.push(sign(z.kind === 'up' ? 'sign-steep' : 'sign-slide', z.railId, z.from));
+  for (const z of rocketZones(file.gimmicks)) if (!z.allow) out.push(sign('sign-no-rocket', z.railId, z.from));
+  return out;
 }
 
 function checkRanges(file: StageFile, network: RailNetwork): void {

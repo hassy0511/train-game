@@ -1,5 +1,8 @@
 import { SONGS } from '../audio/songs';
-import { FLOWER_BRIDGE, FRAGILE, GRASSHOPPER, REWIND_DISTANCE } from '../train/params';
+import { rocketZones } from '../gimmick/rocket';
+import { slopeZones } from '../gimmick/slope';
+import type { RailNetwork } from '../rail/types';
+import { FLOWER_BRIDGE, FRAGILE, GRASSHOPPER, REWIND_DISTANCE, ROCK_ROLL, ROCKET, SLOPE } from '../train/params';
 import type { Placement, StageFile } from './types';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
@@ -73,12 +76,18 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
     if (!isObject(c) || !isString(c.railId) || !railIds.has(c.railId) || !isNumber(c.from) || !isNumber(c.to)) {
       fail(`${where}: cutRail needs railId, from, to`);
     }
+    if (c.style !== undefined && c.style !== 'fly' && c.style !== 'fall') fail(`${where}: cutRail style must be fly or fall`);
+    if (c.props !== undefined && !isString(c.props)) fail(`${where}: cutRail props must be a tag`);
   } else if ('card' in st) {
     const c = st.card;
     if (!isObject(c) || !isString(c.title) || !isString(c.button)) fail(`${where}: card needs title and button`);
     if (c.icon !== undefined && c.icon !== 'badge') fail(`${where}: card icon`);
   } else if ('camera' in st) {
-    if (!['cab', 'chase', 'side', 'top'].includes(String(st.camera))) fail(`${where}: camera`);
+    if (st.camera === 'fixed') {
+      if (!isVec3(st.at) || !isVec3(st.lookAt)) fail(`${where}: a fixed camera needs "at" and "lookAt" [x, y, z]`);
+    } else if (!['cab', 'chase', 'side', 'top'].includes(String(st.camera))) fail(`${where}: camera`);
+  } else if ('fx' in st) {
+    if (st.fx !== 'sneeze') fail(`${where}: fx must be "sneeze"`);
   } else if ('caption' in st) {
     if (!isString(st.caption)) fail(`${where}: "caption" must be text`);
     if (st.seconds !== undefined && !isNumber(st.seconds)) fail(`${where}: "seconds" must be a number`);
@@ -148,6 +157,15 @@ export function validateStageFile(raw: unknown): StageFile {
     if (r.deadEnd !== undefined && typeof r.deadEnd !== 'boolean') fail(`rail "${r.id}": "deadEnd" must be true or false`);
     if (r.upMode !== undefined && r.upMode !== 'fixed' && r.upMode !== 'follow') fail(`rail "${r.id}": "upMode" must be fixed or follow`);
     if (r.deadEnd === true && r.end.type !== 'buffer') fail(`rail "${r.id}": a dead end must end in a buffer`);
+    if (r.base !== undefined) {
+      const b = r.base;
+      if (!isObject(b) || b.look !== 'rock') fail(`rail "${r.id}": base needs look "rock"`);
+      if (b.depth !== undefined && (!isNumber(b.depth) || b.depth <= 0)) fail(`rail "${r.id}": base depth must be > 0`);
+      if (b.toGround !== undefined && typeof b.toGround !== 'boolean') fail(`rail "${r.id}": base toGround must be true or false`);
+      if (b.skip !== undefined && (!Array.isArray(b.skip) || !b.skip.every((k) => isObject(k) && isNumber(k.from) && isNumber(k.to) && k.to > k.from))) {
+        fail(`rail "${r.id}": base skip must be [{ from, to }]`);
+      }
+    }
     railIds.add(r.id);
   }
   for (const r of rails as Record<string, unknown>[]) {
@@ -188,6 +206,7 @@ export function validateStageFile(raw: unknown): StageFile {
 
   requireArray(raw, 'props').forEach((p, i) => {
     if (!isObject(p) || !isString(p.model) || !MODEL_NAME.test(p.model)) fail(`props[${i}]: "model" must match [a-z0-9-]+`);
+    if (p.tag !== undefined && !isString(p.tag)) fail(`props[${i}]: "tag" must be text`);
     checkPlacement(p, `props[${i}]`, railIds);
   });
 
@@ -199,10 +218,19 @@ export function validateStageFile(raw: unknown): StageFile {
     if (!['whistle', 'light', 'none'].includes(String(a.reactsTo))) fail(`actor "${a.id}": reactsTo`);
     if (a.size !== undefined && !isVec3(a.size)) fail(`actor "${a.id}": "size" must be [x, y, z]`);
     checkPlacement(a, `actor "${a.id}"`, railIds);
-    if ((a.type === 'grasshopper' || a.type === 'nut' || a.type === 'squirrel') && !isObject(a.onRail)) {
+    if (['grasshopper', 'nut', 'squirrel', 'rock-roll', 'rock-drop'].includes(a.type) && !isObject(a.onRail)) {
       fail(`actor "${a.id}": a ${a.type} is placed with onRail`);
     }
     if (a.type === 'grasshopper' && a.reactsTo === 'light') fail(`actor "${a.id}": a grasshopper hops on by itself ("none") or when whistled for ("whistle")`);
+    const ap = (a.params ?? {}) as Record<string, unknown>;
+    if (a.type === 'cat' && ap.look !== undefined && ap.look !== 'cat' && ap.look !== 'seabird') fail(`actor "${a.id}": look must be cat or seabird`);
+    if (a.type === 'rock-roll' || a.type === 'rock-drop') {
+      const rw = ap.rewind;
+      if (rw !== undefined && !isNumber(rw) && !(isObject(rw) && isString(rw.railId) && railIds.has(rw.railId) && isNumber(rw.at))) {
+        fail(`actor "${a.id}": rewind must be a place on its rail (a number) or { railId, at }`);
+      }
+      for (const k of ['say', 'hitAfter']) if (ap[k] !== undefined && !isString(ap[k])) fail(`actor "${a.id}": "${k}" must be text`);
+    }
   }
 
   for (const r of requireArray(raw, 'records')) {
@@ -237,6 +265,18 @@ export function validateStageFile(raw: unknown): StageFile {
         if (st[k] !== undefined && (!isNumber(st[k]) || (st[k] as number) < 0)) fail(`mission "${m.id}": "${k}" must be >= 0`);
       }
       if (st.parcel !== undefined && st.parcel !== 'load' && st.parcel !== 'unload') fail(`mission "${m.id}": "parcel"`);
+      if (st.countdown !== undefined) {
+        const c = st.countdown;
+        const where = `mission "${m.id}" countdown`;
+        if (!isObject(c) || !isNumber(c.seconds) || c.seconds <= 0) fail(`${where}: "seconds" must be > 0`);
+        if (c.until !== undefined && (!isObject(c.until) || !isString(c.until.railId) || !railIds.has(c.until.railId) || !isNumber(c.until.at))) {
+          fail(`${where}: "until" needs a known railId and at`);
+        }
+        if (c.assist !== undefined && (!isNumber(c.assist) || c.assist < 0)) fail(`${where}: "assist" must be >= 0`);
+        if (c.assistMax !== undefined && (!isNumber(c.assistMax) || c.assistMax < 0)) fail(`${where}: "assistMax" must be >= 0`);
+        if (c.icon !== undefined && c.icon !== 'volcano' && c.icon !== 'clock') fail(`${where}: "icon" must be volcano or clock`);
+        if (c.music !== undefined && (typeof c.music !== 'string' || !(c.music in SONGS))) fail(`${where}: "music" must be a song in src/audio/songs.ts`);
+      }
     }
     if (m.lines !== undefined && !isObject(m.lines)) fail(`mission "${m.id}": "lines" must be an object`);
     if (m.hints !== undefined) {
@@ -254,7 +294,7 @@ export function validateStageFile(raw: unknown): StageFile {
 
   requireArray(raw, 'gimmicks').forEach((g, i) => {
     if (!isObject(g) || !isString(g.type)) fail(`gimmicks[${i}]: "type" is required`);
-    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile'];
+    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket'];
     if (zoned.includes(g.type)) {
       if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`gimmicks[${i}] ${g.type}: needs a known railId and "from"`);
       if (g.type !== 'jump-pad' && (!isNumber(g.to) || (g.to as number) <= (g.from as number))) fail(`gimmicks[${i}] ${g.type}: needs "to" after "from"`);
@@ -267,6 +307,32 @@ export function validateStageFile(raw: unknown): StageFile {
       if (!isNumber(at)) fail(`gimmicks[${i}] flower-bridge: params.butterflyAt is required`);
       if (to - from < 44) fail(`gimmicks[${i}] flower-bridge: the stream must be at least 44 m (no jump reaches over it)`);
       if ((at as number) >= from - Number(p.bud ?? 12) - Number(p.lead ?? 12)) fail(`gimmicks[${i}] flower-bridge: butterflyAt must be before the bud and its lead`);
+    }
+    if (g.type === 'bubbles') {
+      // v1.7: a bubble column in the sea (looks only).
+      const pos = p.position;
+      if (!Array.isArray(pos) || pos.length !== 3 || !pos.every(isNumber)) fail(`gimmicks[${i}] bubbles: params.position must be [x, y, z]`);
+      if (p.count !== undefined && !(Number.isInteger(p.count) && (p.count as number) >= 1 && (p.count as number) <= 64)) {
+        fail(`gimmicks[${i}] bubbles: params.count must be a whole number 1–64`);
+      }
+      for (const k of ['height', 'radius']) if (p[k] !== undefined && !(isNumber(p[k]) && (p[k] as number) > 0)) fail(`gimmicks[${i}] bubbles: params.${k} must be > 0`);
+    }
+    if (g.type === 'slope') {
+      if (!isNumber(p.pull) || p.pull === 0) fail(`gimmicks[${i}] slope: params.pull must be a number other than 0`);
+      if (p.max !== undefined && (!isNumber(p.max) || p.max <= 0)) fail(`gimmicks[${i}] slope: params.max must be > 0`);
+      const rw = p.rewind;
+      if (rw !== undefined && !(isObject(rw) && isString(rw.railId) && railIds.has(rw.railId) && isNumber(rw.at))) {
+        fail(`gimmicks[${i}] slope: params.rewind needs a known railId and at`);
+      }
+      if (p.line !== undefined && p.line !== null && !isString(p.line)) fail(`gimmicks[${i}] slope: params.line must be text or null`);
+      if (p.sign !== undefined && typeof p.sign !== 'boolean') fail(`gimmicks[${i}] slope: params.sign must be true or false`);
+    }
+    if (g.type === 'rocket') {
+      if (p.allow !== undefined && typeof p.allow !== 'boolean') fail(`gimmicks[${i}] rocket: params.allow must be true or false`);
+      if (p.glow !== undefined && typeof p.glow !== 'boolean') fail(`gimmicks[${i}] rocket: params.glow must be true or false`);
+      if (p.allow === false && p.glow === true) fail(`gimmicks[${i}] rocket: allow false and glow true cannot go together`);
+      if (p.icon !== undefined && !['none', 'sleep', 'bridge'].includes(String(p.icon))) fail(`gimmicks[${i}] rocket: params.icon must be none, sleep or bridge`);
+      for (const k of ['line', 'pressLine']) if (p[k] !== undefined && !isString(p[k])) fail(`gimmicks[${i}] rocket: params.${k} must be text`);
     }
     if (g.type === 'camera' && !['cab', 'chase', 'side', 'top'].includes(String((g.params as Record<string, unknown> | undefined)?.mode))) {
       fail(`gimmicks[${i}] camera: params.mode must be cab, chase, side or top`);
@@ -377,3 +443,78 @@ function checkMeadow(file: StageFile): void {
 }
 
 export type { Placement };
+
+/**
+ * v1.7 checks that need the rails' lengths (called by the loader once the network is built, PHASE6 §5.6):
+ * slopes sit well inside their rail, with no stop line, junction, merge or gap in them, and an uphill leaves room
+ * to slow down before the next station; no rewind (slope, rock, gap) lands on a slope or in a rolling rock's path;
+ * a countdown's `until` is on its rail.
+ */
+export function validateStageLayout(file: StageFile, network: RailNetwork): void {
+  const slopes = slopeZones(file.gimmicks);
+  const where = (i: number): string => `gimmicks[${i}] slope`;
+  for (const z of slopes) {
+    const rail = network.getRail(z.railId);
+    // Room behind the foot for the default rewind (from − 60, which lands inside the rail for a slope 30 m or more
+    // in) and the slip; a slope with its own rewind only needs the slip's room.
+    const ownRewind = (file.gimmicks[z.index].params as Record<string, unknown> | undefined)?.rewind !== undefined;
+    const minFrom = ownRewind ? SLOPE.slipBack + 2 : 30;
+    if (z.from < minFrom) fail(`${where(z.index)}: must start at least ${minFrom} m after the start of rail "${z.railId}"`);
+    if (z.to > rail.length - 10) fail(`${where(z.index)}: must end at least 10 m before the end of rail "${z.railId}"`);
+    const inside = (at: number): boolean => at >= z.from && at <= z.to;
+    for (const st of file.stations) if (st.railId === z.railId && inside(st.at)) fail(`${where(z.index)}: station "${st.id}" stops on it`);
+    for (const j of file.junctions) if (j.railId === z.railId && inside(j.at)) fail(`${where(z.index)}: junction "${j.id}" is on it`);
+    for (const r of file.rails) {
+      if (r.end.type === 'merge' && r.end.railId === z.railId && r.id !== z.railId && inside(r.end.at)) fail(`${where(z.index)}: rail "${r.id}" merges on it`);
+    }
+    // The train slips back SLOPE.slipBack m: no gap just behind the foot either.
+    for (const g of rail.gaps) {
+      if (g.to >= z.from - SLOPE.slipBack - 2 && g.from <= z.to) fail(`${where(z.index)}: a gap (${g.from}–${g.to}) is on it`);
+    }
+    if (z.kind === 'up') {
+      const next = file.stations.filter((st) => st.railId === z.railId && st.at > z.to).sort((a, b) => a.at - b.at)[0];
+      if (next && next.at - z.to < ROCKET.stationQuiet) {
+        fail(`${where(z.index)}: its top must be at least ${ROCKET.stationQuiet} m before station "${next.id}" (the rocket rests there)`);
+      }
+    }
+  }
+
+  const rolling = file.actors.filter((a) => a.type === 'rock-roll' && 'onRail' in a);
+  const checkRewind = (target: { railId: string; at: number }, what: string, inRail = true): void => {
+    const rail = network.rails.get(target.railId);
+    if (!rail) fail(`${what}: rewind on unknown rail "${target.railId}"`);
+    if (inRail && (target.at < 0 || target.at > rail.length)) fail(`${what}: rewind at=${target.at} is outside rail "${target.railId}"`);
+    for (const z of slopes) {
+      if (z.railId === target.railId && target.at >= z.from && target.at <= z.to) fail(`${what}: rewinds onto ${where(z.index)}`);
+    }
+    for (const a of rolling) {
+      if (!('onRail' in a) || a.onRail.railId !== target.railId) continue;
+      const start = Number((a.params as { startDistance?: number } | undefined)?.startDistance ?? ROCK_ROLL.startDistance);
+      if (target.at >= a.onRail.at - start && target.at <= a.onRail.at) fail(`${what}: rewinds into the path of rolling rock "${a.id}"`);
+    }
+  };
+  for (const z of slopes) if (z.kind === 'up') checkRewind(z.rewind, where(z.index));
+  for (const a of file.actors) {
+    if ((a.type !== 'rock-roll' && a.type !== 'rock-drop') || !('onRail' in a)) continue;
+    const rw = (a.params as { rewind?: number | { railId: string; at: number } } | undefined)?.rewind;
+    const target =
+      typeof rw === 'number' ? { railId: a.onRail.railId, at: rw } : rw ?? { railId: a.onRail.railId, at: a.onRail.at - REWIND_DISTANCE };
+    checkRewind(target, `actor "${a.id}"`);
+  }
+  for (const r of file.rails) {
+    // (A default gap rewind before the rail start is clamped by the train, as it always was.)
+    for (const g of r.gaps ?? []) checkRewind(g.rewind ?? { railId: r.id, at: g.from - REWIND_DISTANCE }, `rail "${r.id}" gap ${g.from}`, false);
+  }
+
+  for (const z of rocketZones(file.gimmicks)) {
+    if (z.to < z.from) fail(`gimmicks[${z.index}] rocket: "to" must be after "from"`);
+  }
+  for (const m of file.missions) {
+    for (const st of m.steps) {
+      const until = st.countdown?.until;
+      if (!until) continue;
+      const rail = network.getRail(until.railId);
+      if (until.at < 0 || until.at > rail.length) fail(`mission "${m.id}" countdown: until at=${until.at} is outside rail "${until.railId}"`);
+    }
+  }
+}

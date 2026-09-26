@@ -7,8 +7,21 @@ import { addToProgress, loadProgress } from './core/progress';
 import { ABILITY_NAMES, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
 import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/loader';
-import type { AbilityId } from './stage/types';
-import { JUMP, LEVER_NOTCHES, LIGHT, RESOLUTION_MIN_FPS, RESOLUTION_SLOW_SECONDS, RESOLUTION_STEPS, SPEED_LABELS, STOP_NOTCH } from './train/params';
+import type { AbilityId, Vec3 } from './stage/types';
+import {
+  JUMP,
+  LEVER_NOTCHES,
+  LIGHT,
+  RESOLUTION_MIN_FPS,
+  RESOLUTION_SLOW_SECONDS,
+  RESOLUTION_STEPS,
+  ROCK_ROLL,
+  ROCK_SPLASH_SECONDS,
+  SLOPE,
+  SPEED_LABELS,
+  STOP_NOTCH,
+  VOLCANO_PUFF,
+} from './train/params';
 import { Train } from './train/train';
 import { createUi } from './ui';
 import { createBubbles } from './ui/bubble';
@@ -24,7 +37,10 @@ import { createToast } from './ui/toast';
 import { CAMERA_LABELS, CAMERA_MODES, createSceneView, type CameraFx, type CameraMode } from './view';
 import { createCameraButton } from './ui/camera-button';
 import { createStopGauge } from './ui/stop-gauge';
-import { createJumpButton, createLightButton } from './ui/ability-buttons';
+import { createJumpButton, createLightButton, createRocketButton } from './ui/ability-buttons';
+import { createCountdownPanel } from './ui/countdown-panel';
+import { RocketSystem } from './gimmick/rocket';
+import { SlopeSystem } from './gimmick/slope';
 import { showZukan } from './ui/zukan';
 import { loadSettings, saveSettings, VOLUME_GAIN, type Settings } from './core/settings';
 import { showSettings } from './ui/settings';
@@ -117,11 +133,14 @@ async function boot(): Promise<void> {
 
   const [stage, physics] = await Promise.all([loadStage(stageId), PhysicsWorld.create()]);
   const hasMissions = stage.file.missions.length > 0;
-  // The hidden test course has every button, so the jump and the light can be tried there.
+  // The hidden test course has every button, so the jump, the light and the rocket can be tried there.
   const abilities = new Set<AbilityId>(
-    hasMissions ? [...loadProgress().abilities, ...(await inheritedAbilities(stageId))] : ['whistle', 'jump', 'light'],
+    hasMissions ? [...loadProgress().abilities, ...(await inheritedAbilities(stageId))] : ['whistle', 'jump', 'light', 'rocket'],
   );
   const train = new Train(stage.network, stage.file.junctions, stage.file.start);
+  // 2-3: slopes and the rocket also work on the test course (no mission runner there).
+  const slopes = new SlopeSystem(stage.file.gimmicks, train);
+  const rocket = new RocketSystem(stage.file.gimmicks, train, slopes);
   const whistle = new Whistle();
   const audio = new AudioEngine();
   const events = new StageEventBus();
@@ -144,6 +163,7 @@ async function boot(): Promise<void> {
     audio.setMusicVolume(VOLUME_GAIN[settings.music]);
     app.classList.toggle('is-left-handed', settings.leftHanded);
     app.dataset.calm = settings.calm ? '1' : '0';
+    view.setCalm(settings.calm);
   };
   /** Screen shake and dips are dropped with "がめんの ゆれ: へらす". */
   const shakeScale = (): number => (settings.calm ? 0 : 1);
@@ -153,6 +173,13 @@ async function boot(): Promise<void> {
   // A following butterfly rings a tiny bell every 1.5 s (on the game clock, so a pause stops it too).
   const butterfliesFollowing = new Set<number>();
   let butterflyBellAt = 0;
+  // 2-3: the volcano's smoke rings (only on a stage with a "volcano" prop).
+  const hasVolcano = stage.file.props.some((p) => p.model === 'volcano');
+  let volcanoPuffIn: number = VOLCANO_PUFF.first;
+  let volcanoPuffs = 0;
+  let hurrying = false;
+  const cutsceneActors = new Set<string>();
+  const rockStates = new Map<string, string>();
 
   const ui = createUi(uiEl, {
     speedLabels: SPEED_LABELS,
@@ -194,10 +221,20 @@ async function boot(): Promise<void> {
     runner?.setLight(lightOn);
     events.post({ type: 'light', on: lightOn });
   });
+  const rocketButton = createRocketButton(actionButtons, () => {
+    audio.unlock();
+    const result = rocket.press();
+    if (!result.ok) runner?.onRocketRefused(result);
+  });
   const showAbility = (ability: AbilityId): void => {
     abilities.add(ability);
     if (ability === 'jump') jumpButton.show();
     if (ability === 'light') lightButton.show();
+    if (ability === 'rocket') {
+      rocket.enabled = true;
+      rocketButton.show();
+      app.dataset.hasRocket = '1';
+    }
     events.post({ type: 'ability', id: ability });
   };
   for (const ability of abilities) showAbility(ability);
@@ -212,20 +249,30 @@ async function boot(): Promise<void> {
   const FALL_COLORS = { dark: '#000000', cloud: '#ffffff', leaf: '#d6efb4' } as const;
   const fade = createFade(uiEl, FALL_COLORS[stage.file.environment.fall ?? 'dark']);
   const doorButton = createDoorButton(actionButtons);
+  const countdownPanel = createCountdownPanel(uiEl);
+  // Speed lines at the screen edges while the rocket burns (CSS, shown by #app[data-burn="1"]).
+  const speedLines = document.createElement('div');
+  speedLines.className = 'speed-lines';
+  speedLines.innerHTML = '<span></span>'.repeat(8);
+  uiEl.appendChild(speedLines);
 
   // Camera: the player picks a mode; the game may override it for a moment (doors, cutscenes).
   let userCamera: CameraMode = 'cab';
   let cameraOverride: CameraMode | null = null;
   // Stage camera zones (gimmicks "camera"): e.g. the outside view while the train rides a loop upside down.
   let zoneCamera: CameraMode | null = null;
+  // v1.7: a cutscene's camera standing still (the ending's view from the sea).
+  let fixedCamera: { at: Vec3; lookAt: Vec3 } | null = null;
   const applyCamera = (snap = false): void => {
     const mode = cameraOverride ?? zoneCamera ?? userCamera;
     view.setCamera(mode, snap);
-    app.dataset.camera = mode;
+    view.setFixedCamera(fixedCamera);
+    app.dataset.camera = fixedCamera ? 'fixed' : mode;
     cameraButton.setMode(mode);
   };
+  // In the top corner beside the pause button (PHASE7 §1), for every stage.
   const cameraButton = createCameraButton(
-    actionButtons,
+    uiEl,
     CAMERA_MODES.map((mode) => ({ mode, label: CAMERA_LABELS[mode] })),
     (mode) => {
       userCamera = mode;
@@ -243,10 +290,38 @@ async function boot(): Promise<void> {
       void (async () => {
         await fade(true, 0.4);
         train.rewindTo(Math.max(40, train.frontS - 80));
+        rocket.refill();
         ui.lever.setNotch(STOP_NOTCH);
         await fade(false, 0.4);
       })();
     }
+  });
+  // 2-3: the rocket fires and stops ("ぷしゅっ" when cut short in a quiet place or by a sudden stop).
+  train.events.on('rocketStarted', () => {
+    audio.playRocket();
+    events.post({ type: 'rocket', state: 'burn' });
+  });
+  train.events.on('rocketEnded', ({ cut }) => {
+    if (cut) audio.playPuff();
+    events.post({ type: 'rocket', state: cut ? 'puff' : 'end' });
+  });
+  // 2-3: stopped on an uphill: "ずるずる〜". The runner makes it a fail; the test course just puts the train back.
+  train.events.on('slipped', ({ railId, s }) => {
+    audio.playSlip();
+    events.post({ type: 'slip' });
+    if (hasMissions) return;
+    const target = slopes.current?.rewind ?? { railId, at: s - SLOPE.rewindBefore };
+    void (async () => {
+      await waitSeconds(SLOPE.slipSeconds);
+      await fade(true, 0.4);
+      train.rewindTo(target.at, target.railId);
+      slopes.reset();
+      rocket.reset();
+      rocket.refill();
+      ui.lever.setNotch(STOP_NOTCH);
+      events.post({ type: 'rewind' });
+      await fade(false, 0.4);
+    })();
   });
 
   train.events.on('hardBrake', () => {
@@ -355,6 +430,9 @@ async function boot(): Promise<void> {
     const updraft = zoneAt(gimmicks, 'updraft', train.state.railId, train.frontS);
     train.boostSpeed = updraft ? param(updraft, 'speed', 28) : 0;
     app.dataset.updraft = updraft ? '1' : '0';
+    // 2-3: the slope under the train front, and the rocket resting in quiet places (before the train moves).
+    slopes.update();
+    rocket.update();
 
     train.update(dt);
     boughs.update(dt);
@@ -362,6 +440,16 @@ async function boot(): Promise<void> {
     ui.whistle.setProgress(whistle.progress);
     jumpButton.set(train.jumpProgress, train.jumpWouldClear || (runner?.jumpHint ?? false), train.state.speed < JUMP.minSpeed);
     runner?.update(dt);
+    // 2-3: the volcano's everyday smoke ring, more often while a countdown runs.
+    if (hasVolcano) {
+      volcanoPuffIn -= dt;
+      if (volcanoPuffIn <= 0) {
+        volcanoPuffIn = hurrying ? VOLCANO_PUFF.hurry : VOLCANO_PUFF.every;
+        volcanoPuffs += 1;
+        app.dataset.volcanoPuffs = String(volcanoPuffs);
+        events.post({ type: 'volcano:puff' });
+      }
+    }
     if (butterfliesFollowing.size > 0 && simTime >= butterflyBellAt) {
       audio.playButterfly();
       butterflyBellAt = simTime + 1.5;
@@ -381,7 +469,20 @@ async function boot(): Promise<void> {
     fx.dip = Math.max(0, fx.dip - dt * 1.2);
     fx.shake = Math.max(0, fx.shake - dt * 2.5);
     view.update(dt, pose, fx);
-    ui.hud.setSpeedWord(SPEED_LABELS[train.state.notch]);
+    // 2-3: the lever does nothing while the rocket burns or on a slide: the knob and the speed word say so.
+    ui.hud.setSpeedWord(train.rocketBurning ? 'ロケット！' : train.onSlide ? 'つるつる〜' : SPEED_LABELS[train.state.notch]);
+    ui.lever.setMark(train.rocketBurning ? 'rocket' : train.onSlide ? 'slide' : null);
+    const why = rocket.why;
+    rocketButton.set({
+      pips: rocket.pips,
+      burn: train.rocketRemaining,
+      glow: rocket.glow && (runner === null || runner.phase === 'driving'),
+      idle: rocket.idle,
+      why,
+      mark: rocket.icon || (why === 'slide' || why === 'station' ? why : ''),
+    });
+    const timer = runner?.timer ?? null;
+    countdownPanel.set(timer);
     // Every frame, so the budget check sees the heaviest one (one render per frame; cheap to read).
     const stats = view.getStats();
     if (stats) {
@@ -419,6 +520,12 @@ async function boot(): Promise<void> {
     app.dataset.notch = String(train.state.notch);
     app.dataset.air = train.airborne ? '1' : '0';
     app.dataset.speed = train.state.speed.toFixed(1);
+    app.dataset.rocketPips = String(rocket.pips);
+    app.dataset.burn = train.rocketBurning ? '1' : '0';
+    app.dataset.slope = slopes.kind;
+    app.dataset.slip = train.isSlipping ? '1' : '0';
+    app.dataset.timer = timer ? String(timer.seconds) : '';
+    app.dataset.timerState = timer?.state ?? '';
     if (runner) {
       app.dataset.phase = runner.phase;
       app.dataset.mission = String(runner.missionIndex);
@@ -472,10 +579,19 @@ async function boot(): Promise<void> {
   audio.unlock();
   audio.playMusic(stage.file.environment.bgm);
 
+  /** v1.7: the seabirds (cats that look like seabirds) flap off with "ぱたぱた" instead of walking aside. */
+  const seabirds = new Set(
+    stage.file.actors.filter((a) => a.type === 'cat' && (a.params as { look?: string } | undefined)?.look === 'seabird').map((a) => a.id),
+  );
+  let lastFailReason: string | null = null;
   const ports: MissionPorts = {
     say: (text, who, name) => bubbles.say(text, who, name),
     sayAsync: (text, who) => void bubbles.say(text, who),
     hush: () => bubbles.clear(),
+    sayNow: (text) => {
+      bubbles.clear();
+      void bubbles.say(text);
+    },
     card: (title, button, icon) => {
       audio.playCard();
       return showCard(uiEl, title, button, icon);
@@ -493,7 +609,8 @@ async function boot(): Promise<void> {
     cameraFx: (dip, shake) => {
       fx.dip = Math.max(fx.dip, dip * shakeScale());
       fx.shake = Math.max(fx.shake, shake * shakeScale());
-      audio.playBoing();
+      // A bumped rock has its own rounder "ぽよん" (played with its bonk).
+      if (lastFailReason !== 'rock') audio.playBoing();
     },
     resetLever: () => ui.lever.setNotch(STOP_NOTCH),
     gauge: (state) => gauge.set(state),
@@ -513,6 +630,18 @@ async function boot(): Promise<void> {
       audio.playRecord();
     },
     fanfare: () => audio.playFanfare(),
+    music: (id) => audio.playMusic(id ?? stage.file.environment.bgm),
+    fixedCamera: (at, lookAt) => {
+      const next = at && lookAt ? { at, lookAt } : null;
+      // Nothing to do when no fixed camera was set (every cutscene end): the eased return must not snap.
+      if (!next && !fixedCamera) return;
+      fixedCamera = next;
+      applyCamera(true);
+    },
+    sneeze: async () => {
+      events.post({ type: 'sneeze' });
+      await caption('はっくしょーん！', 2.5, true);
+    },
   };
   events.on('event', (e) => {
     if (e.type === 'door') audio.playDoor(e.open);
@@ -523,6 +652,39 @@ async function boot(): Promise<void> {
       if (e.state === 'follow') butterfliesFollowing.add(e.index);
       else butterfliesFollowing.delete(e.index);
     }
+    if (e.type === 'sneeze') audio.playSneeze();
+    if (e.type === 'volcano:puff') audio.playVolcanoPuff();
+    if (e.type === 'countdown') {
+      const was = hurrying;
+      hurrying = e.state === 'run' || e.state === 'low';
+      if (hurrying && !was) volcanoPuffIn = Math.min(volcanoPuffIn, VOLCANO_PUFF.hurry);
+    }
+    // Test hooks: the stretch a cutscene cut, and the cutscene figures on screen.
+    if (e.type === 'rail:cut') app.dataset.railCut = `${e.railId}:${e.from}-${e.to}`;
+    if (e.type === 'actor:spawn') cutsceneActors.add(e.id);
+    if (e.type === 'actor:remove') cutsceneActors.delete(e.id);
+    if (e.type === 'actor:spawn' || e.type === 'actor:remove') app.dataset.cutsceneActors = [...cutsceneActors].join(',');
+    if (e.type === 'rock') {
+      rockStates.set(e.id, e.state);
+      app.dataset.rocks = [...rockStates].map(([id, state]) => `${id}:${state}`).join(',');
+    }
+    // v1.7 (2-3): rocks, seabirds and the falling bridge.
+    if (e.type === 'fail') lastFailReason = e.reason;
+    if (e.type === 'rock') {
+      if (e.state === 'wobble') audio.playRockWobble();
+      if (e.state === 'roll') {
+        const seconds = e.seconds ?? ROCK_ROLL.crossSeconds;
+        audio.playRockRoll(seconds);
+        // It rolls on off the far side into the sea.
+        audio.playSplash(seconds + ROCK_SPLASH_SECONDS);
+      }
+      if (e.state === 'bonk') {
+        audio.playRockBonk();
+        audio.playSplash(ROCK_SPLASH_SECONDS);
+      }
+    }
+    if (e.type === 'actor:state' && (e.state === 'awake' || e.state === 'flee') && seabirds.has(e.id)) audio.playFlap();
+    if (e.type === 'rail:cut' && e.style === 'fall') audio.playBridgeFall();
   });
 
   // "||" in the corner: stop the game, go on, or leave for the map.
@@ -538,7 +700,7 @@ async function boot(): Promise<void> {
   });
   pause.show();
 
-  runner = new MissionRunner(stage, train, whistle, events, ports);
+  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes });
   runner.knowAbilities(abilities);
   runner.setLight(lightOn);
   await runner.run();

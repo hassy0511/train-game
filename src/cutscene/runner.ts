@@ -1,7 +1,7 @@
 import type { StageEventBus } from '../core/stage-events';
 import type { RailNetwork } from '../rail/types';
 import { resolvePlacement } from '../stage/loader';
-import type { AbilityId, CutsceneStep, Emote, Speaker } from '../stage/types';
+import type { AbilityId, CutsceneStep, Emote, Speaker, Vec3 } from '../stage/types';
 import type { CameraMode } from '../view/camera-rig';
 
 /** What the cutscene runner needs from the UI. */
@@ -14,7 +14,14 @@ export interface CutscenePorts {
   autoCamera(mode: CameraMode | null): void;
   /** Learn an ability: its button appears and a card says so. */
   unlock(ability: AbilityId): Promise<void>;
+  /** v1.7: a camera standing still at `at` looking at `lookAt` (null = back to the usual camera). */
+  fixedCamera(at: Vec3 | null, lookAt?: Vec3): void;
+  /** v1.7: the volcano sneezes ("はっくしょーん！"). Resolves when it is over. */
+  sneeze(): Promise<void>;
 }
+
+/** How long a cut stretch takes to fall into the sea (s), v1.7 style "fall". */
+const CUT_FALL_SECONDS = 1.8;
 
 /** Plays a list of cutscene steps in order. The caller locks the controls around it. */
 export async function runCutscene(
@@ -40,15 +47,23 @@ export async function runCutscene(
     } else if ('wait' in step) {
       await ports.wait(step.wait);
     } else if ('cutRail' in step) {
-      const { railId, from, to } = step.cutRail;
+      const { railId, from, to, style, props } = step.cutRail;
       network.getRail(railId).addGap(from, to);
-      events.post({ type: 'rail:cut', railId, from, to });
-      await ports.wait(1);
+      events.post({ type: 'rail:cut', railId, from, to, style, props });
+      await ports.wait(style === 'fall' ? CUT_FALL_SECONDS : 1);
     } else if ('card' in step) {
       await ports.card(step.card.title, step.card.button, step.card.icon);
     } else if ('camera' in step) {
-      ports.autoCamera(step.camera);
-      await ports.wait(0.6);
+      if (step.camera === 'fixed') {
+        ports.fixedCamera(step.at, step.lookAt);
+        await ports.wait(0.3);
+      } else {
+        ports.fixedCamera(null);
+        ports.autoCamera(step.camera);
+        await ports.wait(0.6);
+      }
+    } else if ('fx' in step) {
+      if (step.fx === 'sneeze') await ports.sneeze();
     } else if ('caption' in step) {
       await ports.caption(step.caption, step.seconds ?? 3);
     } else if ('emote' in step) {

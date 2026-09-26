@@ -98,6 +98,13 @@ function installMonkey(seed: number): void {
         act('light');
         press(l);
       }
+    } else if (r < 0.235) {
+      // 2-3: the rocket (pressing it where it rests only makes the partner say why).
+      const k = visible('rocket');
+      if (k) {
+        act('rocket');
+        press(k);
+      }
     } else if (r < 0.25) {
       const arrows = document.querySelectorAll('#junction .arrow');
       const a = arrows[Math.floor(rnd() * arrows.length)];

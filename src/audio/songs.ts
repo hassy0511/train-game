@@ -20,6 +20,29 @@ const F = 'F2:1 -:1 C3:1 -:1';
 const C = 'C2:1 -:1 G2:1 -:1';
 const Bb = 'Bb1:1 -:1 F2:1 -:1';
 
+// 2-3 volcano: the melody (marimba and bell together) and the tuba-ish bass bars ("2" = with an octave hop).
+const VOLCANO_MELODY =
+  'F4:1 A4:1 C5:2 A4:1 C5:1 F5:2 | D5:2 F5:1 D5:1 Bb4:2 -:2 | G4:1 C5:1 E5:2 G5:1 E5:1 C5:2 | A4:3 C5:1 F5:2 -:2 | ' +
+  'A4:1 D5:1 F5:2 A5:1 F5:1 D5:2 | Bb4:1 D5:1 F5:2 Bb5:2 A5:1 G5:1 | G5:2 E5:1 C5:1 D5:1 E5:1 G5:2 | F5:4 -:2 C5:1 E5:1 | ' +
+  'D5:1 F5:1 Bb5:2 -:2 A5:1 Bb5:1 | C6:2 A5:2 -:4 | E5:1 G5:1 C6:2 -:2 Bb5:1 A5:1 | A5:2 F5:2 -:4 | ' +
+  'D5:1 F5:1 Bb5:1 D5:1 F5:1 Bb5:1 D6:2 | C6:1 A5:1 F5:1 D5:1 E5:1 F5:1 A5:2 | G5:2 C6:2 Bb5:1 G5:1 E5:1 C5:1 | F5:2 C5:1 A4:1 F4:2 -:2';
+const VF = 'F2:2 -:2 C2:2 -:2';
+const VF2 = 'F2:2 -:2 F3:1 -:1 C3:1 -:1';
+const VBb = 'Bb1:2 -:2 F2:2 -:2';
+const VBb2 = 'Bb1:2 -:2 Bb2:1 -:1 F2:1 -:1';
+const VC = 'C2:2 -:2 G2:2 -:2';
+const VC2 = 'C2:2 -:2 C3:1 -:1 G2:1 -:1';
+const VDm = 'D2:2 -:2 A2:2 -:2';
+const VDRUM = 'k:1 h:1 s:1 h:1 k:1 h:1 s:1 h:1';
+/** A bar whose second half goes quiet so the "ぽふっ" is heard alone. */
+const VDRUM_HOLE = 'k:1 h:1 s:1 h:1 -:4';
+
+// hurry: one bar of eighth-note bass per chord (root, then the fifth below).
+const HC = 'C3:1 C3:1 C3:1 C3:1 G2:1 G2:1 C3:1 G2:1';
+const HG = 'G2:1 G2:1 G2:1 G2:1 D2:1 D2:1 G2:1 D2:1';
+const HAm = 'A2:1 A2:1 A2:1 A2:1 E2:1 E2:1 A2:1 E2:1';
+const HF = 'F2:1 F2:1 F2:1 F2:1 C2:1 C2:1 F2:1 C2:1';
+
 export const SONGS: Record<string, Song> = {
   // Title and map: a small music box waltz.
   title: {
@@ -128,6 +151,65 @@ export const SONGS: Record<string, Song> = {
           'C3:1 -:1 G2:1 -:1 | C3:1 -:1 G2:1 -:1 | G2:1 -:1 D3:1 -:1 | G2:1 -:1 D3:1 -:1 | A2:1 -:1 E3:1 -:1 | D3:1 -:1 A2:1 -:1 | C3:1 -:1 D3:1 -:1 | G2:2 -:2',
       },
       { voice: 'drums', gain: 0.45, notes: `${repeat('k:1 h:1 s:1 h:1', 15)} | k:1 -:1 k:1 -:1` },
+    ],
+  },
+
+  // 2-3 かざんのしま: a bright island tune in F, a bouncy 4/4 with the lift on 2 and 4. Marimba and bell play the
+  // melody together (a steel-drum-like shimmer). A (bars 1-8) climbs; B (9-16) leaves little holes that a low
+  // wooden "ぽふっ" fills, like the volcano's smoke rings. Tuba-ish bass on beats 1 and 3; a thin pad in B only.
+  volcano: {
+    id: 'volcano',
+    title: 'かざんの しま',
+    bpm: 120,
+    stepsPerBeat: 2,
+    tracks: [
+      { voice: 'wood', notes: VOLCANO_MELODY },
+      { voice: 'bell', gain: 0.5, notes: VOLCANO_MELODY },
+      {
+        voice: 'bass',
+        notes: [
+          ...[VF, VBb2, VC, VF2, VDm, VBb, VC2, VF],
+          ...[VBb, VF2, VC, VF2, VBb2, VDm, VC2, VF],
+        ].join(' | '),
+      },
+      { voice: 'pad', gain: 0.55, notes: `${repeat('-:8', 8)} | F3:8 | A3:8 | G3:8 | A3:8 | F3:8 | A3:8 | G3:8 | A3:8` },
+      { voice: 'pad', gain: 0.45, notes: `${repeat('-:8', 8)} | D4:8 | C4:8 | E4:8 | C4:8 | D4:8 | D4:8 | E4:8 | C4:8` },
+      // The tom-like "ぽこ" every two bars, and in B the "ぽふっ" in the melody's holes.
+      {
+        voice: 'wood',
+        gain: 0.8,
+        notes:
+          `${repeat('-:8 | -:6 C4:1 F3:1', 4)} | ` +
+          '-:8 | -:4 F3:2 -:2 | -:8 | -:4 F3:2 -:2 | -:8 | -:6 C4:1 F3:1 | -:8 | -:6 C4:1 F3:1',
+      },
+      {
+        voice: 'drums',
+        gain: 0.45,
+        notes: `${repeat(VDRUM, 9)} | ${VDRUM_HOLE} | ${VDRUM} | ${VDRUM_HOLE} | ${repeat(VDRUM, 3)} | k:1 h:1 s:1 h:1 k:1 -:1 -:2`,
+      },
+    ],
+  },
+
+  // The countdown (2-3 M3, later 3-3's race): a quick, cheerful 8-bar loop in C (C-G-Am-F twice). The marimba
+  // runs in eighths, the bass ticks in eighths, the drums never stop, and a bell "ちゃらん" every two bars.
+  // Major and bouncy on purpose: no alarm or siren sound.
+  hurry: {
+    id: 'hurry',
+    title: 'いそげ！',
+    bpm: 150,
+    stepsPerBeat: 2,
+    tracks: [
+      {
+        voice: 'wood',
+        notes:
+          'E5:1 G5:1 C6:1 G5:1 E5:1 G5:1 C6:1 D6:1 | B5:1 G5:1 D5:1 G5:1 B5:1 D6:1 B5:1 G5:1 | ' +
+          'A5:1 E5:1 C5:1 E5:1 A5:1 C6:1 B5:1 A5:1 | G5:1 F5:1 C5:1 F5:1 A5:1 G5:1 F5:1 E5:1 | ' +
+          'E5:1 G5:1 C6:1 G5:1 E6:1 D6:1 C6:1 G5:1 | D6:1 B5:1 G5:1 B5:1 D6:1 E6:1 D6:1 B5:1 | ' +
+          'C6:1 A5:1 E5:1 A5:1 C6:1 E6:1 D6:1 C6:1 | A5:1 F5:1 C5:1 F5:1 A5:1 C6:1 B5:1 G5:1',
+      },
+      { voice: 'bell', gain: 0.5, notes: 'C6:1 G6:3 -:4 | -:8 | C6:1 E6:3 -:4 | -:8 | C6:1 G6:3 -:4 | -:8 | C6:1 E6:3 -:4 | -:8' },
+      { voice: 'bass', notes: repeat([HC, HG, HAm, HF].join(' | '), 2) },
+      { voice: 'drums', gain: 0.5, notes: repeat('k:1 h:1 s:1 h:1 k:1 h:1 s:1 h:1', 8) },
     ],
   },
 

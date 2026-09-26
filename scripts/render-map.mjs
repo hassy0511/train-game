@@ -4,7 +4,8 @@
  * src/world/world.json. Re-run after changing a diorama or when new models arrive (e.g. ticket 0006):
  *   node scripts/render-map.mjs            # every island with a diorama, plus the "?" silhouette
  *   node scripts/render-map.mjs 1-3        # just some
- * Needs Playwright's Chromium (PW_CHROMIUM_PATH to reuse an installed one).
+ * Needs Playwright's Chromium (PW_CHROMIUM_PATH to reuse an installed one). MAP_PORT picks the dev server's port
+ * (default 5199), e.g. when another render or test is running.
  */
 import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -18,7 +19,7 @@ const wanted = process.argv.slice(2);
 const ids = [...world.islands.filter((i) => i.diorama).map((i) => i.id), 'unknown'].filter(
   (id) => wanted.length === 0 || wanted.includes(id),
 );
-const PORT = 5199;
+const PORT = Number(process.env.MAP_PORT) || 5199;
 
 const server = spawn(resolve(root, 'node_modules/.bin/vite'), ['--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
   cwd: root,
