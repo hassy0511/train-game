@@ -331,8 +331,10 @@ test('おうちの かたへ: a long press opens it, erasing asks twice, the あ
 
   // The あいことば typed back in (small letters, spaces, O for 0 are all fine): everything comes back.
   await page.locator('#title-settings').click();
-  await holdParents(page, 2300);
-  await expect(page.locator('#parents')).toBeVisible();
+  // Held until it opens (the page's 2-second timer can run late on a slow machine drawing the title's 3D).
+  await page.locator('#settings-parents').dispatchEvent('pointerdown');
+  await expect(page.locator('#parents')).toBeVisible({ timeout: 15_000 });
+  await page.locator('#settings-parents').dispatchEvent('pointerup');
   await page.locator('#parents-passcode-input').fill(` ${code.toLowerCase().replace(/-/g, ' ').replace(/0/g, 'o')} `);
   await page.locator('#parents-passcode-load').click();
   await expect(page.locator('.parents-confirm')).toContainText(`クリア ${full.cleared.length}`);

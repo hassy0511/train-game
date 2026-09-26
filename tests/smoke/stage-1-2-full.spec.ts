@@ -252,8 +252,9 @@ test('stage 1-2 again with the rocket: up the cliff side track to the empty nest
   await page.goto('/?stage=1-2');
   const app = page.locator('#app');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
-  await expect(page.locator('#rocket')).toBeVisible();
   await page.locator('#title-start').click();
+  // The driving controls wait under the title; once it is gone the rocket is there (inherited from 2-3).
+  await expect(page.locator('#rocket')).toBeVisible();
   await card(page, 'ジャンプ');
   await card(page, 'とびこえろ');
   await missionOne(page);
