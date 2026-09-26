@@ -819,6 +819,14 @@ body {
   margin-bottom: 0;
 }
 
+/* Six islands of rows are taller than an iPad screen: the way out stays in sight at the bottom while scrolling. */
+#zukan-close {
+  position: sticky;
+  bottom: calc(var(--safe-bottom) + 12px);
+  flex-shrink: 0;
+  z-index: 1;
+}
+
 .zukan-count {
   font-size: 22px;
   font-weight: 700;

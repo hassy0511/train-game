@@ -1610,7 +1610,6 @@
       "note": "からっぽの おおきな す。だれの かな？",
       "requires": "rocket",
       "model": "record-nest",
-      "hint": "がけの うえに なにか ある！",
       "onRail": { "railId": "gake", "at": 145.5, "lateral": -16.3, "heightFromRail": -0.53 }
     },
     {
@@ -1699,7 +1698,7 @@
       "railId": "gake",
       "from": 68,
       "to": 142,
-      "params": { "pull": -6, "rewind": { "railId": "main", "at": 640 }, "line": "がけを のぼろう！ ロケット！" }
+      "params": { "pull": -6, "rewind": { "railId": "main", "at": 686 }, "line": "がけを のぼろう！ ロケット！" }
     },
     {
       "type": "flock",

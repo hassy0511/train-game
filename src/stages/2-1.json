@@ -914,7 +914,6 @@
       "note": "てっぺんで みつけた ふわふわの はね",
       "requires": "rocket",
       "model": "record-feather",
-      "hint": "てっぺんに はねが ある！",
       "onRail": { "railId": "kozue-eda", "at": 114, "lateral": -2.3, "heightFromRail": -0.5 }
     }
   ],

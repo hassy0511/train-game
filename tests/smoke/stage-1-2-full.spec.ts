@@ -260,7 +260,8 @@ test('stage 1-2 again with the rocket: up the cliff side track to the empty nest
   await card(page, 'ねぼすけ');
 
   // First try: take the side track but never press the rocket. The train slips back down the steep bit and is put
-  // back on the main line before the junction (640), where the sleeping one lies again.
+  // back on the main line just past the sleeping one (front 686, 9 m before the junction), which stays awake and
+  // aside: no second whistle.
   await waitDriving(page);
   await setNotch(page, NORMAL);
   await waitForS(page, 680 - FRONT - 52);
@@ -276,25 +277,32 @@ test('stage 1-2 again with the rocket: up the cliff side track to the empty nest
   await page.waitForFunction(
     () => {
       const el = document.getElementById('app');
-      return el?.dataset.rail === 'main' && Number(el?.dataset.s) < 660;
+      return el?.dataset.rail === 'main' && Math.abs(Number(el?.dataset.s) - (686 - 6)) < 1;
     },
     null,
     { timeout: 60_000 },
   );
-  console.log('1-2 rocket: slipped on the cliff, back before the junction');
-
-  // Second try: whistle again, take the side track, fire the rocket when it glows. The nest is found on the way up
-  // (the rocket's push is still in the speed), and at the buffer the train is taken back onto the main line.
   await waitDriving(page);
-  await setNotch(page, NORMAL);
-  await page.locator('#whistle').dispatchEvent('pointerdown');
-  await expect(spurArrow).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: resolve(OUT, '25b-cliff-slip-back.png') });
+  console.log('1-2 rocket: slipped on the cliff, back just past the sleeping one, before the junction');
+
+  // Second try, from a standstill: pick the side track, then びゅーん, and fire the rocket the moment the train is on
+  // the side track. The burn and the push are over before the nest (about gake 102 of the 145.5 to find it from
+  // 120.5), yet the train makes it over the top: the nest must still be found (the rocket fired on this rail).
+  await expect(spurArrow).toBeVisible({ timeout: 10_000 });
+  await expect(spurArrow).toHaveAttribute('data-locked', '0');
   await spurArrow.dispatchEvent('pointerdown');
+  await expect(spurArrow).toHaveClass(/is-selected/);
+  await setNotch(page, MAX);
   await expect(app).toHaveAttribute('data-rail', 'gake', { timeout: 30_000 });
   const rocket = page.locator('#rocket');
-  await expect(rocket).toHaveAttribute('data-glow', '1', { timeout: 30_000 });
   await rocket.dispatchEvent('pointerdown');
+  const firedAt = Number(await app.getAttribute('data-s'));
+  console.log(`1-2 rocket: fired at gake ${firedAt.toFixed(1)} (car centre)`);
   await expect(app).toHaveAttribute('data-burn', '1', { timeout: 5_000 });
+  // Later than that the push would still be in the speed at the nest, and this would not test the rule.
+  expect(firedAt).toBeLessThan(9);
   await page.waitForTimeout(1200);
   await page.screenshot({ path: resolve(OUT, '26-cliff-rocket.png') });
   await page.waitForFunction(
@@ -302,8 +310,11 @@ test('stage 1-2 again with the rocket: up the cliff side track to the empty nest
     null,
     { timeout: 30_000 },
   );
+  const foundAt = Number(await app.getAttribute('data-s'));
+  const pushAtFind = await app.getAttribute('data-push');
+  console.log(`1-2 rocket: found the nest at gake ${foundAt.toFixed(1)} (push still in the speed: ${pushAtFind})`);
+  expect(pushAtFind).toBe('0');
   await page.screenshot({ path: resolve(OUT, '27-cliff-nest.png') });
-  console.log('1-2 rocket: found the nest');
   await waitLine(page, 'もとの みちに', 60_000);
   await page.waitForFunction(
     () => {

@@ -585,6 +585,7 @@ async function boot(): Promise<void> {
     app.dataset.speed = train.state.speed.toFixed(1);
     app.dataset.rocketPips = String(rocket.pips);
     app.dataset.burn = train.rocketBurning ? '1' : '0';
+    app.dataset.push = train.rocketPushing ? '1' : '0';
     app.dataset.slope = slopes.kind;
     app.dataset.slip = train.isSlipping ? '1' : '0';
     app.dataset.timer = timer ? String(timer.seconds) : '';

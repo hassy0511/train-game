@@ -32,7 +32,6 @@ import {
   DOOR_REMIND_SECONDS,
   FALL,
   JUMP,
-  JUNCTION_ARROW_DISTANCE,
   LEVER_NOTCHES,
   LIGHT,
   PASSENGER_SECONDS,
@@ -191,7 +190,8 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   timeSafe: 'セーフ！',
   timeUp: 'はっくしょーん！',
   // v1.8
-  spurBack: 'いきどまり！ もとの みちに もどるよ',
+  // Reaching a record's side track end is a success: not the dead end's "いきどまり！".
+  spurBack: 'やったね！ もとの みちに もどるよ',
 };
 
 /**
@@ -255,8 +255,7 @@ export class MissionRunner {
   private lightOn = false;
   private readonly gapHints = new Set<GapDef>();
   private readonly signLines = new Set<string>();
-  /** v1.8: junctions whose "needs an ability" line was said this try; records whose hint was said this stage run. */
-  private readonly needLines = new Set<string>();
+  /** v1.8: records whose hint was said this stage run. */
   private readonly recordHints = new Set<string>();
   private readonly revealed = new Set<string>();
   private readonly found: Set<string>;
@@ -560,7 +559,6 @@ export class MissionRunner {
     this.updateGapHints();
     this.updatePads(dt);
     this.updateJunctionSigns();
-    this.updateJunctionNeeds();
     this.updateRecords();
     if (this.checkDeadEnd() || this.checkSpur()) return;
     const outcome = this.stop?.update(dt) ?? null;
@@ -854,6 +852,10 @@ export class MissionRunner {
       this.events.post({ type: 'rock', id: rock.actor.id, kind: 'drop', state: 'hide', railId: rock.railId, at: rock.at });
     }
     for (const dino of this.dinos) {
+      // A sleeping one already woken and left at or behind where the train is put back stays awake and aside: asleep
+      // again it would lie under the cars (1-2: back from the cliff side track to 686, or from the young one to 680).
+      const passed = target !== undefined && dino.railId === target.railId && dino.at <= target.at;
+      if (dino instanceof MidDino && dino.state === 'awake' && passed) continue;
       dino.reset();
       const id = dino.actor.id;
       if (dino instanceof SmallDino) {
@@ -931,7 +933,8 @@ export class MissionRunner {
 
   /**
    * Records (v1.8): found by passing within RECORD.distance m while using the ability the record needs — none, the
-   * light on, in the air (jump), the rocket burning or its push still in the speed. A record's hint is said once,
+   * light on, in the air (jump), the rocket burning, its push still in the speed, or fired on this rail or the one
+   * before (Train.rocketUsedHere). A record's hint is said once,
    * RECORD.hintDistance m before it, when it can be taken now.
    */
   private updateRecords(): void {
@@ -964,7 +967,7 @@ export class MissionRunner {
       case 'jump':
         return this.train.airborne;
       case 'rocket':
-        return this.train.rocketPushed;
+        return this.train.rocketUsedHere;
       default:
         // Abilities of later chapters (dive, reverse, ...) have no rule yet: such records stay "?".
         return false;
@@ -976,15 +979,12 @@ export class MissionRunner {
     return this.lines.needAbility ?? NEED_LINES[ability] ?? NEED_LINE_OTHER;
   }
 
-  /** v1.8: coming up to a junction whose side way needs an ability the player lacks: the partner says so, once a try. */
-  private updateJunctionNeeds(): void {
-    const j = this.junctionAhead(JUNCTION_ARROW_DISTANCE);
-    if (!j?.needs || this.abilities.has(j.needs) || this.needLines.has(j.id)) return;
-    this.needLines.add(j.id);
-    this.ports.sayAsync(this.needLine(j.needs));
-  }
-
-  /** v1.8: the player tapped the arrow to a side way that needs an ability they do not have. */
+  /**
+   * v1.8: the player tapped the arrow to a side way that needs an ability they do not have. Said only then, not on
+   * the way up to the junction: 1-2's side track starts right after the sleeping dinosaur and 2-1's in the treetop
+   * station's braking, where a line about an ability the child has never heard of would push the one that matters
+   * (the whistle, "ゆっくり") later.
+   */
   onJunctionRefused(junction: JunctionDef): void {
     if (this.phase !== 'driving' || !junction.needs) return;
     this.sayRefusal(this.needLine(junction.needs));
@@ -1241,7 +1241,6 @@ export class MissionRunner {
     this.ports.whistleHint(false);
     this.gapHints.clear();
     this.signLines.clear();
-    this.needLines.clear();
     this.revealed.clear();
     this.events.post({ type: 'rewind' });
     this.ports.resetLever();

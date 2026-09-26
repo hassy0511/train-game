@@ -41,7 +41,7 @@ const STRAW = '#C9A56A';
 const WOOD = '#9A7654';
 const WOOD_DARK = '#6E5238';
 
-/** 1-2: an empty nest, 2.6 m across: a ring of twigs with straw sticking out, a dark hollow and one bit of down. */
+/** 1-2: an empty nest, 2.6 m across: a ring of twigs with straw sticking out and a dark, empty hollow. */
 function nest(): Group {
   const g = new Group();
   const ring = mesh(new TorusGeometry(1.0, 0.36, 6, 14), TWIG, 0, 0.36, 0);
@@ -55,27 +55,43 @@ function nest(): Group {
     stick.rotation.set(Math.sin(a * 3) * 0.6, a, Math.PI / 2 - 0.35);
     g.add(stick);
   }
-  // A little white fluff left behind (nobody home now).
-  g.add(mesh(new SphereGeometry(0.16, 6, 4), '#FFFFFF', 0.3, 0.38, -0.2));
+  // Nothing round in the hollow (it would read as an egg): only a few loose straws lying flat.
+  for (const [x, z, a] of [
+    [0.2, -0.15, 0.4],
+    [-0.25, 0.1, -0.7],
+    [0.05, 0.3, 1.6],
+  ]) {
+    const straw = mesh(new CylinderGeometry(0.035, 0.035, 0.7, 4), STRAW, x, 0.32, z);
+    straw.rotation.set(0, a, Math.PI / 2);
+    g.add(straw);
+  }
   return g;
 }
 
-/** 2-1: one big feather (3.2 m) stuck upright in the bark: white with a sky-blue tip. */
+/**
+ * 2-1: one big feather (3.2 m) stuck upright in the bark: a quill the whole length, bare at the foot, and two
+ * narrow vanes either side of it that taper to the top, white with sky-blue tips.
+ */
 function feather(): Group {
   const g = new Group();
   const tilt = new Group();
   tilt.rotation.z = -0.25;
   tilt.rotation.x = 0.1;
-  tilt.add(mesh(new CylinderGeometry(0.05, 0.07, 3.2, 5), '#E9E2D2', 0, 1.6, 0));
-  const vane = mesh(new SphereGeometry(0.7, 10, 8), '#FAFAF6', 0, 1.85, 0);
-  vane.scale.set(0.8, 1.9, 0.14);
-  tilt.add(vane);
-  const tip = mesh(new SphereGeometry(0.5, 8, 6), '#7CC6F0', 0, 2.85, 0);
-  tip.scale.set(0.8, 0.9, 0.18);
-  tilt.add(tip);
+  tilt.add(mesh(new CylinderGeometry(0.03, 0.08, 3.1, 6), '#CDBF9F', 0, 1.55, 0));
+  for (const side of [-1, 1]) {
+    // A long ellipse leaning in to the quill at the top reads as one half of a feather's vane.
+    const half = new Group();
+    half.position.set(side * 0.05, 1.05, 0);
+    half.rotation.z = side * 0.1;
+    const vane = mesh(new SphereGeometry(1, 10, 8), '#FAFAF6', side * 0.3, 1.05, 0);
+    vane.scale.set(0.3, 1.1, 0.05);
+    half.add(vane);
+    const tip = mesh(new SphereGeometry(1, 8, 6), '#7CC6F0', side * 0.2, 1.8, 0);
+    tip.scale.set(0.14, 0.36, 0.06);
+    half.add(tip);
+    tilt.add(half);
+  }
   g.add(tilt);
-  // A knot of bark at its foot.
-  g.add(mesh(new SphereGeometry(0.35, 6, 4), WOOD_DARK, 0, 0.1, 0));
   return g;
 }
 
