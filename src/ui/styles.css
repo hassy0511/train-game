@@ -1524,6 +1524,90 @@ body {
   }
 }
 
+/* "つづきから / はじめから" beside an island with a saved mission (src/ui/map.ts). The buttons take taps only once it
+   is ready, so a second tap on the island does not choose for the child. */
+.map-choose {
+  position: absolute;
+  z-index: 210;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(31, 42, 68, 0.28);
+  transform: translateY(-50%);
+  animation: choose-pop 0.25s ease-out;
+}
+
+.map-choose.is-left {
+  transform: translate(-100%, -50%);
+}
+
+.map-choose::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  margin-top: -10px;
+  border: 10px solid transparent;
+}
+
+.map-choose.is-right::before {
+  left: -12px;
+  border-right: 12px solid #fff;
+  border-left: 0;
+}
+
+.map-choose.is-left::before {
+  right: -12px;
+  border-left: 12px solid #fff;
+  border-right: 0;
+}
+
+.map-choose-button {
+  min-height: 56px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--ink);
+  pointer-events: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.map-choose.is-ready .map-choose-button {
+  pointer-events: auto;
+}
+
+.map-choose-button.is-continue {
+  background: linear-gradient(#ffd166, #ff9f1c);
+  box-shadow: 0 4px 0 #d9790b;
+}
+
+.map-choose-button.is-start {
+  background: #eef2f7;
+  box-shadow: 0 3px 0 #c9d2de;
+  font-size: 18px;
+}
+
+.map-island.is-choosing {
+  animation: none;
+  z-index: 205 !important;
+}
+
+.map-island.is-choosing img {
+  filter: drop-shadow(0 0 12px rgba(255, 209, 102, 0.95));
+}
+
+@keyframes choose-pop {
+  from {
+    opacity: 0;
+  }
+}
+
 /* ---- small round buttons in the top corner: pause (src/ui/pause.ts) and camera ---- */
 .corner-button {
   position: absolute;

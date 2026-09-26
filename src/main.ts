@@ -103,6 +103,7 @@ function registerOffline(): void {
 async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: string; closeLabel?: string }): Promise<MapChoice> {
   const file = world as unknown as WorldFile;
   const progress = loadProgress();
+  const resume = await savedResume();
   const islands: MapIsland[] = [];
   for (const island of file.islands) {
     const stage = await peekStage(island.id);
@@ -119,6 +120,7 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
       recordsFound: stage.records.length - missing.length,
       recordsTotal: stage.records.length,
       needsLater: missing.some((r) => r.requires !== null && !progress.abilities.includes(r.requires)),
+      resumeMission: resume?.stage === island.id ? resume.mission : undefined,
     });
   }
   const laid = file.links
@@ -670,7 +672,7 @@ async function boot(): Promise<void> {
       allCleared: !next && progress.cleared.length > 0,
       onMap: () => {
         void openMap(uiEl, audio, { next: next?.id, closeLabel: 'もどる' }).then((choice) => {
-          if (choice.kind === 'stage') goToStage(choice.id);
+          if (choice.kind === 'stage') goToStage(choice.id, choice.resume);
         });
       },
       onSettings: () => {
@@ -845,7 +847,7 @@ async function boot(): Promise<void> {
     },
     onMap: async () => {
       const choice = await openMap(uiEl, audio, { next: next?.id, closeLabel: 'もどる' });
-      if (choice.kind === 'stage') goToStage(choice.id);
+      if (choice.kind === 'stage') goToStage(choice.id, choice.resume);
     },
   });
   pause.show();
@@ -870,7 +872,7 @@ async function boot(): Promise<void> {
   const after = await nextStage(loadProgress().cleared, stage.file.id);
   audio.playMusic('title');
   const choice = await openMap(uiEl, audio, { next: after?.id, closeLabel: 'タイトルへ' });
-  if (choice.kind === 'stage') goToStage(choice.id);
+  if (choice.kind === 'stage') goToStage(choice.id, choice.resume);
   else location.href = location.pathname;
 }
 

@@ -476,3 +476,58 @@ test('"▶▶" only on a stage cleared before; the resume moves on only on the s
   await expect(skip).toBeHidden();
   expect(errors).toEqual([]);
 });
+
+test('the map asks how to start an island with a saved mission: "つづきから" or "はじめから"', async ({ page }) => {
+  const errors = watchErrors(page);
+  await seed(page, {
+    cleared: ['1-1', '1-2', '1-3'],
+    abilities: ['whistle', 'jump', 'light'],
+    mapLinks: ['1-1>1-2', '1-2>1-3', '1-3>2-1'],
+    resume: { stage: '2-1', mission: 1 },
+  });
+  await page.goto('/');
+  await ready(page, '1-1');
+  await page.locator('#title-map').click();
+  const map = page.locator('#map');
+  await expect(map).toBeVisible();
+  const island = map.locator('.map-island[data-island="2-1"]');
+  const choose = map.locator('.map-choose');
+  // It asks first, in a bubble beside the island.
+  await island.click({ force: true }); // it bounces (the next island)
+  await expect(choose).toBeVisible();
+  await expect(choose.locator('.is-continue')).toHaveText('つづきから（ミッション 2）');
+  await expect(choose.locator('.is-start')).toHaveText('はじめから');
+  await expect(island).toHaveClass(/is-choosing/);
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: resolve(OUT, '99-map-choose.png') });
+  // A tap on the sea closes it, and nothing starts.
+  await map.locator('.map-area').click({ position: { x: 20, y: 20 } });
+  await expect(choose).toHaveCount(0);
+  await expect(island).not.toHaveClass(/is-choosing/);
+  // A quick double tap on the island only opens it: the buttons wait a moment before they take a tap.
+  await island.click({ force: true }); // it bounces (the next island)
+  const at = (await choose.locator('.is-continue').boundingBox())!;
+  await page.mouse.click(at.x + at.width / 2, at.y + at.height / 2);
+  await expect(map).toBeVisible();
+  expect(new URL(page.url()).search).toBe('');
+  // "はじめから": the stage from its opening, the saved mission kept.
+  await page.waitForTimeout(600);
+  await choose.locator('.is-start').click();
+  await page.waitForURL(/stage=2-1&go=1$/);
+  await ready(page, '2-1');
+  await expect(page.locator('#card')).toHaveCount(0);
+  expect((await saved(page)).resume).toEqual({ stage: '2-1', mission: 1 });
+
+  // "つづきから": straight to mission 2's card.
+  await page.goto('/');
+  await ready(page, '1-1');
+  await page.locator('#title-map').click();
+  await island.click({ force: true }); // it bounces (the next island)
+  await page.waitForTimeout(600);
+  await choose.locator('.is-continue').click();
+  await page.waitForURL(/stage=2-1&go=1&resume=1/);
+  await ready(page, '2-1');
+  await tapUntil(page, '#card');
+  await expect(page.locator('#card')).toContainText('ミッション 2');
+  expect(errors).toEqual([]);
+});
