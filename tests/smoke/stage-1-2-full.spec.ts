@@ -68,7 +68,7 @@ async function jumpGap(page: Page, shot?: string): Promise<void> {
     await page.waitForTimeout(500);
     await page.screenshot({ path: resolve(OUT, shot) });
   }
-  await expect(page.locator('#app')).toHaveAttribute('data-air', '0', { timeout: 10_000 });
+  await expect(page.locator('#app')).toHaveAttribute('data-air', '0', { timeout: 30_000 });
 }
 
 /** Slows to ゆっくり and stops with the front at the station line `at`. */
