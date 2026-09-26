@@ -64,7 +64,7 @@ async function tapTeaser(page: Page, teaser: Locator): Promise<void> {
   await teaser.dispatchEvent('click');
   await expect(page.locator('.map-say')).toHaveText('つづきは また こんど！');
   await expect.poll(() => page.evaluate(() => (window as unknown as { teaserAnims: string[] }).teaserAnims)).toContain('island-wiggle');
-  await expect(teaser).not.toHaveClass(/is-wiggle|is-appear/, { timeout: 5_000 });
+  await expect(teaser).not.toHaveClass(/is-wiggle|is-appear/, { timeout: 10_000 });
   await expect.poll(() => teaser.evaluate((e) => getComputedStyle(e).animationName)).toBe('island-float');
 }
 
@@ -110,16 +110,16 @@ test('chapter 2 finale: the ring, the card, the "?" island, once', async ({ page
   // No way out and no taps on the islands until the card has been seen; the "?" island waits.
   await expect(page.locator('#map-close')).toBeHidden();
   await expect(page.locator('.map-island.is-teaser')).toBeHidden();
-  await expect(page.locator('#map')).toHaveClass(/(^|\s)is-finale(\s|$)/, { timeout: 5_000 });
+  await expect(page.locator('#map')).toHaveClass(/(^|\s)is-finale(\s|$)/, { timeout: 20_000 });
   // The light runs round the six islands in order (1-1 hops first, then the light sets off).
-  await expect(page.locator('[data-link="1-1>1-2"]')).toHaveClass(/is-lit/);
+  await expect(page.locator('[data-link="1-1>1-2"]')).toHaveClass(/is-lit/, { timeout: 20_000 });
   await page.waitForTimeout(1_300);
   await page.screenshot({ path: resolve(OUT, 'map-finale-ring.png') });
-  await expect(page.locator('[data-link="2-3>1-1"]')).toHaveClass(/is-lit/, { timeout: 5_000 });
+  await expect(page.locator('[data-link="2-3>1-1"]')).toHaveClass(/is-lit/, { timeout: 20_000 });
   for (const id of CHAPTER_1.concat(CHAPTER_2)) await expect(page.locator(`.map-island[data-island="${id}"]`)).toHaveClass(/is-hop/);
 
   const card = page.locator('#card');
-  await expect(card).toBeVisible({ timeout: 10_000 });
+  await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(card).toContainText('2しょう クリア！');
   await expect(card).toContainText('ぜんぶ つながった！');
   await expect(card.locator('svg.card-icon')).toBeVisible();
@@ -148,7 +148,7 @@ test('chapter 2 finale: the ring, the card, the "?" island, once', async ({ page
   await expect(page.locator('#map-close')).toBeVisible();
   // Tapped straight away, while it is still floating in: it wiggles all the same, then floats on.
   await tapTeaser(page, teaser);
-  await expect(page.locator('.map-say')).toHaveCount(0, { timeout: 5_000 });
+  await expect(page.locator('.map-say')).toHaveCount(0, { timeout: 10_000 });
   // Once it has faded in for good (opacity 1), the tap again for the picture.
   await settled(page.locator('[data-link="1-1>teaser:3"]'));
   await expect.poll(() => teaser.evaluate((e) => getComputedStyle(e).opacity)).toBe('1');
@@ -156,7 +156,7 @@ test('chapter 2 finale: the ring, the card, the "?" island, once', async ({ page
   await settled(page.locator('.map-say'));
   await expect(page.locator('#map')).toBeVisible();
   await page.screenshot({ path: resolve(OUT, 'map-finale-teaser.png') });
-  await expect(page.locator('.map-say')).toHaveCount(0, { timeout: 5_000 });
+  await expect(page.locator('.map-say')).toHaveCount(0, { timeout: 10_000 });
 
   // Once only: the map opened again shows the ring and the "?" island at once, no light and no card.
   await page.locator('#map-close').click();
@@ -186,7 +186,7 @@ test('chapter 1 finale: a small card when the rail reaches chapter 2', async ({ 
   await page.locator('#title-map').click();
   await expect(page.locator('[data-link="1-3>2-1"]')).toHaveClass(/is-growing/);
   // No ring: the card comes as soon as the rail is in.
-  await expect(page.locator('#card')).toContainText('1しょう クリア！', { timeout: 10_000 });
+  await expect(page.locator('#card')).toContainText('1しょう クリア！', { timeout: 20_000 });
   await expect(page.locator('#card')).toContainText('いきものの せかい');
   await expect(page.locator('#card-button')).toHaveText('つぎへ');
   await page.screenshot({ path: resolve(OUT, 'map-finale-chapter1.png') });

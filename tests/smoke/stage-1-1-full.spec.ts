@@ -119,6 +119,10 @@ test('stage 1-1 full run: all three missions and the ending', async ({ page }) =
   await doors(page, '12b-sakura-boarding.png', true);
   await expect(page.locator('#cargo')).toHaveAttribute('data-passengers', '2');
   await driveTo(page, 425);
+  // On the way the town's map board (a record found just by passing, left of loop 322).
+  const records = (): Promise<string[]> =>
+    page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}').records ?? []);
+  expect(await records()).toContain('town-board');
   await doors(page);
   await expect(page.locator('#cargo')).toHaveAttribute('data-passengers', '3');
   await driveTo(page, 525);
@@ -136,6 +140,10 @@ test('stage 1-1 full run: all three missions and the ending', async ({ page }) =
   await expect(page.locator('#cargo')).toHaveAttribute('data-parcel', '1');
   await driveTo(page, LOOP + 45, { whistleAt: 555 });
   await page.screenshot({ path: resolve(OUT, '14-hq-arrival.png') });
+  // The headquarters' notice board with the plans, found on the way back in. The balloon on the roof needs the jump
+  // (learned in 1-2): not found, whatever happens here.
+  expect(await records()).toEqual(expect.arrayContaining(['town-board', 'hq-plans']));
+  expect(await records()).not.toContain('roof-balloon');
   await doors(page);
   await tapUntil(page, '#card');
   await expect(page.locator('#card')).toContainText('できた！');
@@ -160,6 +168,8 @@ test('stage 1-1 full run: all three missions and the ending', async ({ page }) =
   await expect(page.locator('#map')).toBeVisible();
   await expect(page.locator('[data-link="1-1>1-2"]')).toHaveClass(/is-growing/);
   await expect(page.locator('.map-island[data-island="1-2"]')).toHaveClass(/is-next/);
+  // Records 2 of 3 here; the third (the balloon) needs the jump: "？".
+  await expect(page.locator('.map-island[data-island="1-1"] .map-badge')).toHaveText('きろく 2/3 ？');
   await page.waitForTimeout(1600);
   await page.screenshot({ path: resolve(OUT, '16-map.png') });
   // The next island bounces, so Playwright never sees it "stable": tap it directly.

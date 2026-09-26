@@ -111,6 +111,11 @@ export class Train {
   private rocketLeft = 0;
   /** 2-3: after a burn, slowing back to the lever's speed (at least ROCKET.settle m/s²). */
   private settling = false;
+  /**
+   * v1.8: the rail the rocket last fired on and the one the train went on to from there (at most two; forgotten on
+   * the rail after, and at a rewind). Records needing the rocket count it as used while the train is on one of them.
+   */
+  private rocketRails: string[] = [];
   /** 2-3: slipping back down an uphill: seconds so far and where the car center was when it started. */
   private slipping: { t: number; from: number } | null = null;
   /**
@@ -191,6 +196,27 @@ export class Train {
     return this.rocketLeft > 0;
   }
 
+  /** v1.8: the rocket burns, or its push is still in the speed (slowing back to the lever's speed after a burn). */
+  get rocketPushing(): boolean {
+    return this.rocketLeft > 0 || this.settling;
+  }
+
+  /**
+   * v1.8: the rocket counts as used here: it burns, its push is still in the speed (slowing back to the lever's speed
+   * after a burn), or it fired on this rail or on the rail the train came onto this one from. The last part matters
+   * at びゅーん: fired just before a record's side track, the push is gone before the top, yet only the rocket got
+   * the train up there.
+   */
+  get rocketUsedHere(): boolean {
+    return this.rocketPushing || this.rocketRails.includes(this.state.railId);
+  }
+
+  /** v1.8: the train went onto rail `id` (junction or merge): the rocket's rails move on (see rocketRails). */
+  private enteredRail(id: string): void {
+    if (this.rocketRails.length === 1) this.rocketRails.push(id);
+    else this.rocketRails = [];
+  }
+
   /** 2-3: share of the burn still left (1 right after firing, 0 when not burning). */
   get rocketRemaining(): number {
     return Math.max(0, this.rocketLeft / ROCKET.burn);
@@ -215,6 +241,7 @@ export class Train {
     if (this.airborne || this.rocketLeft > 0) return false;
     this.rocketLeft = ROCKET.burn;
     this.settling = false;
+    this.rocketRails = [this.state.railId];
     this.events.emit('rocketStarted');
     return true;
   }
@@ -354,6 +381,7 @@ export class Train {
     this.airClimb = 0;
     this.rocketLeft = 0;
     this.settling = false;
+    this.rocketRails = [];
     this.slope = null;
     this.jumpCooldown = 0;
     st.s = this.wrap(frontS - TRAIN.length / 2);
@@ -434,6 +462,11 @@ export class Train {
     if (!this.onLoop) return Math.max(0, s);
     const L = this.currentRail.length;
     return ((s % L) + L) % L;
+  }
+
+  /** The junction the arrows are shown for (announced and not passed yet), or null. */
+  get announcedJunction(): JunctionDef | null {
+    return this.announced;
   }
 
   chooseJunction(side: JunctionSide): void {
@@ -640,6 +673,7 @@ export class Train {
         st.s -= j.at;
         this.shiftArcs(-j.at, targetId);
         st.railId = targetId;
+        this.enteredRail(targetId);
         this.refreshPending();
         this.events.emit('railChanged', { railId: targetId });
       }
@@ -654,6 +688,7 @@ export class Train {
         st.s = rail.end.at + (st.s - rail.length);
         this.shiftArcs(rail.end.at - rail.length, rail.end.railId);
         st.railId = rail.end.railId;
+        this.enteredRail(st.railId);
         this.refreshPending();
         this.events.emit('railChanged', { railId: st.railId });
       }

@@ -102,9 +102,41 @@
       "end": {
         "type": "buffer"
       }
+    },
+    {
+      "id": "gake",
+      "points": [
+        [18.27, 0, 691.7],
+        [12.22, 0, 711.03],
+        [1.61, 0, 729.86],
+        [-11.6, 0, 746.4],
+        [-21.51, 1.2, 761.4],
+        [-28.38, 3.6, 776.84],
+        [-32.7, 6.4, 792.61],
+        [-35.47, 8.9, 808.59],
+        [-37.16, 10, 824.69],
+        [-39.34, 10, 846.88],
+        [-42.06, 10, 877.14],
+        [-44.46, 10, 907.5],
+        [-46.15, 10, 932.94]
+      ],
+      "base": { "look": "rock", "toGround": true },
+      "spur": { "back": { "railId": "main", "at": 725 } },
+      "end": {
+        "type": "buffer"
+      }
     }
   ],
   "junctions": [
+    {
+      "id": "to-gake",
+      "railId": "main",
+      "at": 695,
+      "left": "main",
+      "right": "gake",
+      "default": "left",
+      "needs": "rocket"
+    },
     {
       "id": "sign-a",
       "railId": "main",
@@ -1574,10 +1606,11 @@
     },
     {
       "id": "cliff-nest",
-      "name": "がけの うえの なにか",
-      "note": "たかい がけの うえ。ロケットが あれば…",
+      "name": "がけの うえの す",
+      "note": "からっぽの おおきな す。だれの かな？",
       "requires": "rocket",
-      "onRail": { "railId": "main", "at": 800, "lateral": -24 }
+      "model": "record-nest",
+      "onRail": { "railId": "gake", "at": 145.5, "lateral": -16.3, "heightFromRail": -0.53 }
     },
     {
       "id": "footprints",
@@ -1653,6 +1686,20 @@
     }
   ],
   "gimmicks": [
+    {
+      "type": "camera",
+      "railId": "gake",
+      "from": 50,
+      "to": 250,
+      "params": { "mode": "chase" }
+    },
+    {
+      "type": "slope",
+      "railId": "gake",
+      "from": 68,
+      "to": 142,
+      "params": { "pull": -6, "rewind": { "railId": "main", "at": 686 }, "line": "がけを のぼろう！ ロケット！" }
+    },
     {
       "type": "flock",
       "params": {

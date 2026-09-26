@@ -16,13 +16,13 @@ export function listStageIds(): string[] {
 }
 
 /** Every record of every playable (non-hidden) stage, in stage order, for the picture book. */
-export async function loadAllRecords(): Promise<{ stageTitle: string; record: RecordDef }[]> {
-  const out: { stageTitle: string; record: RecordDef }[] = [];
+export async function loadAllRecords(): Promise<{ stageId: string; stageTitle: string; record: RecordDef }[]> {
+  const out: { stageId: string; stageTitle: string; record: RecordDef }[] = [];
   for (const id of listStageIds()) {
     const mod = (await stageModules[`../stages/${id}.json`]()) as { default: StageFile };
     const file = mod.default;
     if (file.hidden) continue;
-    for (const record of file.records) out.push({ stageTitle: file.title, record });
+    for (const record of file.records) out.push({ stageId: file.id, stageTitle: file.title, record });
   }
   return out;
 }

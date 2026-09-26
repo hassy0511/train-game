@@ -22,6 +22,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import manifest from '../../assets/models.json';
 import { buildForestPlaceholder } from '../view/three/forest-placeholders';
 import { buildMeadowPlaceholder } from '../view/three/meadow-placeholders';
+import { buildRecordPlaceholder } from '../view/three/record-placeholders';
 import { buildSkyPlaceholder } from '../view/three/sky-placeholders';
 import { buildVolcanoPlaceholder } from '../view/three/volcano-placeholders';
 
@@ -76,7 +77,8 @@ const drawn = (name: string): Group | null =>
   buildSkyPlaceholder(name) ??
   buildForestPlaceholder(name) ??
   buildMeadowPlaceholder(name) ??
-  buildVolcanoPlaceholder(name);
+  buildVolcanoPlaceholder(name) ??
+  buildRecordPlaceholder(name);
 const pending = manifest._pending.models.filter((n) => !built.has(n) && drawn(n) !== null);
 const load = async (name: string): Promise<Group> =>
   built.has(name) ? (await loader.loadAsync(`${base}models/${name}.glb`)).scene : drawn(name)!;

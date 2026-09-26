@@ -479,7 +479,35 @@
       }
     }
   ],
-  "records": [],
+  "records": [
+    {
+      "id": "town-board",
+      "name": "まちの かんばん",
+      "note": "まちの ちずが かいてある",
+      "requires": null,
+      "model": "record-town-board",
+      "onRail": { "railId": "loop", "at": 322, "lateral": -9 },
+      "rotationY": -90
+    },
+    {
+      "id": "hq-plans",
+      "name": "ほんぶの せっけいず",
+      "note": "ワンダーごうの ひみつが いっぱい",
+      "requires": null,
+      "model": "record-hq-plans",
+      "onRail": { "railId": "loop", "at": 4, "lateral": -10 },
+      "rotationY": -90
+    },
+    {
+      "id": "roof-balloon",
+      "name": "やねの うえの ふうせん",
+      "note": "やねに ひっかかってた あかい ふうせん",
+      "requires": "jump",
+      "model": "record-balloon",
+      "hint": "ふうせんだ！ ジャンプで とどくかな",
+      "onRail": { "railId": "loop", "at": 258, "lateral": -22, "heightFromRail": 7.3 }
+    }
+  ],
   "opening": "opening",
   "ending": "ending",
   "missions": [

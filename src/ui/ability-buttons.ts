@@ -1,3 +1,5 @@
+import type { AbilityId } from '../stage/types';
+
 export interface JumpButton {
   show(): void;
   /** `progress` 0..1 for the cooldown ring; `glow` when jumping now clears the gap ahead; `idle` when stopped. */
@@ -50,6 +52,48 @@ const LIGHT_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
   <circle cx="11" cy="16" r="6" fill="#2b3a4a"/>
   <path d="M19 10l9-4M19 16h10M19 22l9 4" stroke="#2b3a4a" stroke-width="2.4" stroke-linecap="round"/>
 </svg>`;
+
+/** v1.8: diving (later chapters): a drop going down under a wave line, with bubbles. */
+const DIVE_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+  <path d="M3 11c3-2.5 5-2.5 8 0s5 2.5 8 0 5-2.5 8 0" fill="none" stroke="#2b3a4a" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M15 15v10M11 21l4 4 4-4" fill="none" stroke="#2b3a4a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="24" cy="19" r="2" fill="#2b3a4a"/><circle cx="26" cy="25" r="1.4" fill="#2b3a4a"/>
+</svg>`;
+
+/** v1.8: going backwards (later chapters): an arrow turning back. */
+const REVERSE_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+  <path d="M24 24V14a6 6 0 0 0-6-6h-9" fill="none" stroke="#2b3a4a" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M12 3 7 8l5 5" fill="none" stroke="#2b3a4a" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+/** The whistle's picture (same as its button's). */
+const WHISTLE_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+  <path d="M4 14h12l8-6v16l-8-6H4z" fill="#2b3a4a"/>
+  <path d="M26 10c2 1.6 3 3.6 3 6s-1 4.4-3 6" fill="none" stroke="#2b3a4a" stroke-width="2.4" stroke-linecap="round"/>
+</svg>`;
+
+/**
+ * v1.8: each ability's picture as SVG markup (class "icon"): for a junction arrow whose side way needs it and for the
+ * picture book's "?" cards. Abilities without a picture yet fall back to "".
+ */
+export function abilityIcon(ability: AbilityId): string {
+  switch (ability) {
+    case 'jump':
+      return JUMP_ICON;
+    case 'light':
+      return LIGHT_ICON;
+    case 'rocket':
+      return ROCKET_ICON;
+    case 'whistle':
+      return WHISTLE_ICON;
+    case 'dive':
+      return DIVE_ICON;
+    case 'reverse':
+      return REVERSE_ICON;
+    default:
+      return '';
+  }
+}
 
 /** v1.7: what the rocket button shows this frame. */
 export interface RocketButtonState {

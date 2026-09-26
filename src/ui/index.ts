@@ -10,7 +10,8 @@ export interface UiOptions {
   initialNotch: number;
   onNotch(notch: number): void;
   onWhistle(): void;
-  onJunction(side: JunctionSide): void;
+  /** False when that way cannot be taken now (v1.8: it needs an ability). */
+  onJunction(side: JunctionSide): boolean;
 }
 
 export interface Ui {

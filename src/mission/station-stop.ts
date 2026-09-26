@@ -64,7 +64,11 @@ export class StopMonitor {
   update(dt: number): StopOutcome | null {
     if (this.done) return null;
     const st = this.train.state;
-    if (st.railId !== this.station.railId) return null;
+    if (st.railId !== this.station.railId) {
+      // Off on another line (a side track, a wrong turn): no gauge until back on the station's line.
+      this.gauge.visible = false;
+      return null;
+    }
     const offset = this.train.offsetTo(this.station.at);
     const { zone, ok, perfect, maxSpeed } = this.rule;
 

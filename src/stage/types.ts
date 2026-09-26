@@ -54,6 +54,11 @@ export interface RailDef {
   look?: 'rail' | 'silk';
   /** v1.7: rock under the track, so a line along a slope does not float (looks only). */
   base?: RailBaseDef;
+  /**
+   * v1.8: a side track to a record (ends in a buffer). Stopped at its buffer the train is taken to `back` (not a
+   * fail: no dip, the partner says "spurBack").
+   */
+  spur?: { back: { railId: string; at: number } };
   end: RailEndDef;
 }
 
@@ -76,6 +81,11 @@ export interface JunctionDef {
   right?: string;
   default: 'left' | 'right';
   signReversed?: boolean;
+  /**
+   * v1.8: the way off to the side (the side that is not `default`) needs this ability. Its sign and arrow show the
+   * ability's picture; without the ability that way cannot be chosen and the partner says "needAbility".
+   */
+  needs?: AbilityId;
 }
 
 export interface StopRule {
@@ -144,6 +154,11 @@ export type RecordDef = Placement & {
   model?: string;
   /** v1.2: one line for the picture book. */
   note?: string;
+  /**
+   * v1.8: the partner's pointer, said once per stage run when the train comes within RECORD.hintDistance m of the
+   * record while it can be taken (the ability is there, or none is needed).
+   */
+  hint?: string;
 };
 
 /**
@@ -275,7 +290,10 @@ export type MissionLines = Partial<
     | 'timeUp'
     // v1.4
     | 'doorAsk'
-    | 'doorsClosedLever',
+    | 'doorsClosedLever'
+    // v1.8
+    | 'spurBack'
+    | 'needAbility',
     string
   >
 >;

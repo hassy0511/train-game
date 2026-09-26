@@ -174,11 +174,19 @@ export class RocketSystem {
   private nearStop(): boolean {
     const t = this.train;
     const rail = t.currentRail;
-    if (rail.end.type === 'buffer' && rail.length - t.frontS <= ROCKET.bufferQuiet) return true;
+    // v1.8: not while an uphill is still ahead on this rail (a record's side track climbs to its buffer: the rocket
+    // is what gets the train up; it rests from the top of the last uphill on).
+    if (rail.end.type === 'buffer' && rail.length - t.frontS <= ROCKET.bufferQuiet && !this.uphillAhead()) return true;
     if (!this.goal) return false;
     // Along the way the train will go: junction choices (else defaults) and merges.
     const d = t.routeDistance(this.goal.railId, this.goal.at);
     return d !== null && d > -10 && d <= ROCKET.stationQuiet;
+  }
+
+  /** An uphill slope on the current rail whose top the train front has not reached yet. */
+  private uphillAhead(): boolean {
+    const t = this.train;
+    return this.slopes.zones.some((z) => z.kind === 'up' && z.railId === t.state.railId && t.frontS < z.to);
   }
 
   /**

@@ -35,6 +35,7 @@ import {
   LEVER_NOTCHES,
   LIGHT,
   PASSENGER_SECONDS,
+  RECORD,
   REFUSE_COOLDOWN,
   REWIND_DISTANCE,
   SLOPE,
@@ -131,7 +132,8 @@ type DefaultLine =
   | 'noBrakeLever'
   | 'rockHit'
   | 'timeSafe'
-  | 'timeUp';
+  | 'timeUp'
+  | 'spurBack';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -187,7 +189,21 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   rockHit: 'ぽこん！ いしに ぶつかった〜',
   timeSafe: 'セーフ！',
   timeUp: 'はっくしょーん！',
+  // v1.8
+  // Reaching a record's side track end is a success: not the dead end's "いきどまり！".
+  spurBack: 'やったね！ もとの みちに もどるよ',
 };
+
+/**
+ * v1.8: what the partner says at a junction whose side way needs an ability the player does not have yet
+ * (the mission's "needAbility" line wins).
+ */
+const NEED_LINES: Partial<Record<AbilityId, string>> = {
+  rocket: 'ロケットが あれば のぼれそう…',
+  jump: 'ジャンプが できたら いけそう…',
+  light: 'ライトが あれば みえそう…',
+};
+const NEED_LINE_OTHER = 'いまは まだ いけないみたい…';
 
 /** Lever labels by jump hint, for the partner's "つぎの きれめは ふつう で とべる". */
 const HINT_NOTCH: Record<NonNullable<GapDef['hint']>, number> = { normal: 3, fast: 4, max: 5 };
@@ -239,6 +255,8 @@ export class MissionRunner {
   private lightOn = false;
   private readonly gapHints = new Set<GapDef>();
   private readonly signLines = new Set<string>();
+  /** v1.8: records whose hint was said this stage run. */
+  private readonly recordHints = new Set<string>();
   private readonly revealed = new Set<string>();
   private readonly found: Set<string>;
   private readonly abilities: Set<AbilityId>;
@@ -542,7 +560,7 @@ export class MissionRunner {
     this.updatePads(dt);
     this.updateJunctionSigns();
     this.updateRecords();
-    if (this.checkDeadEnd()) return;
+    if (this.checkDeadEnd() || this.checkSpur()) return;
     const outcome = this.stop?.update(dt) ?? null;
     if (outcome) {
       switch (outcome.kind) {
@@ -834,6 +852,10 @@ export class MissionRunner {
       this.events.post({ type: 'rock', id: rock.actor.id, kind: 'drop', state: 'hide', railId: rock.railId, at: rock.at });
     }
     for (const dino of this.dinos) {
+      // A sleeping one already woken and left at or behind where the train is put back stays awake and aside: asleep
+      // again it would lie under the cars (1-2: back from the cliff side track to 686, or from the young one to 680).
+      const passed = target !== undefined && dino.railId === target.railId && dino.at <= target.at;
+      if (dino instanceof MidDino && dino.state === 'awake' && passed) continue;
       dino.reset();
       const id = dino.actor.id;
       if (dino instanceof SmallDino) {
@@ -909,14 +931,24 @@ export class MissionRunner {
     if (this.lines.signRevealed) this.ports.sayAsync(this.lines.signRevealed);
   }
 
-  /** Records: found by passing close (no ability needed) or by lighting them up when they need the light. */
+  /**
+   * Records (v1.8): found by passing within RECORD.distance m while using the ability the record needs — none, the
+   * light on, in the air (jump), the rocket burning, its push still in the speed, or fired on this rail or the one
+   * before (Train.rocketUsedHere). A record's hint is said once,
+   * RECORD.hintDistance m before it, when it can be taken now.
+   */
   private updateRecords(): void {
     for (const record of this.stage.records) {
       const def = record.def;
       if (this.found.has(def.id)) continue;
-      if (def.requires !== null && !(def.requires === 'light' && this.lightOn && this.abilities.has('light'))) continue;
       const d = this.recordDistance(record);
-      if (d === null || d > LIGHT.recordDistance) continue;
+      if (d === null) continue;
+      const takeable = def.requires === null || this.abilities.has(def.requires);
+      if (def.hint && takeable && d <= RECORD.hintDistance && !this.recordHints.has(def.id)) {
+        this.recordHints.add(def.id);
+        this.ports.sayAsync(def.hint);
+      }
+      if (d > RECORD.distance || !takeable || !this.usingAbility(def.requires)) continue;
       this.found.add(def.id);
       addToProgress('records', [def.id]);
       this.events.post({ type: 'record:found', id: def.id });
@@ -925,12 +957,55 @@ export class MissionRunner {
     }
   }
 
+  /** v1.8: the ability a record needs is in use right now (null: nothing needed). */
+  private usingAbility(ability: AbilityId | null): boolean {
+    switch (ability) {
+      case null:
+        return true;
+      case 'light':
+        return this.lightOn;
+      case 'jump':
+        return this.train.airborne;
+      case 'rocket':
+        return this.train.rocketUsedHere;
+      default:
+        // Abilities of later chapters (dive, reverse, ...) have no rule yet: such records stay "?".
+        return false;
+    }
+  }
+
+  /** v1.8: the line for a junction side way that needs `ability`. */
+  private needLine(ability: AbilityId): string {
+    return this.lines.needAbility ?? NEED_LINES[ability] ?? NEED_LINE_OTHER;
+  }
+
+  /**
+   * v1.8: the player tapped the arrow to a side way that needs an ability they do not have. Said only then, not on
+   * the way up to the junction: 1-2's side track starts right after the sleeping dinosaur and 2-1's in the treetop
+   * station's braking, where a line about an ability the child has never heard of would push the one that matters
+   * (the whistle, "ゆっくり") later.
+   */
+  onJunctionRefused(junction: JunctionDef): void {
+    if (this.phase !== 'driving' || !junction.needs) return;
+    this.sayRefusal(this.needLine(junction.needs));
+  }
+
   private recordDistance(record: ResolvedRecord): number | null {
     if (record.onRail) {
       const d = this.train.distanceAhead(record.onRail.railId, record.onRail.at);
       return d === null ? null : Math.abs(d);
     }
     return record.position.distanceTo(this.train.getPose().position);
+  }
+
+  /** v1.8: stopped at the buffer of a record's side track: back to the way on (not a failure). */
+  private checkSpur(): boolean {
+    const rail = this.train.currentRail;
+    const def = this.stage.file.rails.find((r) => r.id === rail.id);
+    if (!def?.spur || this.train.state.speed > 0) return false;
+    if (rail.length - this.train.frontS > 10) return false;
+    this.finishDrive({ kind: 'fail', reason: 'spur', rewind: def.spur.back });
+    return true;
   }
 
   /** Stopped at the buffer of a wrong turn: back before the junction. */
@@ -1122,9 +1197,11 @@ export class MissionRunner {
     // v1.7: out of time, the volcano sneezes ("はっくしょーん！") and the steam wraps the train.
     if (reason === 'timeUp') this.events.post({ type: 'sneeze' });
     const scary = reason === 'cat' || reason === 'dino';
+    // v1.8: back from a record's side track is no failure: no dip, no shake.
+    const calm = reason === 'spur';
     // The silk, a rock, a slip and the sneeze are soft: a small dip, no shake.
     const soft = reason === 'fragile' || reason === 'rock' || reason === 'slip' || reason === 'timeUp';
-    this.ports.cameraFx(scary ? 1 : soft ? 0.3 : 0.5, soft ? 0 : 1);
+    if (!calm) this.ports.cameraFx(scary ? 1 : soft ? 0.3 : 0.5, soft ? 0 : 1);
     const key: DefaultLine = outcome.line ?? FAIL_LINES[reason] ?? (reason as DefaultLine);
     for (const line of (this.lines[key] ?? DEFAULT_LINES[key]).split('\n')) await this.ports.say(line, 'partner');
     if (reason === 'cat') await this.ports.say(this.lines.catDangerAfter ?? DEFAULT_LINES.catDangerAfter, 'partner');
@@ -1267,6 +1344,7 @@ const FAIL_LINES: Partial<Record<FailReason, DefaultLine>> = {
   rock: 'rockHit',
   slip: 'slip',
   timeUp: 'timeUp',
+  spur: 'spurBack',
 };
 const BRIDGE_LINES: Record<NonNullable<BridgeOutcome>['kind'], DefaultLine> = {
   near: 'butterflyNear',
