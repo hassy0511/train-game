@@ -408,3 +408,79 @@ type LineKey = /* v1.4 */ | 'nutHit' | 'nutNear' | 'boughJump' | 'squirrelNear' 
 |---|---|---|
 | `nut` | 転がる木の実。先頭が `trigger` m まで来ると `at` から電車の方へ転がり出す。先頭の台車が実に届いたとき空中なら越えられ、地上なら「ぽこん」で `at − trigger − 30` へ戻る。越えられる瞬間はジャンプボタンが光る | `{ trigger: 80, speed: 5, range: 160 }` |
 | `squirrel` | 実を持ったリス（線路の上 6 m）。先頭が `whistleRange` m 以内（`drop` m より遠い）で汽笛ボタンが光り、汽笛で実を線路の外へ落とす。鳴らさずに `drop` m まで来ると実を `at` の線路の上に落とす（止まった実。ジャンプで越える。ぶつかると `at − 80` へ戻る） | `{ whistleRange: 70, drop: 28 }` |
+
+## 9. v1.6 の追加（2-2、2026-09-25）
+
+`schemaVersion` は 1 のまま。追加はすべて省略可。実例は `src/stages/2-2.json`（`scripts/layout-2-2.mjs` が作る。JSON を手で直さず、スクリプトを直して `node scripts/layout-2-2.mjs` で作りなおす）、設計は `docs/PHASE6_DESIGN.md` §4。
+
+```ts
+interface RailDef {
+  // ...v1.3...
+  look?: 'rail' | 'silk';   // 線路の見た目。"silk" = くもの いと（白い いと 2 本、1.6 m ごとに横糸、40 m ごとに左右の草へ支えの いと。バラストなし）。既定 "rail"
+  gaps?: {
+    from: number; to: number; hint?; rewind?;
+    pit?: boolean;          // false = 切れ目の下に黒い帯を描かない（水の上の切れ目）。既定 true
+    bridge?: number;        // ローダーが付ける（書かない）: この切れ目は gimmicks[bridge] の花の橋がふさぐ小川
+  }[];
+}
+
+type CutsceneStep = /* v1.2 */
+  | { move: string; onRail: {...}; seconds: number; nowait?: boolean }   // nowait = 待たずに次の手順へ（いくつも同時に動かす）
+  | { spawn: string; model: string; onRail: {...}; rotationY?: number }   // rotationY = 線路の向きに対する角度（度。180 = 電車のほうを向く）
+  | { say: string; who?: Speaker; emote?: Emote; name?: string };         // name = 吹き出しに出す名前（例「くもさん」。なければ話し手の名前）
+
+type LineKey = /* v1.5 */
+  | 'hopperNear' | 'hopperOn' | 'hopperReady' | 'hopperDone' | 'hopperFell'
+  | 'butterflyNear' | 'butterflyFollow' | 'butterflyWait' | 'butterflyFast'
+  | 'budClosed' | 'bridgeOpen' | 'bridgeFell'
+  | 'fragileNear' | 'fragileShake' | 'fragileBoing' | 'fragileBoingAfter' | 'fragileClear'
+  | 'fellLight';
+```
+
+- ローダーは読みこんだ JSON を写して（`structuredClone`）から使う。花の橋や寸劇の `cutRail` が切れ目を足し引きしても、元の JSON は変わらない。
+- 花の橋（`flower-bridge`）の小川は `rails[].gaps` に書かない。ローダーが `{ from, to, pit: false, bridge: 番号, rewind: { railId, at: rewindAt } }` をその線路の `gaps` に足す（手で `bridge` を書くと検証で止まる）。
+
+せりふのキー（v1.6。どれも既定あり。ステージで書けば上書き）:
+| キー | 場面 | 既定 |
+|---|---|---|
+| `hopperNear` | 汽笛でよぶバッタが近い（`whistleRange` ＋ 30 m 手前） | バッタさんだ！ きてきで よんでみよう |
+| `hopperOn` | バッタが屋根にのった | わっ！ バッタさんが のった！ |
+| `hopperReady` | のっていて、切れ目まで 60 m。`{speed}` は `gapHint` の段 | バッタジャンプ！ {speed} で とぼう！ |
+| `hopperDone` | 切れ目をこえて、バッタがおりた | ありがとう、バッタさん！ |
+| `hopperFell` | バッタをのせずにバッタの切れ目に落ちた | バッタさんが いないと とどかない〜 |
+| `butterflyNear` | ちょうちょが近い（ライト消灯） | ちょうちょだ！ ライトで よんで みよう |
+| `butterflyFollow` | ついてきた | ついてきた！ ライトは つけた まま ね |
+| `butterflyWait` | とちゅうでライトを消した | ちょうちょが まってる！ ライトを つけて |
+| `butterflyFast` | はやすぎて、ちょうちょが窓のほうへおされている | はやい！ ちょうちょが あわててる〜 |
+| `budClosed` | 閉じた橋の 60 m 手前（ちょうちょがついてきていない） | はしが ない！ ちょうちょを つれて こよう |
+| `bridgeOpen` | 花がひらいた | さいた！ はなの はしだ！ |
+| `bridgeFell` | 閉じた橋に落ちた | ぽちゃん！ はしが まだ ない〜 |
+| `fragileNear` | いとの はしの `warn` m 手前 | いとの はしだ！ ゆっくり わたろう |
+| `fragileShake` | はしの上ではやすぎる | ゆれてる！ ゆっくり！ |
+| `fragileBoing` | ぼよよーん（失敗） | ぼよよーん！ はやすぎた〜 |
+| `fragileBoingAfter` | その あと | いとの うえは ゆっくり ね |
+| `fragileClear` | わたりきった | わたれた！ じょうず！ |
+| `fellLight` | ライトがついたまま飛距離が足りずに落ちた（ほかの失敗のせりふがあるときはそちら） | ライトを けすと はやく なるよ！ |
+
+失敗の理由（`fail.reason`。テストの目印・せりふの選び方）: `tooFast`・`overshoot`（駅）、`cat`・`dino`・`nut`（ぶつかりそう）、`fellShort`・`fellNoJump`（切れ目）、`deadEnd`（行き止まり）に、v1.6 で `hopper`（バッタの切れ目にバッタなしで落ちた → `hopperFell`）、`bridge`（閉じた花の橋に落ちた → `bridgeFell`）、`fragile`（いとの はしで ぼよよーん → `fragileBoing` → `fragileBoingAfter`。画面は少し沈むだけで、ゆれは 0）を足した。
+
+人やもの（`actors[]`、`onRail` で置く）:
+| type | 動き | params（既定値、`src/train/params.ts` の `GRASSHOPPER`） |
+|---|---|---|
+| `grasshopper` | 線路の横の葉にすわっているバッタ（`lateral`・`heightFromRail` で葉の上）。`reactsTo: "none"` は先頭が葉の `hop` m 手前に来ると自分から屋根にのる。`reactsTo: "whistle"` は `whistleRange` m 手前から葉を `passBy` m 過ぎるまで汽笛ボタンが光り、汽笛でのる。空中ではのらない。のれるのは同時に 1 ぴき。のっている間はジャンプの飛距離が `power` 倍・高さ `height` m（ジャンプボタンに `data-hopper="1"`）。バッタの切れ目（葉より先の、同じ線路の最初の切れ目）をこえて着地したらおりる。のせずにそこへ落ちると失敗 `hopper` で、その切れ目の `rewind` へ戻る | `{ hop: 25, whistleRange: 60, passBy: 8, power: 2, height: 8, gapHint: null }`（`gapHint` は `hopperReady` の `{speed}`: normal／fast／max）。`off: { at, lateral?, heightFromRail? }`（省略可）は、おりるときに とびうつる 葉の 場所（同じ線路。なければ 電車の 横の 地面） |
+
+仕掛け（`gimmicks[]`）:
+| type | 動き | params（既定値、`FLOWER_BRIDGE`・`FRAGILE`） |
+|---|---|---|
+| `flower-bridge` | ちょうちょと花の橋。`railId` の `from`〜`to` が小川（切れ目。ローダーが足す）。ちょうちょは `butterflyAt` の横 `butterflyLateral` m、高さ `butterflyHeight` m の小さな花でまつ。ライトがつくと先頭の `lead` m 前を飛んで案内し（電車が `maxSpeed` より速いと `minLead` まで窓のほうへおされるだけ。失敗にしない）、ライトを消すとその場でまつ。つぼみ（`from − bud`、横 `budLateral`）にとまると花がひらき、小川がふさがる（ステージの間ずっとひらいたまま）。閉じた小川に落ちると失敗 `bridge` で `rewindAt` へ | `{ butterflyAt: 必須, butterflyLateral: -5, butterflyHeight: 4, range: 40, lead: 12, minLead: 4, maxSpeed: 8, catchSpeed: 20, bud: 12, budLateral: 4, size: 1, bloomSeconds: 1.5, rewindAt: butterflyAt − 60 }` |
+| `fragile` | 宙にたるんだ いとの はし。先頭が `from − warn` に来るとレバーの「ゆっくり」（`maxSpeed` 以下でいちばん速い段）が光る。はしの上（空中でない）で `maxSpeed` ＋ 0.3 を超えるといとがゆれ、超えたまま `grace` 秒で失敗 `fragile`（ぼよよーん、`rewindAt` へ）。たるみは線路の点そのもので付ける。見た目は画面側で別に描く | `{ maxSpeed: 7.5, grace: 1.0, warn: 80, rewindAt: from − 60 }` |
+
+読み込み時の検査（`src/stage/validate.ts`）:
+- `look` は rail／silk、`pit`・`nowait` は true／false。`gaps[].bridge` は書かない
+- バッタ: `reactsTo` は none／whistle。葉より先 250 m 以内に切れ目（花の橋の小川もふくむ）があり、その切れ目の戻り先が、葉の `hop` m 手前（汽笛でよぶバッタは `whistleRange ＋ 30` m 手前。よびかけの せりふが 先に 出るように）か、それより前。`off` は at（と lateral・heightFromRail）が数。spawn の `rotationY` は数、say の `name` は文字。同じ線路のバッタどうしは 150 m 以上はなす
+- 花の橋: `butterflyAt` は必須。小川は 44 m 以上（どのジャンプでもとどかない幅）。`butterflyAt < from − bud − lead`、`rewindAt < butterflyAt − lead`。ほかの切れ目と重ならない。`butterflyAt`〜`from` の間に分かれ道がない
+- いとの はし: `rewindAt < from`。はしの上に切れ目がない。`maxSpeed` は 0 より大きい
+
+ほかの小さな直し（書き方は変わらない）:
+- 逆標識は、分かれ道を通ると見破りが消える（ループでもどってきたら、もう一度ライトで見破れる）。うその側へ行ったあとは、その分かれ道の 80 m 手前からライトボタンが光る（ライトが消えていれば）
+- 分かれ道の線路が地面より 2 m 以上高いと、標識は線路の高さに立つ

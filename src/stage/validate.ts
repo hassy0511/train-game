@@ -1,4 +1,5 @@
 import { SONGS } from '../audio/songs';
+import { FLOWER_BRIDGE, FRAGILE, GRASSHOPPER, REWIND_DISTANCE } from '../train/params';
 import type { Placement, StageFile } from './types';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
@@ -54,12 +55,15 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
     isObject(r) && isString(r.railId) && railIds.has(r.railId) && isNumber(r.at);
   if ('say' in st) {
     if (!isString(st.say)) fail(`${where}: "say" must be text`);
+    if (st.name !== undefined && !isString(st.name)) fail(`${where}: "name" must be text`);
   } else if ('spawn' in st) {
     if (!isString(st.spawn) || !isString(st.model) || !MODEL_NAME.test(st.model) || !onRailOk(st.onRail)) {
       fail(`${where}: spawn needs id, model and onRail`);
     }
+    if (st.rotationY !== undefined && !isNumber(st.rotationY)) fail(`${where}: "rotationY" must be a number`);
   } else if ('move' in st) {
     if (!isString(st.move) || !onRailOk(st.onRail) || !isNumber(st.seconds)) fail(`${where}: move needs id, onRail, seconds`);
+    if (st.nowait !== undefined && typeof st.nowait !== 'boolean') fail(`${where}: "nowait" must be true or false`);
   } else if ('remove' in st) {
     if (!isString(st.remove)) fail(`${where}: "remove" must be an actor id`);
   } else if ('wait' in st) {
@@ -136,8 +140,11 @@ export function validateStageFile(raw: unknown): StageFile {
         if (g.rewind !== undefined && (!isObject(g.rewind) || !isString(g.rewind.railId) || !isNumber(g.rewind.at))) {
           fail(`rail "${r.id}": gap rewind needs railId and at`);
         }
+        if (g.pit !== undefined && typeof g.pit !== 'boolean') fail(`rail "${r.id}": gap "pit" must be true or false`);
+        if (g.bridge !== undefined) fail(`rail "${r.id}": gap "bridge" is set by the loader (write a flower-bridge gimmick instead)`);
       }
     }
+    if (r.look !== undefined && r.look !== 'rail' && r.look !== 'silk') fail(`rail "${r.id}": "look" must be rail or silk`);
     if (r.deadEnd !== undefined && typeof r.deadEnd !== 'boolean') fail(`rail "${r.id}": "deadEnd" must be true or false`);
     if (r.upMode !== undefined && r.upMode !== 'fixed' && r.upMode !== 'follow') fail(`rail "${r.id}": "upMode" must be fixed or follow`);
     if (r.deadEnd === true && r.end.type !== 'buffer') fail(`rail "${r.id}": a dead end must end in a buffer`);
@@ -192,6 +199,10 @@ export function validateStageFile(raw: unknown): StageFile {
     if (!['whistle', 'light', 'none'].includes(String(a.reactsTo))) fail(`actor "${a.id}": reactsTo`);
     if (a.size !== undefined && !isVec3(a.size)) fail(`actor "${a.id}": "size" must be [x, y, z]`);
     checkPlacement(a, `actor "${a.id}"`, railIds);
+    if ((a.type === 'grasshopper' || a.type === 'nut' || a.type === 'squirrel') && !isObject(a.onRail)) {
+      fail(`actor "${a.id}": a ${a.type} is placed with onRail`);
+    }
+    if (a.type === 'grasshopper' && a.reactsTo === 'light') fail(`actor "${a.id}": a grasshopper hops on by itself ("none") or when whistled for ("whistle")`);
   }
 
   for (const r of requireArray(raw, 'records')) {
@@ -243,17 +254,126 @@ export function validateStageFile(raw: unknown): StageFile {
 
   requireArray(raw, 'gimmicks').forEach((g, i) => {
     if (!isObject(g) || !isString(g.type)) fail(`gimmicks[${i}]: "type" is required`);
-    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough'];
+    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile'];
     if (zoned.includes(g.type)) {
       if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`gimmicks[${i}] ${g.type}: needs a known railId and "from"`);
       if (g.type !== 'jump-pad' && (!isNumber(g.to) || (g.to as number) <= (g.from as number))) fail(`gimmicks[${i}] ${g.type}: needs "to" after "from"`);
+    }
+    const p = (g.params ?? {}) as Record<string, unknown>;
+    if (g.type === 'flower-bridge') {
+      const from = g.from as number;
+      const to = g.to as number;
+      const at = p.butterflyAt;
+      if (!isNumber(at)) fail(`gimmicks[${i}] flower-bridge: params.butterflyAt is required`);
+      if (to - from < 44) fail(`gimmicks[${i}] flower-bridge: the stream must be at least 44 m (no jump reaches over it)`);
+      if ((at as number) >= from - Number(p.bud ?? 12) - Number(p.lead ?? 12)) fail(`gimmicks[${i}] flower-bridge: butterflyAt must be before the bud and its lead`);
     }
     if (g.type === 'camera' && !['cab', 'chase', 'side', 'top'].includes(String((g.params as Record<string, unknown> | undefined)?.mode))) {
       fail(`gimmicks[${i}] camera: params.mode must be cab, chase, side or top`);
     }
   });
 
+  checkMeadow(raw as unknown as StageFile);
+
   return raw as unknown as StageFile;
+}
+
+/** A gap as the running game sees it: `rails[].gaps` plus the streams the loader adds for flower bridges. */
+interface RunGap {
+  railId: string;
+  from: number;
+  to: number;
+  rewind: { railId: string; at: number };
+  what: string;
+}
+
+const numberParam = (params: Record<string, unknown> | undefined, key: string, fallback: number): number => {
+  const v = params?.[key];
+  return isNumber(v) ? v : fallback;
+};
+
+/**
+ * v1.6 (2-2) checks across rails, actors and gimmicks: grasshoppers need a gap ahead to help over, flower bridges
+ * need a clear run for the butterfly, and silk bridges must send the train back to before themselves.
+ * docs/PHASE6_DESIGN.md §4.1–§4.3.
+ */
+function checkMeadow(file: StageFile): void {
+  const gaps: RunGap[] = [];
+  for (const r of file.rails) {
+    for (const g of r.gaps ?? []) {
+      gaps.push({ railId: r.id, from: g.from, to: g.to, rewind: g.rewind ?? { railId: r.id, at: g.from - REWIND_DISTANCE }, what: `rail "${r.id}" gap ${g.from}–${g.to}` });
+    }
+  }
+  file.gimmicks.forEach((g, i) => {
+    if (g.type !== 'flower-bridge' || g.railId === undefined || g.from === undefined || g.to === undefined) return;
+    const butterflyAt = numberParam(g.params, 'butterflyAt', g.from - 100);
+    const rewindAt = numberParam(g.params, 'rewindAt', butterflyAt - 60);
+    gaps.push({ railId: g.railId, from: g.from, to: g.to, rewind: { railId: g.railId, at: rewindAt }, what: `gimmicks[${i}] flower-bridge` });
+  });
+
+  // Flower bridges (§4.2): the stream overlaps no other gap, the train goes back to before the butterfly's lead,
+  // and there is no junction between the butterfly and the stream.
+  file.gimmicks.forEach((g, i) => {
+    if (g.type !== 'flower-bridge' || g.railId === undefined || g.from === undefined || g.to === undefined) return;
+    const where = `gimmicks[${i}] flower-bridge`;
+    const { railId, from, to } = g;
+    const butterflyAt = numberParam(g.params, 'butterflyAt', from - 100);
+    const lead = numberParam(g.params, 'lead', FLOWER_BRIDGE.lead);
+    const rewindAt = numberParam(g.params, 'rewindAt', butterflyAt - 60);
+    for (const other of gaps) {
+      if (other.what === where || other.railId !== railId) continue;
+      if (other.from < to && from < other.to) fail(`${where}: the stream ${from}–${to} overlaps ${other.what}`);
+    }
+    if (rewindAt >= butterflyAt - lead) fail(`${where}: rewindAt (${rewindAt}) must be before butterflyAt − lead (${butterflyAt - lead})`);
+    for (const j of file.junctions) {
+      if (j.railId === railId && j.at >= butterflyAt && j.at <= from) fail(`${where}: junction "${j.id}" lies between the butterfly and the stream`);
+    }
+  });
+
+  // Silk bridges (§4.3): the bounce sends the train back to before the bridge, and no gap is inside it.
+  file.gimmicks.forEach((g, i) => {
+    if (g.type !== 'fragile' || g.railId === undefined || g.from === undefined || g.to === undefined) return;
+    const where = `gimmicks[${i}] fragile`;
+    const { railId, from, to } = g;
+    if (numberParam(g.params, 'maxSpeed', FRAGILE.maxSpeed) <= 0) fail(`${where}: params.maxSpeed must be above 0`);
+    if (numberParam(g.params, 'grace', FRAGILE.grace) < 0) fail(`${where}: params.grace must not be negative`);
+    const rewindAt = numberParam(g.params, 'rewindAt', from - 60);
+    if (rewindAt >= from) fail(`${where}: rewindAt (${rewindAt}) must be before the bridge (${from})`);
+    for (const gap of gaps) {
+      if (gap.railId === railId && gap.from < to && from < gap.to) fail(`${where}: ${gap.what} is on the silk bridge`);
+    }
+  });
+
+  // Grasshoppers (§4.1): a gap within 250 m ahead of the leaf, rewinding to before the point where it gets on;
+  // grasshoppers on one rail at least 150 m apart.
+  const hoppers = file.actors.filter((a) => a.type === 'grasshopper' && 'onRail' in a);
+  for (const a of hoppers) {
+    if (!('onRail' in a)) continue;
+    const { railId, at } = a.onRail;
+    const params = a.params;
+    const gap = gaps.filter((g) => g.railId === railId && g.from > at).sort((x, y) => x.from - y.from)[0];
+    if (!gap || gap.from - at > 250) fail(`actor "${a.id}": a grasshopper needs a gap within 250 m after its leaf`);
+    // One whistled for is announced 30 m before the whistle reaches it: a retry must start before that line too.
+    const reach =
+      a.reactsTo === 'whistle' ? numberParam(params, 'whistleRange', GRASSHOPPER.whistleRange) + 30 : numberParam(params, 'hop', GRASSHOPPER.hop);
+    const getOn = at - reach;
+    if (gap.rewind.railId === railId && gap.rewind.at > getOn) {
+      fail(`actor "${a.id}": its gap (${gap.what}) rewinds to ${gap.rewind.at}, after where the grasshopper is first met (${getOn})`);
+    }
+    const off = params?.off;
+    if (off !== undefined) {
+      const o = off as Record<string, unknown>;
+      if (!isObject(off) || !isNumber(o.at) || (o.lateral !== undefined && !isNumber(o.lateral)) || (o.heightFromRail !== undefined && !isNumber(o.heightFromRail))) {
+        fail(`actor "${a.id}": params.off needs at (and optional lateral, heightFromRail) numbers`);
+      }
+    }
+    const hint = params?.gapHint;
+    if (hint !== undefined && hint !== null && !JUMP_HINTS.includes(String(hint))) fail(`actor "${a.id}": params.gapHint must be normal, fast, max or null`);
+    for (const b of hoppers) {
+      if (b === a || !('onRail' in b) || b.onRail.railId !== railId) continue;
+      if (Math.abs(b.onRail.at - at) < 150) fail(`actors "${a.id}" and "${b.id}": grasshoppers on one rail must be 150 m apart`);
+    }
+  }
 }
 
 export type { Placement };

@@ -1120,3 +1120,44 @@ body {
   right: auto;
   left: calc(var(--safe-left) + 16px);
 }
+
+/* ---- 2-2: grasshopper jump, lever hint ---- */
+.round-button .icon-hopper {
+  display: none;
+}
+
+#jump[data-hopper='1'] .icon-jump {
+  display: none;
+}
+
+#jump[data-hopper='1'] .icon-hopper {
+  display: block;
+}
+
+#jump[data-hopper='1'] .ring.is-jump {
+  --accent: #58b947;
+}
+
+#jump[data-hopper='1'][data-glow='1'] .face {
+  background: #d6f5c4;
+}
+
+/* "Cross the silk this slowly": the notch's mark and word glow. */
+.lever-detent[data-hint='1']::before {
+  background: #ffe066;
+  box-shadow: 0 0 10px 3px rgba(255, 224, 102, 0.9);
+  animation: detent-glow 0.6s ease-in-out infinite alternate;
+}
+
+.lever-detent[data-hint='1'] .lever-label {
+  color: #ffe066;
+}
+
+@keyframes detent-glow {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
+}

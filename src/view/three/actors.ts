@@ -169,8 +169,8 @@ export class ActorLayer {
     for (const actor of actors) this.actorTypes.set(actor.id, actor.type);
     await Promise.all(
       actors
-        // Nuts and squirrels are drawn by the forest gimmicks (they move along the rail on their own).
-        .filter((actor) => actor.type !== 'trigger' && actor.type !== 'nut' && actor.type !== 'squirrel')
+        // Nuts, squirrels (forest) and grasshoppers (meadow) are drawn by their gimmicks: they move on their own.
+        .filter((actor) => actor.type !== 'trigger' && actor.type !== 'nut' && actor.type !== 'squirrel' && actor.type !== 'grasshopper')
         .map((actor) => this.place(actor.id, ACTOR_MODELS[actor.type] ?? actor.type, actor.position, actor.quaternion)),
     );
     await Promise.all(actors.filter((a) => a.type === 'dino-large').map((a) => this.addNeck(a.id)));

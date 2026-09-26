@@ -8,6 +8,8 @@ export interface LeverOptions {
 export interface Lever {
   setNotch(notch: number): void;
   relayout(): void;
+  /** Make one notch's mark glow ("this speed here"), or none. */
+  setHint(notch: number | null): void;
 }
 
 /** Vertical master controller: drag with the thumb, snaps to detents, keeps its position when released. */
@@ -106,5 +108,11 @@ export function createLever(root: HTMLElement, opts: LeverOptions): Lever {
       knob.style.top = `${centerY(fraction)}px`;
     },
     relayout,
+    setHint(n: number | null): void {
+      detents.forEach((d, i) => {
+        const v = i === n ? '1' : '0';
+        if (d.dataset.hint !== v) d.dataset.hint = v;
+      });
+    },
   };
 }

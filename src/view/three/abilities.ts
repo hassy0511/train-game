@@ -26,7 +26,7 @@ import type { StageEvent } from '../../core/stage-events';
 import { param, zoneAt } from '../../gimmick/zones';
 import type { RailNetwork } from '../../rail/types';
 import { resolvePlacement } from '../../stage/loader';
-import type { JunctionDef, StageData } from '../../stage/types';
+import type { GapDef, JunctionDef, StageData } from '../../stage/types';
 import type { ModelLibrary } from './models';
 import { addModelPlacements, sourceMeshes, type ModelPlacement, type SourceMesh } from './props';
 
@@ -38,7 +38,9 @@ export function buildGapPits(network: RailNetwork, groundY: number | null): Grou
   const HALF = 4.5;
   const dark = new Color('#3a2a1c');
   for (const rail of network.rails.values()) {
-    for (const gap of rail.gaps) {
+    for (const gap of rail.gaps as GapDef[]) {
+      // Over water (a puddle, a stream under a flower bridge) there is no dark hole.
+      if (gap.pit === false) continue;
       const positions: number[] = [];
       const colors: number[] = [];
       const indices: number[] = [];
@@ -135,7 +137,10 @@ export class JunctionSigns {
     const geometry = arrowGeometry();
     for (const junction of this.stage.file.junctions) {
       const at = Math.max(0, junction.at - SIGN_BEFORE);
-      const t = resolvePlacement({ onRail: { railId: junction.railId, at, lateral: SIGN_LATERAL }, rotationY: 180 }, this.stage.network, groundY);
+      // On a raised line (2-2's silk 12 m up) the sign stands at the rail's height, not down on the ground.
+      const railY = this.stage.network.getRail(junction.railId).frameAt(at).position.y;
+      const standY = groundY !== null && railY - groundY >= 2 ? null : groundY;
+      const t = resolvePlacement({ onRail: { railId: junction.railId, at, lateral: SIGN_LATERAL }, rotationY: 180 }, this.stage.network, standY);
       const sign = new Group();
       sign.name = `sign:${junction.id}`;
       sign.position.copy(t.position);
@@ -161,9 +166,10 @@ export class JunctionSigns {
     sign.glow = 1;
   }
 
-  /** Back to the (reversed) display after a rewind. */
-  reset(): void {
+  /** Back to the (reversed) display after a rewind, or for one junction once the train has passed it. */
+  reset(junctionId?: string): void {
     for (const sign of this.signs.values()) {
+      if (junctionId !== undefined && sign.junction.id !== junctionId) continue;
       sign.turn = arrowTurn(sign.junction.default);
       sign.glow = 0;
     }

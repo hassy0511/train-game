@@ -96,6 +96,8 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
       btn.dataset.island = island.id;
       btn.style.left = `${island.x}%`;
       btn.style.top = `${island.y}%`;
+      // Islands higher up the map sit on top: their name tag hangs below them, over the island underneath.
+      btn.style.zIndex = String(100 - Math.round(island.y));
       const img = document.createElement('img');
       img.alt = '';
       img.draggable = false;

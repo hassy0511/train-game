@@ -3,8 +3,11 @@ import type { Whistle } from '../actions/whistle';
 import { CatActor } from '../actors/cat';
 import { LargeDino, makeDino, MidDino, SmallDino, type Dino } from '../actors/dino';
 import { RollingNut, Squirrel } from '../actors/nut';
+import { Grasshopper } from '../actors/grasshopper';
+import { FlowerBridges, type BridgeOutcome } from '../gimmick/flower-bridge';
+import { FragileBridges } from '../gimmick/fragile';
 import { addToProgress, loadProgress } from '../core/progress';
-import type { StageEventBus } from '../core/stage-events';
+import type { StageEvent, StageEventBus } from '../core/stage-events';
 import { runCutscene, type CutscenePorts } from '../cutscene/runner';
 import type {
   AbilityId,
@@ -74,7 +77,25 @@ type DefaultLine =
   | 'padAppear'
   | 'nutHit'
   | 'boughJump'
-  | 'squirrelDropped';
+  | 'squirrelDropped'
+  | 'hopperNear'
+  | 'hopperOn'
+  | 'hopperReady'
+  | 'hopperDone'
+  | 'hopperFell'
+  | 'butterflyNear'
+  | 'butterflyFollow'
+  | 'butterflyWait'
+  | 'butterflyFast'
+  | 'budClosed'
+  | 'bridgeOpen'
+  | 'bridgeFell'
+  | 'fragileNear'
+  | 'fragileShake'
+  | 'fragileBoing'
+  | 'fragileBoingAfter'
+  | 'fragileClear'
+  | 'fellLight';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -99,6 +120,24 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   nutHit: 'ぽこん！ きのみに ぶつかった〜',
   boughJump: 'えだが とばして くれるよ！',
   squirrelDropped: 'リスが きのみを おとした！ いまの うちに！',
+  hopperNear: 'バッタさんだ！ きてきで よんでみよう',
+  hopperOn: 'わっ！ バッタさんが のった！',
+  hopperReady: 'バッタジャンプ！ {speed} で とぼう！',
+  hopperDone: 'ありがとう、バッタさん！',
+  hopperFell: 'バッタさんが いないと とどかない〜',
+  butterflyNear: 'ちょうちょだ！ ライトで よんで みよう',
+  butterflyFollow: 'ついてきた！ ライトは つけた まま ね',
+  butterflyWait: 'ちょうちょが まってる！ ライトを つけて',
+  butterflyFast: 'はやい！ ちょうちょが あわててる〜',
+  budClosed: 'はしが ない！ ちょうちょを つれて こよう',
+  bridgeOpen: 'さいた！ はなの はしだ！',
+  bridgeFell: 'ぽちゃん！ はしが まだ ない〜',
+  fragileNear: 'いとの はしだ！ ゆっくり わたろう',
+  fragileShake: 'ゆれてる！ ゆっくり！',
+  fragileBoing: 'ぼよよーん！ はやすぎた〜',
+  fragileBoingAfter: 'いとの うえは ゆっくり ね',
+  fragileClear: 'わたれた！ じょうず！',
+  fellLight: 'ライトを けすと はやく なるよ！',
 };
 
 /** Lever labels by jump hint, for the partner's "つぎの きれめは ふつう で とべる". */
@@ -123,6 +162,13 @@ export class MissionRunner {
   private dinos: Dino[] = [];
   private readonly nuts: RollingNut[];
   private readonly squirrels: Squirrel[];
+  private readonly hoppers: Grasshopper[];
+  private readonly bridges: FlowerBridges;
+  private readonly fragiles: FragileBridges;
+  /** Reversed-sign junctions the train has once gone the wrong way at (the light button glows there after). */
+  private readonly wrongTurns = new Set<string>();
+  /** What the view was last told about each butterfly (state, place). */
+  private readonly butterflyPosted = new Map<number, string>();
   private lightOn = false;
   private readonly gapHints = new Set<GapDef>();
   private readonly signLines = new Set<string>();
@@ -151,6 +197,22 @@ export class MissionRunner {
     this.dinos = stage.actors.map((a) => makeDino(a, train)).filter((d): d is Dino => d !== null);
     this.nuts = stage.actors.filter((a) => a.type === 'nut').map((a) => new RollingNut(a, train));
     this.squirrels = stage.actors.filter((a) => a.type === 'squirrel').map((a) => new Squirrel(a, train));
+    this.hoppers = stage.actors
+      .filter((a) => a.type === 'grasshopper' && a.onRail)
+      .map((a) => new Grasshopper(a, train, stage.network.getRail(a.onRail!.railId).gaps as GapDef[]));
+    this.bridges = new FlowerBridges(stage.file.gimmicks, train, (railId, from, to) => {
+      stage.network.getRail(railId).removeGap(from, to);
+    });
+    this.fragiles = new FragileBridges(stage.file.gimmicks, train);
+    // A reversed sign's lie leads somewhere wrong: remember it, so the light button glows at that junction next time.
+    train.events.on('railChanged', ({ railId }) => {
+      for (const j of stage.file.junctions) if (j.signReversed && j[j.default] === railId && j[j.default] !== j.railId) this.wrongTurns.add(j.id);
+    });
+    // A junction seen through once can be seen through again when a loop brings the train back to it.
+    train.events.on('junctionPassed', () => {
+      for (const id of this.revealed) this.events.post({ type: 'sign:reset', junctionId: id });
+      this.revealed.clear();
+    });
     this.pads = stage.file.gimmicks.flatMap((g, index) =>
       g.type === 'jump-pad' && g.railId !== undefined && g.from !== undefined
         ? [{ index, railId: g.railId, at: g.from, seconds: param(g, 'seconds', 8), range: param(g, 'range', 60), left: 0, hinted: false }]
@@ -179,6 +241,47 @@ export class MissionRunner {
     if (this.phase !== 'driving') return;
     if (reason === 'stopped') this.ports.sayAsync(this.lines.jumpStopped ?? DEFAULT_LINES.jumpStopped);
     if (reason === 'bough') this.ports.sayAsync(this.lines.boughJump ?? DEFAULT_LINES.boughJump);
+  }
+
+  /** Test hooks and UI: the grasshopper riding on the roof (its id, or ""). */
+  get hopperId(): string {
+    return this.hoppers.find((h) => h.state === 'riding')?.actor.id ?? '';
+  }
+
+  /** Which flower bridges are open, "1,0,0" (test hook). */
+  get bridgeFlags(): string {
+    return this.bridges.openFlags;
+  }
+
+  /** The nearest butterfly's state (test hook). */
+  get butterflyState(): string {
+    return this.bridges.active?.state ?? '';
+  }
+
+  /** "" | near | on | shake: the silk bridge at the train (test hook). */
+  get fragileStatus(): string {
+    return this.fragiles.status;
+  }
+
+  /** The fastest speed the lever should show (a silk bridge ahead), or null. */
+  get leverHintSpeed(): number | null {
+    return this.phase === 'driving' ? this.fragiles.hintSpeed : null;
+  }
+
+  /**
+   * The light button glows: a butterfly in reach is waiting for the light, or a reversed sign the train was
+   * fooled by before comes up again.
+   */
+  get lightHint(): boolean {
+    if (this.phase !== 'driving' || this.lightOn) return false;
+    if (this.bridges.lightHint(this.lightOn)) return true;
+    for (const id of this.wrongTurns) {
+      const j = this.stage.file.junctions.find((x) => x.id === id);
+      if (!j || this.revealed.has(j.id)) continue;
+      const d = this.train.distanceAhead(j.railId, j.at);
+      if (d !== null && d > 0 && d <= 80) return true;
+    }
+    return false;
   }
 
   /** A nut ahead can be jumped right now (the jump button glows). */
@@ -347,10 +450,111 @@ export class MissionRunner {
         return;
       }
     }
+    this.updateHoppers();
+    this.updateBridges(dt);
+    this.updateFragiles(dt);
   }
 
-  /** Puts every actor back where it waits (start of the stage and after a rewind). */
-  private resetActors(): void {
+  /** Grasshoppers: one hops on (by itself or when whistled for), helps over its gap, and hops off. */
+  private updateHoppers(): void {
+    for (const hopper of this.hoppers) {
+      const o = hopper.update(this.hopperFree);
+      if (!o) continue;
+      const id = hopper.actor.id;
+      if (o.kind === 'near') this.ports.sayAsync(this.lines.hopperNear ?? DEFAULT_LINES.hopperNear);
+      else if (o.kind === 'board') this.board(hopper);
+      else if (o.kind === 'ready') {
+        const hint = hopper.params.gapHint ?? hopper.gap?.hint ?? 'fast';
+        const text = this.lines.hopperReady ?? DEFAULT_LINES.hopperReady;
+        this.ports.sayAsync(text.replace('{speed}', LEVER_NOTCHES[HINT_NOTCH[hint]].label));
+      } else if (o.kind === 'done') {
+        this.train.jumpBoost = null;
+        this.events.post({ type: 'hopper', id, state: 'off' });
+        this.ports.sayAsync(this.lines.hopperDone ?? DEFAULT_LINES.hopperDone);
+      }
+    }
+  }
+
+  /** No grasshopper is riding (only one fits on the roof). */
+  private get hopperFree(): boolean {
+    return !this.hoppers.some((h) => h.state === 'riding');
+  }
+
+  private board(hopper: Grasshopper): void {
+    this.train.jumpBoost = { power: hopper.params.power, height: hopper.params.height };
+    this.events.post({ type: 'hopper', id: hopper.actor.id, state: 'board' });
+    this.events.post({ type: 'partner:emote', kind: 'jump' });
+    this.ports.sayAsync(this.lines.hopperOn ?? DEFAULT_LINES.hopperOn);
+  }
+
+  /** Butterflies follow the light to their bud; the flower opens a bridge over the stream. */
+  private updateBridges(dt: number): void {
+    for (const { bridge, outcome } of this.bridges.update(dt, this.lightOn)) {
+      if (!outcome) continue;
+      const key: DefaultLine = BRIDGE_LINES[outcome.kind];
+      this.ports.sayAsync(this.lines[key] ?? DEFAULT_LINES[key]);
+      if (outcome.kind === 'open') {
+        this.events.post({ type: 'bridge', index: bridge.index, open: true });
+        this.events.post({ type: 'partner:emote', kind: 'jump' });
+      }
+    }
+    this.postButterflies();
+  }
+
+  /** Tells the view where each butterfly is, when that changed. */
+  private postButterflies(): void {
+    for (const b of this.bridges.bridges) {
+      const key = `${b.state}:${b.s.toFixed(2)}:${b.flustered ? 1 : 0}`;
+      if (this.butterflyPosted.get(b.index) === key) continue;
+      this.butterflyPosted.set(b.index, key);
+      this.events.post({ type: 'butterfly', index: b.index, state: b.state, s: b.s, flustered: b.flustered });
+    }
+  }
+
+  /** Silk bridges: slow over them, or the silk bounces the train back. */
+  private updateFragiles(dt: number): void {
+    for (const { item, outcome } of this.fragiles.update(dt)) {
+      if (!outcome) continue;
+      switch (outcome.kind) {
+        case 'near':
+          this.ports.sayAsync(this.lines.fragileNear ?? DEFAULT_LINES.fragileNear);
+          break;
+        case 'shake':
+          this.events.post({ type: 'fragile', index: item.index, state: 'shake' });
+          this.ports.sayAsync(this.lines.fragileShake ?? DEFAULT_LINES.fragileShake);
+          break;
+        case 'calm':
+          this.events.post({ type: 'fragile', index: item.index, state: 'calm' });
+          break;
+        case 'clear':
+          this.events.post({ type: 'fragile', index: item.index, state: 'calm' });
+          this.ports.sayAsync(this.lines.fragileClear ?? DEFAULT_LINES.fragileClear);
+          break;
+        case 'boing':
+          this.train.emergencyStop();
+          this.events.post({ type: 'fragile', index: item.index, state: 'boing' });
+          this.finishDrive({ kind: 'fail', reason: 'fragile', rewind: { railId: item.railId, at: item.rewindAt } });
+          return;
+      }
+    }
+  }
+
+  /**
+   * Puts every actor back where it waits (start of the stage and after a rewind to `target`): grasshoppers
+   * riding, or whose leaf is ahead of the train again, go back to their leaf.
+   */
+  private resetActors(target?: { railId: string; at: number }): void {
+    for (const hopper of this.hoppers) {
+      const behind = target !== undefined && hopper.state === 'done' && (hopper.railId !== target.railId || hopper.at <= target.at);
+      if (behind) continue;
+      if (hopper.state !== 'sit') this.events.post({ type: 'hopper', id: hopper.actor.id, state: 'sit' });
+      hopper.reset();
+    }
+    this.train.jumpBoost = null;
+    this.bridges.reset();
+    this.postButterflies();
+    this.fragiles.reset();
+    for (const f of this.fragiles.items) this.events.post({ type: 'fragile', index: f.index, state: 'calm' });
     for (const nut of this.nuts) {
       nut.reset();
       this.events.post({ type: 'nut', id: nut.actor.id, state: 'reset', railId: nut.railId, at: nut.at });
@@ -397,6 +601,7 @@ export class MissionRunner {
       }
     }
     if (this.squirrels.some((s) => s.inWhistleRange)) glow = true;
+    if (this.hopperFree && this.hoppers.some((h) => h.inWhistleRange)) glow = true;
     this.ports.whistleHint(glow);
   }
 
@@ -474,11 +679,14 @@ export class MissionRunner {
   private onFell(gap: GapDef, railId: string, short: boolean): void {
     if (this.phase !== 'driving') return;
     this.ports.autoCamera('chase');
-    this.finishDrive({
-      kind: 'fail',
-      reason: short ? 'fellShort' : 'fellNoJump',
-      rewind: gap.rewind ?? { railId, at: gap.from - REWIND_DISTANCE },
-    });
+    const same = (g: GapDef | null) => g !== null && g.from === gap.from && g.to === gap.to;
+    let reason: FailReason = short ? 'fellShort' : 'fellNoJump';
+    let line: DefaultLine | undefined;
+    if (gap.bridge !== undefined) reason = 'bridge';
+    else if (this.hoppers.some((h) => h.railId === railId && h.state === 'sit' && same(h.gap))) reason = 'hopper';
+    // Short with the light on: the light caps the speed, which is what made the jump too short.
+    else if (short && this.lightOn) line = 'fellLight';
+    this.finishDrive({ kind: 'fail', reason, line, rewind: gap.rewind ?? { railId, at: gap.from - REWIND_DISTANCE } });
   }
 
   /** Lever moved while locked: explain why. */
@@ -504,6 +712,9 @@ export class MissionRunner {
         if (this.lines.catWoke) this.ports.sayAsync(this.lines.catWoke);
         this.events.post({ type: 'partner:emote', kind: 'jump' });
       }
+    }
+    for (const hopper of this.hoppers) {
+      if (hopper.onWhistle(this.hopperFree)) this.board(hopper);
     }
     for (const squirrel of this.squirrels) {
       if (!squirrel.onWhistle()) continue;
@@ -585,18 +796,20 @@ export class MissionRunner {
     this.ports.hush();
     this.events.post({ type: 'fail', reason });
     const scary = reason === 'cat' || reason === 'dino';
-    this.ports.cameraFx(scary ? 1 : 0.5, 1);
-    const key: DefaultLine = reason === 'cat' ? 'catDanger' : reason === 'dino' ? 'dinoDanger' : reason === 'nut' ? 'nutHit' : reason;
+    // The silk bounces the train back softly: a dip, no shake.
+    this.ports.cameraFx(scary ? 1 : 0.5, reason === 'fragile' ? 0 : 1);
+    const key: DefaultLine = outcome.line ?? FAIL_LINES[reason] ?? (reason as DefaultLine);
     await this.ports.say(this.lines[key] ?? DEFAULT_LINES[key], 'partner');
     if (reason === 'cat') await this.ports.say(this.lines.catDangerAfter ?? DEFAULT_LINES.catDangerAfter, 'partner');
     if (reason === 'dino') await this.ports.say(this.lines.dangerAfter ?? DEFAULT_LINES.dangerAfter, 'partner');
+    if (reason === 'fragile') await this.ports.say(this.lines.fragileBoingAfter ?? DEFAULT_LINES.fragileBoingAfter, 'partner');
     await this.ports.fade(true, 0.4);
     // Rewind to a bit before whatever we failed at (the station, a cat or dinosaur, a gap, a junction).
     const target = outcome.rewind ?? { railId: station.railId, at: station.at - REWIND_DISTANCE };
     this.train.rewindTo(target.at, target.railId);
     for (const cat of this.cats) cat.reset();
     for (const cat of this.cats) this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'sleep', position: cat.actor.position });
-    this.resetActors();
+    this.resetActors(target);
     for (const pad of this.pads) {
       pad.left = 0;
       pad.hinted = false;
@@ -695,10 +908,29 @@ export class MissionRunner {
   }
 }
 
-type FailReason = 'tooFast' | 'overshoot' | 'cat' | 'dino' | 'fellShort' | 'fellNoJump' | 'deadEnd' | 'nut';
+type FailReason = Extract<StageEvent, { type: 'fail' }>['reason'];
+/** Fail reasons whose line has another key. */
+const FAIL_LINES: Partial<Record<FailReason, DefaultLine>> = {
+  cat: 'catDanger',
+  dino: 'dinoDanger',
+  nut: 'nutHit',
+  hopper: 'hopperFell',
+  bridge: 'bridgeFell',
+  fragile: 'fragileBoing',
+};
+const BRIDGE_LINES: Record<NonNullable<BridgeOutcome>['kind'], DefaultLine> = {
+  near: 'butterflyNear',
+  follow: 'butterflyFollow',
+  wait: 'butterflyWait',
+  fast: 'butterflyFast',
+  closed: 'budClosed',
+  open: 'bridgeOpen',
+};
 interface FailOutcome {
   kind: 'fail';
   reason: FailReason;
+  /** Say this instead of the reason's line. */
+  line?: DefaultLine;
   /** Where to put the train front back; default: REWIND_DISTANCE before the station. */
   rewind?: { railId: string; at: number };
 }

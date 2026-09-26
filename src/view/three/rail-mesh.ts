@@ -29,6 +29,16 @@ const BALLAST_BOTTOM_DEPTH = 0.6;
  */
 const CHUNK = 100;
 const RAIL_COLOR = new Color('#6E6E6E');
+/** How a rail is drawn: steel rails on ballast, or (2-2) two spider-silk threads with thin cross threads. */
+export type TrackLook = 'rail' | 'silk';
+const SILK_COLOR = new Color('#F4F7FF');
+const SILK_RADIUS = 0.09;
+const SILK_SIDES = 6;
+const SILK_CROSS_STEP = 1.6;
+/** Every this many metres a pair of support threads runs up and out to the grass beside the silk line. */
+const SILK_SUPPORT_STEP = 40;
+const SILK_SUPPORT_LATERAL = 9;
+const SILK_SUPPORT_RISE = 14;
 const BALLAST_COLOR = new Color('#A89F91');
 const SLEEPER_COLOR = new Color('#6B4E2E');
 
@@ -190,11 +200,107 @@ export interface TrackSkip {
 const skipped = (skips: TrackSkip[], s: number): boolean => skips.some((k) => s > k.from && s < k.to);
 
 /** Track (rails, ballast, sleepers) of one rail between `from` and `to` as one vertex-coloured geometry. */
-export function buildTrack(rail: Rail, from: number, to: number): BufferGeometry | null {
+export function buildTrack(rail: Rail, from: number, to: number, look: TrackLook = 'rail'): BufferGeometry | null {
+  // Exactly [from, to]: both ends are sample points even when no gap ends there (a flower bridge's gap is already
+  // gone when its track is built), so the piece meets the rest of the line without a hole or an overlap.
+  const end = Math.min(to, rail.length);
+  const samples = [from, ...samplePoints(rail).filter((s) => s > from + 1e-6 && s < end - 1e-6), end];
+  if (look === 'silk') return buildSilkChunk(rail, samples, from, to, []);
   const sleeper = new BoxGeometry(2.4, 0.15, 0.25);
-  const geometry = buildChunk(rail, samplePoints(rail), from, to, sleeper, []);
+  const geometry = buildChunk(rail, samples, from, to, sleeper, []);
   sleeper.dispose();
   return geometry;
+}
+
+/** A round thread from `a` to `b` (both world points) with `radius`, as open tube quads. */
+function addThread(data: GeometryData, a: Vector3, b: Vector3, radius: number, sides = SILK_SIDES): void {
+  const axis = b.clone().sub(a);
+  if (axis.lengthSq() < 1e-8) return;
+  axis.normalize();
+  const helper = Math.abs(axis.y) < 0.9 ? new Vector3(0, 1, 0) : new Vector3(1, 0, 0);
+  const u = new Vector3().crossVectors(axis, helper).normalize();
+  const v = new Vector3().crossVectors(axis, u).normalize();
+  const base = data.positions.length / 3;
+  for (const end of [a, b]) {
+    for (let k = 0; k < sides; k++) {
+      const t = (k / sides) * Math.PI * 2;
+      const p = end.clone().addScaledVector(u, Math.cos(t) * radius).addScaledVector(v, Math.sin(t) * radius);
+      data.positions.push(p.x, p.y, p.z);
+    }
+  }
+  for (let k = 0; k < sides; k++) {
+    const k1 = (k + 1) % sides;
+    data.indices.push(base + k, base + k1, base + sides + k1, base + sides + k1, base + sides + k, base + k);
+  }
+}
+
+/** A pair of support threads from the silk up and out to the grass on both sides. */
+function addSilkSupports(data: GeometryData, f: RailFrame): void {
+  for (const side of [-1, 1]) {
+    const foot = point(f, side * RAIL_HALF_GAUGE, SILK_RADIUS);
+    const top = foot.clone().addScaledVector(f.right, side * SILK_SUPPORT_LATERAL).add(new Vector3(0, SILK_SUPPORT_RISE, 0));
+    addThread(data, foot, top, 0.04, 4);
+  }
+}
+
+/**
+ * A hanging silk bridge (2-2 "fragile"): the silk track between `from` and `to` with no supports in between, and
+ * support threads at both ends only. `u` is 0 at `from` and 1 at `to` for every vertex (for the sway).
+ */
+export function buildSilkBridge(rail: Rail, from: number, to: number): { geometry: BufferGeometry; u: Float32Array } | null {
+  const track = buildSilkChunk(rail, samplePoints(rail), from, to + 1e-3, [], false);
+  const anchors: GeometryData = { positions: [], indices: [] };
+  addSilkSupports(anchors, rail.frameAt(from));
+  addSilkSupports(anchors, rail.frameAt(to));
+  const ends = painted(makeGeometry(anchors), SILK_COLOR);
+  if (!track) return null;
+  const geometry = mergeGeometries([track, ends]);
+  track.dispose();
+  ends.dispose();
+  if (!geometry) return null;
+  const a = rail.frameAt(from).position;
+  const along = rail.frameAt(to).position.clone().sub(a);
+  const length = along.length();
+  along.normalize();
+  const pos = geometry.getAttribute('position');
+  const u = new Float32Array(pos.count);
+  const p = new Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    p.fromBufferAttribute(pos, i).sub(a);
+    u[i] = Math.max(0, Math.min(1, p.dot(along) / length));
+  }
+  return { geometry, u };
+}
+
+/**
+ * Silk track: two round white threads where the rails run, a thin cross thread every 1.6 m, and every 40 m a
+ * pair of support threads up to the grass on both sides. No ballast, no sleepers.
+ */
+function buildSilkChunk(rail: Rail, samples: number[], from: number, to: number, skips: TrackSkip[], supports = true): BufferGeometry | null {
+  const data: GeometryData = { positions: [], indices: [] };
+  for (let index = 0; index < samples.length - 1; index += 1) {
+    const startS = samples[index];
+    const endS = samples[index + 1];
+    if (startS < from || startS >= to) continue;
+    if (isInGap(rail, (startS + endS) / 2) || skipped(skips, (startS + endS) / 2)) continue;
+    const start = rail.frameAt(startS);
+    const end = rail.frameAt(endS);
+    for (const lateral of [-RAIL_HALF_GAUGE, RAIL_HALF_GAUGE]) {
+      addThread(data, point(start, lateral, SILK_RADIUS), point(end, lateral, SILK_RADIUS), SILK_RADIUS);
+    }
+  }
+  const last = Math.min(to, rail.length + 1e-6);
+  for (let s = Math.ceil(from / SILK_CROSS_STEP) * SILK_CROSS_STEP; s < last; s += SILK_CROSS_STEP) {
+    if (isInGap(rail, s) || skipped(skips, s)) continue;
+    const f = rail.frameAt(s);
+    addThread(data, point(f, -RAIL_HALF_GAUGE - 0.1, SILK_RADIUS * 1.5), point(f, RAIL_HALF_GAUGE + 0.1, SILK_RADIUS * 1.5), 0.035, 4);
+  }
+  for (let s = Math.ceil(from / SILK_SUPPORT_STEP) * SILK_SUPPORT_STEP; supports && s < last; s += SILK_SUPPORT_STEP) {
+    if (s < 1 || isInGap(rail, s) || skipped(skips, s)) continue;
+    addSilkSupports(data, rail.frameAt(s));
+  }
+  if (data.indices.length === 0) return null;
+  return painted(makeGeometry(data), SILK_COLOR);
 }
 
 /** One piece of track: rails, ballast and sleepers of `rail` between `from` and `to`, merged into one geometry. */
@@ -233,8 +339,8 @@ function buildChunk(
   return merged;
 }
 
-/** Generates the track (in culled pieces) plus buffer-stop placements. */
-export function buildRailScene(network: RailNetwork, skips: TrackSkip[] = []): RailScene {
+/** Generates the track (in culled pieces) plus buffer-stop placements. `looks`: rails not drawn as steel rails. */
+export function buildRailScene(network: RailNetwork, skips: TrackSkip[] = [], looks: Record<string, TrackLook> = {}): RailScene {
   const group = new Group();
   group.name = 'rail-network';
   const material = new MeshLambertMaterial({ vertexColors: true });
@@ -246,7 +352,11 @@ export function buildRailScene(network: RailNetwork, skips: TrackSkip[] = []): R
     const pieces = Math.max(1, Math.ceil(rail.length / CHUNK));
     for (let i = 0; i < pieces; i++) {
       const to = i === pieces - 1 ? rail.length + 1 : (i + 1) * CHUNK;
-      const geometry = buildChunk(rail, samples, i * CHUNK, to, sleeper, skips.filter((k) => k.railId === rail.id));
+      const railSkips = skips.filter((k) => k.railId === rail.id);
+      const geometry =
+        looks[rail.id] === 'silk'
+          ? buildSilkChunk(rail, samples, i * CHUNK, to, railSkips)
+          : buildChunk(rail, samples, i * CHUNK, to, sleeper, railSkips);
       if (!geometry) continue;
       const mesh = new Mesh(geometry, material);
       mesh.name = `${rail.id}-track-${i}`;

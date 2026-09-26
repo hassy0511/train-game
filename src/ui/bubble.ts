@@ -2,8 +2,8 @@ import type { Speaker } from '../stage/types';
 import { BUBBLE_SECONDS } from '../train/params';
 
 export interface Bubbles {
-  /** Shows the line and resolves when tapped or after the timeout. Lines queue up in order. */
-  say(text: string, who?: Speaker): Promise<void>;
+  /** Shows the line and resolves when tapped or after the timeout. Lines queue up in order. `name` replaces the speaker's name. */
+  say(text: string, who?: Speaker, name?: string): Promise<void>;
   /** Drops the line showing and every queued one (their promises resolve right away). */
   clear(): void;
 }
@@ -33,10 +33,10 @@ export function createBubbles(root: HTMLElement, partnerName: string): Bubbles {
     dismiss?.();
   });
 
-  const showOne = (line: string, who: Speaker): Promise<void> =>
+  const showOne = (line: string, who: Speaker, speakerName?: string): Promise<void> =>
     new Promise((resolve) => {
       el.className = `bubble ${SPEAKER_CLASS[who]}`;
-      name.textContent = who === 'partner' ? partnerName : who === 'amanojaku' ? 'サカサ' : 'たんけんたいの なかま';
+      name.textContent = speakerName ?? (who === 'partner' ? partnerName : who === 'amanojaku' ? 'サカサ' : 'たんけんたいの なかま');
       text.textContent = line;
       el.hidden = false;
       el.dataset.line = line;
@@ -51,9 +51,9 @@ export function createBubbles(root: HTMLElement, partnerName: string): Bubbles {
     });
 
   return {
-    say(line, who = 'partner'): Promise<void> {
+    say(line, who = 'partner', speakerName?: string): Promise<void> {
       const g = generation;
-      queue = queue.then(() => (g === generation ? showOne(line, who) : undefined));
+      queue = queue.then(() => (g === generation ? showOne(line, who, speakerName) : undefined));
       return queue;
     },
     clear(): void {

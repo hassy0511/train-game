@@ -24,12 +24,13 @@ import type { CameraFx, SceneView } from '../SceneView';
 import { cameraTarget, makeCameraTarget, smoothCamera, type CameraMode } from '../camera-rig';
 import { buildGapPits, buildJumpDevice, buildLightBeam, Flocks, JunctionSigns, SkyGimmicks } from './abilities';
 import { ForestGimmicks } from './forest';
+import { MeadowGimmicks } from './meadow';
 import { ActorLayer } from './actors';
 import { bakeModel } from './bake';
 import { addEnvironment, SKY_RADIUS } from './environment';
 import { ModelLibrary } from './models';
 import { addModelPlacements, addProps } from './props';
-import { buildDetachedRailPiece, buildRailScene } from './rail-mesh';
+import { buildDetachedRailPiece, buildRailScene, type TrackLook } from './rail-mesh';
 
 /** The camera draws this far past the stage fog's far end (m). */
 const FOG_CULL_MARGIN = 40;
@@ -72,7 +73,9 @@ export class ThreeSceneView implements SceneView {
   private flocks: Flocks | null = null;
   private sky3: SkyGimmicks | null = null;
   private forest: ForestGimmicks | null = null;
+  private meadow: MeadowGimmicks | null = null;
   private boughSkips: { railId: string; from: number; to: number }[] = [];
+  private railLooks: Record<string, TrackLook> = {};
   private baseFog: { near: number; far: number } | null = null;
   private readonly lightBeam = buildLightBeam();
   private jumpDevice: Object3D | null = null;
@@ -91,14 +94,16 @@ export class ThreeSceneView implements SceneView {
     this.sky = addEnvironment(this.scene, stage.file.environment);
 
     this.network = network;
-    // Springy boughs bend their own track (ForestGimmicks); the rest of the line is built here.
+    // Springy boughs (ForestGimmicks) and hanging silk bridges (MeadowGimmicks) draw their own track; the rest
+    // of the line is built here.
     const boughSkips = stage.file.gimmicks.flatMap((g) =>
       g.type === 'bough' && g.railId !== undefined && g.from !== undefined && g.to !== undefined
         ? [{ railId: g.railId, from: g.from, to: g.to }]
         : [],
     );
-    this.boughSkips = boughSkips;
-    const rails = buildRailScene(network, boughSkips);
+    this.boughSkips = [...boughSkips, ...MeadowGimmicks.trackSkips(stage)];
+    this.railLooks = Object.fromEntries(stage.file.rails.flatMap((r) => (r.look && r.look !== 'rail' ? [[r.id, r.look]] : [])));
+    const rails = buildRailScene(network, this.boughSkips, this.railLooks);
     this.rails = rails.group;
     this.scene.add(rails.group);
 
@@ -134,6 +139,8 @@ export class ThreeSceneView implements SceneView {
     this.scene.add(this.sky3.group);
     this.forest = new ForestGimmicks(stage);
     this.scene.add(this.forest.group);
+    this.meadow = new MeadowGimmicks(stage, this.train);
+    this.scene.add(this.meadow.group);
     const fog = stage.file.environment.fog;
     this.baseFog = fog ? { near: fog.near, far: fog.far } : null;
     if (fog && this.sky) {
@@ -155,6 +162,7 @@ export class ThreeSceneView implements SceneView {
       this.flocks.init(this.models),
       this.sky3.init(this.models),
       this.forest.init(this.models),
+      this.meadow.init(this.models),
     ]);
     // The train, cars and partner only ever move as a whole (door bands, the light beam and the jump unit are
     // objects of their own), so each draws baked, in one call.
@@ -215,7 +223,7 @@ export class ThreeSceneView implements SceneView {
       // Gaps were added to the rail; rebuild the track meshes without the cut piece.
       const oldRails = this.rails;
       oldRails.removeFromParent();
-      const rebuilt = buildRailScene(this.network, this.boughSkips);
+      const rebuilt = buildRailScene(this.network, this.boughSkips, this.railLooks);
       this.rails = rebuilt.group;
       this.scene.add(rebuilt.group);
       this.disposeDetachedObject(oldRails);
@@ -225,7 +233,9 @@ export class ThreeSceneView implements SceneView {
     if (event.type === 'light') this.lightBeam.visible = event.on;
     this.sky3?.onStageEvent(event);
     this.forest?.onEvent(event);
+    this.meadow?.onEvent(event);
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
+    if (event.type === 'sign:reset') this.signs?.reset(event.junctionId);
     if (event.type === 'ability' && event.id === 'jump' && !this.jumpDevice) {
       this.jumpDevice = new Object3D();
       void buildJumpDevice(this.models).then((device) => {
@@ -300,6 +310,10 @@ export class ThreeSceneView implements SceneView {
         car.quaternion.copy(cp.quaternion);
       }
     });
+    // On a swaying silk bridge the cars sag with it (the cab view goes with the lead car).
+    const silkDip = this.train.position.clone();
+    this.meadow?.rideSilk([this.train, ...this.cars]);
+    silkDip.subVectors(this.train.position, silkDip);
 
     cameraTarget(this.cameraMode, pose, this.camTarget);
     smoothCamera(this.camCurrent, this.camTarget, dt, this.cameraSnap || this.cameraMode === 'cab');
@@ -308,6 +322,7 @@ export class ThreeSceneView implements SceneView {
     this.camera.up.copy(this.camCurrent.up);
     this.camera.lookAt(this.camCurrent.lookAt);
     if (this.cameraMode === 'cab') {
+      this.camera.position.add(silkDip);
       this.camera.position.y -= 0.35 * fx.dip;
       if (fx.shake > 0) {
         this.camera.position.x += (Math.random() - 0.5) * 0.12 * fx.shake;
@@ -321,6 +336,7 @@ export class ThreeSceneView implements SceneView {
     this.signs?.update(dt, this.clock);
     this.flocks?.update(dt);
     this.forest?.update(dt);
+    this.meadow?.update(dt, this.cameraMode === 'cab');
     this.sky3?.update(dt, pose.railId, pose.s + TRAIN.length / 2, this.scene.fog as Fog | null, this.baseFog);
     if (this.sky3 && this.sky) {
       const uniforms = (this.sky.material as ShaderMaterial).uniforms;

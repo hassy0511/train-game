@@ -1,5 +1,6 @@
-node_modules/
+node_modules
 dist/
+dist-*/
 tests/smoke/output/*
 !tests/smoke/output/.gitkeep
 tests/smoke/test-results/

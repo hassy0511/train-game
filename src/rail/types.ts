@@ -19,6 +19,7 @@ export interface Rail {
   frameAt(s: number): RailFrame;
   inGap(s: number): boolean;
   addGap(from: number, to: number): void;
+  removeGap(from: number, to: number): boolean;
 }
 
 export interface RailNetwork {

@@ -417,7 +417,109 @@
       "id": "2-2",
       "chapter": 2,
       "x": 76,
-      "y": 80
+      "y": 80,
+      "diorama": {
+        "base": "island-b",
+        "rail": {
+          "radius": 11
+        },
+        "camera": {
+          "yaw": -20,
+          "pitch": 28
+        },
+        "items": [
+          {
+            "model": "rail-web",
+            "at": [
+              -1,
+              -3
+            ],
+            "rotY": -20,
+            "scale": 0.3
+          },
+          {
+            "model": "grass-blade",
+            "at": [
+              -6.5,
+              -5.4
+            ],
+            "rotY": 10,
+            "scale": 0.3
+          },
+          {
+            "model": "grass-blade",
+            "at": [
+              4.4,
+              -1.4
+            ],
+            "rotY": -30,
+            "scale": 0.26
+          },
+          {
+            "model": "grass-blade",
+            "at": [
+              15.5,
+              -6
+            ],
+            "rotY": 20,
+            "scale": 0.24
+          },
+          {
+            "model": "grass-blade",
+            "at": [
+              -18,
+              1
+            ],
+            "rotY": 30,
+            "scale": 0.22
+          },
+          {
+            "model": "meadow-flower",
+            "at": [
+              -16,
+              -3
+            ],
+            "rotY": 0,
+            "scale": 0.35
+          },
+          {
+            "model": "clover",
+            "at": [
+              -13.5,
+              5.5
+            ],
+            "rotY": 20,
+            "scale": 0.5
+          },
+          {
+            "model": "butterfly",
+            "at": [
+              -12.5,
+              2
+            ],
+            "rotY": 40,
+            "scale": 2,
+            "lift": 9
+          },
+          {
+            "model": "grasshopper",
+            "at": [
+              2,
+              5
+            ],
+            "rotY": -55,
+            "scale": 2.5
+          },
+          {
+            "model": "train-proto",
+            "at": [
+              11,
+              2
+            ],
+            "rotY": 0
+          }
+        ]
+      }
     },
     {
       "id": "2-3",
