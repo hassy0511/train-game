@@ -8,6 +8,11 @@ const modelManifest = readdirSync('public/models')
   .filter((f) => f.endsWith('.glb'))
   .map((f) => f.replace(/\.glb$/, ''))
   .sort();
+// Picture-book pictures (public/zukan/<record id>.png, drawn by scripts/render-zukan.mjs).
+const zukanPictures = readdirSync('public/zukan')
+  .filter((f) => f.endsWith('.png'))
+  .map((f) => f.replace(/\.png$/, ''))
+  .sort();
 
 // Short build id shown on the title screen so testers can tell which build they are on.
 function buildId(): string {
@@ -28,8 +33,8 @@ const BUILD_ID = buildId();
 
 /**
  * Writes dist/sw.js: the service worker from src/pwa/sw-template.js with the list of files to cache on
- * install (the game page, its code, the stages, the models, icons). The model viewer (models.html) and the
- * picture-book previews are left out; the previews are cached when first shown.
+ * install (the game page, its code, the stages, the models, icons, the map and picture-book pictures). The model
+ * viewer (models.html) is left out.
  */
 function serviceWorker(): Plugin {
   return {
@@ -44,6 +49,7 @@ function serviceWorker(): Plugin {
         'manifest.webmanifest',
         ...readdirSync('public/icons').map((file) => `icons/${file}`),
         ...readdirSync('public/map').map((file) => `map/${file}`),
+        ...zukanPictures.map((id) => `zukan/${id}.png`),
       ];
       const precache = ['./', ...built.filter((file) => file !== 'index.html'), ...fromPublic];
       const source = readFileSync('src/pwa/sw-template.js', 'utf8')
@@ -58,6 +64,7 @@ export default defineConfig({
   base: process.env.BASE_PATH ?? '/',
   define: {
     __MODEL_MANIFEST__: JSON.stringify(modelManifest),
+    __ZUKAN_PICTURES__: JSON.stringify(zukanPictures),
     __BUILD_ID__: JSON.stringify(BUILD_ID),
   },
   plugins: [serviceWorker()],

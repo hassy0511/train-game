@@ -174,9 +174,40 @@
       "end": {
         "type": "buffer"
       }
+    },
+    {
+      "id": "kozue-eda",
+      "points": [
+        [36, 50.4, 1304.93],
+        [34.16, 51.07, 1324.81],
+        [28.53, 51.73, 1343.97],
+        [20.21, 55.14, 1362.15],
+        [11.76, 60.56, 1380.28],
+        [3.3, 64.33, 1398.41],
+        [-5.15, 64.6, 1416.53],
+        [-13.6, 64.6, 1434.66],
+        [-22.05, 64.6, 1452.79],
+        [-30.5, 64.6, 1470.91],
+        [-38.96, 64.6, 1489.04],
+        [-47.41, 64.6, 1507.16]
+      ],
+      "spur": { "back": { "railId": "top", "at": 180 } },
+      "end": {
+        "type": "buffer"
+      }
     }
   ],
-  "junctions": [],
+  "junctions": [
+    {
+      "id": "to-eda",
+      "railId": "top",
+      "at": 165,
+      "left": "top",
+      "right": "kozue-eda",
+      "default": "left",
+      "needs": "rocket"
+    }
+  ],
   "stations": [
     {
       "id": "nemoto",
@@ -397,6 +428,34 @@
     {
       "model": "branch-log",
       "onRail": { "railId": "top", "at": 296, "lateral": 0.0, "heightFromRail": -0.65 }
+    },
+    {
+      "model": "branch-log",
+      "onRail": { "railId": "kozue-eda", "at": 22, "lateral": 0.0, "heightFromRail": -0.65 }
+    },
+    {
+      "model": "branch-log",
+      "onRail": { "railId": "kozue-eda", "at": 52, "lateral": 0.0, "heightFromRail": -0.65 }
+    },
+    {
+      "model": "branch-log",
+      "onRail": { "railId": "kozue-eda", "at": 82, "lateral": 0.0, "heightFromRail": -0.65 }
+    },
+    {
+      "model": "branch-log",
+      "onRail": { "railId": "kozue-eda", "at": 112, "lateral": 0.0, "heightFromRail": -0.65 }
+    },
+    {
+      "model": "branch-log",
+      "onRail": { "railId": "kozue-eda", "at": 146, "lateral": 0.0, "heightFromRail": -0.65 }
+    },
+    {
+      "model": "branch-log",
+      "onRail": { "railId": "kozue-eda", "at": 181, "lateral": 0.0, "heightFromRail": -0.65 }
+    },
+    {
+      "model": "branch-log",
+      "onRail": { "railId": "kozue-eda", "at": 202, "lateral": 0.0, "heightFromRail": -0.65 }
     },
     {
       "model": "canopy",
@@ -851,10 +910,12 @@
     },
     {
       "id": "treetop",
-      "name": "こずえの てっぺん",
-      "note": "ロケットが あれば とどくかも…",
+      "name": "こずえの はね",
+      "note": "てっぺんで みつけた ふわふわの はね",
       "requires": "rocket",
-      "position": [36, 104, 1420]
+      "model": "record-feather",
+      "hint": "てっぺんに はねが ある！",
+      "onRail": { "railId": "kozue-eda", "at": 114, "lateral": -2.3, "heightFromRail": -0.5 }
     }
   ],
   "missions": [
@@ -957,6 +1018,13 @@
     }
   ],
   "gimmicks": [
+    {
+      "type": "slope",
+      "railId": "kozue-eda",
+      "from": 40,
+      "to": 106,
+      "params": { "pull": -6, "rewind": { "railId": "top", "at": 150 }, "line": "うえむきの えだ！ ロケット！" }
+    },
     {
       "type": "bough",
       "railId": "main",

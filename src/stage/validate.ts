@@ -157,6 +157,12 @@ export function validateStageFile(raw: unknown): StageFile {
     if (r.deadEnd !== undefined && typeof r.deadEnd !== 'boolean') fail(`rail "${r.id}": "deadEnd" must be true or false`);
     if (r.upMode !== undefined && r.upMode !== 'fixed' && r.upMode !== 'follow') fail(`rail "${r.id}": "upMode" must be fixed or follow`);
     if (r.deadEnd === true && r.end.type !== 'buffer') fail(`rail "${r.id}": a dead end must end in a buffer`);
+    if (r.spur !== undefined) {
+      const back = isObject(r.spur) ? r.spur.back : undefined;
+      if (!isObject(back) || !isString(back.railId) || !isNumber(back.at)) fail(`rail "${r.id}": spur needs back: { railId, at }`);
+      if (r.end.type !== 'buffer') fail(`rail "${r.id}": a spur must end in a buffer`);
+      if (r.deadEnd === true) fail(`rail "${r.id}": a spur is not a dead end (write one of them)`);
+    }
     if (r.base !== undefined) {
       const b = r.base;
       if (!isObject(b) || b.look !== 'rock') fail(`rail "${r.id}": base needs look "rock"`);
@@ -194,6 +200,12 @@ export function validateStageFile(raw: unknown): StageFile {
     }
     if (j.default !== 'left' && j.default !== 'right') fail(`junction "${j.id}": "default" must be left or right`);
     if (j[j.default] === undefined) fail(`junction "${j.id}": default side "${j.default}" has no target`);
+    if (j.needs !== undefined) {
+      if (!ABILITIES.includes(String(j.needs))) fail(`junction "${j.id}": "needs" must be an ability`);
+      const other = j.default === 'left' ? 'right' : 'left';
+      if (j[other] === undefined || j[other] === j.railId) fail(`junction "${j.id}": "needs" is for the way off to the side, and the ${other} side has none`);
+      if (j.signReversed === true) fail(`junction "${j.id}": a reversed sign cannot also need an ability`);
+    }
   }
 
   const stationIds = new Set<string>();
@@ -237,6 +249,7 @@ export function validateStageFile(raw: unknown): StageFile {
     if (!isObject(r) || !isString(r.id) || !isString(r.name)) fail('each record needs "id" and "name"');
     if (r.requires !== null && !ABILITIES.includes(String(r.requires))) fail(`record "${r.id}": "requires" must be an ability or null`);
     if (r.model !== undefined && (!isString(r.model) || !MODEL_NAME.test(r.model))) fail(`record "${r.id}": "model" must match [a-z0-9-]+`);
+    if (r.hint !== undefined && !isString(r.hint)) fail(`record "${r.id}": "hint" must be text`);
     checkPlacement(r, `record "${r.id}"`, railIds);
   }
 
@@ -505,6 +518,9 @@ export function validateStageLayout(file: StageFile, network: RailNetwork): void
     // (A default gap rewind before the rail start is clamped by the train, as it always was.)
     for (const g of r.gaps ?? []) checkRewind(g.rewind ?? { railId: r.id, at: g.from - REWIND_DISTANCE }, `rail "${r.id}" gap ${g.from}`, false);
   }
+
+  // v1.8: a spur's way back is a place on a rail (not on a slope).
+  for (const r of file.rails) if (r.spur) checkRewind(r.spur.back, `rail "${r.id}" spur back`);
 
   for (const z of rocketZones(file.gimmicks)) {
     if (z.to < z.from) fail(`gimmicks[${z.index}] rocket: "to" must be after "from"`);

@@ -80,6 +80,31 @@ async function stopAt(page: Page, at: number, slowFrom = 55, brake = 4.5): Promi
   await expect(page.locator('#toast')).toBeVisible({ timeout: 20_000 });
 }
 
+/** Taps through the partner's bubbles until one says `text`. */
+async function waitLine(page: Page, text: string, timeoutMs = 20_000): Promise<void> {
+  const bubble = page.locator('#bubble');
+  const deadline = Date.now() + timeoutMs;
+  while (!((await bubble.getAttribute('data-line')) ?? '').includes(text)) {
+    if (Date.now() > deadline) throw new Error(`no line "${text}"`);
+    if (await bubble.isVisible()) await bubble.dispatchEvent('pointerdown');
+    await page.waitForTimeout(120);
+  }
+}
+
+/** M1 of 1-2 without the fall: the three gaps at ふつう, はやい, びゅーん, then the stop at きょうりゅうえき. */
+async function missionOne(page: Page): Promise<void> {
+  await waitDriving(page);
+  await setNotch(page, NORMAL);
+  await jumpGap(page);
+  await setNotch(page, FAST);
+  await jumpGap(page);
+  await setNotch(page, MAX);
+  await jumpGap(page);
+  await setNotch(page, SLOW);
+  await stopAt(page, 560, 40);
+  await card(page, 'できた！');
+}
+
 test('stage 1-2 full run: jumps, a fall, dinosaurs, a dead end, the light, records', async ({ page }) => {
   test.setTimeout(900_000);
   const errors: string[] = [];
@@ -127,6 +152,18 @@ test('stage 1-2 full run: jumps, a fall, dinosaurs, a dead end, the light, recor
   await setNotch(page, NORMAL);
   await waitForS(page, 680 - FRONT - 52);
   await page.locator('#whistle').dispatchEvent('pointerdown');
+  // v1.8: the side track up the cliff (junction at 695) needs the rocket: its arrow is grey with the rocket's
+  // picture, tapping it chooses nothing and the partner says so; the train stays on the main line.
+  const spurArrow = page.locator('#junction .arrow[data-side="right"]');
+  await expect(spurArrow).toBeVisible({ timeout: 30_000 });
+  await expect(spurArrow).toHaveAttribute('data-needs', 'rocket');
+  await expect(spurArrow).toHaveAttribute('data-locked', '1');
+  await spurArrow.dispatchEvent('pointerdown');
+  await expect(spurArrow).not.toHaveClass(/is-selected/);
+  await waitLine(page, 'ロケットが あれば');
+  await page.screenshot({ path: resolve(OUT, '23a-rocket-junction.png') });
+  await waitForS(page, 700);
+  await expect(app).toHaveAttribute('data-rail', 'main');
   // The big one straddles the rail at 880; its head hangs ~14 m before that and the gate is 20 m.
   await waitForS(page, 880 - FRONT - 70);
   await setNotch(page, SLOW);
@@ -195,5 +232,89 @@ test('stage 1-2 full run: jumps, a fall, dinosaurs, a dead end, the light, recor
   expect(saved.cleared).toContain('1-2');
   console.log('smoke 1-2 full: cleared');
 
+  expect(errors).toEqual([]);
+});
+
+test('stage 1-2 again with the rocket: up the cliff side track to the empty nest', async ({ page }) => {
+  test.setTimeout(600_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  // Back from 2-3 with the rocket (the jump and the light come again in this stage's own story).
+  await page.addInitScript(() => {
+    const key = 'train-game.progress.v1';
+    if (!localStorage.getItem(key)) {
+      localStorage.setItem(key, JSON.stringify({ schema: 1, cleared: ['1-1'], abilities: ['whistle', 'rocket'], records: [], mapLinks: ['1-1>1-2'] }));
+    }
+  });
+  await page.goto('/?stage=1-2');
+  const app = page.locator('#app');
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  await expect(page.locator('#rocket')).toBeVisible();
+  await page.locator('#title-start').click();
+  await card(page, 'ジャンプ');
+  await card(page, 'とびこえろ');
+  await missionOne(page);
+  await card(page, 'ねぼすけ');
+
+  // First try: take the side track but never press the rocket. The train slips back down the steep bit and is put
+  // back on the main line before the junction (640), where the sleeping one lies again.
+  await waitDriving(page);
+  await setNotch(page, NORMAL);
+  await waitForS(page, 680 - FRONT - 52);
+  await page.locator('#whistle').dispatchEvent('pointerdown');
+  const spurArrow = page.locator('#junction .arrow[data-side="right"]');
+  await expect(spurArrow).toBeVisible({ timeout: 30_000 });
+  await expect(spurArrow).toHaveAttribute('data-needs', 'rocket');
+  await expect(spurArrow).toHaveAttribute('data-locked', '0');
+  await spurArrow.dispatchEvent('pointerdown');
+  await expect(spurArrow).toHaveClass(/is-selected/);
+  await expect(app).toHaveAttribute('data-rail', 'gake', { timeout: 30_000 });
+  await expect(app).toHaveAttribute('data-slip', '1', { timeout: 30_000 });
+  await page.waitForFunction(
+    () => {
+      const el = document.getElementById('app');
+      return el?.dataset.rail === 'main' && Number(el?.dataset.s) < 660;
+    },
+    null,
+    { timeout: 60_000 },
+  );
+  console.log('1-2 rocket: slipped on the cliff, back before the junction');
+
+  // Second try: whistle again, take the side track, fire the rocket when it glows. The nest is found on the way up
+  // (the rocket's push is still in the speed), and at the buffer the train is taken back onto the main line.
+  await waitDriving(page);
+  await setNotch(page, NORMAL);
+  await page.locator('#whistle').dispatchEvent('pointerdown');
+  await expect(spurArrow).toBeVisible({ timeout: 30_000 });
+  await spurArrow.dispatchEvent('pointerdown');
+  await expect(app).toHaveAttribute('data-rail', 'gake', { timeout: 30_000 });
+  const rocket = page.locator('#rocket');
+  await expect(rocket).toHaveAttribute('data-glow', '1', { timeout: 30_000 });
+  await rocket.dispatchEvent('pointerdown');
+  await expect(app).toHaveAttribute('data-burn', '1', { timeout: 5_000 });
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: resolve(OUT, '26-cliff-rocket.png') });
+  await page.waitForFunction(
+    () => (JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}').records ?? []).includes('cliff-nest'),
+    null,
+    { timeout: 30_000 },
+  );
+  await page.screenshot({ path: resolve(OUT, '27-cliff-nest.png') });
+  console.log('1-2 rocket: found the nest');
+  await waitLine(page, 'もとの みちに', 60_000);
+  await page.waitForFunction(
+    () => {
+      const el = document.getElementById('app');
+      return el?.dataset.rail === 'main' && Math.abs(Number(el?.dataset.s) - (725 - 6)) < 3;
+    },
+    null,
+    { timeout: 60_000 },
+  );
+  await waitDriving(page);
+  await page.screenshot({ path: resolve(OUT, '28-cliff-back.png') });
+  console.log('1-2 rocket: back on the main line past the junction');
   expect(errors).toEqual([]);
 });

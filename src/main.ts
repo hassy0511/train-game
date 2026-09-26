@@ -244,7 +244,16 @@ async function boot(): Promise<void> {
       audio.unlock();
       if (whistle.trigger()) audio.playWhistle();
     },
-    onJunction: (side) => train.chooseJunction(side),
+    onJunction: (side) => {
+      // v1.8: a side way that needs an ability the player does not have yet stays shut ("ロケットが あれば…").
+      const j = train.announcedJunction;
+      if (j?.needs && side !== j.default && !abilities.has(j.needs)) {
+        runner?.onJunctionRefused(j);
+        return false;
+      }
+      train.chooseJunction(side);
+      return true;
+    },
   });
   const actionButtons = uiEl.querySelector('.action-buttons') as HTMLElement;
   const jumpButton = createJumpButton(actionButtons, () => {
@@ -400,7 +409,11 @@ async function boot(): Promise<void> {
     if (actor.type === 'trigger') physics.addSensor(actor.id, actor.position, actor.quaternion, actor.size);
   }
 
-  train.events.on('junctionApproach', (e) => ui.junction.show(e));
+  train.events.on('junctionApproach', (e) => {
+    const ability = e.junction.needs;
+    const side = e.default === 'left' ? 'right' : 'left';
+    ui.junction.show({ ...e, needs: ability ? { side, ability, has: abilities.has(ability) } : undefined });
+  });
   train.events.on('junctionLocked', () => ui.junction.hide());
   train.events.on('junctionPassed', () => ui.junction.hide());
   train.events.on('railChanged', ({ railId }) => console.info(`rail: now on ${railId}`));
@@ -614,10 +627,11 @@ async function boot(): Promise<void> {
       },
       onZukan: () => {
         void loadAllRecords().then((all) => {
-          const found = loadProgress().records;
+          const progress = loadProgress();
           showZukan(
             uiEl,
-            all.map(({ stageTitle, record }) => ({ stageTitle, record, found: found.includes(record.id) })),
+            all.map(({ stageId, stageTitle, record }) => ({ stageId, stageTitle, record, found: progress.records.includes(record.id) })),
+            new Set(progress.abilities),
           );
         });
       },

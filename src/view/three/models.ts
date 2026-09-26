@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { placeholderSize } from '../placeholder-sizes';
 import { buildForestPlaceholder } from './forest-placeholders';
 import { buildMeadowPlaceholder } from './meadow-placeholders';
+import { buildRecordPlaceholder } from './record-placeholders';
 import { buildSkyPlaceholder } from './sky-placeholders';
 import { buildVolcanoPlaceholder } from './volcano-placeholders';
 
@@ -42,7 +43,11 @@ export class ModelLibrary {
     // so stages stay playable and no 404 requests are made.
     if (!this.available.has(name)) {
       const drawn =
-        buildSkyPlaceholder(name) ?? buildForestPlaceholder(name) ?? buildMeadowPlaceholder(name) ?? buildVolcanoPlaceholder(name);
+        buildSkyPlaceholder(name) ??
+        buildForestPlaceholder(name) ??
+        buildMeadowPlaceholder(name) ??
+        buildVolcanoPlaceholder(name) ??
+        buildRecordPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(drawn ?? makePlaceholder(name));
       this.cache.set(name, placeholder);

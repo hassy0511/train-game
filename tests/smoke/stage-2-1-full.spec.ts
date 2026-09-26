@@ -108,6 +108,17 @@ test('stage 2-1 full run: the springy bough, rolling nuts, the squirrel, upside 
     if (m.type() === 'error') errors.push(m.text());
   });
 
+  // Played with the rocket already learned (as when coming back after 2-3), so M3 can take the upward bough to the
+  // treetop's record on the way. (Without the rocket the side track stays shut: stage-1-2-full.spec.ts checks that.)
+  await page.addInitScript(() => {
+    const key = 'train-game.progress.v1';
+    if (!localStorage.getItem(key)) {
+      localStorage.setItem(
+        key,
+        JSON.stringify({ schema: 1, cleared: ['1-1', '1-2', '1-3'], abilities: ['whistle', 'jump', 'light', 'rocket'], records: [], mapLinks: ['1-1>1-2', '1-2>1-3', '1-3>2-1'] }),
+      );
+    }
+  });
   await page.goto('/?stage=2-1');
   const app = page.locator('#app');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
@@ -175,6 +186,37 @@ test('stage 2-1 full run: the springy bough, rolling nuts, the squirrel, upside 
   await expect(app).toHaveAttribute('data-air', '1', { timeout: 20_000 });
   await expect(app).toHaveAttribute('data-air', '0', { timeout: 15_000 });
   expect(Number(await app.getAttribute('data-s'))).toBeGreaterThan(116 - FRONT);
+  // v1.8: the upward bough (junction at top 165, the rocket's picture on its arrow). Take it, fire the rocket when it
+  // glows, find the feather at the top; at its buffer the train is put back on the top line past the junction.
+  const spurArrow = page.locator('#junction .arrow[data-side="right"]');
+  await expect(spurArrow).toBeVisible({ timeout: 30_000 });
+  await expect(spurArrow).toHaveAttribute('data-needs', 'rocket');
+  await expect(spurArrow).toHaveAttribute('data-locked', '0');
+  await spurArrow.dispatchEvent('pointerdown');
+  await expect(app).toHaveAttribute('data-rail', 'kozue-eda', { timeout: 30_000 });
+  const rocket = page.locator('#rocket');
+  await expect(rocket).toHaveAttribute('data-glow', '1', { timeout: 30_000 });
+  await rocket.dispatchEvent('pointerdown');
+  await expect(app).toHaveAttribute('data-burn', '1', { timeout: 5_000 });
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: resolve(OUT, '55a-bough-rocket.png') });
+  await page.waitForFunction(
+    () => (JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}').records ?? []).includes('treetop'),
+    null,
+    { timeout: 30_000 },
+  );
+  await page.screenshot({ path: resolve(OUT, '55b-treetop-feather.png') });
+  console.log('2-1: found the feather on the upward bough');
+  await page.waitForFunction(
+    () => {
+      const el = document.getElementById('app');
+      return el?.dataset.rail === 'top' && Math.abs(Number(el?.dataset.s) - (180 - 6)) < 3;
+    },
+    null,
+    { timeout: 60_000 },
+  );
+  await waitDriving(page);
+  await setNotch(page, NORMAL);
   await stopAt(page, 'top', 240);
   await doors(page);
   await card(page, 'できた！');
@@ -184,7 +226,7 @@ test('stage 2-1 full run: the springy bough, rolling nuts, the squirrel, upside 
   await expect(page.locator('#card')).toContainText('クリア');
   await page.screenshot({ path: resolve(OUT, '56-clear.png') });
   const progress = await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
-  expect(progress.records).toEqual(expect.arrayContaining(['squirrel-nest']));
+  expect(progress.records).toEqual(expect.arrayContaining(['squirrel-nest', 'treetop']));
   const budget = await page.evaluate(() => ({
     draws: Number(document.getElementById('app')?.dataset.drawsMax),
     tris: Number(document.getElementById('app')?.dataset.trisMax),

@@ -165,7 +165,14 @@ export const UPDRAFT_ACCELERATION = 6;
 export const FALL = { bogieLead: 2, seconds: 0.8, depth: 3.5 } as const;
 
 /** Light: toggled; caps the speed while on and reveals reversed things and records nearby. */
-export const LIGHT = { speedScale: 0.7, revealDistance: 40, recordDistance: 25, cooldown: 0.4 } as const;
+export const LIGHT = { speedScale: 0.7, revealDistance: 40, cooldown: 0.4 } as const;
+
+/**
+ * Records (v1.8): found when the train front passes within `distance` m (along the rail for a record placed on a
+ * rail) while using the ability it needs: the light on, in the air for the jump, the rocket burning or its push
+ * still in the speed. The partner's `hint` for a record comes `hintDistance` m before it.
+ */
+export const RECORD = { distance: 25, hintDistance: 60 } as const;
 
 
 /**

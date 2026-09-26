@@ -27,6 +27,7 @@ import { param, zoneAt } from '../../gimmick/zones';
 import type { RailNetwork } from '../../rail/types';
 import { resolvePlacement } from '../../stage/loader';
 import type { GapDef, JunctionDef, StageData } from '../../stage/types';
+import { buildAbilitySign } from './ability-picture';
 import type { ModelLibrary } from './models';
 import { addModelPlacements, sourceMeshes, type ModelPlacement, type SourceMesh } from './props';
 
@@ -153,6 +154,19 @@ export class JunctionSigns {
       const turn = arrowTurn(junction.default);
       arrow.rotation.z = turn;
       sign.add(arrow);
+      // v1.8: the side way needs an ability: a small round sign with its picture above the board, on that side.
+      if (junction.needs) {
+        const plate = buildAbilitySign(junction.needs, 0.42);
+        if (plate) {
+          const side = junction.default === 'left' ? 1 : -1;
+          plate.position.set(side * 0.4, 3.5, 0.02);
+          // Seen from both sides of the pole: a copy facing back.
+          const back = plate.clone(true);
+          back.rotation.y = Math.PI;
+          back.position.z = -0.02;
+          sign.add(plate, back);
+        }
+      }
       this.group.add(sign);
       this.signs.set(junction.id, { junction, arrow, turn, angle: turn, glow: 0 });
     }

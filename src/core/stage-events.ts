@@ -32,7 +32,9 @@ export type StageEvent =
         // v1.7 (2-3)
         | 'rock'
         | 'slip'
-        | 'timeUp';
+        | 'timeUp'
+        // v1.8: back from a record's side track (not a failure: no dip, no shake)
+        | 'spur';
     }
   | { type: 'rewind' }
   /** The player has this ability (at load and when it is learned). */

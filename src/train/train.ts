@@ -191,6 +191,11 @@ export class Train {
     return this.rocketLeft > 0;
   }
 
+  /** v1.8: the rocket burns, or its push is still in the speed (slowing back to the lever's speed after a burn). */
+  get rocketPushed(): boolean {
+    return this.rocketLeft > 0 || this.settling;
+  }
+
   /** 2-3: share of the burn still left (1 right after firing, 0 when not burning). */
   get rocketRemaining(): number {
     return Math.max(0, this.rocketLeft / ROCKET.burn);
@@ -434,6 +439,11 @@ export class Train {
     if (!this.onLoop) return Math.max(0, s);
     const L = this.currentRail.length;
     return ((s % L) + L) % L;
+  }
+
+  /** The junction the arrows are shown for (announced and not passed yet), or null. */
+  get announcedJunction(): JunctionDef | null {
+    return this.announced;
   }
 
   chooseJunction(side: JunctionSide): void {
