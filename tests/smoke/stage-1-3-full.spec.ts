@@ -87,6 +87,17 @@ test('stage 1-3 full run: island hops, the whistle pad, upside down, the updraft
     if (m.type() === 'error') errors.push(m.text());
   });
 
+  // A save that has come this far (1-1 and 1-2 cleared, their rail drawn), so the run ends the way it does for a
+  // child: chapter 1 is done, and its card shows on the map (a lone 1-3 would not end the chapter). Only into
+  // empty storage: later page loads keep the game's save.
+  await page.addInitScript(() => {
+    const key = 'train-game.progress.v1';
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(
+      key,
+      JSON.stringify({ schema: 1, cleared: ['1-1', '1-2'], abilities: ['whistle', 'jump', 'light'], records: [], mapLinks: ['1-1>1-2', '1-2>1-3'] }),
+    );
+  });
   await page.goto('/?stage=1-3');
   const app = page.locator('#app');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
@@ -172,9 +183,14 @@ test('stage 1-3 full run: island hops, the whistle pad, upside down, the updraft
   expect(budget.draws).toBeLessThanOrEqual(200);
   expect(budget.tris).toBeLessThanOrEqual(100000);
   await page.locator('#card-button').click();
-  // The map: the rail runs on to chapter 2. 2-1 is next (it bounces); 2-2 is still a "?" that only wiggles.
+  // The map: the rail runs on to chapter 2, and chapter 1's small card shows over the map (PHASE7_FINISH §3).
+  // Then 2-1 is next (it bounces); 2-2 is still locked and only wiggles.
   await expect(page.locator('#map')).toBeVisible();
   await expect(page.locator('[data-link="1-3>2-1"]')).toHaveClass(/is-laid/);
+  await expect(page.locator('#card')).toContainText('1しょう クリア', { timeout: 20_000 });
+  await page.screenshot({ path: resolve(OUT, '38a-map-chapter1-card.png') });
+  await page.locator('#card-button').click();
+  await expect(page.locator('#map')).toHaveAttribute('data-finale', 'done');
   await expect(page.locator('.map-island[data-island="2-1"]')).toHaveClass(/is-next/);
   await page.locator('.map-island[data-island="2-2"]').click();
   await expect(page.locator('#map')).toBeVisible();

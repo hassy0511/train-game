@@ -1005,6 +1005,7 @@ M3 のカウントダウン区間（かんそくじょえき 450 → 橋のむ�
 - `world.json` の 2-3（x 52, y 82）に島の絵を描く。`volcano`（縮小）、`mesa-a`、`old-bridge`、`observatory`、`pumice`、`train-proto` を置く（2-1 と同じやり方、`node scripts/render-map.mjs`）
 - 2-2 をクリアすると線路がつながる（`links` に もうある）。2-3 をクリアすると、みさきから海へ線路がのびて、3 章の「？」の島（3-1。まだステージのファイルはない）につながる。章の見出し「3しょう みずと こおり」と、リンク `2-3 → 3-1` を足す
 - **まだ入れていない**（付録 D の だいさんの答え待ち）。スモークテストは「待ち」と記録して先へ進み、`world.json` に `2-3 → 3-1` が入ったら つながっていることを確かめる
+- （2026-09-26 追記）この形はやめて、`docs/PHASE7_FINISH.md` §3 に置きかえた: 2-3 のあとは線路が はじまりの街へ もどって 6 つの島が輪になり、3 章は 左上の「？」の島 1 つだけ（はじまりの街から点線）。`2-3 → 3-1` の線は作らない
 
 ### 12. 寸劇
 入り `opening`（1 場面 4 行まで）:
@@ -1258,7 +1259,7 @@ tests/smoke/stage-2-3-full.spec.ts（test.setTimeout(1_200_000)。本番ビル�
    h. stopAt(kudari, 1035) → doors（降りる。乗客 0）→ card「できた」。
 6. エンディング: #caption に「はっくしょーん」が出たらスクショ 70-sneeze-ending.png →「はしが おちちゃった」で data-rail-cut='kudari:765-865' → 「こんにちは」で data-cutscene-actors に sakasa、札が出たときには いない → tapUntil で進める → card「2しょう おしまい」→ スクショ 71-ending.png → つぎへ → card「クリア」→ スクショ 72-clear.png。
 7. progress: cleared に 2-3、abilities に rocket、records に pumice-float と sulfur-crystal。火山の「ぽふっ」が 10 回より多い（data-volcano-puffs）。drawsMax と trisMax をログに出す（200 と 10 万の中）。
-8. 地図: #map が見え、[data-link="2-3>3-1"] が is-laid → #map-close（§11 の とおり、world.json に入るまでは「待ち」と記録する）。
+8. 地図: #map が見え、[data-link="2-3>3-1"] が is-laid → #map-close（§11 の とおり、world.json に入るまでは「待ち」と記録する）。→ 2026-09-26: PHASE7_FINISH §3 の 章のおわり（[data-link="2-3>1-1"] の光、札「2しょう クリア」、「？」の島と吹き出し、「タイトルへ」、タイトルの★）を確かめる形に かえた。
 9. errors（pageerror と console.error）が空。
 
 足すテスト:
