@@ -1,13 +1,44 @@
 {
-  "_doc": "The world map (docs/PHASE4_DESIGN.md). Islands are placed in % of the map area (x from the left, y from the top). An island without a stage file yet is shown as a '?' silhouette. `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees.",
+  "_doc": "The world map (docs/PHASE4_DESIGN.md). Islands are placed in % of the map area (x from the left, y from the top). An island without a stage file yet is shown as a '?' silhouette. `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees. `chapters[].finale` plays once when its link is first drawn (a ring of lights, then a card); `chapters[].teaser` is a later chapter's single \"?\" island (docs/PHASE7_FINISH.md §3). A link's optional `via` is the curve's control point in %.",
   "chapters": [
     {
       "id": 1,
-      "title": "1しょう はじまり"
+      "title": "1しょう はじまり",
+      "finale": {
+        "link": "1-3>2-1",
+        "card": "1しょう クリア！\nつぎは いきものの せかい！",
+        "button": "つぎへ"
+      }
     },
     {
       "id": 2,
-      "title": "2しょう いきものの せかい"
+      "title": "2しょう いきものの せかい",
+      "finale": {
+        "link": "2-3>1-1",
+        "ring": [
+          "1-1",
+          "1-2",
+          "1-3",
+          "2-1",
+          "2-2",
+          "2-3"
+        ],
+        "card": "2しょう クリア！\nいきものの せかいが\nぜんぶ つながった！",
+        "button": "やったね！",
+        "icon": "ring"
+      }
+    },
+    {
+      "id": 3,
+      "title": "3しょう みずとこおり",
+      "teaser": {
+        "label": "3しょう",
+        "x": 16,
+        "y": 26,
+        "from": "1-1",
+        "after": "2-3",
+        "line": "つづきは また こんど！"
+      }
     }
   ],
   "islands": [
@@ -664,6 +695,26 @@
     [
       "2-2",
       "2-3"
+    ],
+    [
+      "2-3",
+      "1-1",
+      {
+        "via": [
+          35,
+          88
+        ]
+      }
+    ],
+    [
+      "1-1",
+      "teaser:3",
+      {
+        "via": [
+          8,
+          46
+        ]
+      }
     ]
   ]
 }

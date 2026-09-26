@@ -45,7 +45,7 @@ import { showZukan } from './ui/zukan';
 import { loadSettings, saveSettings, VOLUME_GAIN, type Settings } from './core/settings';
 import { showSettings } from './ui/settings';
 import { createPause } from './ui/pause';
-import { linkKey, showMap, type MapChoice, type MapIsland } from './ui/map';
+import { linkKey, showMap, type MapChoice, type MapFinale, type MapIsland, type MapTeaser } from './ui/map';
 import world from './world/world.json';
 import type { WorldFile } from './world/types';
 
@@ -93,9 +93,11 @@ function registerOffline(): void {
 
 /**
  * The world map, from the stages and the save. The rail to a newly opened island grows in once (the links
- * shown are saved right away, so leaving early does not replay it).
+ * shown are saved right away, so leaving early does not replay it). A chapter's closing rail is the exception
+ * (docs/PHASE7_FINISH.md §3): its light and card play, and only once the card is closed is the link saved, so
+ * leaving in the middle shows it again next time.
  */
-async function openMap(root: HTMLElement, options: { next?: string; closeLabel?: string }): Promise<MapChoice> {
+async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: string; closeLabel?: string }): Promise<MapChoice> {
   const file = world as unknown as WorldFile;
   const progress = loadProgress();
   const islands: MapIsland[] = [];
@@ -116,10 +118,37 @@ async function openMap(root: HTMLElement, options: { next?: string; closeLabel?:
       needsLater: missing.some((r) => r.requires !== null && !progress.abilities.includes(r.requires)),
     });
   }
-  const laid = file.links.filter(([from]) => progress.cleared.includes(from)).map(([from, to]) => linkKey(from, to));
+  const laid = file.links
+    .filter(([from, to]) => !to.startsWith('teaser:') && progress.cleared.includes(from))
+    .map(([from, to]) => linkKey(from, to));
   const fresh = laid.filter((key) => !progress.mapLinks.includes(key));
-  addToProgress('mapLinks', fresh);
-  return showMap(root, file, { islands, laid, fresh, ...options });
+  // The latest chapter whose closing rail is drawn now.
+  const ending = [...file.chapters].reverse().find((c) => c.finale && fresh.includes(c.finale.link))?.finale;
+  addToProgress('mapLinks', fresh.filter((key) => key !== ending?.link));
+  const finale: MapFinale | undefined = ending && {
+    link: ending.link,
+    ring: ending.ring,
+    onHop: () => audio.playRecord(),
+    onShown: async () => {
+      if (ending.ring) audio.playFanfare();
+      else audio.playCard();
+      await showCard(root, ending.card, ending.button, ending.icon);
+      addToProgress('mapLinks', [ending.link]);
+    },
+  };
+  const later = file.chapters.find((c) => c.teaser && progress.cleared.includes(c.teaser.after));
+  const teaser: MapTeaser | undefined = later?.teaser && { id: `teaser:${later.id}`, ...later.teaser };
+  return showMap(root, file, { islands, laid, fresh, finale, teaser, ...options });
+}
+
+/** Chapters with islands, and whether every one of their islands is cleared (the title's stars). */
+function chapterStars(): { label: string; done: boolean }[] {
+  const file = world as unknown as WorldFile;
+  const cleared = loadProgress().cleared;
+  return file.chapters
+    .map((c) => ({ id: c.id, islands: file.islands.filter((i) => i.chapter === c.id) }))
+    .filter((c) => c.islands.length > 0)
+    .map((c) => ({ label: `${c.id}しょう`, done: c.islands.every((i) => cleared.includes(i.id)) }));
 }
 
 /** Opens a stage straight into play (no title). */
@@ -548,9 +577,10 @@ async function boot(): Promise<void> {
     // The title's music box (it starts with the first tap: iPad keeps sound locked until then).
     audio.playMusic('title');
     const choice = await showTitle(uiEl, GAME_TITLE, {
+      chapters: chapterStars(),
       continueLabel: next && next.id !== stageId ? `つづきから（${next.title}）` : undefined,
       onMap: () => {
-        void openMap(uiEl, { next: next?.id, closeLabel: 'もどる' }).then((choice) => {
+        void openMap(uiEl, audio, { next: next?.id, closeLabel: 'もどる' }).then((choice) => {
           if (choice.kind === 'stage') goToStage(choice.id);
         });
       },
@@ -694,7 +724,7 @@ async function boot(): Promise<void> {
       audio.setMusicPaused(p);
     },
     onMap: async () => {
-      const choice = await openMap(uiEl, { next: next?.id, closeLabel: 'もどる' });
+      const choice = await openMap(uiEl, audio, { next: next?.id, closeLabel: 'もどる' });
       if (choice.kind === 'stage') goToStage(choice.id);
     },
   });
@@ -710,7 +740,7 @@ async function boot(): Promise<void> {
   // Back to the map: the rail to the next island grows in, and the child taps it to go on.
   const after = await nextStage(loadProgress().cleared, stage.file.id);
   audio.playMusic('title');
-  const choice = await openMap(uiEl, { next: after?.id, closeLabel: 'タイトルへ' });
+  const choice = await openMap(uiEl, audio, { next: after?.id, closeLabel: 'タイトルへ' });
   if (choice.kind === 'stage') goToStage(choice.id);
   else location.href = location.pathname;
 }

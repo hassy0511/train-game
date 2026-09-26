@@ -1,9 +1,46 @@
 /** src/world/world.json: the world map (docs/PHASE4_DESIGN.md). */
 export interface WorldFile {
-  chapters: { id: number; title: string }[];
+  chapters: WorldChapter[];
   islands: WorldIsland[];
-  /** [from, to]: the rail from one island to the next; it is laid once `from` is cleared. */
-  links: [string, string][];
+  /**
+   * [from, to, options?]: the rail from one island to the next; it is laid once `from` is cleared. A link to
+   * "teaser:<chapter>" is the dotted line to that chapter's "?" island (never laid; drawn with the teaser).
+   */
+  links: WorldLink[];
+}
+
+export type WorldLink = [string, string] | [string, string, WorldLinkOptions];
+
+export interface WorldLinkOptions {
+  /** Control point of the curve in % of the map (x, y). Default: above the midpoint (a gentle arc). */
+  via?: [number, number];
+}
+
+export interface WorldChapter {
+  id: number;
+  title: string;
+  /** Shown once, the first time the map draws `link` (docs/PHASE7_FINISH.md §3). */
+  finale?: {
+    /** "from>to": the rail that closes the chapter. */
+    link: string;
+    /** The island ids in order: a golden light runs round them once, hopping each island. */
+    ring?: string[];
+    /** Card text (lines split by "\n", 20 characters at most per line) and its button. */
+    card: string;
+    button: string;
+    icon?: 'badge' | 'ring';
+  };
+  /** A chapter without stages yet: one "?" island with a dotted line, once `after` is cleared. */
+  teaser?: {
+    label: string;
+    x: number;
+    y: number;
+    /** The island the dotted line starts from (the link "<from>>teaser:<id>" gives its curve). */
+    from: string;
+    after: string;
+    /** What the partner says when it is tapped. */
+    line: string;
+  };
 }
 
 export interface WorldIsland {

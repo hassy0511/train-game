@@ -364,6 +364,35 @@ body {
   text-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
 }
 
+.title-chapters {
+  display: flex;
+  gap: 14px;
+  margin-top: -8px;
+}
+
+.title-chapter {
+  padding: 6px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.75);
+  color: #8a97a6;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.title-chapter.is-done {
+  background: #fff;
+  color: var(--ink);
+}
+
+.title-chapter.is-done .title-star {
+  color: #f2a900;
+}
+
+.card {
+  /* Over the map (30): the chapter's card shows up on it. */
+  z-index: 40;
+}
+
 .card h1 {
   line-height: 1.4;
 }
@@ -953,6 +982,175 @@ body {
   top: calc(var(--safe-top) + 12px);
   padding: 10px 24px;
   font-size: 20px;
+}
+
+/* ---- chapter finale on the map (docs/PHASE7_FINISH.md §3) ---- */
+/* No taps on the islands while the rail grows, the light runs round and the card is up. */
+.map.is-finale-playing .map-area {
+  pointer-events: none;
+}
+
+/* The golden light: a short bright dash running along each rail of the ring in turn. */
+.map-link .glow,
+.map-link .glow-core {
+  stroke-dasharray: 12 120;
+  stroke-dashoffset: 12;
+  opacity: 0;
+}
+
+.map-link .glow {
+  stroke: rgba(255, 190, 30, 0.85);
+  stroke-width: 4.4;
+}
+
+.map-link .glow-core {
+  stroke: #fffbe6;
+  stroke-width: 1.6;
+}
+
+.map-link.is-lit .glow,
+.map-link.is-lit .glow-core {
+  animation: ring-light 0.5s linear forwards;
+}
+
+.map-link.is-lit.is-reverse .glow,
+.map-link.is-lit.is-reverse .glow-core {
+  animation-direction: reverse;
+}
+
+@keyframes ring-light {
+  0% {
+    stroke-dashoffset: 12;
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+}
+
+/* Each island hops and shines as the light reaches it. */
+.map-island.is-hop {
+  animation: island-hop 0.45s ease-out;
+}
+
+.map-island.is-hop img {
+  filter: drop-shadow(0 0 14px rgba(255, 214, 90, 0.95)) drop-shadow(0 10px 8px rgba(31, 42, 68, 0.18));
+}
+
+@keyframes island-hop {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  40% {
+    transform: translate(-50%, -62%) scale(1.06);
+  }
+}
+
+/* The next chapter's single "?" island: white, floating, joined to the first town by a dotted line. */
+.map-island.is-teaser {
+  animation: island-float 2.4s ease-in-out infinite alternate;
+}
+
+.map-island.is-teaser img {
+  filter: grayscale(1) brightness(2) opacity(0.7);
+}
+
+.map-island.is-teaser .map-mystery {
+  top: 22%;
+  font-size: 50px;
+  color: #8fb6de;
+  text-shadow: 0 2px 0 #fff;
+}
+
+.map-island.is-teaser .map-label {
+  margin-top: -2px;
+  color: #6b7a8a;
+}
+
+@keyframes island-float {
+  from {
+    transform: translate(-50%, -50%);
+  }
+  to {
+    transform: translate(-50%, -55%);
+  }
+}
+
+.map-island.is-teaser.is-wiggle {
+  animation: island-wiggle 0.4s ease-in-out;
+}
+
+.map-island.is-waiting,
+.map-link.is-waiting {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.map-link.is-appear {
+  animation: fade-in-from-0 0.9s ease-out;
+}
+
+.map-island.is-teaser.is-appear {
+  animation:
+    teaser-appear 0.9s ease-out,
+    island-float 2.4s ease-in-out 0.9s infinite alternate;
+}
+
+@keyframes fade-in-from-0 {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes teaser-appear {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -30%) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* "つづきは また こんど！": a small bubble beside the "?" island for 2 s. */
+.map-say {
+  position: absolute;
+  z-index: 200;
+  transform: translateY(-50%);
+  padding: 10px 18px;
+  border-radius: 18px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(31, 42, 68, 0.25);
+  pointer-events: none;
+  animation: say-pop 0.25s ease-out;
+}
+
+.map-say::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  margin-top: -8px;
+  border: 8px solid transparent;
+  border-right: 10px solid #fff;
+  border-left: 0;
+}
+
+@keyframes say-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.7);
+  }
 }
 
 /* ---- small round buttons in the top corner: pause (src/ui/pause.ts) and camera ---- */

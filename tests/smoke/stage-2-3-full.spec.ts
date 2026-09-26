@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -159,6 +159,22 @@ test('stage 2-3 full run: the rocket, steep slopes and slides, rocks, the countd
     if (m.type() === 'error') errors.push(m.text());
   });
 
+  // A save that has come this far (chapter 1, 2-1 and 2-2 cleared, their rail drawn), so the run ends the way it
+  // does for a child: with chapter 2's finale on the map. Only into empty storage: later page loads keep the game's save.
+  await page.addInitScript(() => {
+    const key = 'train-game.progress.v1';
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        schema: 1,
+        cleared: ['1-1', '1-2', '1-3', '2-1', '2-2'],
+        abilities: ['whistle', 'jump', 'light'],
+        records: [],
+        mapLinks: ['1-1>1-2', '1-2>1-3', '1-3>2-1', '2-1>2-2', '2-2>2-3'],
+      }),
+    );
+  });
   // Every line the bubble shows, in order (to check what was NOT said).
   await page.addInitScript(() => {
     const lines: string[] = [];
@@ -467,19 +483,29 @@ test('stage 2-3 full run: the rocket, steep slopes and slides, rocks, the countd
   await expect(page.locator('#map')).toBeVisible();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
   expect(saved.cleared).toContain('2-3');
-  // The rail on to chapter 3's island (PHASE6 §11) waits for だいさん's answer (PHASE6 2-3 付録 D: show the shadow
-  // island 3-1 and the chapter-3 heading now?). Until world.json has the link it is reported as pending, not skipped
-  // quietly; once it is there it must be laid.
-  const world = JSON.parse(readFileSync(resolve(OUT, '../../../src/world/world.json'), 'utf8')) as { links: string[][] };
-  if (world.links.some(([a, b]) => a === '2-3' && b === '3-1')) {
-    await expect(page.locator('[data-link="2-3>3-1"]')).toHaveClass(/is-laid/);
-  } else {
-    test.info().annotations.push({ type: 'pending', description: 'map link 2-3 > 3-1: waiting for the decision in PHASE6 2-3 付録 D (§11)' });
-    console.log('2-3: PENDING map link 2-3 > 3-1 (PHASE6 2-3 付録 D / §11): not in world.json yet');
-  }
+  // Chapter 2's end on the map (PHASE7_FINISH §3): the last rail closes the ring from 2-3 back to the first town,
+  // the golden light runs round, the card, then chapter 3's single "?" island floats in.
+  await expect(page.locator('[data-link="2-3>1-1"]')).toHaveClass(/is-laid/);
+  await expect(page.locator('#map-close')).toBeHidden();
+  await expect(page.locator('[data-link="2-3>1-1"]')).toHaveClass(/is-lit/, { timeout: 20_000 });
+  await page.screenshot({ path: resolve(OUT, '73-map-ring.png') });
+  await expect(page.locator('#card')).toContainText('2しょう クリア', { timeout: 20_000 });
+  expect((await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'))).mapLinks).not.toContain('2-3>1-1');
+  await page.locator('#card-button').click();
+  await expect(page.locator('#map')).toHaveAttribute('data-finale', 'done');
+  expect((await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'))).mapLinks).toContain('2-3>1-1');
+  const teaser = page.locator('.map-island.is-teaser');
+  await expect(teaser).toBeVisible();
+  await expect(page.locator('[data-link="1-1>teaser:3"]')).toBeVisible();
+  await page.waitForTimeout(1_000); // it floats in
+  await teaser.dispatchEvent('click');
+  await expect(page.locator('.map-say')).toHaveText('つづきは また こんど！');
+  await expect(page.locator('#map-close')).toHaveText('タイトルへ');
   await page.screenshot({ path: resolve(OUT, '73-map.png') });
   await page.locator('#map-close').click();
   await page.waitForURL((url) => !url.search.includes('stage=2-3'), { timeout: 30_000 });
+  // The title now has both chapter stars.
+  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ★/, { timeout: 90_000 });
   expect(await app.getAttribute('data-frame-errors')).toBeNull();
   console.log('smoke 2-3 full: cleared');
   expect(errors).toEqual([]);
