@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * The chapter ends on the map (docs/PHASE7_FINISH.md §3), from a prepared save: the closing rail grows in, the
- * golden light runs round the ring, the card shows over the map, then chapter 3's single "?" island floats in.
- * It plays once; leaving before the card is closed plays it again.
+ * golden light runs round the ring, the card shows over the map, then the rail grows from the first town to the
+ * cloud gate where chapter 3's "?" island used to be, and the map turns to page 2 (docs/PHASE8_CHAPTER3_4.md 第 1 部
+ * §3.6). It plays once; leaving before the card is closed plays it again.
  */
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), 'output');
 mkdirSync(OUT, { recursive: true });
@@ -80,7 +81,7 @@ function watchErrors(page: Page): string[] {
   return errors;
 }
 
-test('chapter 2 finale: the ring, the card, the "?" island, once', async ({ page }) => {
+test('chapter 2 finale: the ring, the card, the rail to the cloud gate and page 2, once', async ({ page }) => {
   const errors = watchErrors(page);
   await seed(page, {
     cleared: [...CHAPTER_1, ...CHAPTER_2],
@@ -107,9 +108,10 @@ test('chapter 2 finale: the ring, the card, the "?" island, once', async ({ page
   // Second look: it plays again, all the way.
   await page.locator('#title-map').click();
   await expect(page.locator('#map')).toBeVisible();
-  // No way out and no taps on the islands until the card has been seen; the "?" island waits.
+  // No way out and no taps on the islands until the card has been seen; the gate and its rail wait.
   await expect(page.locator('#map-close')).toBeHidden();
-  await expect(page.locator('.map-island.is-teaser')).toBeHidden();
+  await expect(page.locator('.map-gate[data-gate="exit"]')).toBeHidden();
+  await expect(page.locator('#map-next')).toBeHidden();
   await expect(page.locator('#map')).toHaveClass(/(^|\s)is-finale(\s|$)/, { timeout: 20_000 });
   // The light runs round the six islands in order (1-1 hops first, then the light sets off).
   await expect(page.locator('[data-link="1-1>1-2"]')).toHaveClass(/is-lit/, { timeout: 20_000 });
@@ -139,40 +141,40 @@ test('chapter 2 finale: the ring, the card, the "?" island, once', async ({ page
   await expect(card).toHaveCount(0);
   expect((await saved(page)).mapLinks).toContain('2-3>1-1');
 
-  // Then chapter 3's "?" island floats in with its dotted line from the first town; tapping it only says "later".
-  await expect(page.locator('#map')).toHaveAttribute('data-finale', 'done');
-  const teaser = page.locator('.map-island.is-teaser');
-  await expect(teaser).toBeVisible();
-  await expect(teaser).toContainText('3しょう');
-  await expect(page.locator('[data-link="1-1>teaser:3"]')).toBeVisible();
+  // Then, where chapter 3's "?" island used to be, the cloud gate: the rail grows from the first town to it, the map
+  // turns to page 2 by itself and the rail grows on to 3-1. Still hands off until it is in; saved once it is.
+  await expect(page.locator('.map-island.is-teaser')).toHaveCount(0);
+  await expect(page.locator('[data-link="1-1>3-1"]')).toHaveClass(/is-growing/);
+  await expect(page.locator('.map-gate[data-gate="exit"]')).toBeVisible();
+  await expect(page.locator('#map-close')).toBeHidden();
+  await page.waitForTimeout(1_000);
+  await page.screenshot({ path: resolve(OUT, 'map-finale-gate.png') });
+  await expect(page.locator('#map')).toHaveAttribute('data-page', '2', { timeout: 10_000 });
+  await expect(page.locator('[data-link-enter="1-1>3-1"]')).toHaveClass(/is-growing/);
+  await expect(page.locator('#map')).toHaveAttribute('data-finale', 'done', { timeout: 10_000 });
+  expect((await saved(page)).mapLinks).toContain('1-1>3-1');
   await expect(page.locator('#map-close')).toBeVisible();
-  // Tapped straight away, while it is still floating in: it wiggles all the same, then floats on.
-  await tapTeaser(page, teaser);
-  await expect(page.locator('.map-say')).toHaveCount(0, { timeout: 10_000 });
-  // Once it has faded in for good (opacity 1), the tap again for the picture.
-  await settled(page.locator('[data-link="1-1>teaser:3"]'));
-  await expect.poll(() => teaser.evaluate((e) => getComputedStyle(e).opacity)).toBe('1');
-  await tapTeaser(page, teaser);
-  await settled(page.locator('.map-say'));
-  await expect(page.locator('#map')).toBeVisible();
-  await page.screenshot({ path: resolve(OUT, 'map-finale-teaser.png') });
-  await expect(page.locator('.map-say')).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.locator('#map-prev')).toBeVisible();
+  await settled(page.locator('.map-pages'));
+  await page.screenshot({ path: resolve(OUT, 'map-finale-page2.png') });
 
-  // Once only: the map opened again shows the ring and the "?" island at once, no light and no card.
+  // Once only: the map opened again shows the ring and the gate at once, no light and no card.
   await page.locator('#map-close').click();
   await expect(page.locator('#map')).toHaveCount(0);
   await page.locator('#title-map').click();
   await expect(page.locator('#map')).toBeVisible();
+  await expect(page.locator('#map')).toHaveAttribute('data-page', '1');
   await expect(page.locator('[data-link="2-3>1-1"]')).toHaveClass(/is-laid/);
   await expect(page.locator('[data-link="2-3>1-1"]')).not.toHaveClass(/is-growing/);
-  await expect(page.locator('.map-island.is-teaser')).toBeVisible();
+  await expect(page.locator('[data-link="1-1>3-1"]')).not.toHaveClass(/is-growing/);
+  await expect(page.locator('.map-gate[data-gate="exit"]')).toBeVisible();
   await page.waitForTimeout(3_000);
   await expect(page.locator('#card')).toHaveCount(0);
   await expect(page.locator('#map')).not.toHaveAttribute('data-finale', /.+/);
   await expect(page.locator('#map')).not.toHaveClass(/(^|\s)is-finale/);
-  // On a later visit too it wiggles, and then floats on (not stuck after the first tap).
-  await tapTeaser(page, teaser);
-  await tapTeaser(page, teaser);
+  // The gate turns the page.
+  await page.locator('.map-gate[data-gate="exit"]').click();
+  await expect(page.locator('#map')).toHaveAttribute('data-page', '2');
   await page.locator('#map-close').click();
   expect(errors).toEqual([]);
 });
@@ -236,7 +238,8 @@ test('a closing rail from a stage opened on its own does not end the chapter', a
   await expect(page.locator('#card')).toContainText('2しょう クリア', { timeout: 20_000 });
   await page.locator('#card-button').click();
   expect((await saved(page)).mapLinks).toContain('2-3>1-1');
-  await expect(page.locator('.map-island.is-teaser')).toBeVisible();
+  await expect(page.locator('[data-link="1-1>3-1"]')).toHaveClass(/is-growing/);
+  await expect(page.locator('#map')).toHaveAttribute('data-finale', 'done', { timeout: 10_000 });
   expect(errors).toEqual([]);
 });
 
@@ -245,5 +248,24 @@ test('title without a finished chapter has no stars', async ({ page }) => {
   await openTitleMap(page);
   await expect(page.locator('#title-chapters')).toHaveCount(0);
   await expect(page.locator('.map-island.is-teaser')).toHaveCount(0);
+  await expect(page.locator('.map-gate')).toHaveCount(0);
   await expect(page.locator('#map')).not.toHaveAttribute('data-finale', /.+/);
+});
+
+/** The later chapter's "?" island (now chapter 5's, on page 2) wiggles on every tap and then floats on. */
+test('the "?" island wiggles and floats on, tap after tap', async ({ page }) => {
+  const errors = watchErrors(page);
+  const all = [...CHAPTER_1, ...CHAPTER_2, '3-1', '3-2', '3-3', '4-1', '4-2', '4-3'];
+  const links = [...CHAIN, '2-3>1-1', '1-1>3-1', '3-1>3-2', '3-2>3-3', '3-3>4-1', '4-1>4-2', '4-2>4-3', 'finale:4'];
+  await seed(page, { cleared: all, abilities: ['whistle', 'jump', 'light', 'rocket'], mapLinks: links });
+  await openTitleMap(page);
+  await expect(page.locator('#map')).toHaveAttribute('data-page', '2');
+  const teaser = page.locator('.map-island.is-teaser');
+  await expect(teaser).toBeVisible();
+  await expect(teaser).toContainText('5しょう');
+  await tapTeaser(page, teaser);
+  await tapTeaser(page, teaser);
+  await settled(page.locator('.map-say'));
+  await page.screenshot({ path: resolve(OUT, 'map-finale-teaser.png') });
+  expect(errors).toEqual([]);
 });

@@ -4,7 +4,8 @@ import type { RailNetwork } from '../rail/types';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import type { Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
-import { validateStageFile, validateStageLayout } from './validate';
+import { validateStageFile, validateStageLayout, validateWaterLayout } from './validate';
+import { computeWaterSpans, diveForkSide } from './water';
 
 // One chunk per stage file; stages load lazily.
 const stageModules = import.meta.glob('../stages/*.json');
@@ -54,6 +55,10 @@ export async function loadStage(id: string): Promise<StageData> {
   const network = buildRailNetwork(file);
   checkRanges(file, network);
   validateStageLayout(file, network);
+  // v1.10: which stretches run on the water or under it, and which side of each dive fork goes under.
+  computeWaterSpans(file, network);
+  for (const j of file.junctions) if (j.dive) j.diveSide = diveForkSide(j, network) ?? undefined;
+  validateWaterLayout(file, network);
   const groundY = file.environment.ground?.y ?? null;
 
   const props: ResolvedProp[] = [...file.props, ...autoSigns(file)].map((p) => {
@@ -152,6 +157,7 @@ function checkRanges(file: StageFile, network: RailNetwork): void {
     ...file.records.map((r): [Placement, string] => [r, `record "${r.id}"`]),
   ];
   for (const [p, what] of placed) if ('onRail' in p) check(p.onRail.railId, p.onRail.at, what);
+  for (const f of file.floaters ?? []) check(f.railId, f.at, `floater "${f.id}"`);
   file.gimmicks.forEach((g, i) => {
     if (g.railId === undefined || g.from === undefined) return;
     check(g.railId, g.from, `gimmicks[${i}] ${g.type}`);

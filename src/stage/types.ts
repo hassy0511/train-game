@@ -1,7 +1,7 @@
 import type { Quaternion, Vector3 } from 'three';
 import type { RailNetwork } from '../rail/types';
 
-/** Stage JSON schema v1 (additions up to v1.7). See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
+/** Stage JSON schema v1 (additions up to v1.10). See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
 export type Vec3 = [number, number, number];
 
 export type AbilityId = 'whistle' | 'light' | 'jump' | 'rocket' | 'dive' | 'magnetLight' | 'reverse';
@@ -13,17 +13,75 @@ export interface EnvironmentDef {
   ground: { y: number; size: number; color: string } | null;
   /** Song id in src/audio/songs.ts (Phase 4), or null for silence. */
   bgm: string | null;
-  /** v1.3: how a fall looks: "dark" (default, fade to black) or "cloud" (caught by a cloud, fade to white). */
-  fall?: 'dark' | 'cloud' | 'leaf';
+  /**
+   * v1.3: how a fall looks: "dark" (default, fade to black) or "cloud" (caught by a cloud, fade to white).
+   * v1.10: "water" (a soft fade to water blue).
+   */
+  fall?: 'dark' | 'cloud' | 'leaf' | 'water';
   /** v1.3: a soft sea of clouds far below (stages in the sky). */
   cloudSea?: { y: number };
   /** v1.9: the quiet sound around the island (src/audio/ambience.ts); omitted = none. */
   ambience?: AmbienceKind;
+  /**
+   * v1.10: water (a sea, a lake, a pond). The loader works out from the rail heights which stretches run on the
+   * surface (the jump button turns into "もぐる") and which run under water (Rail.surfaces / Rail.dives).
+   */
+  water?: WaterDef[];
 }
 
-/** v1.9: the sound around an island. */
-export type AmbienceKind = 'town' | 'valley' | 'sky' | 'forest' | 'meadow' | 'sea';
-export const AMBIENCE_KINDS: readonly AmbienceKind[] = ['town', 'valley', 'sky', 'forest', 'meadow', 'sea'];
+/** v1.10: how a water looks (surface, floor and the colour under water). */
+export type WaterLook = 'sea' | 'lake' | 'puddle' | 'ice';
+export const WATER_LOOKS: readonly WaterLook[] = ['sea', 'lake', 'puddle', 'ice'];
+
+/** v1.10: where a water is on the ground (x, z in metres; `size` [across, along], `rotationY` degrees, 0 = along +Z). */
+export type WaterArea =
+  | { circle: { center: [number, number]; radius: number } }
+  | { rect: { center: [number, number]; size: [number, number]; rotationY?: number; corner?: number } };
+
+/** v1.10: one body of water. */
+export interface WaterDef {
+  /** Height of the surface (m). */
+  y: number;
+  /** Height of the bottom (sea floor, pond floor), below `y`; looks only. */
+  floor: number;
+  /** Omitted: a sea over the whole ground (the ground plane becomes the surface and the floor). */
+  area?: WaterArea;
+  /** Default "sea". */
+  look?: WaterLook;
+  /** Colour and seeing distance (m) under water; defaults by `look`. */
+  under?: { color?: string; far?: number };
+}
+
+/** v1.10 (set by the loader, never written): a stretch of a rail on the surface of, or under, `water` (index). */
+export interface WaterSpan {
+  from: number;
+  to: number;
+  water: number;
+}
+
+/** v1.10: something floating on the water over a surface rail, which the train must dive under. */
+export type FloaterLook = 'log' | 'raft' | 'lily' | 'wave' | 'ice';
+export const FLOATER_LOOKS: readonly FloaterLook[] = ['log', 'raft', 'lily', 'wave', 'ice'];
+
+export interface FloaterDef {
+  id: string;
+  railId: string;
+  /** Its middle along the rail (m). */
+  at: number;
+  /** How far along the rail it covers (m). Default FLOATER.length. */
+  length?: number;
+  /** Default "log". */
+  look?: FloaterLook;
+  /** Where the train front goes back to after bumping it: a place on its rail, or { railId, at }. Default at − DIVE.rewindBefore. */
+  rewind?: number | { railId: string; at: number };
+}
+
+/**
+ * v1.9: the sound around an island. v1.10 adds underwater (it also comes on by itself while the train is under
+ * water), river, ice and snow.
+ */
+export type AmbienceKind = 'town' | 'valley' | 'sky' | 'forest' | 'meadow' | 'sea' | 'underwater' | 'river' | 'ice' | 'snow';
+export const AMBIENCE_KINDS: readonly AmbienceKind[] = ['town', 'valley', 'sky', 'forest', 'meadow', 'sea', 'underwater', 'river', 'ice', 'snow'];
 
 export type RailEndDef =
   | { type: 'buffer' }
@@ -92,6 +150,13 @@ export interface JunctionDef {
    * ability's picture; without the ability that way cannot be chosen and the partner says "needAbility".
    */
   needs?: AbilityId;
+  /**
+   * v1.10: a dive fork (a ring on the water, no arrows): a train diving as it passes takes the side whose rail goes
+   * under water, any other train the other side (`default`, a way on the surface; no fail).
+   */
+  dive?: boolean;
+  /** v1.10 (set by the loader, never written): the side of a dive fork whose rail goes under water. */
+  diveSide?: 'left' | 'right';
 }
 
 export interface StopRule {
@@ -299,7 +364,11 @@ export type MissionLines = Partial<
     | 'doorsClosedLever'
     // v1.8
     | 'spurBack'
-    | 'needAbility',
+    | 'needAbility'
+    // v1.10 (もぐる)
+    | 'diveNear'
+    | 'diveBoing'
+    | 'diveBoingAfter',
     string
   >
 >;
@@ -432,6 +501,8 @@ export interface StageFile {
   ending?: string;
   /** v1.1: cutscenes by id. */
   cutscenes?: Record<string, CutsceneStep[]>;
+  /** v1.10: things floating over surface rails, to dive under. */
+  floaters?: FloaterDef[];
 }
 
 /** A prop with its placement resolved to a world transform. */

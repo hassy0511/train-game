@@ -226,3 +226,54 @@ export const VOLCANO_PUFF = { every: 12, hurry: 4, first: 3 } as const;
  * above the train's middle so the train sits low, under the title. Slow on purpose: it is a backdrop, not a ride.
  */
 export const TITLE_ORBIT = { radius: 30, height: 9, lift: 4.5, swingDeg: 28, seconds: 48 } as const;
+
+/**
+ * v1.10 (chapter 3): diving ("もぐる"). A rail stretch is on the water surface where its top is within `surfaceAbove`
+ * m above to `submerge` m below the surface, and under water where it is `submerge` m or more below (inside the
+ * water's area). The jump button turns into "もぐる" `approach` m before a surface stretch or a dive fork (along the
+ * way the train will go), changing face at most once per `faceHold` s and never in the air.
+ * On a surface stretch each press dives: a downward arc `depth` m deep and speed × `time` s long (at least
+ * `minLength` m; up to `glide` of its length longer to pass under a floater just past its deep part), the bubble dome
+ * on; the next press is allowed `cooldown` s after the front comes up ("ぷかっ"). Slower than `minSpeed`, under water
+ * or on land a press only bobs the train (`bobDepth` m for `bobSeconds` s, no rule). A dive fork within `forkReach` m
+ * of its dive side going under water; under water the dome stays on.
+ * Bumping a floater (or reaching water without the dome) is a soft "ぽよん": stopped in `bounceStop` s, bounced back
+ * `bounceBack` m over `bounceSeconds` s, and put back `rewindBefore` m before it.
+ * `recordGlow`: the button also glows with a dive record this close ahead.
+ */
+export const DIVE = {
+  surfaceAbove: 1.5,
+  submerge: 1.0,
+  depth: 6,
+  time: 2.0,
+  minLength: 8,
+  minSpeed: 1,
+  glide: 0.25,
+  cooldown: 0.6,
+  approach: 80,
+  faceHold: 1.0,
+  forkReach: 60,
+  bobDepth: 0.6,
+  bobSeconds: 0.9,
+  bounceStop: 0.15,
+  bounceBack: 3,
+  bounceSeconds: 0.5,
+  rewindBefore: 60,
+  recordGlow: 30,
+  /** The glow looks this far ahead for a floater (m). */
+  hintDistance: 60,
+  /** Dives and gaps keep apart: no gap, jump pad, bough or silk bridge from `clearBefore` m before a water stretch to `clearAfter` m after it. */
+  clearBefore: 120,
+  clearAfter: 40,
+  /** Room (m) over the train's roof a floater needs, on top of its `draft`. */
+  headroom: 0.2,
+} as const;
+
+/** v1.10: floaters by look: default length along the rail (m) and how deep they reach under the surface (m). */
+export const FLOATER: Record<'log' | 'raft' | 'lily' | 'wave' | 'ice', { length: number; draft: number }> = {
+  log: { length: 2.4, draft: 0.6 },
+  raft: { length: 6, draft: 0.5 },
+  lily: { length: 4, draft: 0.2 },
+  wave: { length: 5, draft: 0.8 },
+  ice: { length: 4, draft: 0.7 },
+};

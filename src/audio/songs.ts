@@ -43,6 +43,20 @@ const HG = 'G2:1 G2:1 G2:1 G2:1 D2:1 D2:1 G2:1 D2:1';
 const HAm = 'A2:1 A2:1 A2:1 A2:1 E2:1 E2:1 A2:1 E2:1';
 const HF = 'F2:1 F2:1 F2:1 F2:1 C2:1 C2:1 F2:1 C2:1';
 
+// ---- chapters 3 and 4 ----------------------------------------------------------------------------------------
+
+// 3-2 kawa: rolling sixteenth-note marimba arpeggios (the stream), one bar per chord: up five notes and back.
+const KW = (a: string, b: string, c: string, d: string, e: string): string => `${a}:1 ${b}:1 ${c}:1 ${d}:1 ${e}:1 ${d}:1 ${c}:1 ${b}:1`;
+const KW_D = KW('A3', 'D4', 'F#4', 'A4', 'D5');
+const KW_G = KW('B3', 'D4', 'G4', 'B4', 'D5');
+const KW_A = KW('A3', 'C#4', 'E4', 'A4', 'C#5');
+const KW_Bm = KW('B3', 'D4', 'F#4', 'B4', 'D5');
+const KW_Fsm = KW('A3', 'C#4', 'F#4', 'A4', 'C#5');
+const KW_EmA = 'B3:1 E4:1 G4:1 B4:1 A4:1 E4:1 C#4:1 A3:1';
+
+// 4-1 koori: the pad's "ちゃっ ちゃっ" on beats 2 and 3 of a waltz bar.
+const KO = (note: string): string => `-:2 ${note}:1 -:1 ${note}:1 -:1`;
+
 export const SONGS: Record<string, Song> = {
   // Title and map: a small music box waltz.
   title: {
@@ -241,6 +255,251 @@ export const SONGS: Record<string, Song> = {
       },
       { voice: 'pad', gain: 0.8, notes: 'G3:6 | E3:6 | A3:6 | D3:6 | C3:6 | D3:6 | D3:6 | G3:6' },
       { voice: 'pad', gain: 0.6, notes: 'B3:6 | G3:6 | C#4:6 | F#3:6 | E3:6 | F#3:6 | A3:6 | D4:6' },
+    ],
+  },
+
+  // 3-1 うみのそこ: a slow, floating 6/8 in E♭. A music-box bell sings long arcs; little marimba arpeggios rise on
+  // beat 2 like bubbles; a warm pad; the bass only touches beat 1. In B (bars 9-16) the bass sings a slow low line
+  // (a whale far off) and the bell answers it high up. No drums, no steel-drum or calypso colour, and no two-note
+  // "danger" figure in the bass.
+  umi: {
+    id: 'umi',
+    title: 'うみの そこの さんぽ',
+    bpm: 66,
+    stepsPerBeat: 3,
+    tracks: [
+      {
+        voice: 'bell',
+        notes:
+          'Eb5:2 F5:1 G5:3 | Ab5:2 G5:1 Eb5:3 | Bb4:2 C5:1 Eb5:2 G5:1 | F5:6 | G5:2 Ab5:1 G5:2 Eb5:1 | C5:3 Eb5:2 C5:1 | Ab4:3 D5:3 | Eb5:6 | ' +
+          '-:3 Eb6:2 C6:1 | Bb5:3 -:3 | -:3 F5:2 Ab5:1 | F5:3 D5:3 | -:3 C6:2 Ab5:1 | G5:2 Ab5:1 Bb5:3 | Ab5:2 G5:1 F5:2 D5:1 | Eb5:6',
+      },
+      // Bubbles: three quick notes going up on beat 2, while the bell holds.
+      {
+        voice: 'wood',
+        gain: 0.35,
+        notes:
+          '-:3 G5:1 Bb5:1 Eb6:1 | -:3 Ab5:1 C6:1 Eb6:1 | -:6 | -:3 F5:1 Bb5:1 D6:1 | -:3 G5:1 C6:1 Eb6:1 | -:6 | -:6 | -:3 G5:1 Bb5:1 Eb6:1 | ' +
+          '-:6 | -:3 G5:1 Bb5:1 Eb6:1 | -:6 | -:3 F5:1 Bb5:1 D6:1 | -:6 | -:6 | -:6 | -:3 Bb5:1 Eb6:1 G6:1',
+      },
+      {
+        voice: 'bass',
+        gain: 0.8,
+        notes:
+          'Eb2:3 -:3 | Ab2:3 -:3 | Eb2:3 -:3 | Bb1:3 -:3 | C2:3 -:3 | Ab1:3 -:3 | F2:3 Bb1:3 | Eb2:3 -:3 | ' +
+          'Ab2:3 C3:2 Eb3:1 | G2:6 | F2:3 Ab2:2 C3:1 | Bb2:3 D3:3 | Ab2:3 C3:3 | G2:2 Bb2:1 Eb3:3 | F2:3 Bb1:3 | Eb2:6',
+      },
+      {
+        voice: 'pad',
+        gain: 0.7,
+        notes: 'Eb3:6 | Ab3:6 | Eb3:6 | D3:6 | Eb3:6 | Ab3:6 | F3:6 | Eb3:6 | Ab3:6 | G3:6 | F3:6 | F3:6 | Ab3:6 | G3:6 | Ab3:3 F3:3 | G3:6',
+      },
+      {
+        voice: 'pad',
+        gain: 0.55,
+        notes: 'G3:6 | C4:6 | Bb3:6 | F3:6 | G3:6 | C4:6 | Ab3:3 D4:3 | Bb3:6 | C4:6 | Bb3:6 | Ab3:6 | D4:6 | C4:6 | Bb3:6 | C4:3 D4:3 | Bb3:6',
+      },
+    ],
+  },
+
+  // 3-2 たきのかわ: a bright 2/4 in D that keeps going up. The marimba rolls in sixteenths all the way (the stream);
+  // the bell jumps up fourths and fifths (fish leaping). In B (bars 9-16, the waterfall) a pad swells and the bell
+  // draws long arcs (a rainbow). Bass short on both beats; a soft kick on 1 and quiet eighth hi-hats.
+  kawa: {
+    id: 'kawa',
+    title: 'かわの さかのぼり',
+    bpm: 112,
+    stepsPerBeat: 4,
+    tracks: [
+      {
+        voice: 'bell',
+        notes:
+          'A4:2 D5:2 A5:3 -:1 | G5:1 F#5:1 E5:2 D5:2 B4:2 | A4:2 D5:2 F#5:2 A5:2 | G5:2 F#5:2 E5:4 | ' +
+          'F#5:2 B5:2 -:1 F#5:1 B5:2 | A5:1 G5:1 F#5:2 E5:2 D5:2 | E5:2 B5:2 A5:2 C#5:2 | D5:4 -:4 | ' +
+          'G5:4 B5:4 | C#6:4 E6:4 | C#6:4 A5:4 | F#5:8 | G5:4 B5:4 | D6:4 C#6:2 B5:2 | B5:2 E5:2 G5:2 C#6:2 | D6:4 A5:4',
+      },
+      {
+        voice: 'wood',
+        gain: 0.28,
+        notes: [KW_D, KW_G, KW_D, KW_A, KW_Bm, KW_G, KW_EmA, KW_D, KW_G, KW_A, KW_Fsm, KW_Bm, KW_G, KW_A, KW_EmA, KW_D].join(' | '),
+      },
+      {
+        voice: 'bass',
+        gain: 0.85,
+        notes:
+          'D2:1 -:3 A2:1 -:3 | G2:1 -:3 D2:1 -:3 | D2:1 -:3 A2:1 -:3 | A1:1 -:3 E2:1 -:3 | B1:1 -:3 F#2:1 -:3 | G2:1 -:3 D2:1 -:3 | E2:1 -:3 A1:1 -:3 | D2:1 -:3 A1:1 -:3 | ' +
+          'G2:1 -:3 D2:1 -:3 | A1:1 -:3 E2:1 -:3 | F#2:1 -:3 C#2:1 -:3 | B1:1 -:3 F#2:1 -:3 | G2:1 -:3 D2:1 -:3 | A1:1 -:3 E2:1 -:3 | E2:1 -:3 A1:1 -:3 | D2:1 -:3 A1:1 -:3',
+      },
+      { voice: 'pad', gain: 0.6, notes: `${repeat('-:8', 8)} | B3:8 | C#4:8 | A3:8 | B3:8 | B3:8 | C#4:8 | B3:4 A3:4 | A3:8` },
+      { voice: 'pad', gain: 0.45, notes: `${repeat('-:8', 8)} | D4:8 | E4:8 | C#4:8 | D4:8 | D4:8 | E4:8 | E4:4 C#4:4 | D4:8` },
+      { voice: 'drums', gain: 0.35, notes: `${repeat('k:2 h:2 h:2 h:2', 15)} | k:2 h:2 k:2 -:2` },
+    ],
+  },
+
+  // 3-3 ほしのうみ: an evening festival by the sea, 4/4 in F. A "ゆうぐれ" (bars 1-8): the bell brings the stars
+  // down in falling phrases over a warm pad. B "おまつり" (9-16): a bright flute tune that walks the whole scale
+  // (not a pentatonic festival flute), little hand drums on beats 1 and 3 (never a 2-and-4 hayashi beat), and
+  // lantern sparkles on the bell.
+  hoshimatsuri: {
+    id: 'hoshimatsuri',
+    title: 'ほしまつりの うみ',
+    bpm: 96,
+    stepsPerBeat: 2,
+    tracks: [
+      {
+        voice: 'bell',
+        notes:
+          'C6:3 A5:1 F5:4 | E5:2 G5:2 C6:3 Bb5:1 | A5:3 F5:1 D5:4 | F5:2 Bb5:2 D6:3 C6:1 | Bb5:3 G5:1 D5:4 | C5:2 E5:2 G5:2 Bb5:2 | A5:3 G5:1 F5:2 D5:2 | C5:2 E5:2 G5:4 | ' +
+          '-:4 C6:1 F6:1 A6:1 -:1 | -:4 D6:1 F6:1 Bb6:1 -:1 | -:4 C6:1 E6:1 G6:1 -:1 | -:4 C6:1 F6:1 A6:1 -:1 | ' +
+          '-:4 D6:1 F6:1 A6:1 -:1 | -:4 D6:1 F6:1 Bb6:1 -:1 | -:4 C6:1 E6:1 G6:1 -:1 | -:4 A5:1 C6:1 F6:1 -:1',
+      },
+      {
+        voice: 'lead',
+        gain: 0.9,
+        notes:
+          `${repeat('-:8', 8)} | ` +
+          'C5:2 F5:1 E5:1 F5:2 A5:2 | G5:1 F5:1 E5:1 D5:1 Bb4:4 | E5:2 G5:1 F5:1 E5:2 C5:2 | A5:3 G5:1 F5:4 | ' +
+          'D5:2 F5:1 E5:1 D5:2 A5:2 | Bb5:3 A5:1 G5:2 F5:2 | G5:1 A5:1 Bb5:2 E5:2 C5:2 | F5:4 -:4',
+      },
+      // A: now and then a bubble "ぽこ"; B: a little hand drum, long on 1 and 3.
+      { voice: 'wood', gain: 0.6, notes: `${repeat('-:8 | -:6 G4:1 C5:1', 4)} | ${repeat('F3:2 C4:1 C4:1 F3:2 C4:1 C4:1', 8)}` },
+      {
+        voice: 'bass',
+        notes:
+          'F2:2 -:2 C3:2 -:2 | C2:2 -:2 G2:2 -:2 | D2:2 -:2 A2:2 -:2 | Bb1:2 -:2 F2:2 -:2 | G2:2 -:2 D2:2 -:2 | C2:2 -:2 G2:2 -:2 | D2:2 -:2 Bb1:2 -:2 | C2:2 -:2 G2:2 -:2 | ' +
+          'F2:2 -:2 C3:2 -:2 | Bb1:2 -:2 F2:2 -:2 | C2:2 -:2 G2:2 -:2 | F2:2 -:2 C3:2 -:2 | D2:2 -:2 A2:2 -:2 | Bb1:2 -:2 F2:2 -:2 | G2:2 -:2 C2:2 -:2 | F2:2 -:2 C2:2 -:2',
+      },
+      {
+        voice: 'pad',
+        gain: 0.7,
+        notes: 'F3:8 | E3:8 | F3:8 | F3:8 | G3:8 | E3:8 | F3:8 | E3:8 | F3:8 | F3:8 | E3:8 | F3:8 | F3:8 | F3:8 | G3:4 E3:4 | F3:8',
+      },
+      {
+        voice: 'pad',
+        gain: 0.55,
+        notes: 'A3:8 | G3:8 | A3:8 | Bb3:8 | Bb3:8 | Bb3:8 | A3:4 Bb3:4 | G3:8 | A3:8 | D4:8 | G3:8 | A3:8 | A3:8 | D4:8 | Bb3:8 | A3:8',
+      },
+      {
+        voice: 'drums',
+        gain: 0.3,
+        notes: `${repeat('-:1 h:1 -:1 h:1 -:1 h:1 -:1 h:1', 8)} | ${repeat('k:2 h:1 h:1 k:2 h:1 h:1', 7)} | k:2 h:1 h:1 k:2 -:2`,
+      },
+    ],
+  },
+
+  // 4-1 こおりのみずうみ: a quick skating waltz in A. It opens on a scale gliding up (a skate pushing off) rather
+  // than long held notes; a celesta-like bell sings and the flute answers in B. Bass on beat 1, a soft pad
+  // "ちゃっ ちゃっ" on 2 and 3, the faintest hi-hat. No sleigh bells.
+  koori: {
+    id: 'koori',
+    title: 'つるつる ワルツ',
+    bpm: 144,
+    stepsPerBeat: 2,
+    tracks: [
+      {
+        voice: 'bell',
+        notes:
+          'A4:1 B4:1 C#5:1 D5:1 E5:1 F#5:1 | A5:4 E5:2 | F#5:1 G#5:1 A5:1 B5:1 C#6:1 D6:1 | E6:2 D6:1 B5:1 G#5:2 | C#6:2 A5:2 F#5:2 | D6:2 A5:1 F#5:1 D5:2 | B5:2 G#5:1 E5:1 D5:1 B4:1 | A4:2 C#5:1 E5:1 A5:2 | ' +
+          'F#5:2 A5:2 D6:2 | -:6 | E5:2 A5:2 C#6:2 | -:6 | B5:1 A5:1 G#5:1 F#5:1 E5:1 D5:1 | -:6 | C#6:2 B5:1 A5:1 E5:2 | D5:2 B4:2 G#4:2',
+      },
+      {
+        voice: 'lead',
+        gain: 0.7,
+        notes: `${repeat('-:6', 9)} | D5:2 C#5:1 B4:1 A4:2 | -:6 | C#5:2 B4:1 A4:1 E4:2 | -:6 | E5:2 G#5:2 B5:2 | A4:2 C#5:2 E5:2 | -:6`,
+      },
+      {
+        voice: 'bass',
+        notes:
+          'A2:2 -:4 | A2:2 -:4 | D2:2 -:4 | E2:2 -:4 | F#2:2 -:4 | D2:2 -:4 | E2:2 -:4 | A2:2 -:4 | ' +
+          'D2:2 -:4 | D2:2 -:4 | A2:2 -:4 | A2:2 -:4 | B1:2 -:4 | E2:2 -:4 | A2:2 -:4 | E2:2 -:4',
+      },
+      { voice: 'pad', gain: 0.9, notes: ['C#4', 'C#4', 'D4', 'D4', 'C#4', 'D4', 'D4', 'C#4', 'D4', 'D4', 'C#4', 'C#4', 'D4', 'D4', 'C#4', 'D4'].map(KO).join(' | ') },
+      { voice: 'pad', gain: 0.7, notes: ['E4', 'E4', 'F#4', 'G#4', 'F#4', 'F#4', 'G#4', 'E4', 'F#4', 'F#4', 'E4', 'E4', 'F#4', 'G#4', 'E4', 'G#4'].map(KO).join(' | ') },
+      { voice: 'drums', gain: 0.2, notes: repeat('-:2 h:2 h:2', 16) },
+    ],
+  },
+
+  // 4-2 おおゆきの むら: a cosy 4/4 in B♭: a warm marimba with a skip in its step (dotted notes, boots in fresh
+  // snow), a bell answering in the gaps, round bass on 1 and 3. The only beat is a soft kick on 1 and a tiny hi-hat
+  // just before the next bar: no sleigh-bell eighths, no winter song, no festival drums.
+  mura: {
+    id: 'mura',
+    title: 'ゆきの むらの おまつり',
+    bpm: 104,
+    stepsPerBeat: 2,
+    tracks: [
+      {
+        voice: 'wood',
+        notes:
+          'D5:3 C5:1 Bb4:2 D5:2 | Eb5:3 F5:1 G5:4 | F5:3 Eb5:1 D5:2 Bb4:2 | C5:2 D5:1 C5:1 A4:4 | Bb4:3 C5:1 D5:2 G5:2 | G5:3 F5:1 Eb5:2 C5:2 | E5:2 G5:2 F5:3 Eb5:1 | D5:4 -:4 | ' +
+          'G5:2 Bb5:2 G5:1 F5:1 Eb5:2 | F5:2 A5:2 F5:1 Eb5:1 C5:2 | D5:2 F#5:2 A5:2 C6:2 | Bb5:3 A5:1 G5:4 | Eb5:1 F5:1 G5:1 Eb5:1 Bb5:2 G5:2 | A5:1 Bb5:1 C6:1 A5:1 F5:4 | Eb5:2 G5:2 F5:1 G5:1 A5:2 | Bb5:4 -:4',
+      },
+      {
+        voice: 'bell',
+        gain: 0.55,
+        notes:
+          '-:8 | -:4 Bb5:2 Eb6:2 | -:8 | -:4 F6:1 D6:1 C6:2 | -:8 | -:8 | -:8 | -:4 Bb5:1 D6:1 F6:2 | ' +
+          '-:8 | -:8 | -:8 | -:4 D6:2 Bb5:2 | -:8 | -:4 C6:1 A5:1 F5:2 | -:8 | -:4 F6:1 D6:1 Bb5:2',
+      },
+      {
+        voice: 'bass',
+        notes:
+          'Bb1:2 -:2 F2:2 -:2 | Eb2:2 -:2 Bb1:2 -:2 | Bb1:2 -:2 F2:2 -:2 | F2:2 -:2 C2:2 -:2 | G2:2 -:2 D2:2 -:2 | Eb2:2 -:2 Bb1:2 -:2 | C2:2 -:2 F2:2 -:2 | Bb1:2 -:2 F2:2 -:2 | ' +
+          'Eb2:2 -:2 Bb1:2 -:2 | F2:2 -:2 C2:2 -:2 | D2:2 -:2 A1:2 -:2 | G2:2 -:2 D2:2 -:2 | Eb2:2 -:2 Bb1:2 -:2 | F2:2 -:2 C2:2 -:2 | C2:2 -:2 F2:2 -:2 | Bb1:2 -:2 F2:2 -:2',
+      },
+      {
+        voice: 'pad',
+        gain: 0.65,
+        notes: 'D3:8 | Eb3:8 | D3:8 | C3:8 | D3:8 | Eb3:8 | E3:4 Eb3:4 | D3:8 | Eb3:8 | Eb3:8 | D3:8 | D3:8 | Eb3:8 | Eb3:8 | Eb3:8 | D3:8',
+      },
+      {
+        voice: 'pad',
+        gain: 0.5,
+        notes: 'F3:8 | G3:8 | F3:8 | A3:8 | Bb3:8 | G3:8 | G3:4 A3:4 | F3:8 | G3:8 | A3:8 | F#3:8 | Bb3:8 | G3:8 | A3:8 | G3:4 A3:4 | F3:8',
+      },
+      { voice: 'drums', gain: 0.35, notes: `${repeat('k:1 -:6 h:1', 15)} | k:1 -:3 k:1 -:3` },
+    ],
+  },
+
+  // 4-3 ゆきやまのトンネル: brave and climbing, a 2/4 in G with a dotted "ta-tan" call. The flute leads; low marimba
+  // eighths are boots crunching uphill; the bass walks root and fifth. In B (bars 9-16) an F natural brings the
+  // mountain air. A bell sparkle of snow every four bars. Hi-hat noise only, no sleigh-bell ring.
+  yuki: {
+    id: 'yuki',
+    title: 'ゆきやま ぐんぐん',
+    bpm: 132,
+    stepsPerBeat: 4,
+    tracks: [
+      {
+        voice: 'lead',
+        notes:
+          'B4:3 D5:1 G5:3 A5:1 | B5:2 A5:1 G5:1 A5:2 D5:2 | E5:3 E5:1 G5:2 C6:2 | B5:6 -:2 | E5:3 F#5:1 G5:2 B5:2 | C6:3 B5:1 A5:2 G5:2 | A5:3 G5:1 F#5:2 A5:2 | D5:6 -:2 | ' +
+          'C6:3 A5:1 F5:2 A5:2 | G5:3 E5:1 C5:2 E5:2 | D5:3 G5:1 B5:2 D6:2 | C6:2 B5:2 A5:2 G5:2 | F5:2 A5:2 C6:4 | G5:3 E5:1 G5:2 C6:2 | B5:3 A5:1 F#5:2 A5:2 | G5:6 -:2',
+      },
+      {
+        voice: 'wood',
+        gain: 0.4,
+        notes:
+          'G3:2 D4:2 G3:2 D4:2 | G3:2 D4:2 G3:2 D4:2 | C4:2 G4:2 C4:2 G4:2 | G3:2 D4:2 G3:2 D4:2 | E4:2 B4:2 E4:2 B4:2 | C4:2 G4:2 C4:2 G4:2 | D4:2 A4:2 D4:2 A4:2 | D4:2 A4:2 D4:2 F#4:2 | ' +
+          'F3:2 C4:2 F3:2 C4:2 | C4:2 G4:2 C4:2 G4:2 | G3:2 D4:2 G3:2 D4:2 | G3:2 D4:2 G3:2 D4:2 | F3:2 C4:2 F3:2 C4:2 | C4:2 G4:2 C4:2 G4:2 | D4:2 A4:2 D4:2 A4:2 | G3:2 D4:2 G3:2 B3:2',
+      },
+      {
+        voice: 'bell',
+        gain: 0.5,
+        notes: `${repeat('-:8', 3)} | -:4 G6:2 D6:2 | ${repeat('-:8', 3)} | -:4 A6:2 F#6:2 | ${repeat('-:8', 3)} | -:4 G6:4 | ${repeat('-:8', 3)} | -:4 B6:2 G6:2`,
+      },
+      {
+        voice: 'bass',
+        notes:
+          'G2:3 -:1 D2:3 -:1 | G2:3 -:1 D2:3 -:1 | C2:3 -:1 G2:3 -:1 | G2:3 -:1 D2:3 -:1 | E2:3 -:1 B1:3 -:1 | C2:3 -:1 G2:3 -:1 | D2:3 -:1 A2:3 -:1 | D2:3 -:1 A1:3 -:1 | ' +
+          'F2:3 -:1 C2:3 -:1 | C2:3 -:1 G2:3 -:1 | G2:3 -:1 D2:3 -:1 | G2:3 -:1 D2:3 -:1 | F2:3 -:1 C2:3 -:1 | C2:3 -:1 G2:3 -:1 | D2:3 -:1 A2:3 -:1 | G2:3 -:1 D2:3 -:1',
+      },
+      { voice: 'pad', gain: 0.45, notes: 'B3:8 | B3:8 | C4:8 | B3:8 | B3:8 | C4:8 | A3:8 | A3:8 | A3:8 | G3:8 | B3:8 | B3:8 | A3:8 | G3:8 | A3:8 | B3:8' },
+      {
+        voice: 'drums',
+        gain: 0.4,
+        notes: `${repeat('k:2 h:2 s:2 h:2', 7)} | k:2 h:2 s:2 k:1 k:1 | ${repeat('k:2 h:2 s:2 h:2', 7)} | k:2 s:2 s:1 s:1 s:2`,
+      },
     ],
   },
 };

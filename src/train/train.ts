@@ -1,13 +1,16 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { Emitter } from '../core/events';
 import type { Rail, RailNetwork } from '../rail/types';
-import type { GapDef, JunctionDef, StartDef } from '../stage/types';
+import type { FloaterDef, GapDef, JunctionDef, StartDef, WaterDef } from '../stage/types';
+import { spanAt } from '../stage/water';
 import {
   ACCELERATION,
   BRAKING,
   BUFFER_MARGIN,
+  DIVE,
   EMERGENCY_STOP_SECONDS,
   FALL,
+  FLOATER,
   HARD_BRAKE_NOTCH,
   JUMP,
   JUNCTION_ARROW_DISTANCE,
@@ -50,6 +53,52 @@ export interface TrainEvents extends Record<string, unknown> {
   rocketStarted: void;
   /** 2-3: the rocket stopped: burnt out (`cut` false) or cut short ("ぷしゅっ": a quiet place, an emergency stop). */
   rocketEnded: { cut: boolean };
+  /** v1.10: a press dived ("ぷくっ・ざぶん"): an arc `length` m long. */
+  dived: { length: number };
+  /** v1.10: up again: the front out of its dive ("ぷかっ", `long` false) or the last car out of the water ("ぷはっ"). */
+  surfaced: { long: boolean };
+  /** v1.10: the bubble dome went on or off. `instant`: put on by a rewind or a resume (no sound, no inflating). */
+  dome: { on: boolean; instant: boolean };
+  /** v1.10: a press that only bobs the train (stopped, on land, under water): a playful "ぷくぷく". */
+  bob: void;
+  /**
+   * v1.10: "ぽよん": the lead bogie reached a floater without diving under it (`floater` its id), or water without
+   * the dome (`floater` null). The train bounces back softly; `rewind` is where it should be put back.
+   */
+  waterBounce: { railId: string; s: number; floater: string | null; rewind: { railId: string; at: number } };
+}
+
+/** v1.10: what a press of "もぐる" did. */
+export type DiveResult = 'ok' | 'bob' | 'diving' | 'cooldown' | 'air' | 'locked';
+
+/**
+ * v1.10: a dive, a jump arc upside down: bogies between `from` and `from + length` on `railId` go down, `depth` m in
+ * the middle. `baseY` is the rail top where it started: where the rail itself goes down (into the water), that much
+ * of the lowering is the rail's. Held (the train went on under water), from `holdAt` on it stays `holdDepth` deep
+ * until the rail is deeper.
+ */
+interface DiveArc {
+  railId: string;
+  from: number;
+  length: number;
+  depth: number;
+  baseY: number;
+  holdAt: number | null;
+  holdDepth: number;
+}
+
+/** Lowering (m) of a dive arc at bogie position `s` (the rail's own drop not taken off). */
+function diveDepth(arc: DiveArc, s: number): number {
+  if (arc.holdAt !== null && s >= arc.holdAt) return arc.holdDepth;
+  const u = (s - arc.from) / arc.length;
+  if (u <= 0 || u >= 1) return 0;
+  return arc.depth * 4 * u * (1 - u);
+}
+
+/** v1.10: the waters and floaters the train dives in and under. */
+export interface TrainWater {
+  waters: WaterDef[];
+  floaters: FloaterDef[];
 }
 
 /** 2-3: the slope under the train front (set every frame by the slope system). */
@@ -78,6 +127,18 @@ function arcHeight(arc: JumpArc, s: number): number {
   const u = (s - arc.from) / arc.length;
   if (u <= 0 || u >= 1) return 0;
   return arc.height * 4 * u * (1 - u);
+}
+
+/** v1.10: a floater's length along the rail (m). */
+function floaterLength(f: FloaterDef): number {
+  return f.length ?? FLOATER[f.look ?? 'log'].length;
+}
+
+/** v1.10: where the train goes back to after bumping floater `f`. */
+export function floaterRewind(f: FloaterDef): { railId: string; at: number } {
+  const rw = f.rewind;
+  if (typeof rw === 'object') return rw;
+  return { railId: f.railId, at: rw ?? Math.max(0, f.at - DIVE.rewindBefore) };
 }
 
 /** The train state machine. Moves along the rail network by arc length; no free physics. */
@@ -123,6 +184,27 @@ export class Train {
    * climb a steep slope for free (PHASE6 §5.2).
    */
   private airClimb = 0;
+  /** v1.10: dive arcs still under a car. */
+  private diveArcs: DiveArc[] = [];
+  /** v1.10: seconds until the next dive is allowed (after the front came up). */
+  private diveCooldown = 0;
+  /** v1.10: the lead bogie was in a dive arc last frame (coming out is "ぷかっ"). */
+  private wasInDive = false;
+  /** v1.10: a dive fork sent the train down: the dome stays on for this many metres until the water takes over. */
+  private domeLatch = 0;
+  private domeIsOn = false;
+  /** v1.10: a car was under water since the dome went on (the dome going off is then "ぷはっ"). */
+  private wasUnder = false;
+  /** v1.10: the lead bogie was under water last frame (reaching water is checked on the way in). */
+  private leadWasUnder = false;
+  /** v1.10: seconds into a playful bob (−1 = none). */
+  private bobT = -1;
+  /** v1.10: "ぽよん" off a floater or the water: seconds so far and where the car center was. */
+  private bouncing: { t: number; from: number } | null = null;
+  /** v1.10: floaters the lead bogie got past (this try). */
+  private readonly floatersPassed = new Set<string>();
+  private readonly waters: WaterDef[];
+  private readonly floaters: FloaterDef[];
 
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
@@ -136,7 +218,10 @@ export class Train {
     private readonly network: RailNetwork,
     private readonly junctions: JunctionDef[],
     start: StartDef,
+    water?: TrainWater,
   ) {
+    this.waters = water?.waters ?? [];
+    this.floaters = water?.floaters ?? [];
     // `start.at` is where the train front stands; the state tracks the lead car center.
     const s0 = start.at - TRAIN.length / 2;
     this.state = { railId: start.railId, s: s0, speed: 0, notch: STOP_NOTCH, direction: start.direction };
@@ -150,6 +235,7 @@ export class Train {
       cars: Array.from({ length: TRAIN.carCount - 1 }, () => ({ position: new Vector3(), quaternion: new Quaternion() })),
     };
     this.refreshPending();
+    this.resetDive();
     this.computePose();
   }
 
@@ -237,7 +323,7 @@ export class Train {
    * falling, slipping, in the air or already burning. Works from a standstill.
    */
   startRocket(): boolean {
-    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping) return false;
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing) return false;
     if (this.airborne || this.rocketLeft > 0) return false;
     this.rocketLeft = ROCKET.burn;
     this.settling = false;
@@ -309,7 +395,7 @@ export class Train {
 
   /** Starts a jump. Distance = speed × air time; the lever does nothing until the lead car lands. */
   jump(): JumpResult {
-    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping) return 'locked';
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing) return 'locked';
     if (this.airborne) return 'air';
     if (this.jumpCooldown > 0) return 'cooldown';
     if (this.jumpBlocked) return 'bough';
@@ -352,7 +438,7 @@ export class Train {
    */
   setNotch(notch: number): boolean {
     if (this.ended || this.lockReason !== null || this.emergency || this.airborne || this.falling) return false;
-    if (this.rocketLeft > 0 || this.slipping || this.onSlide) return false;
+    if (this.rocketLeft > 0 || this.slipping || this.onSlide || this.bouncing) return false;
     const next = Math.min(Math.max(Math.round(notch), 0), SPEED_NOTCHES.length - 1);
     if (next === HARD_BRAKE_NOTCH && this.state.notch !== HARD_BRAKE_NOTCH && this.state.speed > 3) {
       this.events.emit('hardBrake', { speed: this.state.speed });
@@ -390,6 +476,7 @@ export class Train {
     this.emergency = false;
     this.ended = false;
     this.refreshPending();
+    this.resetDive();
     this.computePose();
   }
 
@@ -424,12 +511,11 @@ export class Train {
     let ahead: JunctionDef[] = this.pending;
     for (let hop = 0; hop < 6; hop++) {
       const turn = ahead.find((j) => {
-        const side = j === this.announced && this.choice ? this.choice : j.default;
-        const to = j[side];
+        const to = j[this.routeSide(j)];
         return to !== undefined && to !== rail.id;
       });
       if (turn) {
-        const side = turn === this.announced && this.choice ? this.choice : turn.default;
+        const side = this.routeSide(turn);
         front -= turn.at;
         rail = this.network.getRail(turn[side] as string);
         if (rail.id === railId) return at - front;
@@ -445,6 +531,12 @@ export class Train {
       ahead = this.junctions.filter((j) => j.railId === rail.id && j.at > center).sort((a, b) => a.at - b.at);
     }
     return null;
+  }
+
+  /** The side the train will take at junction `j` as things are now (a dive fork: its dive side while diving). */
+  private routeSide(j: JunctionDef): JunctionSide {
+    if (j.dive && j.diveSide) return this.diving ? j.diveSide : j.diveSide === 'left' ? 'right' : 'left';
+    return j === this.announced && this.choice ? this.choice : j.default;
   }
 
   /** Signed distance from the car FRONT to `at` on the current rail (loop-aware). */
@@ -541,6 +633,12 @@ export class Train {
       target = 0;
       const rate = Math.max(BRAKING, SPEED_NOTCHES[SPEED_NOTCHES.length - 1] / EMERGENCY_STOP_SECONDS);
       st.speed = Math.max(0, st.speed - rate * dt);
+    } else if (this.bouncing) {
+      // v1.10 "ぽよん": a quick soft stop, then bounced back a few metres (the runner puts the train back).
+      this.bouncing.t = Math.min(this.bouncing.t + dt, DIVE.bounceStop + DIVE.bounceSeconds);
+      const k = Math.max(0, this.bouncing.t - DIVE.bounceStop) / DIVE.bounceSeconds;
+      st.speed = 0;
+      st.s = this.bouncing.from - DIVE.bounceBack * k * (2 - k);
     } else if (this.slipping) {
       // "ずるずる": back down the slope a few metres, wheels spinning (the runner puts the train back).
       this.slipping.t = Math.min(this.slipping.t + dt, SLOPE.slipSeconds);
@@ -579,7 +677,351 @@ export class Train {
     rail = this.currentRail;
     this.handleEnd(rail);
     this.handleJump(dt, wasAirborne);
+    this.handleDive(dt);
     this.computePose();
+  }
+
+  // ---- v1.10: diving ("もぐる") -----------------------------------------------------------------------------
+
+  /** True while the bubble dome is on (a dive under a car, sent down at a dive fork, or a car under water). */
+  get domeOn(): boolean {
+    return this.domeIsOn;
+  }
+
+  /** The lead car's middle is under water (records, the muffled sound). */
+  get submerged(): boolean {
+    return spanAt(this.currentRail.dives, this.state.s) !== null;
+  }
+
+  /**
+   * The lead bogie is diving: in a dive arc, sent down at a dive fork, or under water. A dive fork takes its dive side
+   * then, and dive records are found.
+   */
+  get diving(): boolean {
+    return this.leadInDive || this.domeLatch > 0 || spanAt(this.currentRail.dives, this.bogieS) !== null;
+  }
+
+  /** The lead bogie is on a stretch on the water surface (a press dives there). */
+  get onWaterSurface(): boolean {
+    return spanAt(this.currentRail.surfaces, this.bogieS) !== null;
+  }
+
+  /** "ぽよん" off a floater or the water is going on. */
+  get isBouncing(): boolean {
+    return this.bouncing !== null;
+  }
+
+  /** 0 while the front is in a dive, rising to 1 when the next dive may start (the button's ring). */
+  get diveProgress(): number {
+    if (this.leadInDive) return 0;
+    return 1 - Math.min(Math.max(this.diveCooldown / DIVE.cooldown, 0), 1);
+  }
+
+  private get leadInDive(): boolean {
+    const b = this.bogieS;
+    const id = this.state.railId;
+    return this.diveArcs.some((a) => a.railId === id && b > a.from && (a.holdAt !== null || b < a.from + a.length));
+  }
+
+  /**
+   * "もぐる": on a stretch on the water surface a dive (an arc down and up again, the dome on). Stopped, on land or
+   * under water it only bobs the train ("ぷくぷく", no rule). Refused while the front is still in a dive, just after
+   * it came up, in the air, or while the controls are locked.
+   */
+  dive(): DiveResult {
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing) return 'locked';
+    if (this.airborne) return 'air';
+    const surface = this.onWaterSurface;
+    if (surface && (this.leadInDive || this.domeLatch > 0)) return 'diving';
+    if (surface && this.diveCooldown > 0) return 'cooldown';
+    const length = surface && this.state.speed >= DIVE.minSpeed && !this.submerged ? this.diveLength() : null;
+    if (length === null) {
+      if (this.bobT < 0 || this.bobT > DIVE.bobSeconds * 0.6) this.bobT = 0;
+      this.events.emit('bob');
+      return 'bob';
+    }
+    const b = this.bogieS;
+    this.diveArcs.push({
+      railId: this.state.railId,
+      from: b,
+      length,
+      depth: DIVE.depth,
+      baseY: this.currentRail.frameAt(b).position.y,
+      holdAt: null,
+      holdDepth: 0,
+    });
+    this.wasInDive = true;
+    this.events.emit('dived', { length });
+    this.updateDome(false);
+    return 'ok';
+  }
+
+  /**
+   * Length (m) of a dive started now: speed × DIVE.time (at least DIVE.minLength), up to DIVE.glide longer to pass
+   * under a floater just past its deep part; ending before land where the surface stretch does. Null: no room.
+   */
+  private diveLength(): number | null {
+    const b = this.bogieS;
+    const rail = this.currentRail;
+    const surface = spanAt(rail.surfaces, b);
+    if (!surface) return null;
+    const plain = Math.max(DIVE.minLength, Math.min(this.state.speed, JUMP.maxSpeed) * DIVE.time);
+    let length = plain;
+    const floater = this.nextFloater(plain * (1 + DIVE.glide));
+    const fit = floater ? this.floaterFit(floater) : null;
+    if (fit && (plain < fit.min || plain > fit.max)) {
+      const glided = Math.max(plain, fit.min);
+      if (glided <= Math.min(fit.max, plain * (1 + DIVE.glide))) length = glided;
+    }
+    // A stretch going on under water takes the dive with it; otherwise it ends before the land does.
+    const intoWater = rail.dives.some((d) => Math.abs(d.from - surface.to) <= 2);
+    const room = surface.to - b;
+    if (!intoWater && length > room) {
+      if (room < DIVE.minLength) return null;
+      length = room;
+    }
+    return length;
+  }
+
+  /** The next floater on this rail the lead bogie has not got past, starting within `range` m. */
+  private nextFloater(range: number): FloaterDef | null {
+    const b = this.bogieS;
+    let best: FloaterDef | null = null;
+    for (const f of this.floaters) {
+      if (f.railId !== this.state.railId || this.floatersPassed.has(f.id)) continue;
+      const half = floaterLength(f) / 2;
+      if (f.at + half < b || f.at - half - b > range) continue;
+      if (!best || f.at < best.at) best = f;
+    }
+    return best;
+  }
+
+  /** How deep (m) a dive must be to take the whole train under floater `f` (its roof under the floater's bottom). */
+  private floaterNeed(f: FloaterDef): number {
+    const rail = this.network.getRail(f.railId);
+    const span = spanAt(rail.surfaces, f.at);
+    const water = span ? this.waters[span.water] : undefined;
+    const railY = rail.frameAt(f.at).position.y;
+    return (water ? railY - water.y : 0) + TRAIN.height + FLOATER[f.look ?? 'log'].draft + DIVE.headroom;
+  }
+
+  /** The dive lengths (m) from the lead bogie now that pass under floater `f`, or null when none does. */
+  private floaterFit(f: FloaterDef): { min: number; max: number } | null {
+    const b = this.bogieS;
+    const half = floaterLength(f) / 2;
+    const k = this.floaterNeed(f) / DIVE.depth;
+    if (k >= 1 || f.at - half <= b) return null;
+    // Deep enough between u1 and u2 of the arc (4u(1 − u) ≥ k); the floater must lie within.
+    const r = Math.sqrt(1 - k);
+    const min = (f.at + half - b) / ((1 + r) / 2);
+    const max = (f.at - half - b) / ((1 - r) / 2);
+    return min <= max ? { min, max } : null;
+  }
+
+  /** The dives now under floater `f` are deep enough at both its ends. */
+  private passesUnder(f: FloaterDef): boolean {
+    const half = floaterLength(f) / 2;
+    const need = this.floaterNeed(f) - 1e-6;
+    const depthAt = (s: number): number => {
+      let d = 0;
+      for (const a of this.diveArcs) if (a.railId === f.railId) d = Math.max(d, diveDepth(a, s));
+      return d;
+    };
+    return depthAt(f.at - half) >= need && depthAt(f.at + half) >= need;
+  }
+
+  /**
+   * The button glows: a dive started now passes under the floater ahead, or is still going on when the train
+   * reaches the dive fork ahead (and so takes it down).
+   */
+  get diveWouldHelp(): boolean {
+    if (this.state.speed < DIVE.minSpeed || this.airborne || this.falling || this.bouncing || this.diveCooldown > 0) return false;
+    if (this.leadInDive || this.domeLatch > 0 || !this.onWaterSurface) return false;
+    const length = this.diveLength();
+    if (length === null) return false;
+    const b = this.bogieS;
+    const floater = this.nextFloater(DIVE.hintDistance);
+    if (floater && floater.at - floaterLength(floater) / 2 > b) {
+      const fit = this.floaterFit(floater);
+      if (fit && length >= fit.min - 1e-6 && length <= fit.max + 1e-6) return true;
+    }
+    // The fork is taken when the car middle passes it; the lead bogie is then this far past it.
+    const lead = TRAIN.length / 2 - FALL.bogieLead;
+    const fork = this.pending.find((j) => j.dive && j.diveSide);
+    if (fork) {
+      const d = fork.at + lead - b;
+      if (d > 0 && d < length * 0.9) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Route distance (m) from the car front to the next place the jump seat turns into "もぐる" (a stretch on or under
+   * water, or a dive fork) along the way the train will go, or null when none is within `range`.
+   */
+  waterAhead(range: number): number | null {
+    let best: number | null = null;
+    const consider = (d: number): void => {
+      if (d <= range && (best === null || d < best)) best = d;
+    };
+    let rail = this.currentRail;
+    let front = this.frontS;
+    let entry = -Infinity;
+    let ahead: JunctionDef[] = this.pending;
+    for (let hop = 0; hop < 6 && -front <= range; hop++) {
+      const turn = ahead.find((j) => {
+        const to = j[this.routeSide(j)];
+        return to !== undefined && to !== rail.id;
+      });
+      const until = turn ? turn.at : rail.length;
+      for (const sp of [...rail.surfaces, ...rail.dives]) {
+        const start = Math.max(sp.from, entry);
+        if (start > until || sp.to < start || sp.to < front) continue;
+        consider(Math.max(0, start - front));
+      }
+      for (const j of this.junctions) if (j.dive && j.railId === rail.id && j.at >= Math.max(entry, front) && j.at <= until) consider(j.at - front);
+      if (turn) {
+        front -= turn.at;
+        entry = 0;
+        rail = this.network.getRail(turn[this.routeSide(turn)] as string);
+      } else if (rail.end.type === 'merge' && rail.end.railId !== rail.id) {
+        entry = rail.end.at;
+        front = entry + front - rail.length;
+        rail = this.network.getRail(rail.end.railId);
+      } else break;
+      const center = front - TRAIN.length / 2;
+      ahead = this.junctions.filter((j) => j.railId === rail.id && j.at > center).sort((a, b) => a.at - b.at);
+    }
+    return best;
+  }
+
+  /** Per frame: reaching water and floaters, coming up, forgetting old dives, and the dome. */
+  private handleDive(dt: number): void {
+    if (this.bobT >= 0) {
+      this.bobT += dt;
+      if (this.bobT >= DIVE.bobSeconds) this.bobT = -1;
+    }
+    if (this.diveCooldown > 0) this.diveCooldown = Math.max(0, this.diveCooldown - dt);
+    const st = this.state;
+    const rail = this.currentRail;
+    const b = this.bogieS;
+    if (this.domeLatch > 0) this.domeLatch = Math.max(0, this.domeLatch - st.speed * dt);
+    const inDive = this.leadInDive;
+    if (!this.bouncing && !this.falling) {
+      // Reaching water: with the dome the train goes on under (a dive going on keeps its depth), without it "ぽよん".
+      const under = spanAt(rail.dives, b);
+      if (under && !this.leadWasUnder) {
+        if (inDive || this.domeLatch > 0) {
+          this.domeLatch = 0;
+          this.holdDives(b);
+        } else {
+          this.bounce(null, { railId: rail.id, at: Math.max(0, under.from - DIVE.rewindBefore) });
+        }
+      }
+      this.leadWasUnder = under !== null;
+      // Floaters: the train passes under one only diving deep enough there.
+      for (const f of this.floaters) {
+        if (this.bouncing || f.railId !== rail.id || this.floatersPassed.has(f.id)) continue;
+        const half = floaterLength(f) / 2;
+        if (b < f.at - half || b > f.at + half) continue;
+        if (this.passesUnder(f)) this.floatersPassed.add(f.id);
+        else this.bounce(f, floaterRewind(f));
+      }
+    }
+    // The front comes up out of its dive: "ぷかっ", and the next dive in a moment.
+    const nowInDive = this.leadInDive;
+    if (this.wasInDive && !nowInDive && this.domeLatch === 0 && !this.leadWasUnder && !this.bouncing) {
+      this.diveCooldown = DIVE.cooldown;
+      this.events.emit('surfaced', { long: false });
+    }
+    this.wasInDive = nowInDive;
+    // Forget dives the last car has left behind; a held one once the rail under the last car is deeper than it.
+    const last = st.s - TRAIN.carSpacing * (TRAIN.carCount - 1) - TRAIN.bogieOffset;
+    this.diveArcs = this.diveArcs.filter((a) => {
+      if (a.railId !== st.railId) return true;
+      if (a.holdAt === null) return a.from + a.length > last;
+      if (last <= a.holdAt) return true;
+      const drop = a.baseY - this.frameOnRail(last).position.y;
+      return drop < a.holdDepth - 0.05 && last < a.holdAt + 150;
+    });
+    this.updateDome(false);
+  }
+
+  /** The train goes on under water in the middle of a dive: the dive keeps its depth from here until the rail is deeper. */
+  private holdDives(b: number): void {
+    for (const a of this.diveArcs) {
+      if (a.railId !== this.state.railId || a.holdAt !== null || b <= a.from) continue;
+      const at = Math.max(b, a.from + a.length / 2);
+      a.holdDepth = diveDepth(a, at);
+      a.holdAt = at;
+    }
+  }
+
+  /** "ぽよん": the train bounces softly back (the caller puts it back at `rewind`). */
+  private bounce(floater: FloaterDef | null, rewind: { railId: string; at: number }): void {
+    this.bouncing = { t: 0, from: this.state.s };
+    this.state.speed = 0;
+    this.stopRocket();
+    this.diveArcs = [];
+    this.domeLatch = 0;
+    this.events.emit('waterBounce', { railId: this.state.railId, s: this.frontS, floater: floater?.id ?? null, rewind });
+  }
+
+  /** The lead car's small dip while bouncing (m). */
+  private bounceDip(): number {
+    if (!this.bouncing) return 0;
+    return 0.4 * Math.sin(Math.PI * Math.min(1, this.bouncing.t / (DIVE.bounceStop + DIVE.bounceSeconds)));
+  }
+
+  /** Some car's middle is under water. */
+  private carsUnder(): boolean {
+    const dives = this.currentRail.dives;
+    for (let i = 0; i < TRAIN.carCount; i++) if (spanAt(dives, this.state.s - TRAIN.carSpacing * i)) return true;
+    return false;
+  }
+
+  /** The dome is on while a dive is under a car, a dive fork sent the train down, or a car is under water. */
+  private updateDome(instant: boolean): void {
+    const under = this.carsUnder();
+    const on = this.diveArcs.length > 0 || this.domeLatch > 0 || under;
+    if (on !== this.domeIsOn) {
+      this.domeIsOn = on;
+      this.events.emit('dome', { on, instant });
+      // Off after being under water: "ぷはっ" (a dive's own "ぷかっ" came when its front came up).
+      if (!on && this.wasUnder && !instant) this.events.emit('surfaced', { long: true });
+      if (!on) this.wasUnder = false;
+    }
+    if (under) this.wasUnder = true;
+  }
+
+  /**
+   * After a rewind (and at the start): no dive going on; a train put back under water has its dome on at once,
+   * silently (a fail's rewind, a resume at a station under water).
+   */
+  private resetDive(): void {
+    this.diveArcs = [];
+    this.diveCooldown = 0;
+    this.wasInDive = false;
+    this.domeLatch = 0;
+    this.bobT = -1;
+    this.bouncing = null;
+    this.floatersPassed.clear();
+    this.leadWasUnder = spanAt(this.currentRail.dives, this.bogieS) !== null;
+    const under = this.carsUnder();
+    this.wasUnder = under;
+    this.domeIsOn = under;
+    this.events.emit('dome', { on: under, instant: true });
+  }
+
+  /** Lowering (m) of the car at bogie position `s` from the dives, less what the rail itself has gone down since. */
+  private diveLower(s: number, railY: number): number {
+    let h = 0;
+    for (const a of this.diveArcs) {
+      if (a.railId !== this.state.railId) continue;
+      const d = diveDepth(a, s);
+      if (d > 0) h = Math.max(h, d - Math.max(0, a.baseY - railY));
+    }
+    return h;
   }
 
   private handleJump(dt: number, wasAirborne: boolean): void {
@@ -621,10 +1063,11 @@ export class Train {
 
   /** Shifts jump arcs when the train's s is re-based (junction or merge). */
   private shiftArcs(delta: number, railId: string): void {
-    for (const a of this.arcs) {
+    for (const a of [...this.arcs, ...this.diveArcs]) {
       a.from += delta;
       a.railId = railId;
     }
+    for (const a of this.diveArcs) if (a.holdAt !== null) a.holdAt += delta;
   }
 
   getPose(): TrainPose {
@@ -652,7 +1095,8 @@ export class Train {
     const j = this.pending[0];
     if (!j) return;
 
-    if (!this.announced && st.s >= j.at - JUNCTION_ARROW_DISTANCE) {
+    // v1.10: a dive fork shows no arrows (diving or not picks the way).
+    if (!this.announced && !j.dive && st.s >= j.at - JUNCTION_ARROW_DISTANCE) {
       this.announced = j;
       this.choice = null;
       this.locked = false;
@@ -668,8 +1112,14 @@ export class Train {
       this.events.emit('junctionLocked');
     }
     if (st.s >= j.at) {
-      const side = this.choice ?? j.default;
+      const side = j.dive && j.diveSide ? this.routeSide(j) : this.choice ?? j.default;
       const targetId = j[side] ?? st.railId;
+      // Down into the water at a dive fork: the dome stays on until the water takes over.
+      if (j.dive && side === j.diveSide) {
+        this.domeLatch = DIVE.forkReach + TRAIN.length;
+        // A dive going on keeps its depth down the rail (no bob up and down again).
+        this.holdDives(this.bogieS);
+      }
       this.pending.shift();
       this.announced = null;
       this.locked = false;
@@ -736,13 +1186,18 @@ export class Train {
     const rear = this.frameOnRail(s - TRAIN.bogieOffset);
     // The car rides the arc at its center and keeps only a hint of the arc's slope, so the cab view
     // stays on the horizon ("ぴょん" like a toy, not a ski jump). Falling tips it forward.
-    const hc = this.arcLift(s);
+    // v1.10: a dive lowers the car the same way (at its middle, with a hint of the arc's slope).
+    const hc = this.arcLift(s) - this.diveLower(s, (front.position.y + rear.position.y) / 2);
+    const hFront = this.arcLift(s + TRAIN.bogieOffset) - this.diveLower(s + TRAIN.bogieOffset, front.position.y);
+    const hRear = this.arcLift(s - TRAIN.bogieOffset) - this.diveLower(s - TRAIN.bogieOffset, rear.position.y);
     const sag = this.sagAt;
     const id = this.state.railId;
     const sf = sag ? sag(id, s + TRAIN.bogieOffset) : 0;
     const sr = sag ? sag(id, s - TRAIN.bogieOffset) : 0;
-    const hf = hc + JUMP_PITCH * (this.arcLift(s + TRAIN.bogieOffset) - hc) - this.fallDrop(true) - sf;
-    const hr = hc + JUMP_PITCH * (this.arcLift(s - TRAIN.bogieOffset) - hc) - this.fallDrop(false) - sr;
+    const bob = this.bobT >= 0 ? DIVE.bobDepth * Math.sin((Math.PI * this.bobT) / DIVE.bobSeconds) : 0;
+    const dip = this.bounceDip();
+    const hf = hc + JUMP_PITCH * (hFront - hc) - this.fallDrop(true) - sf - bob - dip;
+    const hr = hc + JUMP_PITCH * (hRear - hc) - this.fallDrop(false) - sr - bob - dip * 0.4;
     this.front.copy(front.position).addScaledVector(front.up, hf);
     this.rear.copy(rear.position).addScaledVector(rear.up, hr);
     position.addVectors(this.front, this.rear).multiplyScalar(0.5);

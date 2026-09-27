@@ -145,7 +145,10 @@ type DefaultLine =
   | 'rockHit'
   | 'timeSafe'
   | 'timeUp'
-  | 'spurBack';
+  | 'spurBack'
+  | 'diveNear'
+  | 'diveBoing'
+  | 'diveBoingAfter';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -204,6 +207,10 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   // v1.8
   // Reaching a record's side track end is a success: not the dead end's "いきどまり！".
   spurBack: 'やったね！ もとの みちに もどるよ',
+  // v1.10 (もぐる)
+  diveNear: 'みずだ！ もぐるを おして！',
+  diveBoing: 'ぽよん！ もぐるの わすれた〜',
+  diveBoingAfter: 'ひかったら もぐるを おしてね',
 };
 
 /**
@@ -214,6 +221,7 @@ const NEED_LINES: Partial<Record<AbilityId, string>> = {
   rocket: 'ロケットが あれば のぼれそう…',
   jump: 'ジャンプが できたら いけそう…',
   light: 'ライトが あれば みえそう…',
+  dive: 'もぐれたら いけそう…',
 };
 const NEED_LINE_OTHER = 'いまは まだ いけないみたい…';
 
@@ -221,7 +229,29 @@ const NEED_LINE_OTHER = 'いまは まだ いけないみたい…';
 const HINT_NOTCH: Record<NonNullable<GapDef['hint']>, number> = { normal: 3, fast: 4, max: 5 };
 
 /** Card titles for newly learned abilities. */
-export const ABILITY_NAMES: Partial<Record<AbilityId, string>> = { jump: 'ジャンプ', light: 'ライト', whistle: 'きてき', rocket: 'ロケット' };
+export const ABILITY_NAMES: Partial<Record<AbilityId, string>> = { jump: 'ジャンプ', light: 'ライト', whistle: 'きてき', rocket: 'ロケット', dive: 'もぐる' };
+
+/**
+ * v1.8: the ability a record needs is in use right now (null: nothing needed): the light on, in the air (jump), the
+ * rocket's push (Train.rocketUsedHere), v1.10 diving (in a dive, sent down at a dive fork, or under water).
+ */
+export function abilityInUse(ability: AbilityId | null, train: Train, lightOn: boolean): boolean {
+  switch (ability) {
+    case null:
+      return true;
+    case 'light':
+      return lightOn;
+    case 'jump':
+      return train.airborne;
+    case 'rocket':
+      return train.rocketUsedHere;
+    case 'dive':
+      return train.diving;
+    default:
+      // Abilities of later chapters (reverse, ...) have no rule yet: such records stay "?".
+      return false;
+  }
+}
 
 /**
  * Drives a stage: opening → missions (steps at stations) → ending.
@@ -282,6 +312,8 @@ export class MissionRunner {
   /** Jump pads: shown for a few seconds after a whistle; `index` into gimmicks[]. */
   private readonly pads: { index: number; railId: string; at: number; seconds: number; range: number; left: number; hinted: boolean }[];
   private movingSaid = false;
+  /** v1.10: "みずだ！ もぐるを おして！" was said in this mission. */
+  private diveNearSaid = false;
   /** In the 'doors' phase: false while waiting for the door button, true once the doors are open. */
   private doorsOpen = false;
   private hintsFired = new Set<number>();
@@ -342,6 +374,18 @@ export class MissionRunner {
     this.abilities = new Set(progress.abilities);
     whistle.onWhistle(() => this.onWhistle());
     train.events.on('fell', (e) => this.onFell(e.gap, e.railId, e.short));
+    // v1.10: "ぽよん" off a floater or the water: a soft fail, back before it.
+    train.events.on('waterBounce', (e) => {
+      if (this.phase !== 'driving') return;
+      this.finishDrive({ kind: 'fail', reason: 'dive', rewind: e.rewind });
+    });
+  }
+
+  /** v1.10: the jump seat turned into "もぐる": the partner says so, the first time in a mission. */
+  onDiveNear(): void {
+    if (this.phase !== 'driving' || this.diveNearSaid) return;
+    this.diveNearSaid = true;
+    this.ports.sayNow(this.lines.diveNear ?? DEFAULT_LINES.diveNear);
   }
 
   /** '1' while the first large dinosaur's neck is down, '0' while up, '' when there is none (test hook). */
@@ -629,6 +673,7 @@ export class MissionRunner {
       this.missionIndex = i;
       this.lines = mission.lines ?? {};
       this.movingSaid = false;
+      this.diveNearSaid = false;
       this.hintsFired.clear();
       this.rocketReadySaid = false;
       this.rocketGoSaid = false;
@@ -1098,19 +1143,7 @@ export class MissionRunner {
 
   /** v1.8: the ability a record needs is in use right now (null: nothing needed). */
   private usingAbility(ability: AbilityId | null): boolean {
-    switch (ability) {
-      case null:
-        return true;
-      case 'light':
-        return this.lightOn;
-      case 'jump':
-        return this.train.airborne;
-      case 'rocket':
-        return this.train.rocketUsedHere;
-      default:
-        // Abilities of later chapters (dive, reverse, ...) have no rule yet: such records stay "?".
-        return false;
-    }
+    return abilityInUse(ability, this.train, this.lightOn);
   }
 
   /** v1.8: the line for a junction side way that needs `ability`. */
@@ -1340,14 +1373,16 @@ export class MissionRunner {
     const scary = reason === 'cat' || reason === 'dino';
     // v1.8: back from a record's side track is no failure: no dip, no shake.
     const calm = reason === 'spur';
-    // The silk, a rock, a slip and the sneeze are soft: a small dip, no shake.
-    const soft = reason === 'fragile' || reason === 'rock' || reason === 'slip' || reason === 'timeUp';
+    // The silk, a rock, a slip, the sneeze, "ぽよん" off the water and a dead end are soft: a small dip, no shake.
+    const soft =
+      reason === 'fragile' || reason === 'rock' || reason === 'slip' || reason === 'timeUp' || reason === 'dive' || reason === 'deadEnd';
     if (!calm) this.ports.cameraFx(scary ? 1 : soft ? 0.3 : 0.5, soft ? 0 : 1);
     const key: DefaultLine = outcome.line ?? FAIL_LINES[reason] ?? (reason as DefaultLine);
     for (const line of (this.lines[key] ?? DEFAULT_LINES[key]).split('\n')) await this.ports.say(line, 'partner');
     if (reason === 'cat') await this.ports.say(this.lines.catDangerAfter ?? DEFAULT_LINES.catDangerAfter, 'partner');
     if (reason === 'dino') await this.ports.say(this.lines.dangerAfter ?? DEFAULT_LINES.dangerAfter, 'partner');
     if (reason === 'fragile') await this.ports.say(this.lines.fragileBoingAfter ?? DEFAULT_LINES.fragileBoingAfter, 'partner');
+    if (reason === 'dive') await this.ports.say(this.lines.diveBoingAfter ?? DEFAULT_LINES.diveBoingAfter, 'partner');
     if (reason === 'slip') {
       // After an empty gauge: the mission's advice for that ("save them for the slope"); else "press when it glows".
       const after: DefaultLine = outcome.line === 'slipEmpty' ? 'slipEmptyAfter' : 'slipAfter';
@@ -1512,6 +1547,7 @@ const FAIL_LINES: Partial<Record<FailReason, DefaultLine>> = {
   slip: 'slip',
   timeUp: 'timeUp',
   spur: 'spurBack',
+  dive: 'diveBoing',
 };
 const BRIDGE_LINES: Record<NonNullable<BridgeOutcome>['kind'], DefaultLine> = {
   near: 'butterflyNear',

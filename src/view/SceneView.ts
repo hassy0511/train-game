@@ -29,6 +29,10 @@ export interface SceneView {
   setOrbit(orbit: OrbitCamera | null): void;
   /** "がめんの ゆれ: へらす": no view changes that move the picture (e.g. the rocket's wider view). */
   setCalm(calm: boolean): void;
+  /** v1.10: the train runs under water on a long stretch (a camera outside the cab stays under the surface too). */
+  setSubmerged(on: boolean): void;
+  /** v1.10: the camera is under a water surface (the view turned blue). */
+  isCameraUnderwater(): boolean;
   resize(width: number, height: number, devicePixelRatio: number): void;
   getStats(): { drawCalls: number; triangles: number } | null;
   /** For dev-only helpers (spline visualizer). May return null. */

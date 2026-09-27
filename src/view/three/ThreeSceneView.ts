@@ -1,6 +1,7 @@
 import {
   BoxGeometry,
   BufferGeometry,
+  Color,
   Fog,
   Group,
   Material,
@@ -35,6 +36,7 @@ import { addEnvironment, SKY_RADIUS } from './environment';
 import { ModelLibrary } from './models';
 import { addModelPlacements, addProps } from './props';
 import { buildDetachedRailPiece, buildRailScene, buildTrack, type TrackLook, type TrackLooks } from './rail-mesh';
+import { WaterLayer } from './water';
 
 /** The camera draws this far past the stage fog's far end (m). */
 const FOG_CULL_MARGIN = 40;
@@ -119,6 +121,10 @@ export class ThreeSceneView implements SceneView {
   /** The title screen's camera swinging around the train, and how long it has been on (s). */
   private orbit: OrbitCamera | null = null;
   private orbitTime = 0;
+  /** v1.10: the stage's water (null without any). */
+  private water: WaterLayer | null = null;
+  /** v1.10: what the scene looked like above water, while the camera is under it. */
+  private aboveWater: { background: Color | null; fog: Fog | null; fogColor: Color | null } | null = null;
 
   async init(container: HTMLElement, stage: StageData, network: RailNetwork): Promise<void> {
     this.stage = stage;
@@ -189,6 +195,10 @@ export class ThreeSceneView implements SceneView {
     this.scene.add(this.meadow.group);
     this.volcano = new VolcanoGimmicks(stage, this.train);
     this.scene.add(this.volcano.group);
+    if (stage.file.environment.water?.length) {
+      this.water = new WaterLayer(stage);
+      this.scene.add(this.water.group);
+    }
     // Tagged props stay separate so a cutscene can drop them (the old bridge's girders).
     for (const prop of stage.props) {
       if (!prop.tag) continue;
@@ -294,6 +304,7 @@ export class ThreeSceneView implements SceneView {
       return;
     }
     if (event.type === 'door') this.setDoor(event.open, event.stationId);
+    if (event.type === 'dome') this.water?.setDome(event.on, event.instant);
     if (event.type === 'light') this.lightBeam.visible = event.on;
     this.sky3?.onStageEvent(event);
     this.forest?.onEvent(event);
@@ -497,7 +508,12 @@ export class ThreeSceneView implements SceneView {
     } else if (this.orbit) {
       this.orbitTime += dt;
       orbitTarget(pose, this.orbit, orbitAngle(this.orbit, this.orbitTime), this.camTarget);
-    } else cameraTarget(this.cameraMode, pose, this.camTarget);
+    } else {
+      // v1.10: looking straight down from under the surface shows only a patch of seabed: while the train runs under
+      // water the view from above follows it from behind instead.
+      const mode = this.cameraMode === 'top' && this.water?.isSubmerged ? 'chase' : this.cameraMode;
+      cameraTarget(mode, pose, this.camTarget);
+    }
     // The cab view and the title's orbit are exact every frame (no easing toward them).
     const cab = this.cameraMode === 'cab' && !this.fixedCamera && !this.orbit;
     smoothCamera(this.camCurrent, this.camTarget, dt, this.cameraSnap || cab || (!!this.orbit && !this.fixedCamera));
@@ -537,9 +553,60 @@ export class ThreeSceneView implements SceneView {
       if (uniforms.mist) uniforms.mist.value = this.sky3.mist;
     }
     this.actors?.update(dt);
+    this.updateWater(dt, cab);
     this.cameraPosition.copy(this.camera.position);
     this.sky?.position.copy(this.cameraPosition);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  setSubmerged(on: boolean): void {
+    this.water?.setSubmerged(on);
+  }
+
+  isCameraUnderwater(): boolean {
+    return this.aboveWater !== null;
+  }
+
+  /**
+   * v1.10: the water layer, then the look under water: with the camera under a surface the fog and the background
+   * take the water's colour and seeing distance, and the sky hides; back above, they come back as they were (the
+   * fog stretches of sky3 set their own reach again every frame).
+   */
+  private updateWater(dt: number, cab: boolean): void {
+    if (!this.water) return;
+    const under = this.water.update(dt, this.camera, cab, [this.train, ...this.cars]);
+    // Held under the surface, a camera outside the cab still looks at the train.
+    if (!cab) this.camera.lookAt(this.camCurrent.lookAt);
+    const look = under ? this.water.underLook : null;
+    if (look) {
+      if (!this.aboveWater) {
+        const fog = this.scene.fog as Fog | null;
+        this.aboveWater = {
+          background: this.scene.background instanceof Color ? this.scene.background.clone() : null,
+          fog,
+          fogColor: fog ? fog.color.clone() : null,
+        };
+        if (!fog) this.scene.fog = new Fog(look.color, 1, look.far);
+        if (this.sky) this.sky.visible = false;
+      }
+      const fog = this.scene.fog as Fog;
+      fog.color.set(look.color);
+      fog.near = 1;
+      fog.far = look.far;
+      if (this.scene.background instanceof Color) this.scene.background.set(look.color);
+      else this.scene.background = new Color(look.color);
+    } else if (this.aboveWater) {
+      const was = this.aboveWater;
+      this.aboveWater = null;
+      if (was.fog && was.fogColor) was.fog.color.copy(was.fogColor);
+      this.scene.fog = was.fog;
+      if (was.fog && this.baseFog) {
+        was.fog.near = this.baseFog.near;
+        was.fog.far = this.baseFog.far;
+      }
+      if (was.background && this.scene.background instanceof Color) this.scene.background.copy(was.background);
+      if (this.sky) this.sky.visible = true;
+    }
   }
 
   resize(width: number, height: number, devicePixelRatio: number): void {

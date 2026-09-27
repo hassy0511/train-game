@@ -81,7 +81,7 @@ export class AudioEngine {
     master.connect(ctx.destination);
     this.sfx = ctx.createGain();
     this.sfx.gain.value = this.sfxLevel;
-    this.sfx.connect(master);
+    this.sfx.connect(this.underwaterFilter(ctx, master));
     this.room = ctx.createConvolver();
     this.room.buffer = roomImpulse(ctx);
     const roomLevel = ctx.createGain();
@@ -289,6 +289,20 @@ export class AudioEngine {
   playRecord(): void {
     [1175, 1568, 2093].forEach((f, i) => this.bell(f, i * 0.09, 0.1, 0.6));
     this.hiss({ delay: 0.05, seconds: 0.6, gain: 0.015, filter: 'highpass', freq: 7000, attack: 0.08, dest: this.out(0.4) });
+  }
+
+  /** The map's water light reaches an island (chapter 3's end): a round, wet "ぽこん" of a bubble coming up. */
+  playBubblePop(): void {
+    const wet = this.out(0.3, 1.4);
+    this.ping(380, 0, 0.16, 'sine', 0.16, 900, 0.004, wet);
+    this.ping(760, 0.05, 0.1, 'sine', 0.05, 1300, 0.003, wet);
+    this.hiss({ delay: 0.01, seconds: 0.06, gain: 0.02, freq: 1400, q: 3, dest: wet });
+  }
+
+  /** Powder snow falls on the map's islands: a soft "しゃらん" (a quick run of high bells over a hush of air). */
+  playSnowShimmer(): void {
+    [2093, 2637, 3136, 2349, 2794].forEach((f, i) => this.bell(f, i * 0.06, 0.05, 0.7));
+    this.hiss({ seconds: 0.9, gain: 0.012, attack: 0.15, filter: 'highpass', freq: 6500, dest: this.out(0.4) });
   }
 
   /** A two-tone steam-whistle-like chord with a breath of air, a soft attack and a short tail in the room. */
@@ -584,7 +598,186 @@ export class AudioEngine {
       this.ping(260 + (i % 2) * 30, i * 0.075, 0.05, 'triangle', 0.04 * g, 180, 0.004, o);
     }
   }
+
+  // ---- chapters 3 and 4 -------------------------------------------------------------------------------------
+
+  /**
+   * v1.10: the train is under water (or not): the island's sound crossfades to the underwater bed (see
+   * Ambience.setUnderwater). Cheap to call every frame; call it each frame so a newly set ambience follows too.
+   */
+  setAmbienceUnderwater(on: boolean): void {
+    this.ambience?.setUnderwater(on);
+  }
+
+  /** 4-1: thin ice under the wheels: "ぴし ぴしぴし" (small, bright cracks; nothing breaks yet). */
+  playIceCrack(): void {
+    const o = this.out(0.25, 1.6);
+    [0, 0.16, 0.24, 0.37].forEach((d, i) => {
+      const f = [3400, 2900, 3700, 3100][i];
+      this.ping(f, d, 0.06, 'triangle', 0.05, f * 0.8, 0.001, o);
+      this.ping(f * 1.5, d, 0.03, 'sine', 0.02, f * 1.3, 0.001, o);
+      this.hiss({ delay: d, seconds: 0.03, gain: 0.05, filter: 'highpass', freq: 4000, dest: o });
+    });
+  }
+
+  /** 4-1: through the thin ice, gently: "ぽちゃん … ぷかぷか" (a splash, then bobbing back up twice). */
+  playIceSplash(): void {
+    this.playSplash();
+    const o = this.out(0.2, 1.6);
+    [0.55, 0.85].forEach((d, i) => {
+      this.ping(480 - i * 30, d, 0.16, 'sine', 0.1, 720 - i * 40, 0.01, o);
+      this.ping(900, d + 0.05, 0.06, 'sine', 0.025, 1300, 0.003, o);
+    });
+  }
+
+  /** 4-1: the ice mirror catches the light: "きらーん" (quick high bells up, one ringing out, a shimmer). */
+  playMirror(): void {
+    [1568, 2093, 2637].forEach((f, i) => this.bell(f, i * 0.045, 0.06, 0.5));
+    this.bell(3136, 0.14, 0.08, 1.6);
+    this.ping(2637, 0.14, 1.4, 'sine', 0.025, 2800, 0.02, this.out(0.5));
+    this.hiss({ delay: 0.1, seconds: 1.1, gain: 0.018, attack: 0.1, filter: 'highpass', freq: 7500, dest: this.out(0.4) });
+  }
+
+  /** 4-2: the snowplow blade drops ("かこん！") and throws the snow aside ("ざざーっ"). */
+  playPlow(): void {
+    const o = this.out(0.1, 1.6);
+    this.knock(900, 0, 0.14, o);
+    this.ping(180, 0.01, 0.12, 'sine', 0.14, 120, 0.004, o);
+    this.hiss({ color: 'pink', delay: 0.08, seconds: 0.9, gain: 0.1, attack: 0.06, filter: 'lowpass', freq: 2600, endFreq: 800, q: 0.7, dest: o });
+    this.hiss({ delay: 0.1, seconds: 0.6, gain: 0.03, attack: 0.05, freq: 4500, endFreq: 2500, q: 0.8, dest: o });
+    // Lumps of snow landing to the side.
+    [0.35, 0.5, 0.62].forEach((d, i) => this.hiss({ color: 'brown', delay: d, seconds: 0.1, gain: 0.07 - i * 0.015, filter: 'lowpass', freq: 500, dest: o }));
+  }
+
+  /** 4-2: the snowplow forgotten, the train stops in soft snow: "ぽすっ". */
+  playPlowBump(): void {
+    const o = this.out(0.05, 2);
+    this.hiss({ color: 'pink', seconds: 0.12, gain: 0.14, attack: 0.004, filter: 'lowpass', freq: 600, dest: o });
+    this.ping(140, 0, 0.2, 'sine', 0.16, 100, 0.004, o);
+  }
+
+  /**
+   * 4-3: the snow wave coming down behind: a soft, big "もこもこ" that swells and settles (a round, fluttering
+   * rumble with little soft thumps in it — no roar, nothing scary).
+   */
+  playSnowWave(): void {
+    const ctx = this.ctx;
+    const dest = this.out(0.15, 1.4);
+    if (!ctx || !dest) return;
+    const at = ctx.currentTime;
+    const len = 2.4;
+    const src = noiseSource(ctx, 'pink', at);
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(300, at);
+    f.frequency.linearRampToValueAtTime(750, at + len * 0.5);
+    f.frequency.linearRampToValueAtTime(280, at + len);
+    // "もこもこ": the level flutters slowly, like snow tumbling over itself.
+    const flutter = ctx.createGain();
+    flutter.gain.value = 0.7;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 5;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.3;
+    lfo.connect(depth);
+    depth.connect(flutter.gain);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.16, at + len * 0.45);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    src.connect(f);
+    f.connect(flutter);
+    flutter.connect(g);
+    g.connect(dest);
+    lfo.start(at);
+    src.stop(at + len + 0.05);
+    lfo.stop(at + len + 0.05);
+    this.hiss({ color: 'brown', seconds: len, gain: 0.1, attack: len * 0.45, filter: 'lowpass', freq: 160, q: 0.7, dest });
+    [0.5, 0.8, 1.05, 1.35, 1.6].forEach((d, i) => this.ping(120 + (i % 2) * 25, d, 0.18, 'sine', 0.05, 80, 0.01, dest));
+  }
+
+  /** 4-3: caught by the snow wave: a soft "もふっ" (a puff of snow and a low, round "ぼふ"). */
+  playSnowCatch(): void {
+    const o = this.out(0.1, 1.8);
+    this.hiss({ color: 'pink', seconds: 0.3, gain: 0.12, attack: 0.01, filter: 'lowpass', freq: 1000, endFreq: 300, q: 0.7, dest: o });
+    this.ping(160, 0, 0.3, 'sine', 0.15, 90, 0.006, o);
+    this.hiss({ delay: 0.05, seconds: 0.4, gain: 0.02, attack: 0.05, filter: 'highpass', freq: 5000, dest: o });
+  }
+
+  // ---- v1.10: water ("もぐる") --------------------------------------------------------------------------------
+
+  /** Lowpass between the effects bus and the master (open above water); made in attach(). */
+  private underwaterLp: BiquadFilterNode | null = null;
+  private underwaterOn = false;
+
+  /** The effects bus's way to the master, through the under-water lowpass (called once per context by attach()). */
+  private underwaterFilter(ctx: BaseAudioContext, master: AudioNode): AudioNode {
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.Q.value = 0.5;
+    lp.frequency.value = this.underwaterOn ? UNDERWATER_CUTOFF : OPEN_CUTOFF;
+    lp.connect(master);
+    this.underwaterLp = lp;
+    return lp;
+  }
+
+  /**
+   * v1.10: the train under water: the sounds in the world (everything on the effects bus) go soft and muffled, in
+   * about 0.3 s; the music does not. Asking again for the same does nothing (cheap to call every frame).
+   */
+  setUnderwater(on: boolean): void {
+    if (on === this.underwaterOn) return;
+    this.underwaterOn = on;
+    const lp = this.underwaterLp;
+    if (!lp || !this.ctx) return;
+    lp.frequency.setTargetAtTime(on ? UNDERWATER_CUTOFF : OPEN_CUTOFF, this.ctx.currentTime, 0.1);
+  }
+
+  /** v1.10: a dive: "ぷくっ" (a round bubble going up), then a soft "ざぶん" and a few small bubbles. */
+  playDive(): void {
+    const o = this.out(0.25, 2);
+    this.ping(300, 0, 0.25, 'sine', 0.14, 700, 0.004, o);
+    this.ping(600, 0.03, 0.12, 'sine', 0.04, 900, 0.003, o);
+    this.hiss({ color: 'pink', delay: 0.1, seconds: 0.5, gain: 0.09, attack: 0.02, filter: 'lowpass', freq: 2400, endFreq: 500, q: 0.7, dest: o });
+    this.hiss({ color: 'brown', delay: 0.1, seconds: 0.35, gain: 0.12, filter: 'lowpass', freq: 320, q: 0.7, dest: o });
+    [900, 1300, 1100].forEach((f, i) => this.ping(f, 0.32 + i * 0.07, 0.06, 'sine', 0.04, f * 1.5, 0.003, o));
+  }
+
+  /**
+   * v1.10: up again. "ぷかっ" (`long` false: the front out of a dive): a quick, round pop. "ぷはっ" (the last car
+   * out of the water, the dome off): water running off, then a brighter pop and a little sparkle.
+   */
+  playSurface(long = false): void {
+    const o = this.out(0.3, 2);
+    const at = long ? 0.12 : 0;
+    if (long) {
+      this.hiss({ seconds: 0.4, gain: 0.07, attack: 0.005, freq: 2200, endFreq: 900, q: 0.8, dest: o });
+      this.hiss({ color: 'brown', seconds: 0.3, gain: 0.08, filter: 'lowpass', freq: 400, q: 0.7, dest: o });
+    }
+    this.ping(long ? 600 : 500, at, 0.14, 'sine', 0.14, long ? 1200 : 1000, 0.003, o);
+    this.ping(long ? 900 : 760, at + 0.06, 0.1, 'sine', 0.05, long ? 1500 : 1100, 0.003, o);
+    if (long) this.hiss({ delay: at + 0.05, seconds: 0.4, gain: 0.012, filter: 'highpass', freq: 7000, attack: 0.05, dest: o });
+  }
+
+  /** v1.10: "ぽよん" on the water: the surface gives like jelly (a soft wobble down and back up) and a small splash. */
+  playWaterBounce(): void {
+    const o = this.out(0.2, 1.8);
+    this.ping(360, 0, 0.3, 'sine', 0.14, 200, 0.005, o);
+    this.ping(200, 0.22, 0.35, 'sine', 0.12, 420, 0.005, o);
+    this.ping(720, 0.22, 0.2, 'triangle', 0.03, 840, 0.005, o);
+    this.hiss({ color: 'pink', delay: 0.05, seconds: 0.3, gain: 0.05, attack: 0.01, freq: 1500, endFreq: 700, q: 0.8, dest: o });
+  }
+
+  /** v1.10: a press that only bobs the train (stopped, on land, on the sea floor): "ぷくぷく", three small bubbles. */
+  playBubbles(): void {
+    const o = this.out(0.25, 2);
+    [520, 760, 640].forEach((f, i) => this.ping(f, i * 0.09, 0.08, 'sine', 0.07, f * 1.6, 0.003, o));
+  }
 }
+
+/** v1.10: the effects bus's lowpass above water (open) and under it (muffled), Hz. */
+const OPEN_CUTOFF = 20000;
+const UNDERWATER_CUTOFF = 900;
 
 /** The room's echo: 1.1 s of noise fading out, darker as it fades (made once per context). */
 function roomImpulse(ctx: BaseAudioContext): AudioBuffer {
