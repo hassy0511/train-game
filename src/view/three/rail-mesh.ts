@@ -2,6 +2,7 @@ import {
   BoxGeometry,
   BufferGeometry,
   Color,
+  CylinderGeometry,
   Float32BufferAttribute,
   Group,
   LOD,
@@ -54,6 +55,19 @@ const SLIDE_BALLAST_COLOR = new Color('#D6DBE0');
 const CHEVRON_COLOR = new Color('#FFD43B');
 const ROCK_BASE_COLOR = new Color('#8C7B6B');
 const CHEVRON_STEP = 8;
+/**
+ * v1.10 (3-1): on a stretch on the water surface the track floats: a thin wooden deck instead of the ballast, and a
+ * float lying across under it every FLOAT_STEP m (white and light blue in turn), half in the water.
+ */
+const DECK_COLOR = new Color('#C9A36B');
+const DECK_TOP_DEPTH = 0.25;
+const DECK_BOTTOM_DEPTH = 0.4;
+const DECK_HALF_WIDTH = 1.5;
+const FLOAT_STEP = 6;
+/** Floats: 4 m long on both sides of the deck, half out of the water (the rail top is 0.4 m over the surface). */
+const FLOAT_DEPTH = 0.45;
+const FLOAT_LATERAL = 1.85;
+const FLOAT_COLORS = [new Color('#F4F8FB'), new Color('#8ED3F0')];
 /** A base reaching the ground widens by this much per metre of height (a ridge). */
 const BASE_SPREAD = 0.5;
 /**
@@ -203,6 +217,22 @@ function addBallastSegment(data: GeometryData, start: RailFrame, end: RailFrame)
   addQuad(data, startTopLow, startTopHigh, endTopHigh, endTopLow);
   addQuad(data, startTopHigh, startBottomHigh, endBottomHigh, endTopHigh);
   addQuad(data, startTopLow, endTopLow, endBottomLow, startBottomLow);
+}
+
+/** v1.10 (3-1): the floating track's thin deck under the rails (a flat slab, no sloping ballast sides). */
+function addDeckSegment(data: GeometryData, start: RailFrame, end: RailFrame): void {
+  const sTopL = point(start, -DECK_HALF_WIDTH, DECK_TOP_DEPTH);
+  const sTopR = point(start, DECK_HALF_WIDTH, DECK_TOP_DEPTH);
+  const eTopL = point(end, -DECK_HALF_WIDTH, DECK_TOP_DEPTH);
+  const eTopR = point(end, DECK_HALF_WIDTH, DECK_TOP_DEPTH);
+  const sBotL = point(start, -DECK_HALF_WIDTH, DECK_BOTTOM_DEPTH);
+  const sBotR = point(start, DECK_HALF_WIDTH, DECK_BOTTOM_DEPTH);
+  const eBotL = point(end, -DECK_HALF_WIDTH, DECK_BOTTOM_DEPTH);
+  const eBotR = point(end, DECK_HALF_WIDTH, DECK_BOTTOM_DEPTH);
+  addQuad(data, sTopL, sTopR, eTopR, eTopL);
+  addQuad(data, sTopR, sBotR, eBotR, eTopR);
+  addQuad(data, sTopL, eTopL, eBotL, sBotL);
+  addQuad(data, sBotL, eBotL, eBotR, sBotR);
 }
 
 function frameMatrix(frame: RailFrame, depth: number): Matrix4 {
@@ -457,6 +487,9 @@ function buildChunkParts(
   const slideData: GeometryData = { positions: [], indices: [] };
   const chevronData: GeometryData = { positions: [], indices: [] };
   const baseData: GeometryData = { positions: [], indices: [] };
+  const deckData: GeometryData = { positions: [], indices: [] };
+  const floats: BufferGeometry[] = [];
+  const onSurface = (s: number): boolean => rail.surfaces.some((sp) => s >= sp.from && s <= sp.to);
   const base = looks?.bases.get(rail.id);
   const hasBase = (s: number): boolean =>
     !!base && !isInGap(rail, s) && !skipped(skips, s) && !(base.skip ?? []).some((k) => s > k.from && s < k.to);
@@ -471,7 +504,8 @@ function buildChunkParts(
     addRailSegment(railData, start, end, -RAIL_HALF_GAUGE);
     addRailSegment(railData, start, end, RAIL_HALF_GAUGE);
     const kind = slopeKindAt(looks, rail.id, mid);
-    addBallastSegment(kind === 'up' ? steepData : kind === 'down' ? slideData : ballastData, start, end);
+    if (onSurface(mid)) addDeckSegment(deckData, start, end);
+    else addBallastSegment(kind === 'up' ? steepData : kind === 'down' ? slideData : ballastData, start, end);
     if (base && hasBase(mid)) {
       const before = index === 0 ? -1 : (samples[index - 1] + startS) / 2;
       const after = index + 2 < samples.length ? (endS + samples[index + 2]) / 2 : rail.length + 1;
@@ -486,8 +520,20 @@ function buildChunkParts(
       }
     }
   }
+  for (let s = Math.ceil(from / FLOAT_STEP) * FLOAT_STEP; s < Math.min(to, rail.length + 1e-6); s += FLOAT_STEP) {
+    if (!onSurface(s) || isInGap(rail, s) || skipped(skips, s)) continue;
+    const frame = rail.frameAt(s);
+    for (const side of [-1, 1]) {
+      const float = new CylinderGeometry(0.45, 0.45, 4, 8, 1);
+      float.rotateX(Math.PI / 2);
+      float.translate(side * FLOAT_LATERAL, 0, 0);
+      floats.push(painted(float.applyMatrix4(frameMatrix(frame, FLOAT_DEPTH)), FLOAT_COLORS[Math.round(s / FLOAT_STEP) % 2]));
+    }
+  }
   const parts: BufferGeometry[] = [];
   if (railData.indices.length) parts.push(painted(makeGeometry(railData), RAIL_COLOR));
+  if (deckData.indices.length) parts.push(painted(makeGeometry(deckData), DECK_COLOR));
+  parts.push(...floats);
   if (ballastData.indices.length) parts.push(painted(makeGeometry(ballastData), BALLAST_COLOR));
   if (steepData.indices.length) parts.push(painted(makeGeometry(steepData), STEEP_BALLAST_COLOR));
   if (slideData.indices.length) parts.push(painted(makeGeometry(slideData), SLIDE_BALLAST_COLOR));

@@ -23,6 +23,7 @@ import manifest from '../../assets/models.json';
 import { buildForestPlaceholder } from '../view/three/forest-placeholders';
 import { buildMeadowPlaceholder } from '../view/three/meadow-placeholders';
 import { buildRecordPlaceholder } from '../view/three/record-placeholders';
+import { buildSeaPlaceholder } from '../view/three/sea-placeholders';
 import { buildSkyPlaceholder } from '../view/three/sky-placeholders';
 import { buildVolcanoPlaceholder } from '../view/three/volcano-placeholders';
 
@@ -32,7 +33,8 @@ const GROUPS: [string, RegExp][] = [
   ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird|squirrel|grasshopper|butterfly|spider|seabird)/],
   ['えき・せんろ', /^(platform|station|stop|buffer|crossing|direction|jump|updraft|sky-buoy|sign-|old-bridge)/],
   ['たてもの', /^(house|shop|tower|hq|observatory)/],
-  ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud|canopy|branch|bough|leaf|grass|clover|meadow|water|dandelion|volcano|mesa|pumice)/],
+  ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud|canopy|branch|bough|leaf|grass|clover|meadow|water|dandelion|volcano|mesa|pumice|sandbar|reef|sand-island|palm|kelp|coral|spring-vent)/],
+  ['うみ', /^(whale|fish|current-ring|awa-)/],
   ['こもの', /.*/],
 ];
 
@@ -78,6 +80,7 @@ const drawn = (name: string): Group | null =>
   buildForestPlaceholder(name) ??
   buildMeadowPlaceholder(name) ??
   buildVolcanoPlaceholder(name) ??
+  buildSeaPlaceholder(name) ??
   buildRecordPlaceholder(name);
 const pending = manifest._pending.models.filter((n) => !built.has(n) && drawn(n) !== null);
 const load = async (name: string): Promise<Group> =>

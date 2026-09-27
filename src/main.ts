@@ -588,7 +588,7 @@ async function boot(): Promise<void> {
   train.events.on('junctionApproach', (e) => {
     const ability = e.junction.needs;
     const side = e.default === 'left' ? 'right' : 'left';
-    ui.junction.show({ ...e, needs: ability ? { side, ability, has: abilities.has(ability) } : undefined });
+    ui.junction.show({ ...e, needs: ability ? { side, ability, has: abilities.has(ability) } : undefined, bubbles: e.junction.bubbles });
   });
   train.events.on('junctionLocked', () => ui.junction.hide());
   train.events.on('junctionPassed', () => ui.junction.hide());
@@ -703,7 +703,9 @@ async function boot(): Promise<void> {
       zoneCamera = nextCamera;
       applyCamera();
     }
-    const updraft = zoneAt(gimmicks, 'updraft', train.state.railId, train.frontS);
+    // v1.10 (3-1): a whale's current pushes only while its whale swims along (the test course has no whales to greet).
+    const zone = zoneAt(gimmicks, 'updraft', train.state.railId, train.frontS);
+    const updraft = zone && (runner?.updraftOn(zone) ?? true) ? zone : null;
     train.boostSpeed = updraft ? param(updraft, 'speed', 28) : 0;
     app.dataset.updraft = updraft ? '1' : '0';
     // 2-3: the slope under the train front, and the rocket resting in quiet places (before the train moves).
@@ -837,6 +839,8 @@ async function boot(): Promise<void> {
       app.dataset.bridges = runner.bridgeFlags;
       app.dataset.butterfly = runner.butterflyState;
       app.dataset.fragile = runner.fragileStatus;
+      app.dataset.whales = runner.whaleStates;
+      app.dataset.bubbleRevealed = runner.bubbleRevealedId;
       // Under a card (a cutscene's own, or a learned ability's) it waits: the card is the child's tap.
       skipButton?.setVisible(clearedBefore && !paused && runner.canSkip && !cardUp());
     }
@@ -920,6 +924,16 @@ async function boot(): Promise<void> {
     stage.file.actors.filter((a) => a.type === 'cat' && (a.params as { look?: string } | undefined)?.look === 'seabird').map((a) => a.id),
   );
   let lastFailReason: string | null = null;
+  /** v1.10 (3-1): jump pads that are a whale's back (it surfaces with a song and throws the train with its spout). */
+  const whalePads = new Set(
+    stage.file.gimmicks.flatMap((g, i) => (g.type === 'jump-pad' && (g.params as { look?: string } | undefined)?.look === 'whale' ? [i] : [])),
+  );
+  const nearWhalePad = (): boolean =>
+    [...whalePads].some((i) => {
+      const g = stage.file.gimmicks[i];
+      const d = g.railId !== undefined && g.from !== undefined ? train.distanceAhead(g.railId, g.from) : null;
+      return d !== null && Math.abs(d) < 10;
+    });
   let skippedAt = -Infinity;
   const skipGuard = (): number => (performance.now() - skippedAt < SKIP_CARD_WINDOW_MS ? SKIP_CARD_GUARD_SECONDS : 0);
   const ports: MissionPorts = {
@@ -930,9 +944,9 @@ async function boot(): Promise<void> {
       bubbles.clear();
       void bubbles.say(text);
     },
-    card: (title, button, icon) => {
+    card: (title, button, icon, mirror) => {
       audio.playCard();
-      return showCard(uiEl, title, button, icon, skipGuard());
+      return showCard(uiEl, title, button, icon, skipGuard(), undefined, { mirror });
     },
     clearCard: (title, button, rewards) => {
       audio.playCard();
@@ -989,6 +1003,11 @@ async function boot(): Promise<void> {
       events.post({ type: 'sneeze' });
       await caption('はっくしょーん！', 2.5, true);
     },
+    pop: async (id) => {
+      events.post({ type: 'pop', id });
+      audio.playPop();
+      await waitSeconds(0.6);
+    },
   };
   events.on('event', (e) => {
     if (e.type === 'door') audio.playDoor(e.open);
@@ -1000,6 +1019,11 @@ async function boot(): Promise<void> {
       else butterfliesFollowing.delete(e.index);
     }
     if (e.type === 'sneeze') audio.playSneeze();
+    // v1.10 (3-1): the whale's song, its spout under the train, the true bubbles.
+    if (e.type === 'whale' && e.state === 'sing') audio.playWhaleSong();
+    if (e.type === 'pad' && e.visible && whalePads.has(e.index)) audio.playWhaleSong();
+    if (e.type === 'jump' && nearWhalePad()) audio.playSpout();
+    if (e.type === 'bubbles:true') audio.playBubbleTrue();
     if (e.type === 'volcano:puff') audio.playVolcanoPuff();
     if (e.type === 'countdown') {
       const was = hurrying;
@@ -1050,7 +1074,7 @@ async function boot(): Promise<void> {
     if (runner?.skipCutscene()) skippedAt = performance.now();
   });
 
-  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes });
+  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, dive });
   runner.knowAbilities(abilities);
   runner.setLight(lightOn);
   if (resumeFrom > 0) {

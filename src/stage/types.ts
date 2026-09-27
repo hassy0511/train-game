@@ -74,6 +74,22 @@ export interface FloaterDef {
   look?: FloaterLook;
   /** Where the train front goes back to after bumping it: a place on its rail, or { railId, at }. Default at − DIVE.rewindBefore. */
   rewind?: number | { railId: string; at: number };
+  /** v1.10 (3-1): said once, DIVE.hintDistance m before it (the mission's floatNear otherwise). */
+  say?: string;
+}
+
+/** v1.10 (3-1): the bubbles at a bubble fork: real ones rising, or Sakasa's pink swirly ones sinking. */
+export type BubbleKind = 'rise' | 'sink';
+
+/**
+ * v1.10 (3-1): a bubble fork (`junctions[].bubbles`): a column of bubbles stands on each way out. The rising (real)
+ * bubbles show the true way; the sinking pink ones lead round a loop back before the fork (never a fail).
+ */
+export interface BubbleForkDef {
+  left: BubbleKind;
+  right: BubbleKind;
+  /** Said once, BUBBLE_FORK.nearDistance m before it (the mission's bubbleNear otherwise). */
+  say?: string;
 }
 
 /**
@@ -157,6 +173,8 @@ export interface JunctionDef {
   dive?: boolean;
   /** v1.10 (set by the loader, never written): the side of a dive fork whose rail goes under water. */
   diveSide?: 'left' | 'right';
+  /** v1.10 (3-1): a bubble fork (see BubbleForkDef). */
+  bubbles?: BubbleForkDef;
 }
 
 export interface StopRule {
@@ -368,7 +386,21 @@ export type MissionLines = Partial<
     // v1.10 (もぐる)
     | 'diveNear'
     | 'diveBoing'
-    | 'diveBoingAfter',
+    | 'diveBoingAfter'
+    // v1.10 (3-1)
+    | 'diveGo'
+    | 'diveReady'
+    | 'floatNear'
+    | 'floatHit'
+    | 'floatHitAfter'
+    | 'whaleNear'
+    | 'whaleCall'
+    | 'whaleSang'
+    | 'currentIn'
+    | 'currentWait'
+    | 'bubbleNear'
+    | 'bubbleTrue'
+    | 'bubbleRevealed',
     string
   >
 >;
@@ -414,14 +446,19 @@ export type CutsceneStep =
    * stretch falls to the ground below, with the props tagged `props` on it).
    */
   | { cutRail: { railId: string; from: number; to: number; style?: 'fly' | 'fall'; props?: string } }
-  | { card: { title: string; button: string; icon?: 'badge' } }
+  /** v1.10 `mirror`: a note on paper, its title written mirror-wise (3-1's "のせて"). */
+  | { card: { title: string; button: string; icon?: 'badge'; mirror?: boolean } }
   | { emote: Emote }
   /** Switch the camera for the rest of the cutscene (restored afterwards). */
   | { camera: 'cab' | 'chase' | 'side' | 'top' }
   /** v1.7: a camera standing still at `at`, looking at `lookAt` (world metres), for the rest of the cutscene. */
   | { camera: 'fixed'; at: Vec3; lookAt: Vec3 }
-  /** v1.7: a screen effect. "sneeze": the volcano sneezes ("はっくしょーん！", a big smoke ring), 2.5 s. */
+  /**
+   * v1.7: a screen effect. "sneeze": the volcano sneezes ("はっくしょーん！", a big smoke ring), 2.5 s. v1.10 "pop": a
+   * big bubble pops ("ぱちん", a spray of little bubbles), at cutscene figure `id` (or in front of the camera).
+   */
   | { fx: 'sneeze' }
+  | { fx: 'pop'; id?: string }
   /** Full-screen dark caption that fades after `seconds`. */
   | { caption: string; seconds?: number }
   /** v1.2: grant an ability (its button appears) and show the "learned" card. */
@@ -461,6 +498,31 @@ export interface RocketZoneParams {
   line?: string;
   /** Said on a press here. */
   pressLine?: string;
+}
+
+/**
+ * v1.10 (3-1): params of a "whale" actor (placed with onRail beside the rail, under water; reactsTo "whistle"). It
+ * swims where it is; the whistle within `callRange` m before it (until `until`) greets it: it sings back and swims
+ * along beside the train front (`lead` m ahead, `lateral` m right, `height` m over the rail) until the front passes
+ * `until`, then swims off. Not greeted, it trails `trail` m behind and can still be called. Defaults: WHALE.
+ */
+export interface WhaleParams {
+  until: number;
+  callRange?: number;
+  lead?: number;
+  lateral?: number;
+  height?: number;
+  trail?: number;
+}
+
+/**
+ * v1.10 (3-1): an "updraft" stretch may look like a sea current (`look` "current": bubble rings and streams instead
+ * of wind rings) and belong to a whale (`whale`: an actor id): it pushes only while that whale swims along.
+ */
+export interface UpdraftParams {
+  speed?: number;
+  look?: 'wind' | 'current';
+  whale?: string;
 }
 
 /**

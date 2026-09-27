@@ -7,7 +7,8 @@ import type { CameraMode } from '../view/camera-rig';
 /** What the cutscene runner needs from the UI. */
 export interface CutscenePorts {
   say(text: string, who: Speaker, name?: string): Promise<void>;
-  card(title: string, button: string, icon?: 'badge'): Promise<void>;
+  /** v1.10 `mirror`: a note on paper with its title written mirror-wise. */
+  card(title: string, button: string, icon?: 'badge', mirror?: boolean): Promise<void>;
   caption(text: string, seconds: number): Promise<void>;
   wait(seconds: number): Promise<void>;
   /** Temporarily override the player's camera (null = give it back). */
@@ -18,6 +19,8 @@ export interface CutscenePorts {
   fixedCamera(at: Vec3 | null, lookAt?: Vec3): void;
   /** v1.7: the volcano sneezes ("はっくしょーん！"). Resolves when it is over. */
   sneeze(): Promise<void>;
+  /** v1.10: a big bubble pops ("ぱちん") at cutscene figure `id` (or in front of the camera). Resolves when it is over. */
+  pop(id?: string): Promise<void>;
   /** PHASE7_FINISH §4 item 3: learn an ability quietly (its button appears; no card). Used by the fast-forward. */
   learn(ability: AbilityId): void;
   /** The cutscene is being skipped: put away the line and the caption showing now. */
@@ -90,7 +93,7 @@ export async function runCutscene(
       events.post({ type: 'rail:cut', railId, from, to, style, props });
       await race(ports.wait(style === 'fall' ? CUT_FALL_SECONDS : 1));
     } else if ('card' in step) {
-      await ports.card(step.card.title, step.card.button, step.card.icon);
+      await ports.card(step.card.title, step.card.button, step.card.icon, step.card.mirror);
     } else if ('camera' in step) {
       if (step.camera === 'fixed') {
         ports.fixedCamera(step.at, step.lookAt);
@@ -102,6 +105,7 @@ export async function runCutscene(
       }
     } else if ('fx' in step) {
       if (step.fx === 'sneeze') await race(ports.sneeze());
+      else if (step.fx === 'pop') await race(ports.pop(step.id));
     } else if ('caption' in step) {
       await race(ports.caption(step.caption, step.seconds ?? 3));
     } else if ('emote' in step) {

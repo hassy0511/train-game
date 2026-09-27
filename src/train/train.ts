@@ -1,7 +1,7 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { Emitter } from '../core/events';
 import type { Rail, RailNetwork } from '../rail/types';
-import type { FloaterDef, GapDef, JunctionDef, StartDef, WaterDef } from '../stage/types';
+import type { FloaterDef, GapDef, JunctionDef, StartDef, WaterDef, WaterSpan } from '../stage/types';
 import { spanAt } from '../stage/water';
 import {
   ACCELERATION,
@@ -698,12 +698,25 @@ export class Train {
    * then, and dive records are found.
    */
   get diving(): boolean {
-    return this.leadInDive || this.domeLatch > 0 || spanAt(this.currentRail.dives, this.bogieS) !== null;
+    return this.leadInDive || this.domeLatch > 0 || this.waterAt('dives', this.bogieS) !== null;
   }
 
   /** The lead bogie is on a stretch on the water surface (a press dives there). */
   get onWaterSurface(): boolean {
-    return spanAt(this.currentRail.surfaces, this.bogieS) !== null;
+    return this.waterAt('surfaces', this.bogieS) !== null;
+  }
+
+  /**
+   * The water stretch (on the surface or under it) at `s` on the current rail. Past the end of a rail that merges
+   * into another, it is the other rail's (the lead bogie runs 4 m ahead of the car centre, which changes rails at the
+   * merge: a loop under water merging back must not look dry for those metres, or the train would "ぽよん").
+   */
+  private waterAt(kind: 'surfaces' | 'dives', s: number): WaterSpan | null {
+    const rail = this.currentRail;
+    if (s > rail.length && rail.end.type === 'merge' && rail.end.railId !== rail.id) {
+      return spanAt(this.network.getRail(rail.end.railId)[kind], rail.end.at + (s - rail.length));
+    }
+    return spanAt(rail[kind], s);
   }
 
   /** "ぽよん" off a floater or the water is going on. */
@@ -909,13 +922,15 @@ export class Train {
     const inDive = this.leadInDive;
     if (!this.bouncing && !this.falling) {
       // Reaching water: with the dome the train goes on under (a dive going on keeps its depth), without it "ぽよん".
-      const under = spanAt(rail.dives, b);
+      const under = this.waterAt('dives', b);
       if (under && !this.leadWasUnder) {
         if (inDive || this.domeLatch > 0) {
           this.domeLatch = 0;
           this.holdDives(b);
         } else {
-          this.bounce(null, { railId: rail.id, at: Math.max(0, under.from - DIVE.rewindBefore) });
+          // (Past a merge the stretch is the next rail's: back along this one then.)
+          const from = b > rail.length ? rail.length : under.from;
+          this.bounce(null, { railId: rail.id, at: Math.max(0, from - DIVE.rewindBefore) });
         }
       }
       this.leadWasUnder = under !== null;
@@ -1006,7 +1021,7 @@ export class Train {
     this.bobT = -1;
     this.bouncing = null;
     this.floatersPassed.clear();
-    this.leadWasUnder = spanAt(this.currentRail.dives, this.bogieS) !== null;
+    this.leadWasUnder = this.waterAt('dives', this.bogieS) !== null;
     const under = this.carsUnder();
     this.wasUnder = under;
     this.domeIsOn = under;

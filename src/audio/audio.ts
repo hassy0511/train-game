@@ -768,6 +768,80 @@ export class AudioEngine {
     this.hiss({ color: 'pink', delay: 0.05, seconds: 0.3, gain: 0.05, attack: 0.01, freq: 1500, endFreq: 700, q: 0.8, dest: o });
   }
 
+  /**
+   * v1.10 (3-1): the whale sings back ("ぼえ〜♪"): a low, round voice sliding up and down with a slow vibrato and a
+   * soft echo, 1.6 s. Gentle, never a growl.
+   */
+  playWhaleSong(): void {
+    const ctx = this.ctx;
+    const dest = this.out(0.6, 1.6);
+    if (!ctx || !dest) return;
+    const now = ctx.currentTime;
+    for (const [delay, level] of [
+      [0, 1],
+      [0.45, 0.35],
+    ] as const) {
+      const at = now + delay;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(0.16 * level, at + 0.25);
+      g.gain.setValueAtTime(0.16 * level, at + 1.1);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 1.6);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 900;
+      g.connect(lp);
+      lp.connect(dest);
+      for (const [mult, type, gain] of [
+        [1, 'sine', 1],
+        [2, 'triangle', 0.25],
+      ] as const) {
+        const osc = ctx.createOscillator();
+        osc.type = type;
+        osc.frequency.setValueAtTime(180 * mult, at);
+        osc.frequency.exponentialRampToValueAtTime(240 * mult, at + 0.6);
+        osc.frequency.exponentialRampToValueAtTime(200 * mult, at + 1.5);
+        const vib = ctx.createOscillator();
+        vib.frequency.value = 4;
+        const vibGain = ctx.createGain();
+        vibGain.gain.value = 5 * mult;
+        vib.connect(vibGain);
+        vibGain.connect(osc.frequency);
+        const og = ctx.createGain();
+        og.gain.value = gain;
+        osc.connect(og);
+        og.connect(g);
+        osc.start(at);
+        vib.start(at);
+        osc.stop(at + 1.7);
+        vib.stop(at + 1.7);
+      }
+    }
+    // A few small bubbles going up with the song.
+    [500, 700, 600].forEach((f, i) => this.ping(f, 0.3 + i * 0.25, 0.08, 'sine', 0.03, f * 1.5, 0.003, dest));
+  }
+
+  /** v1.10 (3-1): the whale's spout lifts the train: "ぷしゅーっ" (a rush of spray going up) and a soft "ざぶーん". */
+  playSpout(): void {
+    const o = this.out(0.3, 1.8);
+    this.hiss({ seconds: 0.9, gain: 0.1, attack: 0.03, freq: 1800, endFreq: 3600, q: 0.8, dest: o });
+    this.hiss({ color: 'pink', seconds: 0.6, gain: 0.06, attack: 0.02, filter: 'lowpass', freq: 900, q: 0.7, dest: o });
+    this.hiss({ color: 'brown', delay: 0.8, seconds: 0.6, gain: 0.08, filter: 'lowpass', freq: 500, endFreq: 250, q: 0.7, dest: o });
+  }
+
+  /** v1.10 (3-1): a big bubble pops ("ぱちん") and little bubbles scatter. */
+  playPop(): void {
+    const o = this.out(0.3, 1.8);
+    this.hiss({ seconds: 0.07, gain: 0.08, freq: 2600, q: 1.2, dest: o });
+    this.ping(900, 0, 0.12, 'sine', 0.12, 1800, 0.002, o);
+    [1100, 1500, 1300, 1700].forEach((f, i) => this.ping(f, 0.08 + i * 0.05, 0.06, 'sine', 0.03, f * 1.4, 0.003, o));
+  }
+
+  /** v1.10 (3-1): the true (rising) bubbles chosen: a short "きらりん" (the record's sparkle, shorter). */
+  playBubbleTrue(): void {
+    [1568, 2093].forEach((f, i) => this.bell(f, i * 0.08, 0.08, 0.5));
+  }
+
   /** v1.10: a press that only bobs the train (stopped, on land, on the sea floor): "ぷくぷく", three small bubbles. */
   playBubbles(): void {
     const o = this.out(0.25, 2);

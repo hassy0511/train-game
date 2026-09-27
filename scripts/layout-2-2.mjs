@@ -178,7 +178,33 @@ const JUNCTION_AT = 450;
 const junction = silk.at(JUNCTION_AT);
 const loop = new Path('loop', [junction.x, junction.z], junction.h / RAD, [R(25, 25 * Math.PI), S(60), R(25, 25 * Math.PI)], () => 12);
 const LOOP_MERGE_AT = 390;
-const PATHS = { main, silk, loop };
+
+/**
+ * docs/PHASE8_CHAPTER3_4.md 第 2 部 §4.1, read with §0.2 (dives are short arcs on water-surface rails): the puddle
+ * (main 520–560) becomes a real pond (a hole in the ground, water 1.8 m under the rail so main's jump over it stays a
+ * jump), and a side track for "もぐる" leaves main at 385 to the left, runs 12 m beside it and dips onto the pond's
+ * surface, ending in a buffer on the water. Diving from it finds the marble on the pond's floor.
+ */
+const POND_JUNCTION = 385;
+const POND = { y: -1.8, floor: -8 };
+/** The pond's middle (the old puddle's), and main's heading there (the rectangle lies along main). */
+const POND_CENTER = main.at(540);
+/** The side track: an S of two R60 arcs (12 m to the left), then straight on beside main. */
+const POND_S_DEG = Math.acos(1 - 12 / (2 * 60)) / RAD;
+const POND_ARC = 60 * POND_S_DEG * RAD;
+/** Main's s beside which the S ends, and the side track's s for a main s beside it. */
+const POND_BESIDE_FROM = POND_JUNCTION + 2 * 60 * Math.sin(POND_S_DEG * RAD);
+const pondS = (mainS) => 2 * POND_ARC + (mainS - POND_BESIDE_FROM);
+const pondJunction = main.at(POND_JUNCTION);
+const mizutamari = new Path(
+  'mizutamari',
+  [pondJunction.x, pondJunction.z],
+  pondJunction.h / RAD,
+  [L(60, POND_ARC), R(60, POND_ARC), S(556 - POND_BESIDE_FROM)],
+  // Level beside main, then down into the pond (inside its edge, main 519) onto the water: 0.4 m over the surface.
+  ramps([[pondS(520), pondS(530), 0, POND.y + 0.4]], 0),
+);
+const PATHS = { main, silk, loop, mizutamari };
 
 // ---------------------------------------------------------------------------------------------------------------
 // Checks against the design tables
@@ -388,8 +414,10 @@ const RECORDS = [
     name: 'みずたまりの そこ',
     note: 'なにか ひかってる… もぐれたら とれるかも',
     requires: 'dive',
-    model: 'cloud-crystal',
-    onRail: { railId: 'main', at: 545, lateral: -10 },
+    // A big glass marble on the pond's floor, beside the side track (seen through the water from main too).
+    model: 'record-marble',
+    hint: 'みずたまりの そこ… もぐって みよう！',
+    onRail: { railId: 'mizutamari', at: round(pondS(545)), lateral: 2, heightFromRail: round(POND.floor - (POND.y + 0.4), 2) },
   },
 ];
 
@@ -589,15 +617,16 @@ for (let s = 180, k = 0; s <= 260; s += 8, k++) {
   addOnRail('grass-blade', 'main', s, { lateral: 7, rotation: [0, 0, -30], scale: k % 2 ? 0.85 : 0.95 });
 }
 
-// --- The puddle (main 520–560): water, three floating leaves that catch a train, the "?" record under the water.
-addWater('main', 540, { scale: 1.1 });
+// --- The puddle (main 520–560): the pond (environment.water, drawn by the game: no water-strip prop over it), three
+// floating leaves on it, the marble record on its floor. Random props stay out of its rectangle as before.
+water.push({ x: POND_CENTER.x, z: POND_CENTER.z, h: POND_CENTER.h, hx: 33 + 4, hz: 22 + 4 });
 for (const [s, lateral, rotationY] of [
   [528, 3, 20],
-  [537, -22, -35],
+  [537, -24, -35],
   [552, 17, 60],
 ]) {
-  // leaf-pad is 1.2 m high at scale 1: its top just above the water.
-  addOnRail('leaf-pad', 'main', s, { lateral, rotationY, scale: 0.8, height: GROUND_Y - 0.96 + 0.25 });
+  // leaf-pad is 1.2 m high at scale 1: its top just above the pond's water.
+  addOnRail('leaf-pad', 'main', s, { lateral, rotationY, scale: 0.8, height: POND.y - 0.96 + 0.25 });
 }
 
 // --- Grasshopper leaves: where they sit (a small leaf on a thin stalk) and where batta-1 hops off (575, right 7).
@@ -734,6 +763,8 @@ check(Math.hypot(smoke.x - 751.6, smoke.z - 1377.7) < COORD_TOLERANCE, `smoke [$
 // --- Scattered grass, flowers, clover, pebbles and small puddles (seeded).
 const PLATFORM_ZONE = STATIONS.map((st) => ({ railId: st.railId, from: st.at - 50, to: st.at + 10 }));
 const FIXED = Object.fromEntries(['grass-blade', 'meadow-flower', 'clover', 'rock', 'water-strip'].map((m) => [m, props.filter((p) => p.model === m).length]));
+// The pond replaced the puddle's water-strip: as many random ones as before.
+FIXED['water-strip'] += 1;
 const scattered = [];
 
 /** Can a random prop of footprint `r` stand at (x, z)? */
@@ -826,6 +857,15 @@ const stage = {
     fog: { color: '#eef4d6', near: 140, far: 440 },
     lighting: 'day',
     ground: { y: GROUND_Y, size: 3600, color: '#86a24e' },
+    // v1.10: the puddle is a pond one can dive in (docs/PHASE8_CHAPTER3_4.md 第 2 部 §4.1).
+    water: [
+      {
+        y: POND.y,
+        floor: POND.floor,
+        look: 'puddle',
+        area: { rect: { center: [round(POND_CENTER.x, 2), round(POND_CENTER.z, 2)], size: [64, 42], rotationY: round(POND_CENTER.h / RAD, 1), corner: 6 } },
+      },
+    ],
     bgm: 'meadow',
     fall: 'leaf',
   },
@@ -844,8 +884,13 @@ const stage = {
     },
     { id: 'silk', look: 'silk', points: silk.points(), end: { type: 'buffer' } },
     { id: 'loop', look: 'silk', points: loop.points(), end: { type: 'merge', railId: 'silk', at: LOOP_MERGE_AT } },
+    // Back from its buffer to main 395: batta-1 hops on 10 m later as ever (it waits for the train at 405).
+    { id: 'mizutamari', points: mizutamari.points(), end: { type: 'buffer' }, spur: { back: { railId: 'main', at: 395 } } },
   ],
-  junctions: [{ id: 'ito-wakare', railId: 'silk', at: JUNCTION_AT, left: 'silk', right: 'loop', default: 'right', signReversed: true }],
+  junctions: [
+    { id: 'ito-wakare', railId: 'silk', at: JUNCTION_AT, left: 'silk', right: 'loop', default: 'right', signReversed: true },
+    { id: 'to-mizutamari', railId: 'main', at: POND_JUNCTION, left: 'mizutamari', right: 'main', default: 'right', needs: 'dive' },
+  ],
   stations: STATIONS,
   props,
   actors: ACTORS,
