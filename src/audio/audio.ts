@@ -584,6 +584,111 @@ export class AudioEngine {
       this.ping(260 + (i % 2) * 30, i * 0.075, 0.05, 'triangle', 0.04 * g, 180, 0.004, o);
     }
   }
+
+  // ---- chapters 3 and 4 -------------------------------------------------------------------------------------
+
+  /**
+   * v1.10: the train is under water (or not): the island's sound crossfades to the underwater bed (see
+   * Ambience.setUnderwater). Cheap to call every frame; call it each frame so a newly set ambience follows too.
+   */
+  setAmbienceUnderwater(on: boolean): void {
+    this.ambience?.setUnderwater(on);
+  }
+
+  /** 4-1: thin ice under the wheels: "ぴし ぴしぴし" (small, bright cracks; nothing breaks yet). */
+  playIceCrack(): void {
+    const o = this.out(0.25, 1.6);
+    [0, 0.16, 0.24, 0.37].forEach((d, i) => {
+      const f = [3400, 2900, 3700, 3100][i];
+      this.ping(f, d, 0.06, 'triangle', 0.05, f * 0.8, 0.001, o);
+      this.ping(f * 1.5, d, 0.03, 'sine', 0.02, f * 1.3, 0.001, o);
+      this.hiss({ delay: d, seconds: 0.03, gain: 0.05, filter: 'highpass', freq: 4000, dest: o });
+    });
+  }
+
+  /** 4-1: through the thin ice, gently: "ぽちゃん … ぷかぷか" (a splash, then bobbing back up twice). */
+  playIceSplash(): void {
+    this.playSplash();
+    const o = this.out(0.2, 1.6);
+    [0.55, 0.85].forEach((d, i) => {
+      this.ping(480 - i * 30, d, 0.16, 'sine', 0.1, 720 - i * 40, 0.01, o);
+      this.ping(900, d + 0.05, 0.06, 'sine', 0.025, 1300, 0.003, o);
+    });
+  }
+
+  /** 4-1: the ice mirror catches the light: "きらーん" (quick high bells up, one ringing out, a shimmer). */
+  playMirror(): void {
+    [1568, 2093, 2637].forEach((f, i) => this.bell(f, i * 0.045, 0.06, 0.5));
+    this.bell(3136, 0.14, 0.08, 1.6);
+    this.ping(2637, 0.14, 1.4, 'sine', 0.025, 2800, 0.02, this.out(0.5));
+    this.hiss({ delay: 0.1, seconds: 1.1, gain: 0.018, attack: 0.1, filter: 'highpass', freq: 7500, dest: this.out(0.4) });
+  }
+
+  /** 4-2: the snowplow blade drops ("かこん！") and throws the snow aside ("ざざーっ"). */
+  playPlow(): void {
+    const o = this.out(0.1, 1.6);
+    this.knock(900, 0, 0.14, o);
+    this.ping(180, 0.01, 0.12, 'sine', 0.14, 120, 0.004, o);
+    this.hiss({ color: 'pink', delay: 0.08, seconds: 0.9, gain: 0.1, attack: 0.06, filter: 'lowpass', freq: 2600, endFreq: 800, q: 0.7, dest: o });
+    this.hiss({ delay: 0.1, seconds: 0.6, gain: 0.03, attack: 0.05, freq: 4500, endFreq: 2500, q: 0.8, dest: o });
+    // Lumps of snow landing to the side.
+    [0.35, 0.5, 0.62].forEach((d, i) => this.hiss({ color: 'brown', delay: d, seconds: 0.1, gain: 0.07 - i * 0.015, filter: 'lowpass', freq: 500, dest: o }));
+  }
+
+  /** 4-2: the snowplow forgotten, the train stops in soft snow: "ぽすっ". */
+  playPlowBump(): void {
+    const o = this.out(0.05, 2);
+    this.hiss({ color: 'pink', seconds: 0.12, gain: 0.14, attack: 0.004, filter: 'lowpass', freq: 600, dest: o });
+    this.ping(140, 0, 0.2, 'sine', 0.16, 100, 0.004, o);
+  }
+
+  /**
+   * 4-3: the snow wave coming down behind: a soft, big "もこもこ" that swells and settles (a round, fluttering
+   * rumble with little soft thumps in it — no roar, nothing scary).
+   */
+  playSnowWave(): void {
+    const ctx = this.ctx;
+    const dest = this.out(0.15, 1.4);
+    if (!ctx || !dest) return;
+    const at = ctx.currentTime;
+    const len = 2.4;
+    const src = noiseSource(ctx, 'pink', at);
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(300, at);
+    f.frequency.linearRampToValueAtTime(750, at + len * 0.5);
+    f.frequency.linearRampToValueAtTime(280, at + len);
+    // "もこもこ": the level flutters slowly, like snow tumbling over itself.
+    const flutter = ctx.createGain();
+    flutter.gain.value = 0.7;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 5;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.3;
+    lfo.connect(depth);
+    depth.connect(flutter.gain);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.16, at + len * 0.45);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    src.connect(f);
+    f.connect(flutter);
+    flutter.connect(g);
+    g.connect(dest);
+    lfo.start(at);
+    src.stop(at + len + 0.05);
+    lfo.stop(at + len + 0.05);
+    this.hiss({ color: 'brown', seconds: len, gain: 0.1, attack: len * 0.45, filter: 'lowpass', freq: 160, q: 0.7, dest });
+    [0.5, 0.8, 1.05, 1.35, 1.6].forEach((d, i) => this.ping(120 + (i % 2) * 25, d, 0.18, 'sine', 0.05, 80, 0.01, dest));
+  }
+
+  /** 4-3: caught by the snow wave: a soft "もふっ" (a puff of snow and a low, round "ぼふ"). */
+  playSnowCatch(): void {
+    const o = this.out(0.1, 1.8);
+    this.hiss({ color: 'pink', seconds: 0.3, gain: 0.12, attack: 0.01, filter: 'lowpass', freq: 1000, endFreq: 300, q: 0.7, dest: o });
+    this.ping(160, 0, 0.3, 'sine', 0.15, 90, 0.006, o);
+    this.hiss({ delay: 0.05, seconds: 0.4, gain: 0.02, attack: 0.05, filter: 'highpass', freq: 5000, dest: o });
+  }
 }
 
 /** The room's echo: 1.1 s of noise fading out, darker as it fades (made once per context). */

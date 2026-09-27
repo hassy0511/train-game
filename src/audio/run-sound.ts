@@ -3,8 +3,11 @@ import { noiseSource } from './noise';
 /**
  * What the track under the train sounds like: plain rail; spider silk ("silk", soft and hushed); a hollow iron
  * bridge; old wooden planks; a soft bed of petals. From the rail's look and the stage's "sound" zones (v1.9).
+ * v1.10: ice (a high "しゃーっ" glide, thin "ちん" joints), snow (muffled "さく さく"), a tunnel (louder, with a
+ * short echo on the joints).
  */
-export type RunSurface = 'rail' | 'silk' | 'bridge' | 'wood' | 'soft';
+export type RunSurface = 'rail' | 'silk' | 'bridge' | 'wood' | 'soft' | 'ice' | 'snow' | 'tunnel';
+export const RUN_SURFACES: readonly RunSurface[] = ['rail', 'silk', 'bridge', 'wood', 'soft', 'ice', 'snow', 'tunnel'];
 
 /** One frame of the train, as the running sound needs it. */
 export interface RunInput {
@@ -19,6 +22,8 @@ export interface RunInput {
   surface: RunSurface;
   /** 2-3: the rocket burns ("しゅごーっ" for as long as it lasts). */
   rocket?: boolean;
+  /** v1.10: the lead car is under water: everything muffled, soft joints, no wind, and "ぶくぶく" bubbles. */
+  underwater?: boolean;
   /** Game paused, a card up, or a fade: everything goes quiet. */
   quiet: boolean;
 }
@@ -43,36 +48,96 @@ export const RUN_SOUND = {
   squeal: 0.012,
   release: 0.2,
   rocket: 0.12,
+  /** Ice and snow: the high "しゃーっ" of the wheels sliding along, at full speed (times the surface's own share). */
+  slide: 0.05,
+  /** Under water: the muffle (Hz, the running sound's low-pass) and the bubbles' level and rate (per s, at full). */
+  muffle: 700,
+  bubble: 0.03,
+  bubbles: [2, 12] as [number, number],
+  /** In a tunnel: the slap-back of the joints (s) and how much of it comes back. */
+  echo: [0.12, 0.25] as [number, number],
   /** Seconds to glide to a new level (so a jump or a pause fades rather than clicks). */
   glide: 0.08,
 } as const;
 
-/** How each surface changes the sound: rumble and clack level, and a resonance (Hz, dB) for hollow ones. */
-const SURFACES: Record<RunSurface, { rumble: number; roll: number; clack: number; ring: [number, number] }> = {
+interface SurfaceSound {
+  /** Levels of the rumble, the wheel whir and the joints; a resonance (Hz, dB) for hollow ones. */
+  rumble: number;
+  roll: number;
+  clack: number;
+  ring: [number, number];
+  /** The high sliding hiss: share of RUN_SOUND.slide and its centre (Hz). */
+  slide?: [number, number];
+}
+
+const SURFACES: Record<RunSurface, SurfaceSound> = {
   rail: { rumble: 1, roll: 1, clack: 1, ring: [160, 0] },
   silk: { rumble: 0.25, roll: 0, clack: 0.35, ring: [160, 0] },
   bridge: { rumble: 1.3, roll: 1.1, clack: 1.3, ring: [170, 10] },
   wood: { rumble: 1.1, roll: 0.6, clack: 1.2, ring: [280, 7] },
   soft: { rumble: 0.5, roll: 0.3, clack: 0.4, ring: [160, 0] },
+  ice: { rumble: 0.55, roll: 1.2, clack: 0.5, ring: [2400, 4], slide: [1, 3500] },
+  snow: { rumble: 0.7, roll: 0.4, clack: 0.55, ring: [160, 0], slide: [0.3, 5500] },
+  tunnel: { rumble: 1.25, roll: 1, clack: 1.1, ring: [110, 8] },
 };
+
+/**
+ * One wheel over a joint, per surface: the click's band (Hz, Q) and share, the thump's pitch, share and length,
+ * little rings on top ([Hz, share, length]), and a second, smaller "さく" just after (snow).
+ */
+interface ClickSound {
+  band: number;
+  q: number;
+  click: number;
+  clickDecay: number;
+  low: number;
+  thump: number;
+  thumpDecay: number;
+  rings: [number, number, number][];
+  crunch?: boolean;
+}
+
+const CLICKS: Record<RunSurface, ClickSound> = {
+  rail: { band: 2000, q: 1.2, click: 0.8, clickDecay: 0.035, low: 120, thump: 1.1, thumpDecay: 0.08, rings: [[1650, 0.12, 0.05]] },
+  silk: { band: 500, q: 1.2, click: 0.3, clickDecay: 0.035, low: 120, thump: 1.1, thumpDecay: 0.08, rings: [] },
+  bridge: { band: 2000, q: 1.2, click: 0.8, clickDecay: 0.035, low: 95, thump: 1.1, thumpDecay: 0.16, rings: [[1250, 0.12, 0.12]] },
+  wood: { band: 900, q: 1.2, click: 0.8, clickDecay: 0.035, low: 150, thump: 1.1, thumpDecay: 0.08, rings: [] },
+  soft: { band: 500, q: 1.2, click: 0.3, clickDecay: 0.035, low: 120, thump: 1.1, thumpDecay: 0.08, rings: [] },
+  // "ちん": thin and high, hardly any thump.
+  ice: { band: 3000, q: 1.5, click: 0.5, clickDecay: 0.03, low: 130, thump: 0.5, thumpDecay: 0.06, rings: [[3000, 0.4, 0.16], [2600, 0.2, 0.12]] },
+  // "さく さく": a muffled crunch of packed snow, twice, and a soft low step.
+  snow: { band: 700, q: 0.8, click: 0.9, clickDecay: 0.07, low: 110, thump: 0.6, thumpDecay: 0.1, rings: [], crunch: true },
+  tunnel: { band: 2000, q: 1.2, click: 0.8, clickDecay: 0.035, low: 110, thump: 1.1, thumpDecay: 0.1, rings: [[1650, 0.12, 0.05]] },
+};
+
+/** Under water every joint is a soft "ことっ". */
+const UNDERWATER_CLICK: ClickSound = { band: 500, q: 1, click: 0.4, clickDecay: 0.04, low: 110, thump: 0.8, thumpDecay: 0.08, rings: [] };
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 
 /**
  * The sound of the train running, made of a few always-running voices whose levels follow the train:
  * - "ごーっ": low rumble (brown noise, brighter and louder with speed), with a hollow ring on bridges;
- * - a soft wheel whir (pink noise, mid);
- * - "たたん・たたん": two clicks at each rail joint, closer together as the train goes faster;
+ * - a soft wheel whir (pink noise, mid), and on ice and snow a high sliding "しゃーっ";
+ * - "たたん・たたん": two clicks at each rail joint, closer together as the train goes faster (in a tunnel with a
+ *   short echo);
  * - "ういーん": a gentle motor hum that rises with speed while the lever pulls (a plain hum, no scale);
  * - "びゅーっ": wind at high speed, and in the air;
- * - braking: a soft hiss and, just before stopping, a quiet squeal; then "ぷしゅー" once stopped.
+ * - braking: a soft hiss and, just before stopping, a quiet squeal; then "ぷしゅー" once stopped;
+ * - under water: all of it through a low-pass (muffled), and small bubbles "ぶくぶく".
  */
 export class RunSound {
+  /** Everything but the bubbles goes out through this low-pass (open, except under water). */
+  private readonly muffle: BiquadFilterNode;
+  /** The tunnel's slap-back (joints only). */
+  private readonly echo: GainNode;
   private readonly rumbleFilter: BiquadFilterNode;
   private readonly ring: BiquadFilterNode;
   private readonly rumbleGain: GainNode;
   private readonly rollFilter: BiquadFilterNode;
   private readonly rollGain: GainNode;
+  private readonly slideFilter: BiquadFilterNode;
+  private readonly slideGain: GainNode;
   private readonly motorOscs: OscillatorNode[];
   private readonly motorGain: GainNode;
   private readonly windFilter: BiquadFilterNode;
@@ -88,9 +153,13 @@ export class RunSound {
   /** The train got going since it last stood still (so stopping lets out the brakes' air). */
   private ranSinceStop = false;
   private movingFor = 0;
-  /** Rail joints clicked so far, and "ぷしゅー"s after stopping (hooks for tests). */
+  /** Seconds until the next bubble under water, and the seed for their pitches. */
+  private bubbleIn = 0;
+  private seed = 0x1b0b1e;
+  /** Rail joints clicked so far, "ぷしゅー"s after stopping, and bubbles (hooks for tests). */
   joints = 0;
   releases = 0;
+  bubbles = 0;
   /** Sum of the voice levels asked for last frame (a hook for tests). */
   level = 0;
 
@@ -99,12 +168,35 @@ export class RunSound {
     private readonly out: AudioNode,
   ) {
     const now = ctx.currentTime;
+    this.muffle = ctx.createBiquadFilter();
+    this.muffle.type = 'lowpass';
+    this.muffle.frequency.value = ctx.sampleRate / 2;
+    this.muffle.Q.value = 0.5;
+    this.muffle.connect(out);
     const gain = (): GainNode => {
       const g = ctx.createGain();
       g.gain.value = 0;
-      g.connect(out);
+      g.connect(this.muffle);
       return g;
     };
+
+    this.echo = ctx.createGain();
+    const delay = ctx.createDelay(0.5);
+    delay.delayTime.value = RUN_SOUND.echo[0];
+    const feedback = ctx.createGain();
+    feedback.gain.value = RUN_SOUND.echo[1];
+    const wet = ctx.createGain();
+    wet.gain.value = 0.55;
+    // A little darker each time it comes back, like a stone wall.
+    const dark = ctx.createBiquadFilter();
+    dark.type = 'lowpass';
+    dark.frequency.value = 2500;
+    this.echo.connect(delay);
+    delay.connect(dark);
+    dark.connect(feedback);
+    feedback.connect(delay);
+    dark.connect(wet);
+    wet.connect(this.muffle);
 
     this.rumbleGain = gain();
     this.ring = ctx.createBiquadFilter();
@@ -125,6 +217,14 @@ export class RunSound {
     this.rollFilter.frequency.value = 700;
     this.rollFilter.connect(this.rollGain);
     noiseSource(ctx, 'pink', now).connect(this.rollFilter);
+
+    this.slideGain = gain();
+    this.slideFilter = ctx.createBiquadFilter();
+    this.slideFilter.type = 'bandpass';
+    this.slideFilter.Q.value = 1.1;
+    this.slideFilter.frequency.value = 3500;
+    this.slideFilter.connect(this.slideGain);
+    noiseSource(ctx, 'white', now).connect(this.slideFilter);
 
     this.motorGain = gain();
     const motorFilter = ctx.createBiquadFilter();
@@ -213,12 +313,16 @@ export class RunSound {
     const now = ctx.currentTime;
     const R = RUN_SOUND;
     const surface = SURFACES[input.surface];
+    const under = input.underwater === true;
     const speed = Math.max(0, input.speed);
     const v = speed / R.full;
     const onRail = !input.airborne && !input.quiet && speed > 0.2;
     const set = (param: AudioParam, value: number, glide: number = R.glide): void => {
       param.setTargetAtTime(value, now, glide);
     };
+
+    // Under water the whole running sound slides down into a muffle over about 0.3 s (and opens up again).
+    set(this.muffle.frequency, under ? R.muffle : ctx.sampleRate / 2, 0.1);
 
     // A train starting off is heard at once, but not with a jolt: a short swell over the first half second.
     this.movingFor = onRail ? this.movingFor + dt : 0;
@@ -234,6 +338,13 @@ export class RunSound {
     set(this.rollGain.gain, roll);
     set(this.rollFilter.frequency, 600 + 1000 * Math.min(v, 1.3));
 
+    // Ice and snow: "しゃーっ", louder with speed, and on ice louder still while the brakes try to hold.
+    const [slideShare, slideFreq] = surface.slide ?? [0, 3500];
+    const skid = input.surface === 'ice' && input.braking && speed > 0.5 ? 1.8 : 1;
+    const slide = onRail ? R.slide * slideShare * Math.min(v, 1.3) * skid * swell : 0;
+    set(this.slideGain.gain, slide, 0.12);
+    set(this.slideFilter.frequency, slideFreq * (0.85 + 0.25 * Math.min(v, 1.2)));
+
     // The motor pulls while the lever asks for more than the speed; a little hum while cruising; none coasting
     // down or braking.
     const pulling = input.target > speed + 0.3 ? 1 : input.target > 0.5 && !input.braking ? 0.35 : 0;
@@ -243,7 +354,7 @@ export class RunSound {
     this.motorOscs.forEach((osc, i) => set(osc.frequency, hum * [1, 2, 3][i], 0.1));
 
     const fast = Math.max(0, v - 0.45) / 0.55;
-    const wind = input.quiet ? 0 : R.wind * fast ** 1.3 + (input.airborne ? R.airWind : 0);
+    const wind = input.quiet || under ? 0 : R.wind * fast ** 1.3 + (input.airborne ? R.airWind : 0);
     set(this.windGain.gain, wind, 0.15);
     set(this.windFilter.frequency, 500 + 1500 * Math.min(v, 1.4) + (input.airborne ? 400 : 0));
 
@@ -260,18 +371,30 @@ export class RunSound {
         this.sinceJoint %= R.joint;
         // Heard clearly even slow: that is where a child feels the rhythm.
         const loud = R.clack * (0.7 + 0.5 * Math.min(v, 1.2)) * surface.clack;
-        this.clack(0, loud, input.surface);
+        this.clack(0, loud, input.surface, under);
         const apart = R.bogie / speed;
-        if (apart > 0.05 && apart < 0.6) this.clack(apart, loud * 0.85, input.surface);
+        if (apart > 0.05 && apart < 0.6) this.clack(apart, loud * 0.85, input.surface, under);
         this.joints += 1;
       }
     }
     // Landing from a jump: "がたん".
     if (this.wasAirborne && !input.airborne && !input.quiet) {
-      this.clack(0, R.clack * 1.3 * surface.clack, input.surface);
-      this.clack(0.09, R.clack * 1.1 * surface.clack, input.surface);
+      this.clack(0, R.clack * 1.3 * surface.clack, input.surface, under);
+      this.clack(0.09, R.clack * 1.1 * surface.clack, input.surface, under);
     }
     this.wasAirborne = input.airborne;
+
+    // Under water: small bubbles going up, more of them the faster the train goes.
+    if (under && !input.quiet) {
+      this.bubbleIn -= dt;
+      if (this.bubbleIn <= 0) {
+        const [slow, quick] = R.bubbles;
+        this.bubbleIn = (0.5 + this.random()) / (slow + (quick - slow) * Math.min(v, 1));
+        this.bubble();
+      }
+    } else {
+      this.bubbleIn = 0;
+    }
 
     // Stopped after a run (braked down to a standstill, not put back by a rewind): the brakes let out their
     // air, "ぷしゅー".
@@ -283,56 +406,90 @@ export class RunSound {
     if (speed <= 0.05) this.ranSinceStop = false;
     this.lastSpeed = input.quiet ? 0 : speed;
 
-    this.level = rumble + roll + motor + wind;
+    this.level = rumble + roll + slide + motor + wind;
   }
 
-  /** One wheel over a joint: a click of noise, a low thump and a small metallic ring (or a knock on wood). */
-  private clack(delay: number, gain: number, surface: RunSurface): void {
+  private random(): number {
+    this.seed ^= this.seed << 13;
+    this.seed ^= this.seed >>> 17;
+    this.seed ^= this.seed << 5;
+    return (this.seed >>> 0) / 0xffffffff;
+  }
+
+  /** "ぷく": one small bubble, a sine rising quickly (heard past the muffle, as if right by the window). */
+  private bubble(): void {
     const ctx = this.ctx;
+    const at = ctx.currentTime;
+    const f = 300 + 500 * this.random();
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(f, at);
+    osc.frequency.exponentialRampToValueAtTime(f * 1.8, at + 0.04);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(RUN_SOUND.bubble * (0.6 + 0.4 * this.random()), at + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.05);
+    osc.connect(g);
+    g.connect(this.out);
+    osc.start(at);
+    osc.stop(at + 0.08);
+    this.bubbles += 1;
+  }
+
+  /** One wheel over a joint: a click of noise, a low thump and a small ring (a knock on wood, a crunch in snow). */
+  private clack(delay: number, gain: number, surface: RunSurface, underwater = false): void {
+    const ctx = this.ctx;
+    const c = underwater ? UNDERWATER_CLICK : CLICKS[surface];
+    const echo = surface === 'tunnel' && !underwater;
     const at = ctx.currentTime + delay;
-    const env = (g: GainNode, peak: number, decay: number): void => {
-      g.gain.setValueAtTime(0.0001, at);
-      g.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0002), at + 0.003);
-      g.gain.exponentialRampToValueAtTime(0.0001, at + decay);
+    const env = (g: GainNode, peak: number, decay: number, start = at): void => {
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0002), start + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + decay);
+    };
+    const send = (g: GainNode): void => {
+      g.connect(this.muffle);
+      if (echo) g.connect(this.echo);
     };
 
-    // The click: a short burst of band-passed noise.
-    const noise = noiseSource(ctx, 'white', at);
-    const band = ctx.createBiquadFilter();
-    band.type = 'bandpass';
-    band.frequency.value = surface === 'wood' ? 900 : surface === 'silk' || surface === 'soft' ? 500 : 2000;
-    band.Q.value = 1.2;
-    const clickGain = ctx.createGain();
-    env(clickGain, gain * (surface === 'silk' || surface === 'soft' ? 0.3 : 0.8), 0.035);
-    noise.connect(band);
-    band.connect(clickGain);
-    clickGain.connect(this.out);
-    noise.stop(at + 0.05);
+    // The click: a short burst of band-passed noise (in snow, a second smaller one just after: "さく").
+    for (const [lag, share] of c.crunch ? [[0, 1], [0.028, 0.6]] : [[0, 1]]) {
+      const noise = noiseSource(ctx, 'white', at + lag);
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = lag > 0 ? c.band * 1.15 : c.band;
+      band.Q.value = c.q;
+      const clickGain = ctx.createGain();
+      env(clickGain, gain * c.click * share, c.clickDecay, at + lag);
+      noise.connect(band);
+      band.connect(clickGain);
+      send(clickGain);
+      noise.stop(at + lag + c.clickDecay + 0.02);
+    }
 
     // The thump under it.
     const thump = ctx.createOscillator();
     thump.type = 'sine';
-    const low = surface === 'bridge' ? 95 : surface === 'wood' ? 150 : 120;
-    thump.frequency.setValueAtTime(low, at);
-    thump.frequency.exponentialRampToValueAtTime(low * 0.6, at + 0.07);
+    thump.frequency.setValueAtTime(c.low, at);
+    thump.frequency.exponentialRampToValueAtTime(c.low * 0.6, at + 0.07);
     const thumpGain = ctx.createGain();
-    env(thumpGain, gain * 1.1, surface === 'bridge' ? 0.16 : 0.08);
+    env(thumpGain, gain * c.thump, c.thumpDecay);
     thump.connect(thumpGain);
-    thumpGain.connect(this.out);
+    send(thumpGain);
     thump.start(at);
-    thump.stop(at + 0.2);
+    thump.stop(at + c.thumpDecay + 0.12);
 
-    // Steel on steel: a faint ring (not on silk, petals or wood).
-    if (surface === 'rail' || surface === 'bridge') {
+    // Steel on steel: a faint ring (not on silk, petals, wood or snow); on ice a thin "ちん".
+    for (const [freq, share, decay] of c.rings) {
       const ping = ctx.createOscillator();
       ping.type = 'triangle';
-      ping.frequency.value = surface === 'bridge' ? 1250 : 1650;
+      ping.frequency.value = freq;
       const pingGain = ctx.createGain();
-      env(pingGain, gain * 0.12, surface === 'bridge' ? 0.12 : 0.05);
+      env(pingGain, gain * share, decay);
       ping.connect(pingGain);
-      pingGain.connect(this.out);
+      send(pingGain);
       ping.start(at);
-      ping.stop(at + 0.15);
+      ping.stop(at + decay + 0.1);
     }
   }
 
@@ -352,7 +509,7 @@ export class RunSound {
     g.gain.exponentialRampToValueAtTime(0.0001, at + 0.95);
     noise.connect(band);
     band.connect(g);
-    g.connect(this.out);
+    g.connect(this.muffle);
     noise.stop(at + 1);
   }
 }
