@@ -11,6 +11,8 @@ export interface MapIsland {
   recordsTotal: number;
   /** Some record needs an ability the player does not have yet: come back later ("？"). */
   needsLater: boolean;
+  /** The saved mission to go on from on this island (0-based, at least 1): a tap asks "つづきから" or "はじめから". */
+  resumeMission?: number;
 }
 
 /** A chapter's end (docs/PHASE7_FINISH.md §3): plays once, after its rail has grown in. */
@@ -52,7 +54,8 @@ export interface MapOptions {
   teaser?: MapTeaser;
 }
 
-export type MapChoice = { kind: 'stage'; id: string } | { kind: 'close' };
+/** `resume`: go on from the island's saved mission ("つづきから") instead of from its start. */
+export type MapChoice = { kind: 'stage'; id: string; resume?: boolean } | { kind: 'close' };
 
 export const linkKey = (from: string, to: string): string => `${from}>${to}`;
 
@@ -63,6 +66,8 @@ const RING_STEP_SECONDS = 0.5;
 /** A breath between the light coming home and the card. */
 const RING_REST_SECONDS = 0.5;
 const SAY_SECONDS = 2;
+/** The "つづきから / はじめから" choice ignores taps this long: a second tap on the island does not pick for the child. */
+const CHOOSE_GUARD_SECONDS = 0.4;
 /** Map area aspect (16:10): SVG x units per % of width. */
 const K = 1.6;
 const WIDE = 100 * K;
@@ -90,6 +95,44 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
       el.remove();
       resolve(choice);
     };
+
+    // An island with a saved mission asks how to start, in a bubble beside it; a tap anywhere else closes it.
+    let choose: HTMLElement | null = null;
+    const closeChoose = (): void => {
+      choose?.remove();
+      choose = null;
+      area.querySelector('.map-island.is-choosing')?.classList.remove('is-choosing');
+    };
+    const askStart = (btn: HTMLElement, id: string, x: number, y: number, mission: number): void => {
+      closeChoose();
+      const box = document.createElement('div');
+      box.className = 'map-choose';
+      box.dataset.island = id;
+      // On the side with more room: right of an island in the left half, else left of it (islands are 25% wide).
+      const right = x < 50;
+      box.classList.add(right ? 'is-right' : 'is-left');
+      box.style.left = `${right ? x + 11 : x - 11}%`;
+      box.style.top = `${y}%`;
+      const add = (cls: string, label: string, resume: boolean): void => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `map-choose-button ${cls}`;
+        b.textContent = label;
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          finish({ kind: 'stage', id, resume });
+        });
+        box.appendChild(b);
+      };
+      add('is-continue', `つづきから（ミッション ${mission + 1}）`, true);
+      add('is-start', 'はじめから', false);
+      box.addEventListener('click', (e) => e.stopPropagation());
+      area.appendChild(box);
+      choose = box;
+      window.setTimeout(() => box.classList.add('is-ready'), CHOOSE_GUARD_SECONDS * 1000);
+      btn.classList.add('is-choosing');
+    };
+    area.addEventListener('click', closeChoose);
 
     const { finale, teaser } = options;
     // Where each node sits (% of the area): the islands, and the teaser's "?" island.
@@ -194,8 +237,13 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
           if (options.fresh.length > 0) btn.style.animationDelay = `${RAIL_GROW_SECONDS}s`;
         }
       }
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
         if (state?.title && state.unlocked) {
+          if (state.resumeMission !== undefined) {
+            e.stopPropagation();
+            if (choose?.dataset.island !== island.id) askStart(btn, island.id, island.x, island.y, state.resumeMission);
+            return;
+          }
           finish({ kind: 'stage', id: island.id });
           return;
         }
