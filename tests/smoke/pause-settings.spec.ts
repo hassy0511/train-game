@@ -214,7 +214,8 @@ function fullProgress(): { schema: 1; cleared: string[]; abilities: string[]; re
   const stages = readdirSync(resolve(root, 'src/stages'))
     .filter((f) => f.endsWith('.json'))
     .map((f) => JSON.parse(readFileSync(resolve(root, 'src/stages', f), 'utf8')) as { id: string; hidden?: boolean; unlocks: string[]; records: { id: string }[] })
-    .filter((s) => !s.hidden);
+    // あいことば version 1 carries chapters 1 and 2 only (version 2 comes with chapters 3 and 4, PHASE8_CHAPTER3_4 §5).
+    .filter((s) => !s.hidden && /^[12]-/.test(s.id));
   const world = JSON.parse(readFileSync(resolve(root, 'src/world/world.json'), 'utf8')) as { links: [string, string][] };
   return {
     schema: 1,
