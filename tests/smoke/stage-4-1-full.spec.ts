@@ -349,7 +349,9 @@ test('stage 4-1 full run: ice, thin ice and the rocket, the ice hole, the mirror
   await waitFront(page, 'ana', 5);
   await expect(page.locator('#jump')).toHaveAttribute('data-mode', 'dive', { timeout: 30_000 });
   await page.screenshot({ path: resolve(OUT, '4-1-08-ice-hole.png') });
-  const dives = await diveOnGlow(page, 'ana', 140);
+  // The shell (ana 160) makes the seat glow from DIVE.recordGlow (30 m) before it: keep pressing on the glow until the
+  // front is 10 m short of it (stopping at 140 left a window of about 2 m, missed on a slow frame).
+  const dives = await diveOnGlow(page, 'ana', 150);
   console.log(`4-1: dived ${dives} time(s) in the ice hole`);
   await page.waitForFunction(() => (JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}').records ?? []).includes('glow-shell'), null, { timeout: 60_000 });
   expect(Number(await app.getAttribute('data-dive-bounces'))).toBe(0);
