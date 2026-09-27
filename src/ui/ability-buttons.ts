@@ -77,6 +77,13 @@ const MAGNET_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
   <path d="M16 27v3M8 25l-2 2M24 25l2 2" stroke="#2b3a4a" stroke-width="2" stroke-linecap="round"/>
 </svg>`;
 
+/** Chapter 4's snowplow (not given in chapter 3; records waiting for it show it grey): a plough blade pushing snow. */
+const PLOW_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+  <path d="M6 10h8l4 12H4z" fill="#2b3a4a"/>
+  <path d="M18 16h8" stroke="#2b3a4a" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="24" cy="24" r="2.4" fill="#2b3a4a"/><circle cx="28" cy="20" r="1.8" fill="#2b3a4a"/><circle cx="21" cy="27.5" r="1.5" fill="#2b3a4a"/>
+</svg>`;
+
 /** The whistle's picture (same as its button's). */
 const WHISTLE_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
   <path d="M4 14h12l8-6v16l-8-6H4z" fill="#2b3a4a"/>
@@ -103,6 +110,8 @@ export function abilityIcon(ability: AbilityId): string {
       return REVERSE_ICON;
     case 'magnetLight':
       return MAGNET_ICON;
+    case 'plow':
+      return PLOW_ICON;
     default:
       return '';
   }

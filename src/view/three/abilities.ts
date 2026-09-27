@@ -29,6 +29,7 @@ import { resolvePlacement } from '../../stage/loader';
 import type { GapDef, JunctionDef, StageData } from '../../stage/types';
 import { buildAbilitySign } from './ability-picture';
 import type { ModelLibrary } from './models';
+import { LEAP } from '../../train/params';
 import { addModelPlacements, sourceMeshes, type ModelPlacement, type SourceMesh } from './props';
 
 /** Dark "pit" strips on the ground under rail gaps, so a missing piece of rail reads as a hole. */
@@ -251,6 +252,9 @@ interface FlockParams {
   radius: number;
   /** rad/s around the circle; negative flies the other way. */
   speed: number;
+  /** v1.10 (3-2): "leap": fish or frogs just under the surface of the water at `surface`, now and then jumping out. */
+  mode?: 'circle' | 'leap';
+  surface?: number;
 }
 
 /** Birds fly in lanes -LANES … LANES around the circle, each lane wider and higher than the next. */
@@ -280,7 +284,7 @@ export class Flocks {
   readonly group = new Group();
   /** Each bird is a pose; a flock draws as one instanced batch per model part. */
   private readonly birds: { object: Object3D; flock: FlockParams; phase: number; lane: number; batch: number; slot: number }[] = [];
-  private readonly batches: { meshes: { mesh: InstancedMesh; matrix: Matrix4 }[] }[] = [];
+  private readonly batches: { meshes: { mesh: InstancedMesh; matrix: Matrix4 }[]; model: string; lift: number; liftTo: number; liftRate: number }[] = [];
   private readonly scratch = new Matrix4();
   private time = 0;
 
@@ -305,7 +309,7 @@ export class Flocks {
         this.group.add(mesh);
         return { mesh, matrix: source.matrix };
       });
-      this.batches.push({ meshes });
+      this.batches.push({ meshes, model: flock.model, lift: 0, liftTo: 0, liftRate: 0 });
       for (let i = 0; i < flock.count; i++) {
         const object = new Object3D();
         object.scale.setScalar(0.8 + (((i * 37) % 10) / 9) * (MAX_SCALE - 0.8));
@@ -315,20 +319,49 @@ export class Flocks {
     }
   }
 
+  /**
+   * v1.10 (3-3): the flocks of `model` rise `meters` over `seconds` (the festival's jellyfish lanterns); 0 s at once.
+   */
+  lift(model: string, meters: number, seconds: number): void {
+    for (const b of this.batches) {
+      if (b.model !== model) continue;
+      b.liftTo = meters;
+      if (seconds <= 0) b.lift = meters;
+      b.liftRate = seconds > 0 ? Math.abs(meters - b.lift) / seconds : 0;
+    }
+  }
+
   update(dt: number): void {
     this.time += dt;
+    for (const b of this.batches) {
+      if (b.lift === b.liftTo) continue;
+      const step = b.liftRate * dt;
+      b.lift = Math.abs(b.liftTo - b.lift) <= step ? b.liftTo : b.lift + Math.sign(b.liftTo - b.lift) * step;
+    }
     for (const bird of this.birds) {
       const { center, radius, speed } = bird.flock;
       const a = this.time * speed + bird.phase;
-      const r = radius + bird.lane * LANE_WIDTH;
-      bird.object.position.set(
-        center[0] + Math.cos(a) * r,
-        center[1] + bird.lane * LANE_RISE + Math.sin(this.time * 0.9 + bird.phase * 3) * BOB,
-        center[2] + Math.sin(a) * r,
-      );
-      // Face along the circle, banking into the turn.
       const dir = Math.sign(speed) || 1;
-      bird.object.rotation.set(0, Math.atan2(-Math.sin(a) * dir, Math.cos(a) * dir), -0.25 * dir, 'YXZ');
+      if (bird.flock.mode === 'leap') {
+        // v1.10 (3-2): swimming round just under the surface; every few seconds one jumps out in an arc.
+        const r = radius + bird.lane * LANE_WIDTH * 0.6;
+        const period = LEAP.every * (0.7 + 0.6 * ((bird.slot * 0.618) % 1));
+        const t = (this.time + bird.phase * 7) % period;
+        const u = t / LEAP.seconds;
+        const jump = u < 1 ? 4 * u * (1 - u) : 0;
+        const surface = bird.flock.surface ?? center[1];
+        bird.object.position.set(center[0] + Math.cos(a) * r, surface - 0.35 + jump * (LEAP.height + 0.35), center[2] + Math.sin(a) * r);
+        bird.object.rotation.set(u < 1 ? (u - 0.5) * 1.6 : 0, Math.atan2(-Math.sin(a) * dir, Math.cos(a) * dir), 0, 'YXZ');
+      } else {
+        const r = radius + bird.lane * LANE_WIDTH;
+        bird.object.position.set(
+          center[0] + Math.cos(a) * r,
+          center[1] + bird.lane * LANE_RISE + Math.sin(this.time * 0.9 + bird.phase * 3) * BOB + this.batches[bird.batch].lift,
+          center[2] + Math.sin(a) * r,
+        );
+        // Face along the circle, banking into the turn.
+        bird.object.rotation.set(0, Math.atan2(-Math.sin(a) * dir, Math.cos(a) * dir), -0.25 * dir, 'YXZ');
+      }
       bird.object.updateMatrix();
       for (const part of this.batches[bird.batch].meshes) {
         part.mesh.setMatrixAt(bird.slot, this.scratch.multiplyMatrices(bird.object.matrix, part.matrix));

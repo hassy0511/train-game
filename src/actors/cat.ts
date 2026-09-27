@@ -21,6 +21,11 @@ export class CatActor {
   readonly params: CatParams;
   readonly railId: string;
   readonly at: number;
+  /**
+   * v1.10 (3-3): this animal's own lines (params say / woke / danger / after), instead of the mission's catNear,
+   * catWoke, catDanger and catDangerAfter: a stage with two animals on the rail (a seabird and a sea turtle).
+   */
+  readonly lines: { say?: string; woke?: string; danger?: string; after?: string };
   private nearAnnounced = false;
 
   constructor(
@@ -31,6 +36,9 @@ export class CatActor {
     if (!actor.onRail) throw new Error(`cat "${actor.id}" must be placed with onRail`);
     this.railId = actor.onRail.railId;
     this.at = actor.onRail.at;
+    const p = actor.params as Record<string, unknown>;
+    const text = (k: string): string | undefined => (typeof p[k] === 'string' ? (p[k] as string) : undefined);
+    this.lines = { say: text('say'), woke: text('woke'), danger: text('danger'), after: text('after') };
   }
 
   reset(): void {

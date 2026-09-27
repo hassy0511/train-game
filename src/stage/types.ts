@@ -5,7 +5,11 @@ import type { RailNetwork } from '../rail/types';
 /** Stage JSON schema v1 (additions up to v1.10). See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
 export type Vec3 = [number, number, number];
 
-export type AbilityId = 'whistle' | 'light' | 'jump' | 'rocket' | 'dive' | 'magnetLight' | 'reverse';
+/**
+ * `plow` (ゆきかき, chapter 4, PHASE8 §0.4) is named ahead of its stage: 3-2's third record waits for it, and nothing
+ * gives it yet (like `magnetLight`, chapter 5).
+ */
+export type AbilityId = 'whistle' | 'light' | 'jump' | 'rocket' | 'dive' | 'plow' | 'magnetLight' | 'reverse';
 
 export interface EnvironmentDef {
   sky: { top: string; bottom: string };
@@ -35,6 +39,13 @@ export interface EnvironmentDef {
    * like ice by themselves.
    */
   surface?: RunSurface;
+  /** v1.10 (3-3): stars in the upper half of the sky (`count` 1–1000; hidden under water). */
+  stars?: { count: number };
+  /**
+   * v1.10 (3-3): where the festival (cutscene fx "festival") happens: the glowing balls rise at `bursts` [x, y, z],
+   * the moon comes up at `moon` (azimuth degrees from +Z towards +X, elevation degrees).
+   */
+  festival?: { bursts: Vec3[]; moon?: { azimuth: number; elevation: number } };
 }
 
 /** v1.10 (4-1): falling snow: `count` flakes (0–2000) in a box `radius` m round the camera, falling `fall` m/s. */
@@ -64,7 +75,14 @@ export interface WaterDef {
   /** Default "sea". */
   look?: WaterLook;
   /** Colour and seeing distance (m) under water; defaults by `look`. */
-  under?: { color?: string; far?: number };
+  under?: { color?: string; far?: number; sparkle?: string };
+  /**
+   * v1.10 (3-2): the side of an `area` hole: "bowl" (default, the floor colour a little darker) or "cliff" (a rock
+   * wall with stripes and a grassy lip).
+   */
+  wall?: 'bowl' | 'cliff';
+  /** v1.10 (3-2): the bubbles under water drift this way (m/s in x, z). Looks only (never pushes the train). */
+  flow?: [number, number];
   /**
    * v1.10 (4-1), look "ice" only: open water in the ice (a circle, or a rect as in `area`). With holes, a rail counts as
    * on the water only inside one (elsewhere it runs on the ice), and it may go under the ice only through one.
@@ -156,7 +174,7 @@ export interface RailDef {
   /** v1.6: how the track looks: "rail" (default: rails, sleepers, ballast) or "silk" (spider-silk threads). */
   look?: 'rail' | 'silk';
   /** v1.7: rock under the track, so a line along a slope does not float (looks only). */
-  base?: RailBaseDef;
+  base?: RailBaseDef | RailBaseDef[];
   /**
    * v1.8: a side track to a record (ends in a buffer). Stopped at its buffer the train is taken to `back` (not a
    * fail: no dip, the partner says "spurBack").
@@ -170,10 +188,14 @@ export interface RailDef {
  * reaches the ground plane, wider at the bottom (a ridge). `skip`: stretches without it (an arch, a bridge).
  */
 export interface RailBaseDef {
-  look: 'rock';
+  /** v1.10 (3-3) "pier": a wooden pier (a plank deck and square posts down to the ground) instead of rock. */
+  look: 'rock' | 'pier';
   depth?: number;
   toGround?: boolean;
   skip?: { from: number; to: number }[];
+  /** v1.10 (3-3): in a list of bases, the stretch this one covers (m along the rail). */
+  from?: number;
+  to?: number;
 }
 
 export interface JunctionDef {
@@ -273,6 +295,9 @@ export type RecordDef = Placement & {
   hint?: string;
 };
 
+/** v1.7 / v1.10: the countdown panel's picture, which also picks how a time-up looks. */
+export type CountdownIcon = 'volcano' | 'clock' | 'moon';
+
 /**
  * v1.7: a countdown over one step's drive (2-3 M3). It starts when the drive to this step's station starts and stops
  * once the train front passes `until` (default: the station's stop zone). Out of time: back to where the step started
@@ -285,8 +310,8 @@ export interface CountdownDef {
   assist?: number;
   /** Default COUNTDOWN.assistMax (30). */
   assistMax?: number;
-  /** The picture on the panel: "volcano" (default) or "clock". */
-  icon?: 'volcano' | 'clock';
+  /** The picture on the panel: "volcano" (default), "clock" or v1.10 (3-3) "moon" (the moon rising over the sea). */
+  icon?: CountdownIcon;
   /** Song while counting (src/audio/songs.ts); the stage's own song comes back afterwards. */
   music?: string;
 }
@@ -484,19 +509,35 @@ export type CutsceneStep =
    * stretch falls to the ground below, with the props tagged `props` on it).
    */
   | { cutRail: { railId: string; from: number; to: number; style?: 'fly' | 'fall'; props?: string } }
-  /** v1.10 `mirror`: a note on paper, its title written mirror-wise (3-1's "のせて"). */
-  | { card: { title: string; button: string; icon?: 'badge'; mirror?: boolean } }
+  /**
+   * v1.10 `mirror`: a note on paper, its title written mirror-wise (3-1's "のせて"). v1.10 (3-2) icon "drawing": a
+   * crayon picture of the train on drawing paper.
+   */
+  | { card: { title: string; button: string; icon?: 'badge' | 'drawing'; mirror?: boolean } }
   | { emote: Emote }
   /** Switch the camera for the rest of the cutscene (restored afterwards). */
   | { camera: 'cab' | 'chase' | 'side' | 'top' }
-  /** v1.7: a camera standing still at `at`, looking at `lookAt` (world metres), for the rest of the cutscene. */
-  | { camera: 'fixed'; at: Vec3; lookAt: Vec3 }
+  /**
+   * v1.7: a camera standing still at `at`, looking at `lookAt` (world metres), for the rest of the cutscene.
+   * v1.10: `reach` (1–4, default 2.5): how many times further than the stage fog it sees while it is on. A wide shot
+   * from far out wants the default; a close shot 1, so the player's camera after it does not see further than usual.
+   */
+  | { camera: 'fixed'; at: Vec3; lookAt: Vec3; reach?: number }
   /**
    * v1.7: a screen effect. "sneeze": the volcano sneezes ("はっくしょーん！", a big smoke ring), 2.5 s. v1.10 "pop": a
    * big bubble pops ("ぱちん", a spray of little bubbles), at cutscene figure `id` (or in front of the camera).
    */
   | { fx: 'sneeze' }
   | { fx: 'pop'; id?: string }
+  /** v1.10 (3-3): the festival (the moon rises, glowing balls come up from the sea, the lanterns brighten), 2.5 s. */
+  | { fx: 'festival' }
+  /**
+   * v1.10 (3-3): the child presses one button during the cutscene (it alone glows; the partner says `say` again every
+   * DOOR_REMIND_SECONDS). `fx` "beacon": the press lights the lighthouse.
+   */
+  | { press: 'light' | 'whistle' | 'rocket' | 'jump'; say?: string; fx?: 'beacon' }
+  /** v1.10 (3-3): the doors on the platform side of the station the train stands at open or close (looks only). */
+  | { door: 'open' | 'close' }
   /** Full-screen dark caption that fades after `seconds`. */
   | { caption: string; seconds?: number }
   /** v1.2: grant an ability (its button appears) and show the "learned" card. */
@@ -654,6 +695,21 @@ export interface StageFile {
   cutscenes?: Record<string, CutsceneStep[]>;
   /** v1.10: things floating over surface rails, to dive under. */
   floaters?: FloaterDef[];
+}
+
+/**
+ * v1.10 (3-2): params of a "waterfall" gimmick (looks and sound only): a curtain of water falling from the lip line
+ * `from`–`to` ([x, z]) at height `top` down to the water at `bottom`, thrown `throw` m out; a rock ledge `lip` m deep.
+ * Defaults: WATERFALL.
+ */
+export interface WaterfallParams {
+  from: [number, number];
+  to: [number, number];
+  top: number;
+  bottom: number;
+  throw?: number;
+  lip?: number;
+  rainbow?: boolean;
 }
 
 /** A prop with its placement resolved to a world transform. */

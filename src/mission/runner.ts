@@ -272,6 +272,8 @@ const NEED_LINES: Partial<Record<AbilityId, string>> = {
   jump: 'ジャンプが できたら いけそう…',
   light: 'ライトが あれば みえそう…',
   dive: 'もぐれたら いけそう…',
+  // v1.10: chapter 4's snowplow (3-2's third record waits for it).
+  plow: 'ゆきを どかせたら いけそう…',
 };
 const NEED_LINE_OTHER = 'いまは まだ いけないみたい…';
 
@@ -288,6 +290,8 @@ export const ABILITY_NAMES: Partial<Record<AbilityId, string>> = {
   whistle: 'きてき',
   rocket: 'ロケット',
   dive: 'もぐる',
+  // Chapter 4's ability (not given yet in chapter 3): 3-2's third record waits for it.
+  plow: 'ゆきかき',
   // Chapter 5's ability (not given anywhere yet): 3-1's third record waits for it.
   magnetLight: 'じしゃくライト',
 };
@@ -351,6 +355,8 @@ export class MissionRunner {
   private safeLeft = 0;
   /** Where the train last stopped for a step (a countdown's time-up goes back there). */
   private lastStop: { railId: string; at: number } | null = null;
+  /** v1.10 (3-3): the station the train last stood at (a cutscene's doors open on its side). */
+  private lastStationId: string | null = null;
   /** Rocket lines: rocketReady / rocketGo once per mission (PHASE6 §5.1); rocketAgain counts glows per slope (reset on rewind). */
   private rocketReadySaid = false;
   private rocketGoSaid = false;
@@ -550,6 +556,9 @@ export class MissionRunner {
     if (this.phase !== 'driving' || this.lightOn) return false;
     if (this.bridges.lightHint(this.lightOn)) return true;
     if (this.bubbleLightHint) return true;
+    // v1.10 (3-3): a dark stretch that asks for the light (fog params.glow).
+    const fog = zoneAt(this.stage.file.gimmicks, 'fog', this.train.state.railId, this.train.frontS);
+    if (fog && (fog.params as { glow?: boolean } | undefined)?.glow === true) return true;
     for (const id of this.wrongTurns) {
       const j = this.stage.file.junctions.find((x) => x.id === id);
       if (!j || this.revealed.has(j.id)) continue;
@@ -798,6 +807,7 @@ export class MissionRunner {
     const target = { railId: station.railId, at: station.at };
     this.train.rewindTo(station.at, station.railId);
     this.lastStop = target;
+    this.lastStationId = station.id;
     this.passengers = passengers;
     this.parcel = parcel;
     this.ports.setCargo(passengers, parcel);
@@ -949,7 +959,8 @@ export class MissionRunner {
           if (this.lines.gauge) this.ports.sayAsync(this.lines.gauge);
           break;
         case 'near':
-          if (this.lines.stationNear) this.ports.sayAsync(this.lines.stationNear);
+          // v1.10 (3-3): "{station}" is the station's name (a mission with two stations says each one's).
+          if (this.lines.stationNear) this.ports.sayAsync(this.lines.stationNear.replace('{station}', this.stop?.station.name ?? ''));
           break;
         case 'short':
           this.ports.sayAsync(this.lines.short ?? DEFAULT_LINES.short);
@@ -968,13 +979,18 @@ export class MissionRunner {
     for (const cat of this.cats) {
       const c = cat.update();
       if (!c) continue;
-      if (c.kind === 'near' && this.lines.catNear) this.ports.sayAsync(this.lines.catNear);
+      // v1.10 (3-3): an animal with its own lines (the sea turtle) says them, and at once (only useful now).
+      const own = cat.lines;
+      if (c.kind === 'near') {
+        if (own.say) this.ports.sayNow(own.say);
+        else if (this.lines.catNear) this.ports.sayAsync(this.lines.catNear);
+      }
       if (c.kind === 'danger') {
         this.train.emergencyStop();
         this.ports.autoCamera('side');
         cat.flee();
         this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'flee', position: this.catFleePosition(cat), seconds: 0.6 });
-        this.finishDrive({ kind: 'fail', reason: 'cat', rewind: { railId: cat.railId, at: cat.at - REWIND_DISTANCE } });
+        this.finishDrive({ kind: 'fail', reason: 'cat', text: own.danger, after: own.after, rewind: { railId: cat.railId, at: cat.at - REWIND_DISTANCE } });
         return;
       }
     }
@@ -1336,6 +1352,11 @@ export class MissionRunner {
     return this.whales.some((w) => w.actor.id === id && w.following);
   }
 
+  /** Test hook (v1.10, 3-3): every animal on the rail and its state, "umidori:sleep,kame:awake". */
+  get actorStates(): string {
+    return this.cats.map((c) => `${c.actor.id}:${c.state}`).join(',');
+  }
+
   /** Test hook: every whale's state, "kujira:follow". */
   get whaleStates(): string {
     return this.whales.map((w) => `${w.actor.id}:${w.state}`).join(',');
@@ -1564,7 +1585,8 @@ export class MissionRunner {
     for (const cat of this.cats) {
       if (cat.onWhistle()) {
         this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'awake', position: this.catFleePosition(cat), seconds: cat.params.fleeSeconds });
-        if (this.lines.catWoke) this.ports.sayAsync(this.lines.catWoke);
+        const woke = cat.lines.woke ?? this.lines.catWoke;
+        if (woke) this.ports.sayAsync(woke);
         this.events.post({ type: 'partner:emote', kind: 'jump' });
       }
     }
@@ -1587,7 +1609,13 @@ export class MissionRunner {
   }
 
   private catFleePosition(cat: CatActor): Vector3 {
-    if ((cat.actor.params as { look?: string }).look === 'seabird') {
+    const look = (cat.actor.params as { look?: string }).look;
+    if (look === 'turtle') {
+      // v1.10 (3-3): the sea turtle swims off up and aside (it stays under water).
+      const frame = this.stage.network.getRail(cat.railId).frameAt(cat.at);
+      return frame.position.clone().addScaledVector(frame.right, cat.params.fleeLateral).addScaledVector(frame.up, 7);
+    }
+    if (look === 'seabird') {
       // v1.7: a seabird flaps off up into the sky instead of walking aside.
       const frame = this.stage.network.getRail(cat.railId).frameAt(cat.at);
       return frame.position.clone().addScaledVector(frame.right, cat.params.fleeLateral * 3).addScaledVector(frame.up, 22);
@@ -1634,6 +1662,7 @@ export class MissionRunner {
     }
     this.endCountdown();
     this.lastStop = { railId: station.railId, at: station.at };
+    this.lastStationId = station.id;
     if ((step.board ?? 0) > 0 || (step.alight ?? 0) > 0 || step.parcel) await this.doors(step, station);
   }
 
@@ -1699,8 +1728,13 @@ export class MissionRunner {
     // The train is stopped and the lever is locked until the rewind: say why now, not after older lines.
     this.ports.hush();
     this.events.post({ type: 'fail', reason });
-    // v1.7: out of time, the volcano sneezes ("はっくしょーん！") and the steam wraps the train.
-    if (reason === 'timeUp') this.events.post({ type: 'sneeze' });
+    // v1.7: out of time, the volcano sneezes ("はっくしょーん！") and the steam wraps the train. v1.10 (3-3): how it looks
+    // follows the countdown's picture (the moon comes up over the sea).
+    if (reason === 'timeUp') {
+      const icon = this.countdown?.def.icon ?? 'volcano';
+      this.events.post({ type: 'timeUp', icon });
+      if (icon === 'volcano') this.events.post({ type: 'sneeze' });
+    }
     const scary = reason === 'cat' || reason === 'dino';
     // v1.8: back from a record's side track is no failure: no dip, no shake.
     const calm = reason === 'spur';
@@ -1719,8 +1753,9 @@ export class MissionRunner {
       iceStation;
     if (!calm) this.ports.cameraFx(scary ? 1 : soft ? 0.3 : 0.5, soft ? 0 : 1);
     const key: DefaultLine = outcome.line ?? (iceStation ? 'iceOvershoot' : undefined) ?? FAIL_LINES[reason] ?? (reason as DefaultLine);
-    for (const line of (this.lines[key] ?? DEFAULT_LINES[key]).split('\n')) await this.ports.say(line, 'partner');
-    if (reason === 'cat') await this.ports.say(this.lines.catDangerAfter ?? DEFAULT_LINES.catDangerAfter, 'partner');
+    for (const line of (outcome.text ?? this.lines[key] ?? DEFAULT_LINES[key]).split('\n')) await this.ports.say(line, 'partner');
+    // An animal with its own "after" line says only that one (below).
+    if (reason === 'cat' && !outcome.after) await this.ports.say(this.lines.catDangerAfter ?? DEFAULT_LINES.catDangerAfter, 'partner');
     if (reason === 'dino') await this.ports.say(this.lines.dangerAfter ?? DEFAULT_LINES.dangerAfter, 'partner');
     if (reason === 'fragile') await this.ports.say(this.lines.fragileBoingAfter ?? DEFAULT_LINES.fragileBoingAfter, 'partner');
     if (reason === 'dive') await this.ports.say(this.lines.diveBoingAfter ?? DEFAULT_LINES.diveBoingAfter, 'partner');
@@ -1850,6 +1885,13 @@ export class MissionRunner {
     this.train.lockInput('cutscene');
     this.ports.autoCamera('chase');
     this.skip = new CutsceneSkip();
+    // v1.10 (3-3): doors a cutscene opens close again when it ends.
+    let doorOpen = false;
+    const door = (open: boolean): void => {
+      if (!this.lastStationId || open === doorOpen) return;
+      doorOpen = open;
+      this.events.post({ type: 'door', open, stationId: this.lastStationId });
+    };
     await runCutscene(
       steps,
       this.stage.network,
@@ -1857,6 +1899,7 @@ export class MissionRunner {
       this.events,
       {
         ...this.ports,
+        door,
         unlock: async (ability) => {
           this.grant(ability);
           await this.ports.unlock(ability);
@@ -1869,6 +1912,7 @@ export class MissionRunner {
       this.skip,
     );
     this.skip = null;
+    door(false);
     this.ports.autoCamera(null);
     this.ports.fixedCamera(null);
     this.phase = previous === 'driving' ? 'idle' : previous;
@@ -1917,8 +1961,10 @@ interface FailOutcome {
   reason: FailReason;
   /** Say this instead of the reason's line. */
   line?: DefaultLine;
-  /** Said after the reason's line (a rock's "hitAfter"). */
+  /** Said after the reason's line (a rock's "hitAfter"; v1.10 an animal's own "after"). */
   after?: string;
+  /** v1.10 (3-3): say this text instead of the reason's line (an animal's own "danger"). */
+  text?: string;
   /** Where to put the train front back; default: REWIND_DISTANCE before the station. */
   rewind?: { railId: string; at: number };
 }

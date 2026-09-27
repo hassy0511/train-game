@@ -20,8 +20,11 @@ export interface SceneView {
   onStageEvent(event: StageEvent): void;
   /** Switches the camera. `snap` skips the smooth transition. */
   setCamera(mode: CameraMode, snap?: boolean): void;
-  /** v1.7: a camera standing still at `at` looking at `lookAt` (world metres); null = back to the mode's camera. */
-  setFixedCamera(fixed: { at: [number, number, number]; lookAt: [number, number, number] } | null): void;
+  /**
+   * v1.7: a camera standing still at `at` looking at `lookAt` (world metres); null = back to the mode's camera.
+   * v1.10: `reach` = how many times further than the stage fog it sees (default: the wide shot's).
+   */
+  setFixedCamera(fixed: { at: [number, number, number]; lookAt: [number, number, number]; reach?: number } | null): void;
   /**
    * The title screen's camera circling the standing train (null = back to the mode's camera, snapped). A fixed
    * camera still wins over it.

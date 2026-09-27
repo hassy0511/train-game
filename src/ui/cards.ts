@@ -6,7 +6,31 @@ const BADGE = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
   <circle cx="60" cy="60" r="9" fill="#ffd166" stroke="#2b3a4a" stroke-width="3"/>
 </svg>`;
 
-export type CardIcon = 'badge' | 'ring' | 'wave' | 'snow';
+export type CardIcon = 'badge' | 'ring' | 'wave' | 'snow' | 'drawing';
+
+/**
+ * v1.10 (3-2): a crayon drawing of the Wonder train on drawing paper (the boat's sail): three round cars with windows
+ * and wheels (no face), wobbly crayon lines, a pink swirl in the corner. Drawn in the DOM, never in 3D.
+ */
+const DRAWING = (() => {
+  // Each line is drawn twice, a little apart, so it looks like crayon.
+  const crayon = (d: string, color: string, width = 3.2): string =>
+    `<path d="${d}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>` +
+    `<path d="${d}" transform="translate(0.8 0.6)" fill="none" stroke="${color}" stroke-width="${width * 0.6}" stroke-linecap="round" opacity="0.55"/>`;
+  const cars = [0, 1, 2]
+    .map((i) => {
+      const x = 14 + i * 50;
+      const body = `M${x} 64 q-2 -22 6 -26 l32 -1 q8 3 6 27 z`;
+      const win = `M${x + 8} 46 h10 v9 h-10 z M${x + 26} 46 h10 v9 h-10 z`;
+      const wheels = `M${x + 12} 70 a5 5 0 1 0 0.1 0 M${x + 34} 70 a5 5 0 1 0 0.1 0`;
+      return crayon(body, i === 0 ? '#e9573f' : '#3fa7d6') + crayon(win, '#2b3a4a', 2.4) + crayon(wheels, '#2b3a4a', 2.6);
+    })
+    .join('');
+  const coupling = crayon('M62 58 h6 M112 58 h6', '#2b3a4a', 2.4);
+  const rail = crayon('M6 80 q80 4 158 -1', '#8a6a48', 2.4);
+  const swirl = crayon('M150 96 c0-3 4-3 4 0 0 5-8 5-8 0 0-7 12-7 12 0 0 9-16 9-16 0', '#e8579f', 2.6);
+  return `<svg class="card-drawing" viewBox="0 0 170 110" role="img" aria-label="ワンダーごうの え">${cars}${coupling}${rail}${swirl}</svg>`;
+})();
 
 /** Chapter 3's end (water): a wave with bubbles over the sea. */
 const WAVE = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
@@ -146,7 +170,9 @@ export function showCard(
       el.classList.add('is-mirror');
       el.insertAdjacentHTML('beforeend', SWIRL);
     }
-    if (icon) el.insertAdjacentHTML('beforeend', { badge: BADGE, ring: RING, wave: WAVE, snow: SNOW }[icon]);
+    // v1.10 (3-2): a crayon drawing on drawing paper.
+    if (icon === 'drawing') el.classList.add('is-drawing');
+    if (icon) el.insertAdjacentHTML('beforeend', { badge: BADGE, ring: RING, wave: WAVE, snow: SNOW, drawing: DRAWING }[icon]);
     const h = document.createElement('h1');
     if (options.mirror) h.setAttribute('aria-label', 'ぐるぐる もようの てがみ');
     const lines = title.split('\n');

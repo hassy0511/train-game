@@ -15,6 +15,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  NormalBlending,
   Object3D,
   Path,
   PerspectiveCamera,
@@ -64,6 +65,13 @@ const SHAFT_LENGTH = 26;
 
 /** The pond wall and floor get a little darker than the floor colour. */
 const WALL_SHADE = 0.8;
+/**
+ * v1.10 (3-2) wall "cliff": a rock wall (grey-brown with two pale bands above the water), a grassy lip along the top
+ * edge.
+ */
+const CLIFF_ROCK = '#A89A86';
+const CLIFF_BAND = '#BDB09A';
+const CLIFF_GRASS = '#8CC46A';
 
 /** The ground plane for a stage with water: holes where waters with an area are, none at all over a sea. */
 export function buildWaterGround(environment: EnvironmentDef): Mesh | null {
@@ -218,6 +226,9 @@ export class WaterLayer {
   private domeWant = 0;
   private time = 0;
   private under: { water: WaterDef; index: number } | null = null;
+  /** v1.10 (3-2, 3-3): the motes' colour under the water the camera was last under (`under.sparkle`). */
+  private moteWater: WaterDef | null = null;
+  private readonly moteWhite = new Color('#f2fbff');
   /** How far the camera is being held under the surface (0..1, eased). */
   private hold = 0;
   private submerged = false;
@@ -268,16 +279,19 @@ export class WaterLayer {
       bowls.push(paint(flatShape(new ShapeGeometry(shape), w.floor), floorColor));
       // The pond's wall, from the ground (or the surface) down to the floor.
       const top = Math.max(env.ground?.y ?? w.y, w.y);
-      const wall: number[] = [];
-      for (let i = 0; i < outline.length; i++) {
-        const [ax, az] = outline[i];
-        const [bx, bz] = outline[(i + 1) % outline.length];
-        wall.push(ax, top, az, bx, top, bz, bx, w.floor, bz, ax, top, az, bx, w.floor, bz, ax, w.floor, az);
+      if (w.wall === 'cliff') bowls.push(cliffWall(outline, top, w.y, w.floor));
+      else {
+        const wall: number[] = [];
+        for (let i = 0; i < outline.length; i++) {
+          const [ax, az] = outline[i];
+          const [bx, bz] = outline[(i + 1) % outline.length];
+          wall.push(ax, top, az, bx, top, bz, bx, w.floor, bz, ax, top, az, bx, w.floor, bz, ax, w.floor, az);
+        }
+        const wg = new BufferGeometry();
+        wg.setAttribute('position', new Float32BufferAttribute(wall, 3));
+        wg.computeVertexNormals();
+        bowls.push(paint(wg, '#' + new Color(floorColor).multiplyScalar(WALL_SHADE).getHexString()));
       }
-      const wg = new BufferGeometry();
-      wg.setAttribute('position', new Float32BufferAttribute(wall, 3));
-      wg.computeVertexNormals();
-      bowls.push(paint(wg, '#' + new Color(floorColor).multiplyScalar(WALL_SHADE).getHexString()));
     }
     const surfaceGeometry = mergeAll(surfaces.map((g) => stripTo(g, ['position', 'normal'])));
     if (surfaceGeometry) {
@@ -445,10 +459,26 @@ export class WaterLayer {
     // Seen from below the surface faces away from the sun: it glows a little itself, a bright ceiling (not a dark lid).
     this.surfaceMaterial.emissive.copy(under ? this.ceilingGlow : this.noGlow);
     this.motes.visible = under;
-    if (under) {
-      // The cube of bubbles follows the camera in whole steps, drifting up slowly.
+    if (under && this.under) {
+      // The cube of bubbles follows the camera in whole steps, drifting up slowly (v1.10 3-2: and with the flow).
       const step = MOTE_SPAN / 3;
-      this.motes.position.set(Math.round(p.x / step) * step, Math.round(p.y / step) * step + ((this.time * 0.4) % step), Math.round(p.z / step) * step);
+      const flow = this.under.water.flow ?? [0, 0];
+      const drift = (v: number): number => ((this.time * v) % step + step) % step;
+      this.motes.position.set(
+        Math.round(p.x / step) * step + drift(flow[0]),
+        Math.round(p.y / step) * step + ((this.time * 0.4) % step),
+        Math.round(p.z / step) * step + drift(flow[1]),
+      );
+      if (this.moteWater !== this.under.water) {
+        // v1.10 (3-3) `under.sparkle`: glowing motes of that colour (added to the picture), else the white bubbles.
+        this.moteWater = this.under.water;
+        const sparkle = this.under.water.under?.sparkle;
+        const m = this.motes.material as PointsMaterial;
+        m.color.copy(sparkle ? new Color(sparkle) : this.moteWhite);
+        m.blending = sparkle ? AdditiveBlending : NormalBlending;
+        m.size = sparkle ? 0.24 : 0.18;
+        m.needsUpdate = true;
+      }
     }
     this.shafts.visible = under;
     if (under && this.under) this.placeShafts(p, this.under.water);
@@ -488,6 +518,44 @@ export class WaterLayer {
     });
     this.dome.instanceMatrix.needsUpdate = true;
   }
+}
+
+/**
+ * v1.10 (3-2): a cliff round a water's outline: rock from the floor up to the ground, two pale bands above the water,
+ * and a strip of grass leaning in along the top (vertex colours, merged with the floors: no extra draw call).
+ */
+function cliffWall(outline: [number, number][], top: number, surface: number, floor: number): BufferGeometry {
+  const pos: number[] = [];
+  const col: number[] = [];
+  const colors = { rock: new Color(CLIFF_ROCK), band: new Color(CLIFF_BAND), grass: new Color(CLIFF_GRASS) };
+  // Bands of the wall from the bottom up: [y0, y1, colour].
+  const above = top - surface;
+  const rows: [number, number, Color][] = [
+    [floor, surface + above * 0.3, colors.rock],
+    [surface + above * 0.3, surface + above * 0.4, colors.band],
+    [surface + above * 0.4, surface + above * 0.65, colors.rock],
+    [surface + above * 0.65, surface + above * 0.72, colors.band],
+    [surface + above * 0.72, top - 0.4, colors.rock],
+    [top - 0.4, top, colors.grass],
+  ];
+  const n = outline.length;
+  for (let i = 0; i < n; i++) {
+    const [ax, az] = outline[i];
+    const [bx, bz] = outline[(i + 1) % n];
+    // A little in and out along the wall so it is not one flat face (the same on both sides of a corner).
+    const jag = (x: number, z: number): number => (hash(Math.round(x * 3) * 7 + Math.round(z * 3)) - 0.5) * 0.12;
+    for (const [y0, y1, c] of rows) {
+      const shade = 0.92 + jag(ax + y0, az) * 1.2;
+      const quad = [ax, y1, az, bx, y1, bz, bx, y0, bz, ax, y1, az, bx, y0, bz, ax, y0, az];
+      pos.push(...quad);
+      for (let k = 0; k < 6; k++) col.push(c.r * shade, c.g * shade, c.b * shade);
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
 }
 
 /** A square shape `size` across round the origin. */
