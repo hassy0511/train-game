@@ -973,7 +973,127 @@
       "id": "4-2",
       "chapter": 4,
       "x": 48,
-      "y": 80
+      "y": 80,
+      "diorama": {
+        "base": "island-b",
+        "rail": {
+          "radius": 11
+        },
+        "camera": {
+          "yaw": 25,
+          "pitch": 28
+        },
+        "items": [
+          {
+            "model": "snow-island",
+            "at": [
+              0,
+              0
+            ],
+            "rotY": 0,
+            "scale": 0.33,
+            "lift": 0.06
+          },
+          {
+            "model": "snow-house",
+            "at": [
+              -13,
+              -6
+            ],
+            "rotY": 30,
+            "scale": 0.55
+          },
+          {
+            "model": "snow-house-b",
+            "at": [
+              -4,
+              -13
+            ],
+            "rotY": -10,
+            "scale": 0.5
+          },
+          {
+            "model": "kamakura",
+            "at": [
+              -14,
+              6
+            ],
+            "rotY": 60,
+            "scale": 0.9
+          },
+          {
+            "model": "kamakura",
+            "at": [
+              -5,
+              4
+            ],
+            "rotY": -20,
+            "scale": 0.8
+          },
+          {
+            "model": "ski-lift-tower",
+            "at": [
+              15,
+              -8
+            ],
+            "rotY": 0,
+            "scale": 0.6
+          },
+          {
+            "model": "lantern",
+            "at": [
+              -9,
+              8
+            ],
+            "rotY": 0,
+            "scale": 1.4
+          },
+          {
+            "model": "lantern",
+            "at": [
+              -2,
+              8
+            ],
+            "rotY": 0,
+            "scale": 1.4
+          },
+          {
+            "model": "lantern",
+            "at": [
+              -11,
+              1
+            ],
+            "rotY": 0,
+            "scale": 1.4
+          },
+          {
+            "model": "snow-pine",
+            "at": [
+              16,
+              7
+            ],
+            "rotY": 40,
+            "scale": 0.8
+          },
+          {
+            "model": "snow-pine",
+            "at": [
+              3,
+              -14
+            ],
+            "rotY": 0,
+            "scale": 0.7
+          },
+          {
+            "model": "train-proto",
+            "at": [
+              11,
+              2
+            ],
+            "rotY": 0
+          }
+        ]
+      }
     },
     {
       "id": "4-3",
