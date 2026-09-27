@@ -92,17 +92,24 @@ async function camera(page: Page, mode: 'cab' | 'chase' | 'side' | 'top'): Promi
   await expect(page.locator('#app')).toHaveAttribute('data-camera', mode);
 }
 
-/** A fail: wait until the train is put back on `rail` before `below` (front) and driving again. */
+/**
+ * A fail: wait until the train is put back on `rail` before `below` (front) and driving again. The page keeps where the
+ * train was while failing (see the init script), so a put-back that came and went during a slow screenshot still
+ * counts; the list starts afresh after each one.
+ */
 async function waitRewound(page: Page, rail: string, below: number): Promise<void> {
   await page.waitForFunction(
     ([r, t]) => {
-      const el = document.getElementById('app');
-      return el?.dataset.rail === r && Number(el?.dataset.s) < Number(t) && el?.dataset.phase === 'failing';
+      const seen = (window as unknown as { __failing: { rail: string; s: number }[] }).__failing;
+      return seen.some((f) => f.rail === r && f.s < Number(t));
     },
     [rail, below - FRONT] as const,
     { timeout: 180_000 },
   );
   await waitDriving(page);
+  await page.evaluate(() => {
+    (window as unknown as { __failing: unknown[] }).__failing.length = 0;
+  });
 }
 
 /**
@@ -225,6 +232,15 @@ test('stage 4-1 full run: ice, thin ice and the rocket, the ice hole, the mirror
       const line = document.getElementById('bubble')?.dataset.line;
       if (line && lines[lines.length - 1] !== line) lines.push(line);
     }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-line'] });
+  });
+  // Where the train is while a fail plays (put back included), for waitRewound.
+  await page.addInitScript(() => {
+    const failing: { rail: string; s: number }[] = [];
+    (window as unknown as { __failing: typeof failing }).__failing = failing;
+    new MutationObserver(() => {
+      const d = document.getElementById('app')?.dataset;
+      if (d?.phase === 'failing' && d.rail) failing.push({ rail: d.rail, s: Number(d.s) });
+    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-s', 'data-phase', 'data-rail'] });
   });
   const saidSoFar = (): Promise<string> => page.evaluate(() => (window as unknown as { __lines: string[] }).__lines.join('\n'));
 
