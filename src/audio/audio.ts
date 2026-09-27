@@ -1,3 +1,5 @@
+import type { AmbienceKind } from '../stage/types';
+import { Ambience } from './ambience';
 import { MusicPlayer } from './music';
 import { noiseBuffer, noiseSource, type NoiseColor } from './noise';
 import { RunSound, type RunInput } from './run-sound';
@@ -18,6 +20,9 @@ export class AudioEngine {
   private run: RunSound | null = null;
   /** A small, soft room (a short reverb) that bells and chimes ring into. */
   private room: ConvolverNode | null = null;
+  /** The island's sound around the train, and the one asked for (started once the context exists). */
+  private ambience: Ambience | null = null;
+  private ambienceKind: AmbienceKind | null = null;
   private sfxLevel = 1;
   /** Steps through a few notes of G major so the butterfly's bell does not repeat one pitch. */
   private butterflyNote = 0;
@@ -58,6 +63,7 @@ export class AudioEngine {
     roomLevel.connect(this.sfx);
     this.run = new RunSound(ctx, this.sfx);
     if (!withMusic) return;
+    this.setAmbience(this.ambienceKind);
     this.music = new MusicPlayer(ctx, master);
     this.music.setVolume(this.musicLevel);
     this.music.setPaused(this.musicPaused);
@@ -67,6 +73,17 @@ export class AudioEngine {
   /** Every frame: the train running (see RunSound). Silent until the first tap unlocks the sound. */
   updateRun(dt: number, input: RunInput): void {
     this.run?.update(dt, input);
+    this.ambience?.update(dt);
+  }
+
+  /** The island's quiet sound around the train (null = none). Asking again for the one playing does nothing. */
+  setAmbience(kind: AmbienceKind | null): void {
+    this.ambienceKind = kind;
+    const ctx = this.ctx;
+    if (!ctx || !this.sfx || this.ambience?.kind === kind) return;
+    this.ambience?.stop();
+    this.ambience = kind ? new Ambience(ctx, this.sfx, kind) : null;
+    this.ambience?.setPaused(this.musicPaused);
   }
 
   /** Rail joints clicked so far and the running sound's level (hooks for tests and the sounds page). */
@@ -97,6 +114,7 @@ export class AudioEngine {
   setMusicPaused(paused: boolean): void {
     this.musicPaused = paused;
     this.music?.setPaused(paused);
+    this.ambience?.setPaused(paused);
   }
 
   /** The song playing or waiting for the first tap. */

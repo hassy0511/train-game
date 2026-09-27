@@ -1,6 +1,7 @@
 import { AudioEngine } from '../audio/audio';
 import { SOUNDS } from '../audio/catalog';
 import { RUN_SOUND, type RunInput, type RunSurface } from '../audio/run-sound';
+import { AMBIENCE_KINDS, type AmbienceKind } from '../stage/types';
 import { ACCELERATION, LEVER_NOTCHES } from '../train/params';
 
 /**
@@ -89,6 +90,27 @@ const tick = (now: number): void => {
 };
 requestAnimationFrame(tick);
 
+// The islands' ambience, one at a time.
+const AMBIENCE_LABELS: Record<AmbienceKind, string> = {
+  town: 'まち',
+  valley: 'きょうりゅうの たに',
+  sky: 'くもの うえ',
+  forest: 'もり',
+  meadow: 'はらっぱ',
+  sea: 'かざんの しま（うみ）',
+};
+const ambienceButtons: HTMLButtonElement[] = [];
+for (const kind of [...AMBIENCE_KINDS, null]) {
+  const b = button(kind ? AMBIENCE_LABELS[kind] : 'なし', () => {
+    audio.setAmbience(kind);
+    ambienceButtons.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  });
+  b.dataset.ambience = kind ?? 'none';
+  b.setAttribute('aria-pressed', String(kind === null));
+  ambienceButtons.push(b);
+  $('ambience').appendChild(b);
+}
+
 // Every one-shot effect, in its group.
 const effects = $('effects');
 let group = '';
@@ -152,6 +174,23 @@ async function measure(): Promise<Measure[]> {
     engine.updateRun(step, input);
     const data = (await ctx.startRendering()).getChannelData(0);
     out.push({ ...levels(`run-${name}`, data), joints: engine.runStats.joints } as Measure);
+  }
+  // Each island's ambience for 6 s, with its little sounds coming as they would.
+  for (const kind of AMBIENCE_KINDS) {
+    const seconds = 6;
+    const ctx = new OfflineAudioContext(1, RATE * seconds, RATE);
+    const engine = new AudioEngine();
+    engine.attach(ctx);
+    engine.setAmbience(kind);
+    const step = 1 / 20;
+    const still: RunInput = { speed: 0, target: 0, braking: false, airborne: false, surface: 'rail', quiet: true };
+    for (let t = step; t < seconds - step; t += step) {
+      void ctx.suspend(t).then(() => {
+        engine.updateRun(step, still);
+        void ctx.resume();
+      });
+    }
+    out.push(levels(`ambience-${kind}`, (await ctx.startRendering()).getChannelData(0)));
   }
   return out;
 }

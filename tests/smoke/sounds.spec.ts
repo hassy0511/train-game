@@ -51,5 +51,11 @@ test('sounds page: every effect plays, is heard and does not clip; the running s
   expect(rms['run-bridge']).toBeGreaterThan(rms['run-rail']);
   // The rocket's roar is heard over the rails.
   expect(rms['run-rocket']).toBeGreaterThan(rms['run-rail'] * 1.2);
+  // Each island's ambience is there, and well under the running train.
+  const around = measured.filter((m) => m.id.startsWith('ambience-'));
+  expect(around.map((m) => m.id)).toEqual(['ambience-town', 'ambience-valley', 'ambience-sky', 'ambience-forest', 'ambience-meadow', 'ambience-sea']);
+  for (const m of around) expect(m.rms, `${m.id} too loud`).toBeLessThan(rms['run-rail'] * 0.6);
+  await page.locator('button[data-ambience="forest"]').click();
+  await expect(page.locator('button[data-ambience="forest"]')).toHaveAttribute('aria-pressed', 'true');
   expect(errors).toEqual([]);
 });

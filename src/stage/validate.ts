@@ -3,7 +3,7 @@ import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import type { RailNetwork } from '../rail/types';
 import { FLOWER_BRIDGE, FRAGILE, GRASSHOPPER, REWIND_DISTANCE, ROCK_ROLL, ROCKET, SLOPE } from '../train/params';
-import type { Placement, StageFile } from './types';
+import { AMBIENCE_KINDS, type AmbienceKind, type Placement, type StageFile } from './types';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
 const ABILITIES = ['whistle', 'light', 'jump', 'rocket', 'dive', 'magnetLight', 'reverse'];
@@ -126,6 +126,9 @@ export function validateStageFile(raw: unknown): StageFile {
   }
   if (env.fall !== undefined && !['dark', 'cloud', 'leaf'].includes(String(env.fall))) fail('"environment.fall" must be dark, cloud or leaf');
   if (env.cloudSea !== undefined && (!isObject(env.cloudSea) || !isNumber(env.cloudSea.y))) fail('"environment.cloudSea" needs y');
+  if (env.ambience !== undefined && !AMBIENCE_KINDS.includes(env.ambience as AmbienceKind)) {
+    fail(`"environment.ambience" must be one of ${AMBIENCE_KINDS.join(', ')}`);
+  }
 
   const rails = requireArray(raw, 'rails');
   if (rails.length === 0) fail('at least one rail is required');

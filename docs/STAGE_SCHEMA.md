@@ -652,3 +652,23 @@ type LineKey = /* v1.7 */ | 'spurBack' | 'needAbility';
 - `bridge`: 鉄の 橋（ごーっが 大きく、低く ひびく。たたんも 大きい）。`wood`: 木の 橋（ことん・ことん）
 - 実例: 2-3 の ぐらぐらばし（kudari 745〜885、`wood`）
 - 読み込み時の 検査: `surface` は 上の 5 つの どれか、`from` < `to`
+
+```ts
+interface EnvironmentDef {
+  // ...
+  ambience?: 'town' | 'valley' | 'sky' | 'forest' | 'meadow' | 'sea';
+  // しまの まわりの 小さな 音（src/audio/ambience.ts）。省略 = なし。こうかおんの 音量で 鳴る。一時停止で 止まる
+}
+```
+
+| ambience | 音 |
+|---|---|
+| town | 遠くの まちの ざわざわ、すずめ、ときどき 鈴 |
+| valley | 谷を ふく 風、ときどき 小鳥 |
+| sky | 高い 風、ときどき 風鈴 |
+| forest | 葉っぱの さらさら、小鳥の さえずり |
+| meadow | 草の そよぎ、虫（こおろぎ）、ときどき 小鳥 |
+| sea | 波、とおくの 火山の ごろごろ（ごく 小さく）、ときどき 海鳥 |
+
+- いまの ステージ: 1-1 town、1-2 valley、1-3 sky、2-1 forest、2-2 meadow、2-3 sea（0-0 は なし）
+- 読み込み時の 検査: 上の 6 つの どれか

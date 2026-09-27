@@ -11,6 +11,7 @@
     "lighting": "day",
     "ground": { "y": -0.6, "size": 3600, "color": "#86a24e" },
     "bgm": "meadow",
+    "ambience": "meadow",
     "fall": "leaf"
   },
   "start": { "railId": "main", "at": 45, "direction": 1 },

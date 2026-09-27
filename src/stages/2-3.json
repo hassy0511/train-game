@@ -11,6 +11,7 @@
     "lighting": "day",
     "ground": { "y": 0, "size": 3200, "color": "#3d9ad6" },
     "bgm": "volcano",
+    "ambience": "sea",
     "fall": "cloud"
   },
   "start": { "railId": "main", "at": 45, "direction": 1 },

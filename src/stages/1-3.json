@@ -23,6 +23,7 @@
     "lighting": "day",
     "ground": null,
     "bgm": "sky",
+    "ambience": "sky",
     "fall": "cloud",
     "cloudSea": {
       "y": -70

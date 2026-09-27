@@ -135,6 +135,8 @@ test('2-3 on the test course: the rocket, an uphill, a slide and a quiet zone', 
   // The layout with the lever on the left, then on the right (PHASE7 §1): four round buttons, the camera in the corner.
   for (const leftHanded of [true, false]) {
     await page.goto('/?stage=0-0');
+    // Loaded before the reload: leaving mid-load cuts model downloads short, and the page logs "Failed to fetch".
+    await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
     await page.evaluate((lh) => {
       localStorage.setItem('train-game.settings.v1', JSON.stringify({ music: 2, sound: 2, calm: false, leftHanded: lh }));
     }, leftHanded);

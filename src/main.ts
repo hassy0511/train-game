@@ -228,6 +228,8 @@ async function boot(): Promise<void> {
   const rocket = new RocketSystem(stage.file.gimmicks, train, slopes);
   const whistle = new Whistle();
   const audio = new AudioEngine();
+  // The island's quiet sound around the train (from the first tap on; under the title too).
+  audio.setAmbience(stage.file.environment.ambience ?? null);
   const events = new StageEventBus();
 
   const view = createSceneView(params);

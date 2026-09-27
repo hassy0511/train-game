@@ -17,7 +17,13 @@ export interface EnvironmentDef {
   fall?: 'dark' | 'cloud' | 'leaf';
   /** v1.3: a soft sea of clouds far below (stages in the sky). */
   cloudSea?: { y: number };
+  /** v1.9: the quiet sound around the island (src/audio/ambience.ts); omitted = none. */
+  ambience?: AmbienceKind;
 }
+
+/** v1.9: the sound around an island. */
+export type AmbienceKind = 'town' | 'valley' | 'sky' | 'forest' | 'meadow' | 'sea';
+export const AMBIENCE_KINDS: readonly AmbienceKind[] = ['town', 'valley', 'sky', 'forest', 'meadow', 'sea'];
 
 export type RailEndDef =
   | { type: 'buffer' }

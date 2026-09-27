@@ -26,7 +26,8 @@
       "size": 900,
       "color": "#7fc96f"
     },
-    "bgm": "town"
+    "bgm": "town",
+    "ambience": "town"
   },
   "start": {
     "railId": "loop",
