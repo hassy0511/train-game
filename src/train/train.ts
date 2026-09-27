@@ -475,6 +475,11 @@ export class Train {
     this.choice = side;
   }
 
+  /** The speed the lever asks for now (0 while stopping at a buffer or stop point): the running sound's motor. */
+  get targetSpeed(): number {
+    return this.leverTarget(this.currentRail).target;
+  }
+
   /** The lever's target speed and brake now (the automatic stop before a buffer / stop point included). */
   private leverTarget(rail: Rail): { target: number; brake: number } {
     const st = this.state;

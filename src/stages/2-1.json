@@ -27,6 +27,7 @@
       "color": "#6b8f47"
     },
     "bgm": "forest",
+    "ambience": "forest",
     "fall": "leaf"
   },
   "start": {

@@ -3,7 +3,7 @@ import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import type { RailNetwork } from '../rail/types';
 import { FLOWER_BRIDGE, FRAGILE, GRASSHOPPER, REWIND_DISTANCE, ROCK_ROLL, ROCKET, SLOPE } from '../train/params';
-import type { Placement, StageFile } from './types';
+import { AMBIENCE_KINDS, type AmbienceKind, type Placement, type StageFile } from './types';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
 const ABILITIES = ['whistle', 'light', 'jump', 'rocket', 'dive', 'magnetLight', 'reverse'];
@@ -126,6 +126,9 @@ export function validateStageFile(raw: unknown): StageFile {
   }
   if (env.fall !== undefined && !['dark', 'cloud', 'leaf'].includes(String(env.fall))) fail('"environment.fall" must be dark, cloud or leaf');
   if (env.cloudSea !== undefined && (!isObject(env.cloudSea) || !isNumber(env.cloudSea.y))) fail('"environment.cloudSea" needs y');
+  if (env.ambience !== undefined && !AMBIENCE_KINDS.includes(env.ambience as AmbienceKind)) {
+    fail(`"environment.ambience" must be one of ${AMBIENCE_KINDS.join(', ')}`);
+  }
 
   const rails = requireArray(raw, 'rails');
   if (rails.length === 0) fail('at least one rail is required');
@@ -307,7 +310,7 @@ export function validateStageFile(raw: unknown): StageFile {
 
   requireArray(raw, 'gimmicks').forEach((g, i) => {
     if (!isObject(g) || !isString(g.type)) fail(`gimmicks[${i}]: "type" is required`);
-    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket'];
+    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound'];
     if (zoned.includes(g.type)) {
       if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`gimmicks[${i}] ${g.type}: needs a known railId and "from"`);
       if (g.type !== 'jump-pad' && (!isNumber(g.to) || (g.to as number) <= (g.from as number))) fail(`gimmicks[${i}] ${g.type}: needs "to" after "from"`);
@@ -346,6 +349,10 @@ export function validateStageFile(raw: unknown): StageFile {
       if (p.allow === false && p.glow === true) fail(`gimmicks[${i}] rocket: allow false and glow true cannot go together`);
       if (p.icon !== undefined && !['none', 'sleep', 'bridge'].includes(String(p.icon))) fail(`gimmicks[${i}] rocket: params.icon must be none, sleep or bridge`);
       for (const k of ['line', 'pressLine']) if (p[k] !== undefined && !isString(p[k])) fail(`gimmicks[${i}] rocket: params.${k} must be text`);
+    }
+    if (g.type === 'sound' && !['rail', 'silk', 'bridge', 'wood', 'soft'].includes(String(p.surface))) {
+      // v1.9: what the track sounds like on this stretch (the running sound).
+      fail(`gimmicks[${i}] sound: params.surface must be rail, silk, bridge, wood or soft`);
     }
     if (g.type === 'camera' && !['cab', 'chase', 'side', 'top'].includes(String((g.params as Record<string, unknown> | undefined)?.mode))) {
       fail(`gimmicks[${i}] camera: params.mode must be cab, chase, side or top`);

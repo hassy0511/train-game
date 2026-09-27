@@ -62,6 +62,8 @@ test('boots stage 0-0, drives for 5 s, passes the sensor, whistle cools down', a
   const s = Number(await app.getAttribute('data-s'));
   expect(s - START_CENTER).toBeGreaterThanOrEqual(20);
   expect(logs.some((l) => l.includes('sensor: sensor-1 enter'))).toBe(true);
+  // The running sound clicked over rail joints ("たたん", every 12 m) on the way.
+  expect(Number(await app.getAttribute('data-run-joints'))).toBeGreaterThanOrEqual(1);
 
   const whistle = page.locator('#whistle');
   await whistle.dispatchEvent('pointerdown');
@@ -100,6 +102,8 @@ test('junction: tapping the right arrow switches to the branch and the train sto
 
   await expect(page.locator('#end-overlay')).toBeVisible({ timeout: 90_000 });
   await expect(page.locator('#hud-speed')).toHaveText('とまる');
+  // Braked to a standstill at the buffer: the brakes let out their air ("ぷしゅー") once.
+  await expect(app).toHaveAttribute('data-run-releases', '1', { timeout: 10_000 });
   await page.screenshot({ path: resolve(OUT, '03-end-of-line.png') });
   console.log(`smoke: stopped at s=${await app.getAttribute('data-s')} m on ${await app.getAttribute('data-rail')}`);
 
@@ -131,6 +135,8 @@ test('2-3 on the test course: the rocket, an uphill, a slide and a quiet zone', 
   // The layout with the lever on the left, then on the right (PHASE7 §1): four round buttons, the camera in the corner.
   for (const leftHanded of [true, false]) {
     await page.goto('/?stage=0-0');
+    // Loaded before the reload: leaving mid-load cuts model downloads short, and the page logs "Failed to fetch".
+    await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
     await page.evaluate((lh) => {
       localStorage.setItem('train-game.settings.v1', JSON.stringify({ music: 2, sound: 2, calm: false, leftHanded: lh }));
     }, leftHanded);

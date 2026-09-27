@@ -34,7 +34,7 @@ const BUILD_ID = buildId();
 /**
  * Writes dist/sw.js: the service worker from src/pwa/sw-template.js with the list of files to cache on
  * install (the game page, its code, the stages, the models, icons, the map, title and picture-book pictures). The model
- * viewer (models.html) is left out.
+ * viewer (models.html) and the sounds page (sounds.html) are left out.
  */
 function serviceWorker(): Plugin {
   return {
@@ -42,7 +42,11 @@ function serviceWorker(): Plugin {
     apply: 'build',
     generateBundle(_options, bundle) {
       const built = Object.keys(bundle).filter(
-        (file) => file !== 'models.html' && !/^assets\/models-.*\.js$/.test(file) && !file.endsWith('.png'),
+        (file) =>
+          file !== 'models.html' &&
+          file !== 'sounds.html' &&
+          !/^assets\/(models|sounds)-.*\.js$/.test(file) &&
+          !file.endsWith('.png'),
       );
       const fromPublic = [
         ...modelManifest.map((name) => `models/${name}.glb`),
@@ -73,7 +77,12 @@ export default defineConfig({
     target: 'es2022',
     rollupOptions: {
       // models.html is the standalone model viewer for reviewing Blender deliveries.
-      input: { main: resolve(__dirname, 'index.html'), models: resolve(__dirname, 'models.html') },
+      // sounds.html plays every sound effect and the running sound, to judge them on the iPad.
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        models: resolve(__dirname, 'models.html'),
+        sounds: resolve(__dirname, 'sounds.html'),
+      },
     },
     sourcemap: false,
     // Rapier's inlined wasm makes one large chunk; that is expected.

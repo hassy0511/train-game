@@ -639,3 +639,36 @@ type LineKey = /* v1.7 */ | 'spurBack' | 'needAbility';
 | 1-1 | 記録 3 つ: `town-board`「まちの かんばん」（通るだけ、loop 322 の 左）、`hq-plans`「ほんぶの せっけいず」（通るだけ、ほんぶの 前 loop 4。M3 で ほんぶへ もどる ときに 見つかる）、`roof-balloon`「やねの うえの ふうせん」（ジャンプ、loop 258 の 家の やね） |
 | 1-2 | 分かれ道 `to-gake`（main 695、右が 支線、`needs: "rocket"`）と 支線 `gake`（256 m、右の がけの 外を のぼる。坂 68〜142、戻り先 main 686（ねぼすけ恐竜 680 の 先）、もどる 先 main 725、カメラ chase 50〜250）。記録 `cliff-nest` は がけの 上の 空の 巣（gake 145.5 の 左 16 m、坂の てっぺんの 少し 先） |
 | 2-1 | 分かれ道 `to-eda`（top 165、右が 支線、`needs: "rocket"`）と 支線 `kozue-eda`（221 m、こずえのえきの 横を 上へ のびる えだ。坂 40〜106、戻り先 top 150、もどる 先 top 180）。記録 `treetop` は てっぺんの はね（kozue-eda 114） |
+
+## 12. v1.9 の追加（走行音、2026-09-27）
+`schemaVersion` は 1 のまま。追加は 省略可。
+
+```ts
+// gimmicks[]: 線路の その区間の 走る 音（先頭で 判定）
+{ type: 'sound'; railId: string; from: number; to: number; params: { surface: 'rail' | 'silk' | 'bridge' | 'wood' | 'soft' } }
+```
+
+- 走る 音は 線路の 見た目から きまる: ふつうは `rail`、`look: "silk"` の 線路は `silk`（しずか、ふわっと）、`flower-bridge` の 花の 上は `soft`（はなびら）。`sound` の 区間が あれば それが かつ
+- `bridge`: 鉄の 橋（ごーっが 大きく、低く ひびく。たたんも 大きい）。`wood`: 木の 橋（ことん・ことん）
+- 実例: 2-3 の ぐらぐらばし（kudari 745〜885、`wood`）
+- 読み込み時の 検査: `surface` は 上の 5 つの どれか、`from` < `to`
+
+```ts
+interface EnvironmentDef {
+  // ...
+  ambience?: 'town' | 'valley' | 'sky' | 'forest' | 'meadow' | 'sea';
+  // しまの まわりの 小さな 音（src/audio/ambience.ts）。省略 = なし。こうかおんの 音量で 鳴る。一時停止で 止まる
+}
+```
+
+| ambience | 音 |
+|---|---|
+| town | 遠くの まちの ざわざわ、すずめ、ときどき 鈴 |
+| valley | 谷を ふく 風、ときどき 小鳥 |
+| sky | 高い 風、ときどき 風鈴 |
+| forest | 葉っぱの さらさら、小鳥の さえずり |
+| meadow | 草の そよぎ、虫（こおろぎ）、ときどき 小鳥 |
+| sea | 波、とおくの 火山の ごろごろ（ごく 小さく）、ときどき 海鳥 |
+
+- いまの ステージ: 1-1 town、1-2 valley、1-3 sky、2-1 forest、2-2 meadow、2-3 sea（0-0 は なし）
+- 読み込み時の 検査: 上の 6 つの どれか
