@@ -230,12 +230,14 @@ test('chapter 2 done (its ring seen before): the rail to the gate, the page turn
   await expect(page.locator('.map-dot.is-on')).toHaveAttribute('data-page', '2');
   await expect(page.locator('#map-prev')).toBeVisible();
   await expect(page.locator('#map-next')).toBeHidden();
-  // 3-1 (its stage is there) is open, the next island to play; the rest of chapter 3 is "?" until its stages come.
-  // Chapter 4's islands are "?" too, but 4-1 (made before 3-3): its name, locked. No "?" island for chapter 5 yet.
+  // 3-1 (its stage is there) is open, the next island to play; 3-2, 3-3 and 4-1 (their stages are there) show their
+  // names, locked. The rest of chapter 4 is "?" until its stages come. No "?" island for chapter 5 yet.
   await expect(page.locator('.map-island[data-island="3-1"]')).toHaveClass(/is-next/);
-  for (const id of [...CH3.slice(1), ...CH4.filter((i) => i !== '4-1')]) await expect(page.locator(`.map-island[data-island="${id}"]`)).toHaveClass(/is-unknown/);
-  await expect(page.locator('.map-island[data-island="4-1"]')).not.toHaveClass(/is-unknown/);
-  await expect(page.locator('.map-island[data-island="4-1"]')).toHaveClass(/is-locked/);
+  for (const id of CH4.filter((i) => i !== '4-1')) await expect(page.locator(`.map-island[data-island="${id}"]`)).toHaveClass(/is-unknown/);
+  for (const id of [...CH3.slice(1), '4-1']) {
+    await expect(page.locator(`.map-island[data-island="${id}"]`)).not.toHaveClass(/is-unknown/);
+    await expect(page.locator(`.map-island[data-island="${id}"]`)).toHaveClass(/is-locked/);
+  }
   await expect(page.locator('.map-island.is-teaser')).toHaveCount(0);
   await page.waitForTimeout(400);
   await page.screenshot({ path: resolve(OUT, 'map-page2.png') });
