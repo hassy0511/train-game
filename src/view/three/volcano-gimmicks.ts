@@ -162,7 +162,10 @@ export class VolcanoGimmicks {
   }
 
   async init(models: ModelLibrary): Promise<void> {
-    const actors = this.stage.actors.filter((a) => (a.type === 'rock-roll' || a.type === 'rock-drop') && a.onRail);
+    // v1.10 (4-1): rolling "rocks" that look like a row of snowbirds are drawn by the ice gimmicks.
+    const actors = this.stage.actors.filter(
+      (a) => (a.type === 'rock-roll' || a.type === 'rock-drop') && a.onRail && (a.params as { look?: string }).look !== 'snowbird',
+    );
     if (actors.length === 0) return;
     const pumice = await models.load('pumice');
     const size = new Box3().setFromObject(pumice).getSize(new Vector3());

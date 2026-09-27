@@ -294,3 +294,50 @@ export const WHALE = { callRange: 80, near: 90, lead: 10, lateral: -12, height: 
  * and after the sinking side was taken, from `wrongGlow` m before that fork.
  */
 export const BUBBLE_FORK = { columns: [12, 28], nearDistance: 90, lightGlow: 100, wrongGlow: 80 } as const;
+
+/**
+ * v1.10 (4-1): ice ("こおり", gimmicks "ice"). On ice the lever's brakes (every notch's, the hard brake's and the automatic
+ * stop before a buffer) work `grip` times as hard; nothing else changes (speeding up, the game's own sudden stops,
+ * the rocket). At a station whose stop line is on ice the lever's notches glow in two steps: "ゆっくり" once the rest
+ * of the way is what slowing to `slowSpeed` takes plus the stop zone and `slowMargin` m, then "とまる" `stopLead` m
+ * before the place where "とまる" now would stop the train. `sparkle`: seconds of the wheels' ice dust after the
+ * speed stops dropping.
+ */
+export const ICE = { grip: 0.4, slowSpeed: 5, slowMargin: 40, stopLead: 5, sparkle: 1 } as const;
+
+/**
+ * v1.10 (4-1): thin ice ("うすい こおり", gimmicks "thin-ice"). While the train is on it (the front past its start, the
+ * last bogie not yet past its end, not in the air), slower than `minSpeed` m/s for `grace` s it breaks under the
+ * train ("ぽちゃん", fail "crack"): the cars sink `sink` m and bob back up to `bob` m, and the train goes back `rewindBefore`
+ * m before it. Only the rocket is fast enough. The rocket button glows from `glowAhead` m before it while a press now
+ * would carry the train across (worked out ahead in `predictStep` s steps for up to `predictSeconds` s). Its line comes
+ * `warn` m before it. Behind the last bogie the ice breaks into floes after `breakAfter` s and freezes again after
+ * `refreeze` s.
+ */
+export const THIN_ICE = {
+  minSpeed: 24,
+  grace: 0.8,
+  glowAhead: 80,
+  /** No press gets across (a long stretch met almost stopped): glow from this far before it (the furthest a press reaches). */
+  fallbackAhead: 20,
+  warn: 120,
+  rewindBefore: 150,
+  breakAfter: 0.3,
+  refreeze: 4,
+  sink: 0.8,
+  bob: 0.4,
+  predictStep: 1 / 30,
+  predictSeconds: 8,
+  /** A second press in the prediction comes this long after the first burn ends (s). */
+  repress: 0.3,
+  /** From the train front to its last bogie (m): the train is on the ice until that has passed its end. */
+  rear: TRAIN.carSpacing * (TRAIN.carCount - 1) + TRAIN.bogieOffset + TRAIN.length / 2,
+} as const;
+
+/**
+ * v1.10 (4-1): ice mirrors (gimmicks "mirror"). The nearest mirror within `range` m, with the train on its front side,
+ * shows the train (and nearby things) reflected. With the light on and the mirror ahead within `flashRange` m it
+ * flashes ("きらーん"). A mirror at a junction lights the light button `hintDistance` m before the junction; on its false
+ * way the partner calls out `fakeWarn` m before the mirror. `tint`: the glass's light blue over the reflection.
+ */
+export const MIRROR = { range: 260, flashRange: 200, reflectRadius: 80, hintDistance: 100, fakeWarn: 45, tint: 0.25, flashCone: 40 } as const;

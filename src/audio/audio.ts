@@ -630,6 +630,24 @@ export class AudioEngine {
     });
   }
 
+  /** 4-1: a row of little snowbirds: "ぴよぴよ" (short high chirps, a few voices). */
+  playSnowbirds(): void {
+    const o = this.out(0.2, 1.2);
+    [0, 0.12, 0.3, 0.42, 0.6].forEach((d, i) => {
+      const f = 2300 + (i % 3) * 180;
+      this.ping(f, d, 0.07, 'sine', 0.035, f * 1.35, 0.004, o);
+    });
+  }
+
+  /** 4-1: a seal slides off on its belly: "きゅっ きゅっ" (two small squeaks). */
+  playSeal(): void {
+    const o = this.out(0.15, 1.2);
+    [0, 0.22].forEach((d) => {
+      this.ping(900, d, 0.12, 'triangle', 0.06, 1350, 0.01, o);
+      this.ping(1800, d, 0.06, 'sine', 0.015, 2400, 0.005, o);
+    });
+  }
+
   /** 4-1: the ice mirror catches the light: "きらーん" (quick high bells up, one ringing out, a shimmer). */
   playMirror(): void {
     [1568, 2093, 2637].forEach((f, i) => this.bell(f, i * 0.045, 0.06, 0.5));

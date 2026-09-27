@@ -821,3 +821,95 @@ type CutsceneStep = /* ... */
 |---|---|
 | 2-2 | みずたまり（main 520–560）が ほんとうの 池に（`water`: 水面 −1.8、底 −8、`look: "puddle"`、main と 同じ 向きの 64 × 42 m。本線の ジャンプは そのまま: 本線の レールは 水面より 1.8 m 上で「水の 上」に ならない）。分かれ道 `to-mizutamari`（main 385、左、`needs: "dive"`）と 支線 `mizutamari`（173 m、main の 左 12 m、池の 中で 水の 上へ、車止め、もどる 先 main 395）。記録 `mizutamari` は 池の そこの `record-marble`（おおきな ビーだま） |
 | 2-3 | 海が `water`（水面 0、底 −14、`look: "sea"`）に。分かれ道 `to-umi`（main 200、右 ＝ 海の 側、`needs: "dive"`）と 支線 `umi`（約 210 m、低い 土手を くだって 海の 上を うきで 走る、車止め、もどる 先 main 210）。記録 `bubble-spring` は 支線 170 の 右 6 m の 海の そこ（`spring-vent`）、その 上に あわの 柱。M3 の ヒント「うみの なかから あわが…」は M1 の main 145 へ |
+
+## 14. v1.10 の追加（4-1「こおりのみずうみ」、2026-09-27）
+`schemaVersion` は 1 のまま。追加は すべて 省略可。設計は `docs/PHASE8_CHAPTER3_4.md` 第 7 部 §4（本文の「3-2」は 4-1）。実例は `src/stages/4-1.json`（`scripts/layout-4-1.mjs` が 作る。JSON を 手で 直さない）。全ステージ共通の 数は `src/train/params.ts` の `ICE`・`THIN_ICE`・`MIRROR`。
+
+### こおり（`gimmicks[]` の `ice`、区間）
+```json
+{ "type": "ice", "railId": "main", "from": 199, "to": 1900, "params": { "grip": 0.4, "line": "こおりの うえだ！ つるつる〜", "sign": true } }
+```
+- 電車の 先頭が 区間に ある あいだ、**レバーの ブレーキ**（とまる・ゆっくり… の 3、きゅうブレーキの 8）と **車止めの 前の 自動ブレーキ**が `grip` 倍（既定 0.4）。加速・ゲームの 急停止（あざらし・ゆきどり）・ロケット（点火と その あとの もどり）は そのまま
+- `line` は 区間に のった とき 1 回（しっぱいで もどった あとも もう 1 回）。`sign`（既定 true）で 入口の 左 3.2 m に 札 `sign-ice`
+- 見た目: 道床が 水色（`#bfe3f2`）。レバーの つまみに ゆきの けっしょう（`#lever-knob[data-mark="ice"]`）。こおりの 上で 速さを 落として いる あいだ、車輪から きらきらの こな と「しゃーっ」（走る 音は 自動で `ice`）
+- `slope` と 重ねない。同じ 線路の `ice` どうしも 重ねない
+
+**こおりの 駅**（停止線が `ice` の 中に ある 駅。新しい 欄は ない）
+- レバーの 目もりが 2 だんで 光る（`.lever-detent[data-hint="1"]`）: 「ゆっくり」＝ 速さが 5.5 m/s より 上で、のこりが (v² − 5²) ÷ (2 × 3 × grip) ＋ 停止ゾーン（30）＋ 40 m 以下。つぎに「とまる」＝ のこりが v² ÷ (2 × 3 × grip) ＋ 5 m 以下（止まるか ゾーンを 出るまで 光ったまま）
+- こおりの 駅は `stop.maxSpeed: 9` を ステージに 書く（停止ゾーンに 9 m/s より 速く 入ると すぐ「はやすぎ」）
+- こおりの 駅で いきすぎ・はやすぎは やわらかい しっぱい（画面 しずみ 0.3、ゆれ 0）で、せりふが `iceOvershoot`「つるーん！ すべって いきすぎた〜」→ `iceOvershootAfter`「こおりは はやめに ブレーキ ね」
+
+### うすい こおり（`gimmicks[]` の `thin-ice`、区間）
+```json
+{ "type": "thin-ice", "railId": "main", "from": 1415, "to": 1535,
+  "params": { "line": "うすくて ながい！ ロケット 2かい！", "minSpeed": 24, "grace": 0.8, "warn": 120, "rewindAt": 1265, "sign": true } }
+```
+- 電車が のって いる（先頭が `from` を こえ、うしろの 台車〔先頭から 35 m〕が `to` を こえるまで、空中で ない）あいだ、`minSpeed`（24 m/s）より 遅いと「ぴしぴし」（`crackShake`）、そのまま `grace`（0.8 秒）で 失敗 `crack`（「ぽちゃん」）。速く なれば 数えなおし。**レバーの いちばん 速い 段（22）では わたれず、ロケット（30）でだけ わたれる**
+- ロケットが 光る: 先頭が `from − 80` から うしろの 台車が `to` を ぬけるまでで、**いま 押せば わたりきれる** とき（1/30 秒 きざみで 8 秒 先まで 計算。1 回で わたれない 長さなら、1 回目が 切れた 0.3 秒 あとに もう 1 回 押す つもりで 計算）。どう 押しても わたれない（止まりかけで 近づいた）ときは、それまで 光って いなければ `from − 20` から 光る。せりふは いまの `rocketReady`（ミッションで 最初）・`rocketAgain`（同じ 区間で 2 回目）
+- 失敗 `crack`: 電車が 止まり、3 両が 半分（0.8 m）しずんで 0.4 m まで「ぷかっ」と 浮き、おもちゃの 船の ように ゆれる。あざらしが あなから 顔を 出す。カメラは うしろから。やわらかい しっぱい（画面 しずみ 0.3、ゆれ 0）。せりふ `crackFall`「ぽちゃん！ ぷかぷか〜」→ `crackAfter`「ひかったら ロケットで いっきに！」（つぶ 0 なら `crackEmpty`「ぽちゃん！ ロケットが たりない〜」→ `crackEmptyAfter`「こんどは ロケットを とっておこう」）→ 白く つつんで `rewindAt`（既定 `from − 150`）、つぶ 満タン
+- わたりきると `thinIceClear`（書いた ときだけ）。うしろの 台車が 通った 所から 0.3 秒で こおりが 板に 割れて 水が 見え、4 秒で もとに もどる
+- `line` は `warn`（120 m）手前で 1 回。`sign` で 20 m 手前の 左に 札 `sign-thin-ice`。道床は こい 水色（`#8cc3e0`）
+- カメラを うしろから に したい ときは いまの `camera` 区間（`chase`）を 置く
+
+### かがみ（`gimmicks[]` の `mirror`、区間なし）
+```json
+{ "type": "mirror", "params": { "position": [-398.9, 0, 546.4], "rotationY": 192, "width": 22, "height": 14,
+  "railId": "kagami1", "junction": "j-kagami1", "lightHint": true } }
+{ "type": "mirror", "params": { "position": [-385, 0, 1080], "rotationY": 222, "width": 30, "height": 18, "reflect": ["train", "cutscene"] } }
+```
+- `position`（かがみの 下の まんなか）に こおりの かがみ（はば `width`・高さ `height`、雪の 台と こおりの ふち）を 立てる。`rotationY` 0 で ガラスが +Z を 向く
+- **うつる もの**: 電車が かがみの 前（ガラスが 向いて いる 側）`range`（260 m）以内の とき、いちばん 近い かがみ 1 まい だけに、電車 3 両（ライトの 光も）・近くの 線路（`reflectRadius` 80 m 以内）・分かれ道の 標識、`reflect` に `cutscene` が あれば 寸劇の 役者 が うつる。本物の はんしゃ（画面を もう 1 回 ぜんぶ 描く）は 使わず、ステンシルの まどに 小さい 2 回目の 描画を する（ふえるのは 写しの 分だけ）
+- `junction`: その 分かれ道は `signReversed`、`default` の 道が `railId`（`deadEnd` の 線路）。うその 道の 先に かがみが あり、じぶんの 電車が むこうから 来る ように 見える。**かがみの 中の 標識は ほんとうの 向き**
+- `lightHint: true`: その 分かれ道の 100 m 手前から、ライトが 消えて いれば ライトボタンが 光る（見やぶるまで）。`mirrorNear` を 言う（改行で 複数の 吹き出し。書いた ときだけ）
+- ライトが ついて いて、かがみが 前 `flashRange`（200 m）以内・向きが ±40° の とき「きらーん」（音・写しの ライトの 所に 光の 星・`mirrorFlash`「きらーん！ あれは かがみ だ！」）。1 回の 近づきで 1 回。見やぶると かがみに きらきらの 波
+- うその 道で かがみまで 45 m で `mirrorFake`「わっ！ ワンダーごうが もう 1だい！？」。止まった あとは いまの `deadEnd`（やわらかい しっぱい）
+
+### こおりの 板（`gimmicks[]` の `ice-sheet`、見た目だけ）と 雪
+```json
+{ "type": "ice-sheet", "params": { "outline": [[-212, -445], [90, -330], "…"], "y": 0.05, "color": "#cfeaf6" } }
+"environment": { "snow": { "count": 600, "radius": 60, "fall": 1.2 }, "surface": "snow" }
+```
+- `ice-sheet`: `outline`（[x, z] の 点、3 つ 以上）の 平らな こおり（うすい ひびと 岸の 雪。下から 見ても 明るい）。こおりで おおわれた 水（下）の `area` は 穴に なる
+- `environment.snow`: カメラの まわりに ふる 雪（`count` 0〜2000 の 整数、`radius` m、`fall` m/s）
+- `environment.surface`: `sound` 区間の ない 所の 走る 音（既定 `rail`）。`snow` の ステージは 道床が 白く、地面が すこし 明るい。`ice`・`thin-ice` の 区間は 自動で `ice`
+
+### こおりで おおわれた 水（`environment.water[].holes`）
+```json
+{ "y": 0, "floor": -12, "look": "ice",
+  "area": { "rect": { "center": [65, 32], "size": [40, 130], "rotationY": 90, "corner": 8 } },
+  "holes": [{ "rect": { "center": [65, 32.4], "size": [24, 100], "rotationY": 90, "corner": 10 } }] }
+```
+- `look: "ice"` の ときだけ。`holes` は `{ center, radius }` か `{ rect }`（`area` と 同じ 書き方）。**線路が 水の 上（もぐれる 所）に なるのは 穴の 中だけ**。穴の そとは こおりの 上（ふつうの 線路）。水の 中へ 入る 線路の 入口と 出口も 穴の 中（検査）
+- 見た目: 穴の 中は 水、`area` の 残りは こおりの 板（下から 明るい 天井）。`ice-sheet` と 重ねる ときは `ice-sheet` の 側に 穴が あく
+
+### どうぶつの 見た目
+- `cat` に `params.look: "seal"`: あざらし（`seal-sleep`／`seal`）。きてきで おなかで すいーっと どく（ふみきりの 棒は 立たない）
+- `rock-roll` に `params.look: "snowbird"`: ゆきどり 5 わの 行列が よちよち わたり、わたったら 右の 雪の 上で 止まって 見送る。近づきすぎると ぱたぱた（判定・失敗の 理由 `rock` は そのまま）
+
+### 失敗・せりふ
+- 失敗の 理由（`fail.reason`）に `crack`（やわらかい）
+```ts
+type LineKey = /* v1.10 (4-1) */
+  | 'iceNear'   // こおりの 駅で 最初に「ゆっくり」が 光った（既定 なし）
+  | 'iceStop'   // 最初に「とまる」が 光った（既定 なし）
+  | 'iceBrake'  // ミッションで はじめて こおりの 上で 速さを 落とした（既定 なし）
+  | 'iceOvershoot' | 'iceOvershootAfter'
+  | 'crackShake' | 'crackFall' | 'crackAfter' | 'crackEmpty' | 'crackEmptyAfter'
+  | 'thinIceClear'  // 既定 なし
+  | 'mirrorNear'    // 既定 なし
+  | 'mirrorFlash' | 'mirrorFake';
+```
+
+### 読み込み時の 検査
+- `ice`: `grip` は 0 より 大きく 1 以下。`ice` どうし・`slope` と 重ならない
+- `thin-ice`: 長さ 36 m 以上（びゅーんの ジャンプ 35.2 m で とびこせない）。`from − 10`〜`to + 35` に 停止線・分かれ道・合流・切れ目・ロケットの おやすみ（`allow: false`）が ない。`rewindAt` は `from − 120` 以下で、`thin-ice`・`slope` の 中で ない。`to + 35 + 30` が 同じ 線路で 次の 駅の 停止線の 200 m 手前（ロケットの おやすみ）より 前。`minSpeed` は レバーの いちばん 速い 段より 大きく、ロケットの 速さより 小さい
+- `mirror`: `position` は 3 つの 数、`width`・`height` などは 正。`junction` が あれば `railId` も 書き、その 分かれ道は `signReversed` で `default` の 道が `railId`、`railId` は `deadEnd`
+- `ice-sheet`: `outline` は 3 点 以上
+- `environment.snow.count` は 0〜2000 の 整数、`environment.surface` は 走る 音の 名前、`holes` は `look: "ice"` だけ
+- `cat.look` に `seal`、`rock-roll.look` に `snowbird`
+
+### テスト用の しるし
+`#app` の `data-ice`（先頭が こおりの 上 1）、`data-ice-hint`（`slow`／`stop`／空）、`data-thin`（`on`／`crack`／空）、`data-cracks`（ぽちゃんの 回数）、`data-mirror`（いま うつして いる かがみの gimmicks 番号）、`data-mirror-flash`（きらーんの 回数）。`#lever-knob` の `data-mark` に `ice`
+
+### まだ ない もの
+- 要る ステージが まだ ない とき（4-1 の `unlock.requires: ["3-3"]`）: 島は かぎの まま。`?stage=4-1` で 直接 ひらくと、ない ステージの かわりに それより 前の ステージが 教える 能力を 持って はじまる（いまは 2-3 まで。前の ステージの `unlocks` に `dive` が 入れば それも）

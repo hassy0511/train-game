@@ -1,6 +1,6 @@
 import type { RailNetwork } from '../rail/types';
 import { DIVE } from '../train/params';
-import type { JunctionDef, StageFile, WaterArea, WaterDef, WaterLook, WaterSpan } from './types';
+import type { JunctionDef, StageFile, WaterArea, WaterDef, WaterHole, WaterLook, WaterSpan } from './types';
 
 /**
  * v1.10 water helpers shared by the loader, the checks, the view and the train: where a water is, and which rail
@@ -82,6 +82,20 @@ export function areaOutline(area: WaterArea, segments = 48): [number, number][] 
   ]);
 }
 
+/** v1.10 (4-1): a hole in the ice as an area (a circle or a rect). */
+export function holeArea(h: WaterHole): WaterArea {
+  return 'rect' in h ? { rect: h.rect } : { circle: { center: h.center, radius: h.radius } };
+}
+
+/**
+ * v1.10 (4-1): an ice-covered water (look "ice" with holes) is open only in its holes; true when (x, z) is in one.
+ * Other waters are open everywhere in their area.
+ */
+export function openWaterAt(w: WaterDef, x: number, z: number, grow = 0): boolean {
+  if (!w.holes || w.holes.length === 0) return true;
+  return w.holes.some((h) => inArea(holeArea(h), x, z, grow));
+}
+
 /** The water whose area holds (x, z) (the first one), with its index, or null. */
 export function waterAt(waters: WaterDef[] | undefined, x: number, z: number): { water: WaterDef; index: number } | null {
   if (!waters) return null;
@@ -119,7 +133,8 @@ export function computeWaterSpans(file: StageFile, network: RailNetwork): void {
       if (hit) {
         const rel = p.y - hit.water.y;
         if (rel <= -DIVE.submerge) kind = 'dive';
-        else if (rel <= DIVE.surfaceAbove) kind = 'surface';
+        // v1.10 (4-1): on an ice-covered water a rail is on the water only in a hole (elsewhere it runs on the ice).
+        else if (rel <= DIVE.surfaceAbove && openWaterAt(hit.water, p.x, p.z)) kind = 'surface';
       }
       const current = open as { kind: 'surface' | 'dive'; from: number; water: number } | null;
       if (current && (current.kind !== kind || current.water !== hit?.index)) close(s);
