@@ -13,6 +13,7 @@ import {
   JUMP,
   LEVER_NOTCHES,
   LIGHT,
+  PLOW,
   RECORD,
   RESOLUTION_MIN_FPS,
   RESOLUTION_SLOW_SECONDS,
@@ -46,6 +47,8 @@ import { createSkipButton, type SkipButton } from './ui/skip-button';
 import { RocketSystem } from './gimmick/rocket';
 import { SlopeSystem } from './gimmick/slope';
 import { DiveSystem } from './gimmick/dive';
+import { PlowSystem } from './gimmick/plow';
+import { JumpSeat } from './gimmick/seat-face';
 import { IceSystem, iceZones, thinIceZones } from './gimmick/ice';
 import { ThinIceSystem } from './gimmick/thin-ice';
 import { MirrorSystem } from './gimmick/mirror';
@@ -295,7 +298,7 @@ async function boot(): Promise<void> {
   const hasMissions = stage.file.missions.length > 0;
   // The hidden test course has every button, so the jump, the light, the rocket and diving can be tried there.
   const abilities = new Set<AbilityId>(
-    hasMissions ? [...loadProgress().abilities, ...(await inheritedAbilities(stageId))] : ['whistle', 'jump', 'light', 'rocket', 'dive'],
+    hasMissions ? [...loadProgress().abilities, ...(await inheritedAbilities(stageId))] : ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow'],
   );
   const train = new Train(stage.network, stage.file.junctions, stage.file.start, {
     waters: stage.file.environment.water ?? [],
@@ -309,6 +312,11 @@ async function boot(): Promise<void> {
   // v1.10: near water the jump seat turns into "もぐる".
   const dive = new DiveSystem(train, stage.records, (id) => foundRecords.has(id));
   let diveBounces = 0;
+  // v1.10 (4-2): snow walls (the train bursts them or bumps them), and the jump seat's face: jump, もぐる or ゆきかき.
+  const plow = new PlowSystem(stage.file.gimmicks, train, (index, state, cleared, instant) =>
+    events.post({ type: 'plow:wall', index, state, cleared, instant }),
+  );
+  const seat = new JumpSeat(dive, plow, train);
   // v1.10 (4-1): ice (weaker brakes, the glowing notches at an ice station), thin ice (only the rocket gets across,
   // it lights the rocket button) and ice mirrors.
   const ice = new IceSystem(stage.file.gimmicks, stage.file.stations, train);
@@ -389,9 +397,9 @@ async function boot(): Promise<void> {
   const actionButtons = uiEl.querySelector('.action-buttons') as HTMLElement;
   const jumpButton = createJumpButton(actionButtons, () => {
     audio.unlock();
-    // v1.10: the seat is "もぐる" near water (the train's events play its sounds).
-    const press = dive.press();
-    if (press.kind === 'dive') return;
+    // v1.10: the seat is "もぐる" near water, "ゆきかき" near snow (the train's events play their sounds).
+    const press = seat.press();
+    if (press.kind === 'dive' || press.kind === 'plow') return;
     const result = press.result;
     if (result === 'ok') {
       // With a grasshopper on the roof the jump goes "びよーん".
@@ -428,6 +436,11 @@ async function boot(): Promise<void> {
       dive.enabled = true;
       jumpButton.show();
     }
+    if (ability === 'plow') {
+      // v1.10 (4-2): "ゆきかき" takes the jump's seat too.
+      plow.enabled = true;
+      jumpButton.show();
+    }
     if (ability === 'light') lightButton.show();
     if (ability === 'rocket') {
       rocket.enabled = true;
@@ -445,7 +458,7 @@ async function boot(): Promise<void> {
   const cargo = createCargoStrip(uiEl);
   const toast = createToast(uiEl);
   /** What a fall fades to: black, a white cloud (1-3) or a green leaf (2-1). */
-  const FALL_COLORS = { dark: '#000000', cloud: '#ffffff', leaf: '#d6efb4', water: '#cdeefe' } as const;
+  const FALL_COLORS = { dark: '#000000', cloud: '#ffffff', leaf: '#d6efb4', water: '#cdeefe', snow: '#f2f7fc' } as const;
   const fade = createFade(uiEl, FALL_COLORS[stage.file.environment.fall ?? 'dark']);
   const doorButton = createDoorButton(actionButtons);
   const countdownPanel = createCountdownPanel(uiEl);
@@ -568,6 +581,55 @@ async function boot(): Promise<void> {
     })();
   });
   dive.events.on('near', () => runner?.onDiveNear());
+  // v1.10 (4-2): the snowplow. Its sounds, the view's blade, walls and flying snow, and "ぽすっ" (the runner makes it a
+  // soft fail; the test course puts the train back itself): the window goes white and the wiper clears it.
+  app.dataset.plowBursts = '0';
+  app.dataset.plowBumps = '0';
+  const snowSplat = document.createElement('div');
+  snowSplat.className = 'snow-splat';
+  snowSplat.innerHTML = '<i></i><i></i><i></i><i></i><i></i><i></i><b></b>';
+  uiEl.prepend(snowSplat);
+  let plowSprayIn = 0;
+  let plowSpraying = false;
+  let bladeDrops = 0;
+  train.events.on('bladeDown', ({ instant }) => {
+    if (!instant) {
+      bladeDrops += 1;
+      app.dataset.bladeDrops = String(bladeDrops);
+      audio.playPlow();
+    }
+    events.post({ type: 'plow:blade', down: true, instant });
+  });
+  train.events.on('bladeUp', ({ instant }) => {
+    if (!instant) audio.playBladeUp();
+    events.post({ type: 'plow:blade', down: false, instant });
+  });
+  train.events.on('wallBurst', ({ span, boosted }) => {
+    app.dataset.plowBursts = String(plow.bursts);
+    audio.playWallBurst(boosted);
+    events.post({ type: 'plow:burst', index: span.index, boosted });
+  });
+  train.events.on('snowBump', ({ span, rewind }) => {
+    app.dataset.plowBumps = String(plow.bumps);
+    audio.playPlowBump();
+    events.post({ type: 'plow:bump', index: span.index });
+    // Snow all over the screen, and the wiper clears it ("きゅっ きゅっ").
+    snowSplat.classList.remove('is-on');
+    void snowSplat.offsetWidth;
+    snowSplat.classList.add('is-on');
+    audio.playWiper();
+    if (hasMissions) return;
+    void (async () => {
+      await waitSeconds(PLOW.splatSeconds);
+      await fade(true, 0.4);
+      train.rewindTo(rewind.at, rewind.railId);
+      rocket.reset();
+      rocket.refill();
+      ui.lever.setNotch(STOP_NOTCH);
+      events.post({ type: 'rewind' });
+      await fade(false, 0.4);
+    })();
+  });
   // v1.10 (4-1): thin ice ("ぴしぴし", "ぽちゃん", across) and the mirrors' "きらーん"; the runner makes "ぽちゃん" a fail,
   // the test course puts the train back itself.
   let iceSparkle = false;
@@ -607,6 +669,8 @@ async function boot(): Promise<void> {
   events.on('event', (e) => {
     if (e.type === 'rewind') {
       dive.reset();
+      seat.reset();
+      snowSplat.classList.remove('is-on');
       // v1.10 (4-1): the ice is whole again, and its lines come again.
       ice.reset();
       thinIce.reset();
@@ -776,6 +840,21 @@ async function boot(): Promise<void> {
 
     train.update(dt);
     dive.update(dt);
+    seat.update(dt);
+    plow.update();
+    // v1.10 (4-2): snow flying off the snowplow ("ざざざー") while it clears a buried stretch.
+    const spraying = train.plowing && Math.abs(train.state.speed) > 0.3;
+    if (spraying !== plowSpraying) {
+      plowSpraying = spraying;
+      events.post({ type: 'plow:spray', on: spraying });
+    }
+    if (spraying) {
+      plowSprayIn -= dt;
+      if (plowSprayIn <= 0) {
+        plowSprayIn = PLOW.sprayEvery;
+        audio.playPlowSpray(Math.abs(train.state.speed));
+      }
+    } else plowSprayIn = 0;
     thinIce.update(dt);
     mirrors.update();
     if (ice.sparkle !== iceSparkle) {
@@ -801,9 +880,13 @@ async function boot(): Promise<void> {
     boughs.update(dt);
     whistle.update(dt);
     ui.whistle.setProgress(whistle.progress);
-    jumpButton.setMode(dive.face);
+    jumpButton.setMode(seat.face);
     jumpButton.setDiving(train.domeOn);
-    if (dive.face === 'dive') jumpButton.set(train.diveProgress, dive.glow && (runner === null || runner.phase === 'driving'), false);
+    jumpButton.setPlowing(train.bladeDown, spraying);
+    const driving = runner === null || runner.phase === 'driving';
+    if (seat.face === 'dive') jumpButton.set(train.diveProgress, dive.glow && driving, false);
+    // "ゆきかき" glows until the blade is down, and is never grey (it works standing too).
+    else if (seat.face === 'plow') jumpButton.set(1, seat.glow && driving, false);
     else jumpButton.set(train.jumpProgress, train.jumpWouldClear || (runner?.jumpHint ?? false), train.state.speed < JUMP.minSpeed);
     runner?.update(dt);
     if (!runner) findTestCourseRecords();
@@ -896,6 +979,11 @@ async function boot(): Promise<void> {
     app.dataset.slope = slopes.kind;
     app.dataset.slip = train.isSlipping ? '1' : '0';
     app.dataset.dive = train.domeOn ? 'on' : dive.face === 'dive' ? 'near' : '';
+    if (plow.spans.length > 0) {
+      app.dataset.plow = train.bladeDown ? 'on' : seat.face === 'plow' ? 'near' : '';
+      app.dataset.plowing = train.plowing ? '1' : '0';
+      for (const sp of plow.spans) app.setAttribute(`data-wall-${sp.index}`, plow.wallState(sp.index));
+    }
     app.dataset.diving = train.diving ? '1' : '0';
     app.dataset.submerged = train.submerged ? '1' : '0';
     app.dataset.underwater = view.isCameraUnderwater() ? '1' : '0';
@@ -1009,6 +1097,10 @@ async function boot(): Promise<void> {
   const whalePads = new Set(
     stage.file.gimmicks.flatMap((g, i) => (g.type === 'jump-pad' && (g.params as { look?: string } | undefined)?.look === 'whale' ? [i] : [])),
   );
+  /** v1.10 (4-2): jump pads that are a folded ski jump. */
+  const skiPads = new Set(
+    stage.file.gimmicks.flatMap((g, i) => (g.type === 'jump-pad' && (g.params as { look?: string } | undefined)?.look === 'ski' ? [i] : [])),
+  );
   const nearWhalePad = (): boolean =>
     [...whalePads].some((i) => {
       const g = stage.file.gimmicks[i];
@@ -1052,7 +1144,7 @@ async function boot(): Promise<void> {
       fx.dip = Math.max(fx.dip, dip * shakeScale());
       fx.shake = Math.max(fx.shake, shake * shakeScale());
       // A bumped rock has its own rounder "ぽよん" (played with its bonk), and so does the water (v1.10).
-      if (lastFailReason !== 'rock' && lastFailReason !== 'dive' && lastFailReason !== 'crack') audio.playBoing();
+      if (lastFailReason !== 'rock' && lastFailReason !== 'dive' && lastFailReason !== 'crack' && lastFailReason !== 'plow') audio.playBoing();
     },
     resetLever: () => ui.lever.setNotch(STOP_NOTCH),
     gauge: (state) => gauge.set(state),
@@ -1142,6 +1234,12 @@ async function boot(): Promise<void> {
     if (e.type === 'actor:state' && (e.state === 'awake' || e.state === 'flee') && seabirds.has(e.id)) audio.playFlap();
     if (e.type === 'actor:state' && (e.state === 'awake' || e.state === 'flee') && seals.has(e.id)) audio.playSeal();
     if (e.type === 'rail:cut' && e.style === 'fall' && !e.instant) audio.playBridgeFall();
+    // v1.10 (4-2): the ski jump folds down ("ばたん！"), the lanterns come on at dusk.
+    if (e.type === 'pad' && e.visible && skiPads.has(e.index)) audio.playPadFlop();
+    if (e.type === 'sky' && e.seconds > 0) audio.playLanterns();
+    // Test hooks: the evening sky, the swirl marks shown by the light.
+    if (e.type === 'sky') app.dataset.sky = e.sky;
+    if (e.type === 'trace') app.dataset.trace = e.on ? '1' : '0';
   });
 
   // "||" in the corner: stop the game, go on, or leave for the map.
@@ -1160,7 +1258,7 @@ async function boot(): Promise<void> {
     if (runner?.skipCutscene()) skippedAt = performance.now();
   });
 
-  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, dive, ice, thinIce, mirrors });
+  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, dive, ice, thinIce, mirrors, plow, seat });
   runner.knowAbilities(abilities);
   runner.setLight(lightOn);
   if (resumeFrom > 0) {

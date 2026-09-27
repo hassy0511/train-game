@@ -6,10 +6,15 @@ export interface JumpButton {
   set(progress: number, glow: boolean, idle: boolean): void;
   /** A grasshopper rides on the roof: the ring turns green and the icon becomes a grasshopper (2-2). */
   setHopper(on: boolean): void;
-  /** v1.10: the seat's face: "jump", or "dive" near water (blue, "もぐる"; a quick turn when it changes). */
-  setMode(mode: 'jump' | 'dive'): void;
+  /**
+   * v1.10: the seat's face: "jump", "dive" near water (blue, "もぐる"), or "plow" before snow (purple, "ゆきかき"); a
+   * quick turn when it changes.
+   */
+  setMode(mode: 'jump' | 'dive' | 'plow'): void;
   /** v1.10: diving now (bubbles rise in the face). */
   setDiving(on: boolean): void;
+  /** v1.10 (4-2): the blade is down (the face shows it) and clearing snow now (snow flies in the face). */
+  setPlowing(down: boolean, clearing: boolean): void;
 }
 
 export interface LightButton {
@@ -64,6 +69,19 @@ const DIVE_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
   <circle cx="24" cy="19" r="2" fill="#2b3a4a"/><circle cx="26" cy="25" r="1.4" fill="#2b3a4a"/>
 </svg>`;
 
+/**
+ * v1.10 (4-2): the snowplow: a round yellow scoop pushing snow, with a few flakes flying off (made up: no real snow
+ * plough's wedge or blades).
+ */
+const PLOW_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+  <path d="M5 21c0-6 5-10 11-10h3v12H8a3 3 0 0 1-3-2z" fill="#f2b632" stroke="#2b3a4a" stroke-width="1.8" stroke-linejoin="round"/>
+  <path d="M19 15h6a2 2 0 0 1 2 2v4h-8" fill="#4a5360"/>
+  <circle cx="23" cy="24" r="2.4" fill="#2b3a4a"/>
+  <circle cx="4" cy="12" r="1.8" fill="#ffffff" stroke="#2b3a4a" stroke-width="1"/>
+  <circle cx="8" cy="7" r="1.5" fill="#ffffff" stroke="#2b3a4a" stroke-width="1"/>
+  <circle cx="3" cy="26" r="1.4" fill="#ffffff" stroke="#2b3a4a" stroke-width="1"/>
+</svg>`;
+
 /** v1.8: going backwards (later chapters): an arrow turning back. */
 const REVERSE_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
   <path d="M24 24V14a6 6 0 0 0-6-6h-9" fill="none" stroke="#2b3a4a" stroke-width="2.8" stroke-linecap="round"/>
@@ -99,6 +117,8 @@ export function abilityIcon(ability: AbilityId): string {
       return WHISTLE_ICON;
     case 'dive':
       return DIVE_ICON;
+    case 'plow':
+      return PLOW_ICON;
     case 'reverse':
       return REVERSE_ICON;
     case 'magnetLight':
@@ -146,13 +166,21 @@ export function createJumpButton(root: HTMLElement, onPress: () => void): JumpBu
     root,
     'jump',
     'ジャンプ',
-    JUMP_ICON.replace('class="icon"', 'class="icon icon-jump"') + HOPPER_ICON + DIVE_ICON.replace('class="icon"', 'class="icon icon-dive"'),
+    JUMP_ICON.replace('class="icon"', 'class="icon icon-jump"') +
+      HOPPER_ICON +
+      DIVE_ICON.replace('class="icon"', 'class="icon icon-dive"') +
+      PLOW_ICON.replace('class="icon"', 'class="icon icon-plow"'),
     'is-jump',
   );
   button.dataset.hopper = '0';
   button.dataset.mode = 'jump';
   button.dataset.diving = '0';
-  button.querySelector('.face')?.insertAdjacentHTML('beforeend', '<span class="dive-bubbles" aria-hidden="true"><i></i><i></i><i></i></span>');
+  button.dataset.plowing = '0';
+  button.dataset.blade = '0';
+  button.querySelector('.face')?.insertAdjacentHTML(
+    'beforeend',
+    '<span class="dive-bubbles" aria-hidden="true"><i></i><i></i><i></i></span><span class="plow-snow" aria-hidden="true"><i></i><i></i><i></i><i></i></span>',
+  );
   const label = button.querySelector('.label') as HTMLElement;
   button.addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -179,7 +207,7 @@ export function createJumpButton(root: HTMLElement, onPress: () => void): JumpBu
     setMode(mode): void {
       if (button.dataset.mode === mode) return;
       button.dataset.mode = mode;
-      const text = mode === 'dive' ? 'もぐる' : 'ジャンプ';
+      const text = mode === 'dive' ? 'もぐる' : mode === 'plow' ? 'ゆきかき' : 'ジャンプ';
       label.textContent = text;
       button.setAttribute('aria-label', text);
       // The face turns round once as it changes (restart the animation).
@@ -190,6 +218,12 @@ export function createJumpButton(root: HTMLElement, onPress: () => void): JumpBu
     setDiving(on): void {
       const v = on ? '1' : '0';
       if (button.dataset.diving !== v) button.dataset.diving = v;
+    },
+    setPlowing(down, clearing): void {
+      const b = down ? '1' : '0';
+      const c = clearing ? '1' : '0';
+      if (button.dataset.blade !== b) button.dataset.blade = b;
+      if (button.dataset.plowing !== c) button.dataset.plowing = c;
     },
   };
 }

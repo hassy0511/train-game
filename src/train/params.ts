@@ -269,6 +269,40 @@ export const DIVE = {
   headroom: 0.2,
 } as const;
 
+/**
+ * v1.10 (chapter 4): the snowplow ("ゆきかき"). The jump seat turns into "ゆきかき" `approach` m before an unburst snow
+ * wall or snow still to clear (along the way the train will go) and glows until pressed; a press lowers the blade
+ * (counted as down at once; the view takes `dropSeconds`). Down, it bursts walls and clears buried stretches; it rises
+ * once no snow is left within `approach` m ahead, and the seat goes back to the jump `faceHold` s later. Without it
+ * the wall stops the train ("ぽすっ": `bumpStop` s to stop, `bumpIn` m in, then `bumpBack` m back over
+ * `bumpSeconds` s) and it is put back `rewindBefore` m before the wall. A burst wall and its stretch stay cleared for
+ * the rest of the stage run (rewinds included). The loader's checks keep `zoneBefore` m before a wall to `zoneAfter`
+ * m after its stretch free of other things to press for (gaps, water), jump pads `padBefore` m away, a side way's
+ * wall `sideWayMin` m past its junction and a wall `slopeGap` m before an uphill in its stretch. While plowing the
+ * snow is thrown aside with a "ざざっ" every `sprayEvery` s.
+ */
+export const PLOW = {
+  approach: 80,
+  faceHold: 1.0,
+  dropSeconds: 0.25,
+  riseSeconds: 0.3,
+  bumpStop: 0.15,
+  bumpSeconds: 0.5,
+  bumpIn: 1.5,
+  bumpBack: 2,
+  rewindBefore: 60,
+  wallDepth: 4,
+  zoneBefore: 120,
+  zoneAfter: 40,
+  padBefore: 200,
+  sideWayMin: 60,
+  slopeGap: 50,
+  stationGap: 20,
+  sprayEvery: 0.3,
+  /** Seconds of the soft "ぽすっ" before the fade: the snowy window and the wiper's two wipes. */
+  splatSeconds: 1.2,
+} as const;
+
 /** v1.10: floaters by look: default length along the rail (m) and how deep they reach under the surface (m). */
 export const FLOATER: Record<'log' | 'raft' | 'lily' | 'wave' | 'ice', { length: number; draft: number }> = {
   log: { length: 2.4, draft: 0.6 },

@@ -2,10 +2,11 @@ import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
 import { buildRailNetwork } from '../rail/network';
 import type { RailNetwork } from '../rail/types';
 import { iceZones, thinIceZones } from '../gimmick/ice';
+import { assignPlowSpans, plowSpans } from '../gimmick/plow';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import type { Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
-import { validateIceLayout, validateStageFile, validateStageLayout, validateWaterLayout } from './validate';
+import { validateIceLayout, validatePlowLayout, validateStageFile, validateStageLayout, validateWaterLayout } from './validate';
 import { computeWaterSpans, diveForkSide } from './water';
 
 // One chunk per stage file; stages load lazily.
@@ -61,6 +62,9 @@ export async function loadStage(id: string): Promise<StageData> {
   for (const j of file.junctions) if (j.dive) j.diveSide = diveForkSide(j, network) ?? undefined;
   validateWaterLayout(file, network);
   validateIceLayout(file, network);
+  // v1.10 (4-2): snow walls and their buried stretches on the rails (and the stations buried under snow).
+  assignPlowSpans(file, network);
+  validatePlowLayout(file, network);
   const groundY = file.environment.ground?.y ?? null;
 
   const props: ResolvedProp[] = [...file.props, ...autoSigns(file)].map((p) => {
@@ -73,6 +77,7 @@ export async function loadStage(id: string): Promise<StageData> {
       physics: p.physics ?? 'none',
       tag: p.tag,
       onRail: 'onRail' in p ? { railId: p.onRail.railId, at: p.onRail.at } : undefined,
+      ...(p.trace ? { trace: true, traceLine: p.traceLine } : {}),
     };
   });
 
@@ -135,6 +140,8 @@ function autoSigns(file: StageFile): PropDef[] {
   // v1.10 (4-1): ice (a snow crystal) and thin ice (cracks and the rocket).
   for (const z of iceZones(file.gimmicks)) if (z.sign) out.push(sign('sign-ice', z.railId, z.from));
   for (const z of thinIceZones(file.gimmicks)) if (z.sign) out.push(sign('sign-thin-ice', z.railId, Math.max(0, z.from - 20)));
+  // v1.10 (4-2): a snow wall's purple snowplow sign, a little before the wall.
+  for (const sp of plowSpans(file.gimmicks)) if (sp.sign) out.push(sign('sign-plow', sp.railId, Math.max(0, sp.from - 8)));
   return out;
 }
 

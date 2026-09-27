@@ -78,6 +78,11 @@ const RIDGE_BULGE = 0.35;
 const RIDGE_FOOT_COLOR = new Color('#6F5D4E');
 const RIDGE_TOP_COLOR = new Color('#A8927A');
 const RIDGE_COLOR_HEIGHT = 60;
+/** v1.10 (4-2): a snowy ridge (`base.look` "snow"): pale blue-lilac in the shade at the foot, white at the top. */
+const SNOW_RIDGE_FOOT_COLOR = new Color('#C9D6E6');
+const SNOW_RIDGE_TOP_COLOR = new Color('#F6F9FC');
+const SNOW_RIDGE_COLOR_HEIGHT = 20;
+const SNOW_BASE_COLOR = new Color('#E6EDF5');
 
 /**
  * v1.7: how parts of the track look — slopes (bed colour, arrows) and the rock bed under a rail (`rails[].base`).
@@ -430,8 +435,11 @@ function rockHash(x: number, z: number): number {
   return v - Math.floor(v);
 }
 
-/** v1.7: a ridge's colours, per vertex: dark at the foot, light at the top, each point a little different. */
-function paintedRidge(geometry: BufferGeometry, groundY: number): BufferGeometry {
+/**
+ * v1.7: a ridge's colours, per vertex: dark at the foot, light at the top, each point a little different. v1.10 (4-2):
+ * a snowy one is white at the top and pale blue-lilac in the shade at the foot, with less variation.
+ */
+function paintedRidge(geometry: BufferGeometry, groundY: number, snow = false): BufferGeometry {
   const position = geometry.getAttribute('position');
   const colors = new Float32Array(position.count * 3);
   const c = new Color();
@@ -439,8 +447,13 @@ function paintedRidge(geometry: BufferGeometry, groundY: number): BufferGeometry
     const x = position.getX(i);
     const y = position.getY(i);
     const z = position.getZ(i);
-    c.copy(RIDGE_FOOT_COLOR).lerp(RIDGE_TOP_COLOR, Math.min(1, Math.max(0, (y - groundY) / RIDGE_COLOR_HEIGHT)));
-    c.multiplyScalar(0.9 + 0.18 * rockHash(z, x));
+    if (snow) {
+      c.copy(SNOW_RIDGE_FOOT_COLOR).lerp(SNOW_RIDGE_TOP_COLOR, Math.min(1, Math.max(0, (y - groundY) / SNOW_RIDGE_COLOR_HEIGHT)));
+      c.multiplyScalar(0.97 + 0.04 * rockHash(z, x));
+    } else {
+      c.copy(RIDGE_FOOT_COLOR).lerp(RIDGE_TOP_COLOR, Math.min(1, Math.max(0, (y - groundY) / RIDGE_COLOR_HEIGHT)));
+      c.multiplyScalar(0.9 + 0.18 * rockHash(z, x));
+    }
     colors.set([c.r, c.g, c.b], i * 3);
   }
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
@@ -561,7 +574,8 @@ function buildChunkParts(
   if (baseData.indices.length) {
     const groundY = looks?.groundY ?? null;
     const geometry = makeGeometry(baseData);
-    parts.push(base?.toGround && groundY !== null ? paintedRidge(geometry, groundY) : painted(geometry, ROCK_BASE_COLOR));
+    const snow = base?.look === 'snow';
+    parts.push(base?.toGround && groundY !== null ? paintedRidge(geometry, groundY, snow) : painted(geometry, snow ? SNOW_BASE_COLOR : ROCK_BASE_COLOR));
   }
   const sleepers: BufferGeometry[] = [];
   for (let s = Math.ceil(from / SLEEPER_STEP) * SLEEPER_STEP; s < Math.min(to, rail.length + 1e-6); s += SLEEPER_STEP) {

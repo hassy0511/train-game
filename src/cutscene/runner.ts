@@ -112,6 +112,8 @@ export async function runCutscene(
       events.post({ type: 'partner:emote', kind: step.emote as Emote });
     } else if ('unlock' in step) {
       await ports.unlock(step.unlock);
+    } else if ('sky' in step) {
+      events.post({ type: 'sky', sky: step.sky, seconds: step.seconds ?? 3 });
     }
   }
   // Skipped during the last step: nothing left to fast-forward, but the line or caption showing goes away.
@@ -120,7 +122,7 @@ export async function runCutscene(
 
 /**
  * Applies at once only what the steps leave behind (PHASE7_FINISH §4 item 3): cut rails, learned abilities, and the
- * figures they bring on or take off, each where it ends up. Lines, waits, cards, captions, cameras and effects are
+ * figures they bring on or take off, each where it ends up, and v1.10 (4-2) the evening sky. Lines, waits, cards, captions, cameras and effects are
  * left out (the caller gives the usual camera back). Used for the cutscenes before a resumed mission, and for the
  * rest of one skipped with "▶▶".
  */
@@ -154,6 +156,8 @@ export function fastForwardCutscene(
       events.post({ type: 'rail:cut', railId, from, to, style, props, instant: true });
     } else if ('unlock' in step) {
       ports.learn(step.unlock);
+    } else if ('sky' in step) {
+      events.post({ type: 'sky', sky: step.sky, seconds: 0 });
     }
   }
   for (const spawn of spawned.values()) events.post(spawn);

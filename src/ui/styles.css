@@ -3081,3 +3081,167 @@ body {
 .card.is-mirror .big-button {
   order: 2;
 }
+
+/* ---- v1.10 (4-2): the snowplow ("ゆきかき"): the jump seat's purple face, snow flying in it, the snowy window ---- */
+.round-button .icon-plow {
+  display: none;
+}
+
+#jump[data-mode='plow'] .icon-jump,
+#jump[data-mode='plow'] .icon-hopper,
+#jump[data-mode='plow'] .icon-dive {
+  display: none;
+}
+
+#jump[data-mode='plow'] .icon-plow {
+  display: block;
+}
+
+#jump[data-mode='plow'] .ring.is-jump {
+  --accent: #7b86e8;
+}
+
+/* The blade is down: the scoop sits a little lower in the face (pressed). */
+#jump[data-mode='plow'][data-blade='1'] .icon-plow {
+  transform: translateY(3px);
+}
+
+#jump[data-mode='plow'][data-glow='1'] .face {
+  background: #e3e6ff;
+  animation: plow-glow 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes plow-glow {
+  from {
+    box-shadow: 0 0 0 0 rgba(123, 134, 232, 0.9), 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+  to {
+    box-shadow: 0 0 0 14px rgba(123, 134, 232, 0), 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.plow-snow {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  display: none;
+}
+
+#jump[data-mode='plow'][data-plowing='1'] .plow-snow {
+  display: block;
+}
+
+.plow-snow i {
+  position: absolute;
+  top: 55%;
+  left: 45%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(123, 134, 232, 0.6);
+  animation: plow-flake 0.7s ease-out infinite;
+}
+
+.plow-snow i:nth-child(2) {
+  --dx: -1;
+  animation-delay: 0.18s;
+}
+
+.plow-snow i:nth-child(3) {
+  width: 6px;
+  height: 6px;
+  animation-delay: 0.35s;
+}
+
+.plow-snow i:nth-child(4) {
+  --dx: -1;
+  width: 6px;
+  height: 6px;
+  animation-delay: 0.52s;
+}
+
+@keyframes plow-flake {
+  from {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate(calc(var(--dx, 1) * 30px), -30px);
+    opacity: 0;
+  }
+}
+
+/*
+ * "ぽすっ" into the snow (4-2): soft round lumps of snow cover the window, then a wiper sweeps twice ("きゅっ きゅっ")
+ * and clears them. Soft white, never scary; gone in about a second and a half.
+ */
+.snow-splat {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+  overflow: hidden;
+}
+
+.snow-splat.is-on {
+  display: block;
+  animation: splat-fade 1.6s ease-in forwards;
+}
+
+.snow-splat i {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #f4f8fc 60%, #dfe8f2 100%);
+  box-shadow: 0 6px 18px rgba(120, 140, 170, 0.25);
+  transform: scale(0.2);
+  animation: splat-lump 0.25s ease-out forwards;
+}
+
+.snow-splat i:nth-child(1) { left: 8%; top: 12%; width: 34vw; height: 30vw; }
+.snow-splat i:nth-child(2) { left: 40%; top: 4%; width: 38vw; height: 32vw; animation-delay: 0.04s; }
+.snow-splat i:nth-child(3) { left: 62%; top: 30%; width: 34vw; height: 30vw; animation-delay: 0.08s; }
+.snow-splat i:nth-child(4) { left: 20%; top: 40%; width: 40vw; height: 34vw; animation-delay: 0.02s; }
+.snow-splat i:nth-child(5) { left: -6%; top: 55%; width: 30vw; height: 28vw; animation-delay: 0.06s; }
+.snow-splat i:nth-child(6) { left: 55%; top: 60%; width: 36vw; height: 30vw; animation-delay: 0.1s; }
+
+@keyframes splat-lump {
+  to {
+    transform: scale(1);
+  }
+}
+
+/* The wiper: a dark rounded arm swinging from the bottom middle, twice. */
+.snow-splat b {
+  position: absolute;
+  left: 50%;
+  bottom: -4%;
+  width: 1.4vw;
+  height: 82vh;
+  margin-left: -0.7vw;
+  border-radius: 1vw;
+  background: #3d4a5c;
+  transform-origin: 50% 100%;
+  transform: rotate(-70deg);
+  animation: splat-wipe 0.9s ease-in-out 0.3s 1 forwards;
+}
+
+@keyframes splat-wipe {
+  0% { transform: rotate(-70deg); }
+  25% { transform: rotate(70deg); }
+  50% { transform: rotate(-70deg); }
+  75% { transform: rotate(70deg); }
+  100% { transform: rotate(-70deg); }
+}
+
+@keyframes splat-fade {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
