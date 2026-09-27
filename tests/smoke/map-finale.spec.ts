@@ -158,21 +158,26 @@ test('chapter 2 finale: the ring, the card, the rail to the cloud gate and page 
   await settled(page.locator('.map-pages'));
   await page.screenshot({ path: resolve(OUT, 'map-finale-page2.png') });
 
-  // Once only: the map opened again shows the ring and the gate at once, no light and no card.
+  // Once only: the map opened again shows the ring and the gate at once, no light and no card. It opens on page 2,
+  // where the next island (3-1) is (§3.5).
   await page.locator('#map-close').click();
   await expect(page.locator('#map')).toHaveCount(0);
   await page.locator('#title-map').click();
   await expect(page.locator('#map')).toBeVisible();
-  await expect(page.locator('#map')).toHaveAttribute('data-page', '1');
+  await expect(page.locator('#map')).toHaveAttribute('data-page', '2');
   await expect(page.locator('[data-link="2-3>1-1"]')).toHaveClass(/is-laid/);
   await expect(page.locator('[data-link="2-3>1-1"]')).not.toHaveClass(/is-growing/);
   await expect(page.locator('[data-link="1-1>3-1"]')).not.toHaveClass(/is-growing/);
-  await expect(page.locator('.map-gate[data-gate="exit"]')).toBeVisible();
+  await expect(page.locator('[data-link-enter="1-1>3-1"]')).not.toHaveClass(/is-growing/);
+  await expect(page.locator('.map-gate[data-gate="enter"]')).toBeVisible();
   await page.waitForTimeout(3_000);
   await expect(page.locator('#card')).toHaveCount(0);
   await expect(page.locator('#map')).not.toHaveAttribute('data-finale', /.+/);
   await expect(page.locator('#map')).not.toHaveClass(/(^|\s)is-finale/);
-  // The gate turns the page.
+  // The gates turn the page, back and on.
+  await page.locator('.map-gate[data-gate="enter"]').click();
+  await expect(page.locator('#map')).toHaveAttribute('data-page', '1');
+  await expect(page.locator('.map-gate[data-gate="exit"]')).toBeVisible();
   await page.locator('.map-gate[data-gate="exit"]').click();
   await expect(page.locator('#map')).toHaveAttribute('data-page', '2');
   await page.locator('#map-close').click();
