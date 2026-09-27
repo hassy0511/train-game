@@ -7,7 +7,8 @@ import { addToProgress, loadProgress, setResume, type Resume } from './core/prog
 import { ABILITY_NAMES, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
 import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/loader';
-import type { AbilityId, Vec3 } from './stage/types';
+import type { AbilityId, GimmickDef, Vec3 } from './stage/types';
+import type { RunSurface } from './audio/run-sound';
 import {
   JUMP,
   LEVER_NOTCHES,
@@ -177,6 +178,19 @@ function chapterStars(): { label: string; done: boolean }[] {
     .map((c) => ({ label: `${c.id}しょう`, done: c.islands.every((i) => cleared.includes(i.id)) }));
 }
 
+/**
+ * What the track sounds like under the train front: a "sound" zone (v1.9) wins; else silk rails are silk, and a
+ * flower bridge's petals are soft.
+ */
+function runSurface(gimmicks: GimmickDef[], railId: string, s: number): RunSurface {
+  const zone = zoneAt(gimmicks, 'sound', railId, s);
+  if (zone) return zone.params?.surface as RunSurface;
+  if (railLooks.get(railId) === 'silk') return 'silk';
+  return zoneAt(gimmicks, 'flower-bridge', railId, s) ? 'soft' : 'rail';
+}
+/** Each rail's look (set when the stage loads), for runSurface(). */
+const railLooks = new Map<string, string | undefined>();
+
 /** Opens a stage straight into play (no title); with `resume`, at the mission the save says to go on from. */
 function goToStage(id: string, resume = false): void {
   location.search = `?stage=${encodeURIComponent(id)}&go=1${resume ? '&resume=1' : ''}`;
@@ -202,6 +216,7 @@ async function boot(): Promise<void> {
   const stageId = params.get('stage') ?? '1-1';
 
   const [stage, physics] = await Promise.all([loadStage(stageId), PhysicsWorld.create()]);
+  for (const rail of stage.file.rails) railLooks.set(rail.id, rail.look);
   const hasMissions = stage.file.missions.length > 0;
   // The hidden test course has every button, so the jump, the light and the rocket can be tried there.
   const abilities = new Set<AbilityId>(
@@ -514,6 +529,7 @@ async function boot(): Promise<void> {
     if (paused) {
       // Game time stands still; keep drawing so a resize or the returning view stay right.
       view.update(0, train.getPose(), fx);
+      audio.updateRun(0, { speed: 0, target: 0, braking: false, airborne: false, surface: 'rail', quiet: true });
       return;
     }
     simTime += dt;
@@ -541,6 +557,16 @@ async function boot(): Promise<void> {
     rocket.update();
 
     train.update(dt);
+    audio.updateRun(dt, {
+      speed: Math.abs(train.state.speed),
+      target: train.targetSpeed,
+      braking: train.targetSpeed < Math.abs(train.state.speed) - 0.3,
+      airborne: train.airborne || train.isFalling,
+      surface: runSurface(gimmicks, train.currentRail.id, train.frontS),
+      quiet: false,
+    });
+    app.dataset.runJoints = String(audio.runStats.joints);
+    app.dataset.runReleases = String(audio.runStats.releases);
     boughs.update(dt);
     whistle.update(dt);
     ui.whistle.setProgress(whistle.progress);

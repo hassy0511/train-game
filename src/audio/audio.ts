@@ -1,4 +1,5 @@
 import { MusicPlayer } from './music';
+import { RunSound, type RunInput } from './run-sound';
 
 /** Synthesized sound effects and music (no audio assets, fully original). The context unlocks on the first tap. */
 export class AudioEngine {
@@ -7,9 +8,13 @@ export class AudioEngine {
   private song: string | null = null;
   private musicLevel = 1;
   private musicPaused = false;
-  private ctx: AudioContext | null = null;
+  private ctx: BaseAudioContext | null = null;
+  /** The context that plays (the one made on the first tap); an offline one only renders. */
+  private live: AudioContext | null = null;
   /** Every sound effect goes through this gain (the "こうかおん" setting). */
   private sfx: GainNode | null = null;
+  /** The train running ("たたん・たたん", "ごーっ"), made when the context is. */
+  private run: RunSound | null = null;
   private sfxLevel = 1;
   /** Steps through a few notes of G major so the butterfly's bell does not repeat one pitch. */
   private butterflyNote = 0;
@@ -18,16 +23,51 @@ export class AudioEngine {
     if (!this.ctx) {
       const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctor) return;
-      this.ctx = new Ctor();
-      this.sfx = this.ctx.createGain();
-      this.sfx.gain.value = this.sfxLevel;
-      this.sfx.connect(this.ctx.destination);
-      this.music = new MusicPlayer(this.ctx, this.ctx.destination);
-      this.music.setVolume(this.musicLevel);
-      this.music.setPaused(this.musicPaused);
-      if (this.song) this.music.play(this.song);
+      const live = new Ctor();
+      this.live = live;
+      this.attach(live);
     }
-    if (this.ctx.state === 'suspended') void this.ctx.resume();
+    if (this.live?.state === 'suspended') void this.live.resume();
+  }
+
+  /**
+   * Builds the sound on a context: effects and music meet in a gentle compressor, so a pile of sounds at once
+   * gets fuller rather than distorted. The sounds page (sounds.html) also attaches an OfflineAudioContext here to
+   * measure each effect.
+   */
+  attach(ctx: BaseAudioContext, withMusic = ctx === this.live): void {
+    this.ctx = ctx;
+    const master = ctx.createDynamicsCompressor();
+    master.threshold.value = -14;
+    master.knee.value = 12;
+    master.ratio.value = 4;
+    master.attack.value = 0.003;
+    master.release.value = 0.25;
+    master.connect(ctx.destination);
+    this.sfx = ctx.createGain();
+    this.sfx.gain.value = this.sfxLevel;
+    this.sfx.connect(master);
+    this.run = new RunSound(ctx, this.sfx);
+    if (!withMusic) return;
+    this.music = new MusicPlayer(ctx, master);
+    this.music.setVolume(this.musicLevel);
+    this.music.setPaused(this.musicPaused);
+    if (this.song) this.music.play(this.song);
+  }
+
+  /** Every frame: the train running (see RunSound). Silent until the first tap unlocks the sound. */
+  updateRun(dt: number, input: RunInput): void {
+    this.run?.update(dt, input);
+  }
+
+  /** Rail joints clicked so far and the running sound's level (hooks for tests and the sounds page). */
+  get runStats(): { joints: number; releases: number; level: number } {
+    return { joints: this.run?.joints ?? 0, releases: this.run?.releases ?? 0, level: this.run?.level ?? 0 };
+  }
+
+  /** "ぷしゅー" on its own (the sounds page). */
+  playRelease(): void {
+    this.run?.release();
   }
 
   /** Plays a song from src/audio/songs.ts (null = silence). Asking again for the playing song does nothing. */
@@ -63,7 +103,7 @@ export class AudioEngine {
       [784, 240],
       [1047, 380],
     ];
-    for (const [f, delay] of notes) window.setTimeout(() => this.tone(f, delay === 380 ? 0.6 : 0.18, 'triangle', 0.18), delay);
+    for (const [f, delay] of notes) this.tone(f, delay === 380 ? 0.6 : 0.18, 'triangle', 0.18, f, delay / 1000);
   }
 
   /** A record found: a sparkly three-note arpeggio. */
@@ -73,7 +113,7 @@ export class AudioEngine {
       [1568, 90],
       [2093, 180],
     ] as [number, number][]) {
-      window.setTimeout(() => this.tone(f, 0.35, 'sine', 0.12), delay);
+      this.tone(f, 0.35, 'sine', 0.12, f, delay / 1000);
     }
   }
 
@@ -119,11 +159,11 @@ export class AudioEngine {
     }
   }
 
-  /** Short helper for one-shot tones. */
-  private tone(freq: number, seconds: number, type: OscillatorType, gain = 0.2, endFreq = freq): void {
+  /** Short helper for one-shot tones, `delay` s from now on the audio clock. */
+  private tone(freq: number, seconds: number, type: OscillatorType, gain = 0.2, endFreq = freq, delay = 0): void {
     const ctx = this.ctx;
     if (!ctx) return;
-    const now = ctx.currentTime;
+    const now = ctx.currentTime + delay;
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
     osc.type = type;
@@ -141,7 +181,7 @@ export class AudioEngine {
   /** Stop grade: a rising two-note chime for perfect, one note for ok. */
   playStop(kind: 'perfect' | 'ok'): void {
     this.tone(660, 0.18, 'sine', 0.2);
-    if (kind === 'perfect') window.setTimeout(() => this.tone(990, 0.3, 'sine', 0.2), 140);
+    if (kind === 'perfect') this.tone(990, 0.3, 'sine', 0.2, 990, 0.14);
   }
 
   playDoor(open: boolean): void {
@@ -160,7 +200,7 @@ export class AudioEngine {
 
   playCard(): void {
     this.tone(523, 0.12, 'triangle', 0.15);
-    window.setTimeout(() => this.tone(784, 0.2, 'triangle', 0.15), 110);
+    this.tone(784, 0.2, 'triangle', 0.15, 784, 0.11);
   }
 
   /** "ぴょん": a quick rising hop. */
@@ -176,7 +216,7 @@ export class AudioEngine {
   /** "ひゅ〜… ぽよん": a slow slide down, then a soft bounce (not scary). */
   playFall(): void {
     this.tone(900, 0.8, 'sine', 0.12, 220);
-    window.setTimeout(() => this.tone(260, 0.35, 'sine', 0.18, 520), 850);
+    this.tone(260, 0.35, 'sine', 0.18, 520, 0.85);
   }
 
   playLight(on: boolean): void {
@@ -304,8 +344,8 @@ export class AudioEngine {
 
   /** v1.7: the rocket fires: "ぼぼぼ… しゅごー" (a low rumble rising into a rush). */
   playRocket(): void {
-    for (let i = 0; i < 3; i++) window.setTimeout(() => this.tone(110 + i * 12, 0.12, 'square', 0.06, 90), i * 110);
-    window.setTimeout(() => this.tone(260, 1.4, 'sawtooth', 0.05, 900), 300);
+    for (let i = 0; i < 3; i++) this.tone(110 + i * 12, 0.12, 'square', 0.06, 90, i * 0.11);
+    this.tone(260, 1.4, 'sawtooth', 0.05, 900, 0.3);
   }
 
   /** v1.7: the rocket stops: "ぷしゅっ". */
@@ -321,7 +361,7 @@ export class AudioEngine {
   /** v1.7: the volcano sneezes: "ぷしゅーっ… ぽふーん" (soft, not a bang). */
   playSneeze(): void {
     this.tone(500, 0.5, 'triangle', 0.08, 1100);
-    window.setTimeout(() => this.tone(180, 0.7, 'sine', 0.2, 70), 520);
+    this.tone(180, 0.7, 'sine', 0.2, 70, 0.52);
   }
 
   /** v1.7: the volcano's everyday smoke ring: a small, soft "ぽふっ" (quiet: it comes every few seconds). */
@@ -344,7 +384,7 @@ export class AudioEngine {
   /** v1.7: the train bumps a rock: "ぽよん" (the fail boing, an octave higher and rounder). */
   playRockBonk(): void {
     this.tone(440, 0.4, 'triangle', 0.16, 220);
-    window.setTimeout(() => this.tone(330, 0.3, 'sine', 0.12, 520), 180);
+    this.tone(330, 0.3, 'sine', 0.12, 520, 0.18);
   }
 
   /** v1.7: something small lands in the sea: "ぽちゃん" (a water drop: a quick rise, then a little bubble). */

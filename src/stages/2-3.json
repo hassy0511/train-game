@@ -352,6 +352,7 @@
       "params": { "allow": false, "icon": "sleep", "line": "しーっ… とりが ねてるよ", "pressLine": "しーっ… ロケットは おやすみ" }
     },
     { "type": "rocket", "railId": "kudari", "from": 740, "to": 885, "params": { "allow": false, "icon": "bridge", "line": "ぐらぐらばし！ ロケットは だめ" } },
+    { "type": "sound", "railId": "kudari", "from": 745, "to": 885, "params": { "surface": "wood" } },
     { "type": "rocket", "railId": "kudari", "from": 640, "to": 690, "params": { "glow": true, "line": "まっすぐだ！ ロケットで いそげ！" } },
     { "type": "camera", "railId": "main", "from": 230, "to": 345, "params": { "mode": "chase" } },
     { "type": "fog", "railId": "miharashi", "from": 78, "to": 118, "params": { "near": 2, "far": 22, "lightFar": 70 } },
