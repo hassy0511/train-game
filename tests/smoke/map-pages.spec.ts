@@ -100,6 +100,43 @@ async function swipe(page: Page, from: { x: number; y: number }, dx: number, dy 
   );
 }
 
+/**
+ * From now on, keeps what each element matching `selector` looks like the moment it is added (its island, its text
+ * and its box with its pop-in finished): the snow and the bubble come and go in a second or two, quicker than a slow
+ * screenshot, so the test reads these instead of looking for them afterwards.
+ */
+async function recordAdded(page: Page, selector: string): Promise<void> {
+  await page.evaluate((selector) => {
+    const w = window as unknown as { __added?: Record<string, { island?: string; text: string; box: DOMRect }[]> };
+    const seen: { island?: string; text: string; box: DOMRect }[] = [];
+    (w.__added ??= {})[selector] = seen;
+    new MutationObserver((records) => {
+      for (const r of records) {
+        for (const n of r.addedNodes) {
+          if (!(n instanceof HTMLElement) || !n.matches(selector)) continue;
+          for (const a of n.getAnimations()) a.finish();
+          seen.push({ island: n.dataset.island, text: n.textContent ?? '', box: n.getBoundingClientRect().toJSON() as DOMRect });
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  }, selector);
+}
+
+type Added = { island?: string; text: string; box: { x: number; width: number } };
+
+/** What `recordAdded` kept for `selector`, once there are at least `count`. */
+async function added(page: Page, selector: string, count = 1): Promise<Added[]> {
+  const handle = await page.waitForFunction(
+    ([selector, count]) => {
+      const seen = (window as unknown as { __added?: Record<string, unknown[]> }).__added?.[selector as string] ?? [];
+      return seen.length >= (count as number) ? seen : null;
+    },
+    [selector, count] as const,
+    { timeout: 20_000 },
+  );
+  return (await handle.jsonValue()) as Added[];
+}
+
 const centre = async (target: Locator): Promise<{ x: number; y: number }> => {
   const b = await target.boundingBox();
   if (!b) throw new Error('no box');
@@ -166,6 +203,13 @@ test('chapter 2 done (its ring seen before): the rail to the gate, the page turn
   await expect(map).toHaveAttribute('data-growing', '1');
   const out = page.locator(`[data-link="${GATE}"]`);
   await expect(out).toHaveClass(/is-growing/);
+  // Not saved while it still grows (read together: the save and the end of growing come in the same moment).
+  const early = await page.evaluate(
+    (key) => ({ growing: document.getElementById('map')?.dataset.growing, links: (JSON.parse(localStorage.getItem(key) ?? '{}').mapLinks ?? []) as string[] }),
+    KEY,
+  );
+  expect(early.growing).toBe('1');
+  expect(early.links).not.toContain(GATE);
   await expect(page.locator('#map-close')).toBeHidden();
   await expect(page.locator('#map-next')).toBeHidden();
   await expect(page.locator('.map-gate[data-gate="exit"]')).toBeVisible();
@@ -175,7 +219,6 @@ test('chapter 2 done (its ring seen before): the rail to the gate, the page turn
   expect(new URL(page.url()).search).toBe('');
   await page.waitForTimeout(500);
   await page.screenshot({ path: resolve(OUT, 'map-page1-gate.png') });
-  expect((await saved(page)).mapLinks).not.toContain(GATE);
   // Then page 2 by itself, and the rail grows on from the gate there to 3-1.
   await turned(page, 2);
   await expect(page.locator(`[data-link-enter="${GATE}"]`)).toHaveClass(/is-growing/);
@@ -294,6 +337,7 @@ test("chapter 3's end: the water light 3-1 → 4-1, snow on chapter 4, the card,
   await seed(page, CH3_DONE);
   await toTitle(page);
   await expect(page.locator('#title-chapters')).toHaveText(/3しょう ★\s*4しょう ☆/);
+  await recordAdded(page, '.map-snow');
   const map = await openMap(page);
   // It opens on chapter 3's page; the long rail down to 4-1 grows, then the light runs along the road.
   await expect(map).toHaveAttribute('data-page', '2');
@@ -304,9 +348,7 @@ test("chapter 3's end: the water light 3-1 → 4-1, snow on chapter 4, the card,
   await expect(page.locator('.map-link.is-lit.is-water').first()).toBeAttached({ timeout: 10_000 });
   await page.waitForTimeout(600);
   await page.screenshot({ path: resolve(OUT, 'map-ch3-finale.png') });
-  await page.waitForSelector('.map-snow', { state: 'attached', timeout: 10_000 });
-  expect(await page.locator('.map-snow').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.island))).toEqual(CH4);
-  await page.waitForTimeout(250);
+  expect((await added(page, '.map-snow', CH4.length)).map((s) => s.island)).toEqual(CH4);
   await page.screenshot({ path: resolve(OUT, 'map-ch3-snow.png') });
   await expect(map).toHaveAttribute('data-trail', '3-1,3-2,3-3,4-1');
   for (const key of ['3-1>3-2', '3-2>3-3', '3-3>4-1']) await expect(page.locator(`[data-link="${key}"]`)).toHaveClass(/is-lit/);
@@ -390,12 +432,13 @@ test("chapter 4's end: the aurora and the islands twinkling, the card, then chap
   await expect(teaser).toContainText('5しょう');
   await expect(page.locator('[data-link="4-3>teaser:5"]')).toBeVisible();
   await expect(teaser).not.toHaveClass(/is-appear/, { timeout: 10_000 });
+  await recordAdded(page, '.map-say');
   await teaser.dispatchEvent('click');
-  await expect(page.locator('.map-say')).toHaveText('つづきは また こんど！');
-  await page.locator('.map-say').evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished.catch(() => undefined))));
+  const [said] = await added(page, '.map-say');
+  expect(said.text).toBe('つづきは また こんど！');
   await page.screenshot({ path: resolve(OUT, 'map-teaser5.png') });
   // The bubble stays on the screen (said to the left of the island at the right edge).
-  const say = (await page.locator('.map-say').boundingBox())!;
+  const say = said.box;
   expect(say.x).toBeGreaterThanOrEqual(0);
   expect(say.x + say.width).toBeLessThanOrEqual(1194);
 
