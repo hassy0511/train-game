@@ -289,6 +289,12 @@ export class WireSceneView implements SceneView {
     this.renderer.render(this.scene, this.camera);
   }
 
+  setSubmerged(): void {}
+
+  isCameraUnderwater(): boolean {
+    return false;
+  }
+
   resize(width: number, height: number, devicePixelRatio: number): void {
     if (!this.renderer) return;
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));

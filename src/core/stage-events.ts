@@ -37,7 +37,9 @@ export type StageEvent =
         | 'slip'
         | 'timeUp'
         // v1.8: back from a record's side track (not a failure: no dip, no shake)
-        | 'spur';
+        | 'spur'
+        // v1.10: "ぽよん" off a floater, or water without the dome (soft)
+        | 'dive';
     }
   /**
    * Back to a station after a failure (or a resume). `boarded`: passengers who already got on this run, per station
@@ -96,6 +98,14 @@ export type StageEvent =
   | { type: 'sneeze' }
   /** v1.7: the volcano's everyday small smoke ring ("ぽふっ"), every VOLCANO_PUFF seconds. */
   | { type: 'volcano:puff' }
+  /**
+   * v1.10: diving. "dive": a press dived ("ぷくっ・ざぶん"); "surface": the front came up ("ぷかっ") or the last car
+   * left the water ("ぷはっ", `long`); "bounce": "ぽよん" off a floater or the water; "bob": a press only bobbed the
+   * train. `railId`/`s`: where the train front was.
+   */
+  | { type: 'dive'; state: 'dive' | 'surface' | 'bounce' | 'bob'; long?: boolean; railId?: string; s?: number }
+  /** v1.10: the bubble dome went on or off (`instant`: a rewind or a resume put it on, no inflating). */
+  | { type: 'dome'; on: boolean; instant: boolean }
   /** v1.7: a countdown started ("run"), got low, was beaten ("safe"), ran out ("up") or was put away ("off"). */
   | { type: 'countdown'; state: 'run' | 'low' | 'safe' | 'up' | 'off' };
 

@@ -1,5 +1,5 @@
 import { CatmullRomCurve3, Quaternion, Vector3 } from 'three';
-import type { RailEndDef } from '../stage/types';
+import type { RailEndDef, WaterSpan } from '../stage/types';
 import type { Rail as RailApi, RailFrame } from './types';
 
 export interface RailInit {
@@ -32,6 +32,8 @@ export class Rail implements RailApi {
   readonly length: number;
   readonly gaps: { from: number; to: number }[];
   readonly end: RailEndDef;
+  surfaces: WaterSpan[] = [];
+  dives: WaterSpan[] = [];
 
   private readonly curve: CatmullRomCurve3;
   private readonly upRef: Vector3;
