@@ -1,9 +1,26 @@
 import { RUN_SURFACES, type RunSurface } from '../audio/run-sound';
 import { SONGS } from '../audio/songs';
+import { iceZones, thinIceZones } from '../gimmick/ice';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import type { RailNetwork } from '../rail/types';
-import { DIVE, FLOATER, FLOWER_BRIDGE, FRAGILE, GRASSHOPPER, RECORD, REWIND_DISTANCE, ROCK_ROLL, ROCKET, SLOPE, TRAIN } from '../train/params';
+import {
+  DIVE,
+  FLOATER,
+  FLOWER_BRIDGE,
+  FRAGILE,
+  GRASSHOPPER,
+  LEVER_NOTCHES,
+  RECORD,
+  REWIND_DISTANCE,
+  ROCK_ROLL,
+  ROCKET,
+  SLOPE,
+  STOP_RULE,
+  THIN_ICE,
+  TRAIN,
+} from '../train/params';
+import { openWaterAt } from './water';
 import { AMBIENCE_KINDS, FLOATER_LOOKS, WATER_LOOKS, type AmbienceKind, type FloaterLook, type Placement, type StageFile, type WaterLook } from './types';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
@@ -131,6 +148,13 @@ export function validateStageFile(raw: unknown): StageFile {
     fail(`"environment.ambience" must be one of ${AMBIENCE_KINDS.join(', ')}`);
   }
   if (env.water !== undefined) checkWater(env.water);
+  if (env.snow !== undefined) {
+    // v1.10 (4-1): snow falling round the camera.
+    const sn = env.snow;
+    if (!isObject(sn) || !Number.isInteger(sn.count) || (sn.count as number) < 0 || (sn.count as number) > 2000) fail('"environment.snow.count" must be a whole number 0–2000');
+    for (const k of ['radius', 'fall']) if (sn[k] !== undefined && !(isNumber(sn[k]) && (sn[k] as number) > 0)) fail(`"environment.snow.${k}" must be > 0`);
+  }
+  if (env.surface !== undefined && !RUN_SURFACES.includes(env.surface as RunSurface)) fail(`"environment.surface" must be one of ${RUN_SURFACES.join(', ')}`);
 
   const rails = requireArray(raw, 'rails');
   if (rails.length === 0) fail('at least one rail is required');
@@ -246,7 +270,8 @@ export function validateStageFile(raw: unknown): StageFile {
     }
     if (a.type === 'grasshopper' && a.reactsTo === 'light') fail(`actor "${a.id}": a grasshopper hops on by itself ("none") or when whistled for ("whistle")`);
     const ap = (a.params ?? {}) as Record<string, unknown>;
-    if (a.type === 'cat' && ap.look !== undefined && ap.look !== 'cat' && ap.look !== 'seabird') fail(`actor "${a.id}": look must be cat or seabird`);
+    if (a.type === 'cat' && ap.look !== undefined && !['cat', 'seabird', 'seal'].includes(String(ap.look))) fail(`actor "${a.id}": look must be cat, seabird or seal`);
+    if (a.type === 'rock-roll' && ap.look !== undefined && ap.look !== 'rock' && ap.look !== 'snowbird') fail(`actor "${a.id}": look must be rock or snowbird`);
     if (a.type === 'rock-roll' || a.type === 'rock-drop') {
       const rw = ap.rewind;
       if (rw !== undefined && !isNumber(rw) && !(isObject(rw) && isString(rw.railId) && railIds.has(rw.railId) && isNumber(rw.at))) {
@@ -318,7 +343,7 @@ export function validateStageFile(raw: unknown): StageFile {
 
   requireArray(raw, 'gimmicks').forEach((g, i) => {
     if (!isObject(g) || !isString(g.type)) fail(`gimmicks[${i}]: "type" is required`);
-    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound'];
+    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound', 'ice', 'thin-ice'];
     if (zoned.includes(g.type)) {
       if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`gimmicks[${i}] ${g.type}: needs a known railId and "from"`);
       if (g.type !== 'jump-pad' && (!isNumber(g.to) || (g.to as number) <= (g.from as number))) fail(`gimmicks[${i}] ${g.type}: needs "to" after "from"`);
@@ -365,6 +390,7 @@ export function validateStageFile(raw: unknown): StageFile {
     if (g.type === 'camera' && !['cab', 'chase', 'side', 'top'].includes(String((g.params as Record<string, unknown> | undefined)?.mode))) {
       fail(`gimmicks[${i}] camera: params.mode must be cab, chase, side or top`);
     }
+    checkIceGimmick(g as Record<string, unknown>, p, `gimmicks[${i}] ${g.type}`, railIds);
   });
 
   if (raw.floaters !== undefined) {
@@ -391,6 +417,58 @@ export function validateStageFile(raw: unknown): StageFile {
 
 const COLOR = /^#[0-9a-fA-F]{6}$/;
 
+/** v1.10 (4-1): the params of ice, thin-ice, mirror and ice-sheet gimmicks (PHASE8 第 7 部 §4.6). */
+function checkIceGimmick(g: Record<string, unknown>, p: Record<string, unknown>, where: string, railIds: Set<string>): void {
+  const optText = (k: string): void => {
+    if (p[k] !== undefined && p[k] !== null && !isString(p[k])) fail(`${where}: params.${k} must be text or null`);
+  };
+  const optBool = (k: string): void => {
+    if (p[k] !== undefined && typeof p[k] !== 'boolean') fail(`${where}: params.${k} must be true or false`);
+  };
+  const optPositive = (k: string): void => {
+    if (p[k] !== undefined && !(isNumber(p[k]) && (p[k] as number) > 0)) fail(`${where}: params.${k} must be > 0`);
+  };
+  if (g.type === 'ice') {
+    if (p.grip !== undefined && !(isNumber(p.grip) && p.grip > 0 && p.grip <= 1)) fail(`${where}: params.grip must be above 0 and at most 1`);
+    optText('line');
+    optBool('sign');
+  }
+  if (g.type === 'thin-ice') {
+    const from = g.from as number;
+    const to = g.to as number;
+    // A jump at びゅーん goes 35.2 m: it must not hop over the thin ice.
+    if (to - from < 36) fail(`${where}: must be at least 36 m long (no jump gets over it)`);
+    const fastest = Math.max(...LEVER_NOTCHES.map((n) => n.speed));
+    const minSpeed = isNumber(p.minSpeed) ? p.minSpeed : THIN_ICE.minSpeed;
+    if (!(minSpeed > fastest && minSpeed < ROCKET.speed)) fail(`${where}: params.minSpeed must be above the lever's fastest (${fastest}) and below the rocket's (${ROCKET.speed})`);
+    if (p.grace !== undefined && !(isNumber(p.grace) && p.grace >= 0)) fail(`${where}: params.grace must be >= 0`);
+    optPositive('warn');
+    if (p.rewindAt !== undefined && !isNumber(p.rewindAt)) fail(`${where}: params.rewindAt must be a number`);
+    optText('line');
+    optBool('sign');
+  }
+  if (g.type === 'mirror') {
+    if (!isVec3(p.position)) fail(`${where}: params.position must be [x, y, z]`);
+    if (p.rotationY !== undefined && !isNumber(p.rotationY)) fail(`${where}: params.rotationY must be a number`);
+    for (const k of ['width', 'height', 'range', 'flashRange', 'reflectRadius']) optPositive(k);
+    if (p.railId !== undefined && !(isString(p.railId) && railIds.has(p.railId))) fail(`${where}: params.railId must be a known rail`);
+    if (p.junction !== undefined && !isString(p.junction)) fail(`${where}: params.junction must be a junction id`);
+    if (p.junction !== undefined && p.railId === undefined) fail(`${where}: a mirror at a junction needs params.railId (its false way)`);
+    optBool('lightHint');
+    if (p.reflect !== undefined && !(Array.isArray(p.reflect) && p.reflect.every((r) => r === 'train' || r === 'cutscene'))) {
+      fail(`${where}: params.reflect must be a list of "train" and "cutscene"`);
+    }
+  }
+  if (g.type === 'ice-sheet') {
+    const outline = p.outline;
+    if (!Array.isArray(outline) || outline.length < 3 || !outline.every((q) => Array.isArray(q) && q.length === 2 && q.every(isNumber))) {
+      fail(`${where}: params.outline must be 3 or more [x, z] points`);
+    }
+    if (p.y !== undefined && !isNumber(p.y)) fail(`${where}: params.y must be a number`);
+    if (p.color !== undefined && !(typeof p.color === 'string' && COLOR.test(p.color))) fail(`${where}: params.color must be #rrggbb`);
+  }
+}
+
 /** v1.10: `environment.water` (PHASE8 part 2 §2.13). */
 function checkWater(water: unknown): void {
   if (!Array.isArray(water)) fail('"environment.water" must be an array');
@@ -412,6 +490,18 @@ function checkWater(water: unknown): void {
         if (r.rotationY !== undefined && !isNumber(r.rotationY)) fail(`${where}: rect rotationY must be a number`);
         if (r.corner !== undefined && !(isNumber(r.corner) && r.corner >= 0)) fail(`${where}: rect corner must be >= 0`);
       } else fail(`${where}: "area" must be { circle } or { rect }`);
+    }
+    if (w.holes !== undefined) {
+      // v1.10 (4-1): open water in an ice-covered water.
+      if (w.look !== 'ice') fail(`${where}: "holes" are for look "ice" only`);
+      if (!Array.isArray(w.holes) || w.holes.length === 0) fail(`${where}: "holes" must be a non-empty list`);
+      for (const h of w.holes as unknown[]) {
+        if (!isObject(h)) fail(`${where}: a hole must be { center, radius } or { rect }`);
+        if ('rect' in h) {
+          const r = h.rect;
+          if (!isObject(r) || !pair(r.center) || !pair(r.size) || !(r.size as number[]).every((n) => n > 0)) fail(`${where}: a rect hole needs center [x, z] and size [across, along] > 0`);
+        } else if (!pair(h.center) || !isNumber(h.radius) || h.radius <= 0) fail(`${where}: a hole needs center [x, z] and radius > 0`);
+      }
     }
     if (w.under !== undefined) {
       const u = w.under;
@@ -631,6 +721,11 @@ export function validateWaterLayout(file: StageFile, network: RailNetwork): void
       let lowest = Infinity;
       for (let s = d.from; s <= d.to; s += 1) lowest = Math.min(lowest, rail.frameAt(s).position.y);
       if (water.y - lowest < TRAIN.height + 0.9) fail(`rail "${rail.id}": the stretch under water at ${d.from.toFixed(0)}–${d.to.toFixed(0)} must reach ${TRAIN.height + 0.9} m below the surface`);
+      // v1.10 (4-1): under an ice sheet only through one of its holes.
+      for (const at of [d.from, d.to]) {
+        const p = rail.frameAt(at).position;
+        if (water.holes?.length && !openWaterAt(water, p.x, p.z, 3)) fail(`rail "${rail.id}": goes under the ice at ${at.toFixed(0)} outside its holes`);
+      }
     }
   }
   // Nothing to jump near the water: no gap, jump pad, bough, silk bridge or flower bridge from DIVE.clearBefore m
@@ -693,4 +788,63 @@ export function validateWaterLayout(file: StageFile, network: RailNetwork): void
     }
     if (!ok) fail(`record "${r.id}": a dive record must be within ${RECORD.distance} m of a stretch on or under water`);
   }
+}
+
+/**
+ * v1.10 (4-1) checks on ice, thin ice and mirrors that need the rails (PHASE8 第 7 部 §4.6): ice stretches do not
+ * overlap each other or a slope; thin ice has room around it (no stop line, junction, merge, gap or rocket rest from
+ * 10 m before it to 35 m past it; the train's way back leaves room to speed up; the rocket does not rest while the
+ * train crosses it); a mirror at a junction stands at the end of its false way.
+ */
+export function validateIceLayout(file: StageFile, network: RailNetwork): void {
+  const ice = iceZones(file.gimmicks);
+  const thin = thinIceZones(file.gimmicks);
+  const slopes = slopeZones(file.gimmicks);
+  const overlaps = (a: { railId: string; from: number; to: number }, b: { railId: string; from: number; to: number }): boolean =>
+    a.railId === b.railId && a.from < b.to && b.from < a.to;
+  for (const z of ice) {
+    const where = `gimmicks[${z.index}] ice`;
+    for (const o of ice) if (o !== z && overlaps(z, o)) fail(`${where}: overlaps gimmicks[${o.index}] ice`);
+    for (const sl of slopes) if (overlaps(z, sl)) fail(`${where}: overlaps gimmicks[${sl.index}] slope (ice and slopes do not go together yet)`);
+  }
+  const rockets = rocketZones(file.gimmicks);
+  for (const z of thin) {
+    const where = `gimmicks[${z.index}] thin-ice`;
+    const rail = network.getRail(z.railId);
+    const lo = z.from - 10;
+    const hi = z.to + 35;
+    const inside = (at: number): boolean => at >= lo && at <= hi;
+    for (const st of file.stations) if (st.railId === z.railId && inside(st.at)) fail(`${where}: station "${st.id}" stops too near it`);
+    for (const j of file.junctions) if (j.railId === z.railId && inside(j.at)) fail(`${where}: junction "${j.id}" is too near it`);
+    for (const r of file.rails) {
+      if (r.end.type === 'merge' && r.end.railId === z.railId && r.id !== z.railId && inside(r.end.at)) fail(`${where}: rail "${r.id}" merges too near it`);
+    }
+    for (const g of rail.gaps) if (g.to >= lo && g.from <= hi) fail(`${where}: a gap (${g.from}–${g.to}) is too near it`);
+    for (const r of rockets) if (!r.allow && r.railId === z.railId && r.from <= hi && r.to >= lo) fail(`${where}: the rocket rests near it (gimmicks[${r.index}])`);
+    for (const o of thin) if (o !== z && overlaps(z, o)) fail(`${where}: overlaps gimmicks[${o.index}] thin-ice`);
+    for (const sl of slopes) if (overlaps(z, sl)) fail(`${where}: overlaps gimmicks[${sl.index}] slope`);
+    // The way back: on this rail, before it with room to speed up, not on thin ice or a slope.
+    const back = z.rewind;
+    if (back.at > z.from - 120) fail(`${where}: rewindAt (${back.at}) must be at least 120 m before it (room to speed up)`);
+    if (back.at < 0 || back.at > rail.length) fail(`${where}: rewindAt (${back.at}) is outside rail "${z.railId}"`);
+    for (const o of thin) if (o.railId === back.railId && back.at >= o.from && back.at <= o.to) fail(`${where}: rewinds onto gimmicks[${o.index}] thin-ice`);
+    for (const sl of slopes) if (sl.railId === back.railId && back.at >= sl.from && back.at <= sl.to) fail(`${where}: rewinds onto gimmicks[${sl.index}] slope`);
+    // The rocket must not start resting before the last bogie is across (the next station's quiet stretch).
+    const next = file.stations.filter((st) => st.railId === z.railId && st.at > z.to).sort((a, b) => a.at - b.at)[0];
+    if (next && z.to + 35 + STOP_RULE.zone > next.at - ROCKET.stationQuiet) {
+      fail(`${where}: must end at least ${35 + STOP_RULE.zone + ROCKET.stationQuiet} m before station "${next.id}" (the rocket rests there)`);
+    }
+  }
+  file.gimmicks.forEach((g, i) => {
+    if (g.type !== 'mirror') return;
+    const p = (g.params ?? {}) as Record<string, unknown>;
+    if (p.junction === undefined) return;
+    const where = `gimmicks[${i}] mirror`;
+    const j = file.junctions.find((x) => x.id === p.junction);
+    if (!j) fail(`${where}: unknown junction "${String(p.junction)}"`);
+    if (!j.signReversed) fail(`${where}: junction "${j.id}" must have a reversed sign (signReversed)`);
+    if (j[j.default] !== p.railId) fail(`${where}: junction "${j.id}"'s default way must be the mirror's rail "${String(p.railId)}"`);
+    const def = file.rails.find((r) => r.id === p.railId);
+    if (!def?.deadEnd) fail(`${where}: rail "${String(p.railId)}" must be a dead end`);
+  });
 }

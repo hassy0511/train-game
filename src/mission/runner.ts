@@ -6,6 +6,9 @@ import { RollingNut, Squirrel } from '../actors/nut';
 import { Grasshopper } from '../actors/grasshopper';
 import { DroppingRock, ROCK_HIT_AFTER, RollingRock } from '../actors/rock';
 import type { RocketPress, RocketSystem } from '../gimmick/rocket';
+import type { IceSystem, ThinIceZone } from '../gimmick/ice';
+import type { ThinIceSystem } from '../gimmick/thin-ice';
+import type { MirrorSystem } from '../gimmick/mirror';
 import type { SlopeSystem, SlopeZone } from '../gimmick/slope';
 import { Countdown, type CountdownView } from './countdown';
 import { FlowerBridges, type BridgeOutcome } from '../gimmick/flower-bridge';
@@ -34,6 +37,7 @@ import {
   JUMP,
   LEVER_NOTCHES,
   LIGHT,
+  MIRROR,
   PASSENGER_SECONDS,
   RECORD,
   REFUSE_COOLDOWN,
@@ -89,6 +93,10 @@ export interface MissionPorts extends CutscenePorts {
 export interface MissionSystems {
   rocket: RocketSystem;
   slopes: SlopeSystem;
+  /** v1.10 (4-1): ice, thin ice and ice mirrors (made by the caller, like the rocket). */
+  ice?: IceSystem;
+  thinIce?: ThinIceSystem;
+  mirrors?: MirrorSystem;
 }
 
 export type MissionPhase = 'idle' | 'driving' | 'stopped' | 'doors' | 'cutscene' | 'failing' | 'clear';
@@ -148,7 +156,16 @@ type DefaultLine =
   | 'spurBack'
   | 'diveNear'
   | 'diveBoing'
-  | 'diveBoingAfter';
+  | 'diveBoingAfter'
+  | 'iceOvershoot'
+  | 'iceOvershootAfter'
+  | 'crackShake'
+  | 'crackFall'
+  | 'crackAfter'
+  | 'crackEmpty'
+  | 'crackEmptyAfter'
+  | 'mirrorFlash'
+  | 'mirrorFake';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -211,6 +228,16 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   diveNear: 'みずだ！ もぐるを おして！',
   diveBoing: 'ぽよん！ もぐるの わすれた〜',
   diveBoingAfter: 'ひかったら もぐるを おしてね',
+  // v1.10 (4-1). iceNear, iceStop, iceBrake, thinIceClear and mirrorNear have no default: only said when written.
+  iceOvershoot: 'つるーん！ すべって いきすぎた〜',
+  iceOvershootAfter: 'こおりは はやめに ブレーキ ね',
+  crackShake: 'ぴしぴし！ われちゃう〜！',
+  crackFall: 'ぽちゃん！ ぷかぷか〜',
+  crackAfter: 'ひかったら ロケットで いっきに！',
+  crackEmpty: 'ぽちゃん！ ロケットが たりない〜',
+  crackEmptyAfter: 'こんどは ロケットを とっておこう',
+  mirrorFlash: 'きらーん！ あれは かがみ だ！',
+  mirrorFake: 'わっ！ ワンダーごうが もう 1だい！？',
 };
 
 /**
@@ -276,6 +303,14 @@ export class MissionRunner {
   private readonly droppingRocks: DroppingRock[];
   private readonly rocket: RocketSystem | null;
   private readonly slopes: SlopeSystem | null;
+  /** v1.10 (4-1). */
+  private readonly ice: IceSystem | null;
+  private readonly thinIce: ThinIceSystem | null;
+  private readonly mirrors: MirrorSystem | null;
+  /** v1.10 (4-1): ice lines said in this mission (iceNear, iceStop, iceBrake). */
+  private readonly iceSaid = new Set<string>();
+  /** v1.10 (4-1): mirror junctions whose mirrorNear was said this try. */
+  private readonly mirrorNearSaid = new Set<string>();
   /** The countdown of the step being driven, if it has one. */
   private countdown: Countdown | null = null;
   /** Seconds the "セーフ！" panel still shows. */
@@ -340,9 +375,13 @@ export class MissionRunner {
     this.groundY = stage.file.environment.ground?.y ?? null;
     this.rocket = systems?.rocket ?? null;
     this.slopes = systems?.slopes ?? null;
+    this.ice = systems?.ice ?? null;
+    this.thinIce = systems?.thinIce ?? null;
+    this.mirrors = systems?.mirrors ?? null;
     this.rollingRocks = stage.actors.filter((a) => a.type === 'rock-roll').map((a) => new RollingRock(a, train));
     this.droppingRocks = stage.actors.filter((a) => a.type === 'rock-drop').map((a) => new DroppingRock(a, train));
     this.listenRocketAndSlopes();
+    this.listenIce();
     this.cats = stage.actors.filter((a) => a.type === 'cat').map((a) => new CatActor(a, train));
     this.dinos = stage.actors.map((a) => makeDino(a, train)).filter((d): d is Dino => d !== null);
     this.nuts = stage.actors.filter((a) => a.type === 'nut').map((a) => new RollingNut(a, train));
@@ -455,7 +494,94 @@ export class MissionRunner {
       const d = this.train.distanceAhead(j.railId, j.at);
       if (d !== null && d > 0 && d <= 80) return true;
     }
+    // v1.10 (4-1): a mirror junction with lightHint, from MIRROR.hintDistance m before it until seen through.
+    for (const j of this.mirrorHintJunctions()) {
+      if (this.revealed.has(j.id)) continue;
+      const d = this.train.distanceAhead(j.railId, j.at);
+      if (d !== null && d > 0 && d <= MIRROR.hintDistance) return true;
+    }
     return false;
+  }
+
+  /** v1.10 (4-1): the junctions of mirrors that light the light button (lightHint). */
+  private mirrorHintJunctions(): JunctionDef[] {
+    const ids = (this.mirrors?.mirrors ?? []).filter((m) => m.lightHint && m.junction).map((m) => m.junction);
+    return this.stage.file.junctions.filter((j) => ids.includes(j.id));
+  }
+
+  /**
+   * v1.10 (4-1): ice, thin ice and mirror lines, and thin ice's "ぽちゃん" fail (PHASE8 第 7 部 §4). The lines with no
+   * default are said only when the mission has them.
+   */
+  private listenIce(): void {
+    const once = (key: string, text: string | undefined, now = false): void => {
+      if (this.phase !== 'driving' || !text || this.iceSaid.has(key)) return;
+      this.iceSaid.add(key);
+      if (now) this.ports.sayNow(text);
+      else this.ports.sayAsync(text);
+    };
+    this.ice?.events.on('enter', (zone) => {
+      if (this.phase !== 'driving' || !zone.line) return;
+      const key = `ice:${zone.index}`;
+      if (this.zoneLines.has(key)) return;
+      this.zoneLines.add(key);
+      this.ports.sayAsync(zone.line);
+    });
+    this.ice?.events.on('brake', () => once('iceBrake', this.lines.iceBrake));
+    // "ゆっくり" then "とまる": only useful on time, so they replace what is queued.
+    this.ice?.events.on('hint', ({ kind }) => once(kind === 'slow' ? 'iceNear' : 'iceStop', kind === 'slow' ? this.lines.iceNear : this.lines.iceStop, true));
+    const thin = this.thinIce;
+    if (thin) {
+      thin.events.on('warn', (zone) => {
+        if (this.phase !== 'driving' || !zone.line) return;
+        const key = `thin:${zone.index}`;
+        if (this.zoneLines.has(key)) return;
+        this.zoneLines.add(key);
+        this.ports.sayAsync(zone.line);
+      });
+      thin.events.on('glow', ({ count }) => {
+        if (this.phase !== 'driving') return;
+        // "いまだ！" once per mission; the same stretch glowing again (its second press) is "もういっかい！".
+        if (count >= 2) {
+          if (this.lines.rocketAgain) this.ports.sayNow(this.lines.rocketAgain);
+        } else if (!this.rocketReadySaid) {
+          this.rocketReadySaid = true;
+          if (this.lines.rocketReady) this.ports.sayNow(this.lines.rocketReady);
+        }
+      });
+      thin.events.on('shake', () => {
+        if (this.phase === 'driving') this.ports.sayNow(this.lines.crackShake ?? DEFAULT_LINES.crackShake);
+      });
+      thin.events.on('clear', () => {
+        if (this.phase === 'driving' && this.lines.thinIceClear) this.ports.sayAsync(this.lines.thinIceClear);
+      });
+      thin.events.on('crack', (zone: ThinIceZone) => {
+        if (this.phase !== 'driving') return;
+        this.train.emergencyStop();
+        this.ports.autoCamera('chase');
+        const empty = this.rocket !== null && this.rocket.enabled && this.rocket.pips <= 0;
+        this.finishDrive({ kind: 'fail', reason: 'crack', line: empty ? 'crackEmpty' : 'crackFall', rewind: zone.rewind });
+      });
+    }
+    this.mirrors?.events.on('flash', () => {
+      if (this.phase === 'driving') this.ports.sayNow(this.lines.mirrorFlash ?? DEFAULT_LINES.mirrorFlash);
+    });
+    this.mirrors?.events.on('fake', () => {
+      if (this.phase === 'driving') this.ports.sayNow(this.lines.mirrorFake ?? DEFAULT_LINES.mirrorFake);
+    });
+  }
+
+  /** v1.10 (4-1): "あれ？ むこうにも ワンダーごう…？" once per try, MIRROR.hintDistance m before a lightHint mirror's junction. */
+  private updateMirrorLines(): void {
+    const text = this.lines.mirrorNear;
+    if (!text || this.lightOn) return;
+    for (const j of this.mirrorHintJunctions()) {
+      if (this.revealed.has(j.id) || this.mirrorNearSaid.has(j.id)) continue;
+      const d = this.train.distanceAhead(j.railId, j.at);
+      if (d === null || d <= 0 || d > MIRROR.hintDistance) continue;
+      this.mirrorNearSaid.add(j.id);
+      for (const line of text.split('\n')) this.ports.sayAsync(line);
+    }
   }
 
   /** A nut or a dropped rock ahead can be jumped right now (the jump button glows). */
@@ -674,6 +800,7 @@ export class MissionRunner {
       this.lines = mission.lines ?? {};
       this.movingSaid = false;
       this.diveNearSaid = false;
+      this.iceSaid.clear();
       this.hintsFired.clear();
       this.rocketReadySaid = false;
       this.rocketGoSaid = false;
@@ -743,6 +870,7 @@ export class MissionRunner {
     this.updateGapHints();
     this.updatePads(dt);
     this.updateJunctionSigns();
+    this.updateMirrorLines();
     this.updateRecords();
     if (this.checkDeadEnd() || this.checkSpur()) return;
     const outcome = this.stop?.update(dt) ?? null;
@@ -1342,12 +1470,15 @@ export class MissionRunner {
       this.rearm = false;
       this.slopes?.reset();
       this.rocket?.reset();
+      this.ice?.reset();
+      this.thinIce?.reset();
     }
     // v1.7: the rocket fills up for every drive from a station, and rests near this one.
     if (this.rocket) {
       this.rocket.refill();
       this.rocket.goal = { railId: station.railId, at: station.at };
     }
+    if (this.ice) this.ice.goal = station;
     this.train.unlockInput();
     return new Promise((resolve) => {
       this.resolveDrive = resolve;
@@ -1374,15 +1505,29 @@ export class MissionRunner {
     // v1.8: back from a record's side track is no failure: no dip, no shake.
     const calm = reason === 'spur';
     // The silk, a rock, a slip, the sneeze, "ぽよん" off the water and a dead end are soft: a small dip, no shake.
+    // v1.10 (4-1): past an ice station ("つるーん") and through thin ice ("ぽちゃん") are soft too.
+    const iceStation = (reason === 'tooFast' || reason === 'overshoot') && this.ice !== null && this.ice.onIce(station);
     const soft =
-      reason === 'fragile' || reason === 'rock' || reason === 'slip' || reason === 'timeUp' || reason === 'dive' || reason === 'deadEnd';
+      reason === 'fragile' ||
+      reason === 'rock' ||
+      reason === 'slip' ||
+      reason === 'timeUp' ||
+      reason === 'dive' ||
+      reason === 'deadEnd' ||
+      reason === 'crack' ||
+      iceStation;
     if (!calm) this.ports.cameraFx(scary ? 1 : soft ? 0.3 : 0.5, soft ? 0 : 1);
-    const key: DefaultLine = outcome.line ?? FAIL_LINES[reason] ?? (reason as DefaultLine);
+    const key: DefaultLine = outcome.line ?? (iceStation ? 'iceOvershoot' : undefined) ?? FAIL_LINES[reason] ?? (reason as DefaultLine);
     for (const line of (this.lines[key] ?? DEFAULT_LINES[key]).split('\n')) await this.ports.say(line, 'partner');
     if (reason === 'cat') await this.ports.say(this.lines.catDangerAfter ?? DEFAULT_LINES.catDangerAfter, 'partner');
     if (reason === 'dino') await this.ports.say(this.lines.dangerAfter ?? DEFAULT_LINES.dangerAfter, 'partner');
     if (reason === 'fragile') await this.ports.say(this.lines.fragileBoingAfter ?? DEFAULT_LINES.fragileBoingAfter, 'partner');
     if (reason === 'dive') await this.ports.say(this.lines.diveBoingAfter ?? DEFAULT_LINES.diveBoingAfter, 'partner');
+    if (iceStation) await this.ports.say(this.lines.iceOvershootAfter ?? DEFAULT_LINES.iceOvershootAfter, 'partner');
+    if (reason === 'crack') {
+      const after: DefaultLine = outcome.line === 'crackEmpty' ? 'crackEmptyAfter' : 'crackAfter';
+      await this.ports.say(this.lines[after] ?? DEFAULT_LINES[after], 'partner');
+    }
     if (reason === 'slip') {
       // After an empty gauge: the mission's advice for that ("save them for the slope"); else "press when it glows".
       const after: DefaultLine = outcome.line === 'slipEmpty' ? 'slipEmptyAfter' : 'slipAfter';
@@ -1397,6 +1542,10 @@ export class MissionRunner {
     this.rocket?.refill();
     this.rocket?.reset();
     this.slopes?.reset();
+    this.ice?.reset();
+    this.thinIce?.reset();
+    this.mirrors?.reset();
+    this.mirrorNearSaid.clear();
     this.rearm = true;
     this.slopeGlows.clear();
     this.zoneLines.clear();
@@ -1548,6 +1697,7 @@ const FAIL_LINES: Partial<Record<FailReason, DefaultLine>> = {
   timeUp: 'timeUp',
   spur: 'spurBack',
   dive: 'diveBoing',
+  crack: 'crackFall',
 };
 const BRIDGE_LINES: Record<NonNullable<BridgeOutcome>['kind'], DefaultLine> = {
   near: 'butterflyNear',

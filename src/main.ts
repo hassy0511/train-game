@@ -46,6 +46,9 @@ import { createSkipButton, type SkipButton } from './ui/skip-button';
 import { RocketSystem } from './gimmick/rocket';
 import { SlopeSystem } from './gimmick/slope';
 import { DiveSystem } from './gimmick/dive';
+import { IceSystem, iceZones, thinIceZones } from './gimmick/ice';
+import { ThinIceSystem } from './gimmick/thin-ice';
+import { MirrorSystem } from './gimmick/mirror';
 import { showZukan } from './ui/zukan';
 import { loadSettings, saveSettings, VOLUME_GAIN, type Settings } from './core/settings';
 import { showSettings } from './ui/settings';
@@ -71,6 +74,13 @@ async function inheritedAbilities(id: string, seen = new Set<string>()): Promise
   for (const req of stage.unlock.requires) {
     const before = await peekStage(req);
     if (before) out.push(...before.unlocks, ...(await inheritedAbilities(req, seen)));
+    else {
+      // v1.10: a required stage not made yet (4-1 needs 3-3 before chapter 3 is in): what the stages before it teach.
+      const earlier = listStageIds().filter((id) => !id.startsWith('0-') && id.localeCompare(req, undefined, { numeric: true }) < 0);
+      const last = earlier[earlier.length - 1];
+      const prev = last ? await peekStage(last) : null;
+      if (last && prev && !seen.has(last)) out.push(...prev.unlocks, ...(await inheritedAbilities(last, seen)));
+    }
   }
   return out;
 }
@@ -244,13 +254,14 @@ async function chapterStars(): Promise<{ label: string; done: boolean; faint: bo
 
 /**
  * What the track sounds like under the train front: a "sound" zone (v1.9) wins; else silk rails are silk, and a
- * flower bridge's petals are soft.
+ * flower bridge's petals are soft; v1.10: ice and thin ice are ice, elsewhere the stage's own surface.
  */
-function runSurface(gimmicks: GimmickDef[], railId: string, s: number): RunSurface {
+function runSurface(gimmicks: GimmickDef[], railId: string, s: number, fallback: RunSurface = 'rail'): RunSurface {
   const zone = zoneAt(gimmicks, 'sound', railId, s);
   if (zone) return zone.params?.surface as RunSurface;
   if (railLooks.get(railId) === 'silk') return 'silk';
-  return zoneAt(gimmicks, 'flower-bridge', railId, s) ? 'soft' : 'rail';
+  if (zoneAt(gimmicks, 'ice', railId, s) || zoneAt(gimmicks, 'thin-ice', railId, s)) return 'ice';
+  return zoneAt(gimmicks, 'flower-bridge', railId, s) ? 'soft' : fallback;
 }
 /** Each rail's look (set when the stage loads), for runSurface(). */
 const railLooks = new Map<string, string | undefined>();
@@ -298,6 +309,13 @@ async function boot(): Promise<void> {
   // v1.10: near water the jump seat turns into "もぐる".
   const dive = new DiveSystem(train, stage.records, (id) => foundRecords.has(id));
   let diveBounces = 0;
+  // v1.10 (4-1): ice (weaker brakes, the glowing notches at an ice station), thin ice (only the rocket gets across,
+  // it lights the rocket button) and ice mirrors.
+  const ice = new IceSystem(stage.file.gimmicks, stage.file.stations, train);
+  const thinIce = new ThinIceSystem(stage.file.gimmicks, train, rocket);
+  rocket.extraGlow = () => thinIce.glow;
+  const mirrors = new MirrorSystem(stage.file.gimmicks, train);
+  const hasIce = iceZones(stage.file.gimmicks).length > 0 || thinIceZones(stage.file.gimmicks).length > 0;
   const whistle = new Whistle();
   const audio = new AudioEngine();
   // The island's quiet sound around the train (from the first tap on; under the title too).
@@ -393,6 +411,7 @@ async function boot(): Promise<void> {
     audio.playLight(lightOn);
     train.speedScale = lightOn ? LIGHT.speedScale : 1;
     lightButton.setOn(lightOn);
+    mirrors.lightOn = lightOn;
     runner?.setLight(lightOn);
     events.post({ type: 'light', on: lightOn });
   });
@@ -549,8 +568,50 @@ async function boot(): Promise<void> {
     })();
   });
   dive.events.on('near', () => runner?.onDiveNear());
+  // v1.10 (4-1): thin ice ("ぴしぴし", "ぽちゃん", across) and the mirrors' "きらーん"; the runner makes "ぽちゃん" a fail,
+  // the test course puts the train back itself.
+  let iceSparkle = false;
+  let cracks = 0;
+  app.dataset.cracks = '0';
+  app.dataset.mirrorFlash = '0';
+  thinIce.events.on('shake', (z) => {
+    audio.playIceCrack();
+    events.post({ type: 'thin', index: z.index, state: 'shake' });
+  });
+  thinIce.events.on('clear', (z) => events.post({ type: 'thin', index: z.index, state: 'clear' }));
+  thinIce.events.on('crack', (z) => {
+    cracks += 1;
+    app.dataset.cracks = String(cracks);
+    audio.playIceSplash();
+    events.post({ type: 'thin', index: z.index, state: 'crack' });
+    if (hasMissions) return;
+    train.emergencyStop();
+    void (async () => {
+      await waitSeconds(1.6);
+      await fade(true, 0.4);
+      train.rewindTo(z.rewind.at, z.rewind.railId);
+      rocket.reset();
+      rocket.refill();
+      ice.reset();
+      thinIce.reset();
+      ui.lever.setNotch(STOP_NOTCH);
+      events.post({ type: 'rewind' });
+      await fade(false, 0.4);
+    })();
+  });
+  mirrors.events.on('flash', (m) => {
+    app.dataset.mirrorFlash = String(mirrors.flashes);
+    audio.playMirror();
+    events.post({ type: 'mirror', index: m.index, state: 'flash' });
+  });
   events.on('event', (e) => {
-    if (e.type === 'rewind') dive.reset();
+    if (e.type === 'rewind') {
+      dive.reset();
+      // v1.10 (4-1): the ice is whole again, and its lines come again.
+      ice.reset();
+      thinIce.reset();
+      mirrors.reset();
+    }
     if (e.type === 'record:found') foundRecords.add(e.id);
   });
   // In the cab under water: the dome's rim round the screen edge (CSS shows it by #app[data-underwater]).
@@ -709,9 +770,16 @@ async function boot(): Promise<void> {
     // 2-3: the slope under the train front, and the rocket resting in quiet places (before the train moves).
     slopes.update();
     rocket.update();
+    ice.update(dt);
 
     train.update(dt);
     dive.update(dt);
+    thinIce.update(dt);
+    mirrors.update();
+    if (ice.sparkle !== iceSparkle) {
+      iceSparkle = ice.sparkle;
+      events.post({ type: 'ice', sparkle: iceSparkle });
+    }
     audio.setUnderwater(train.submerged);
     // Under water the island's sound turns to the underwater bed, and the rails to a soft "ことっ" with bubbles.
     audio.setAmbienceUnderwater(train.submerged);
@@ -721,7 +789,7 @@ async function boot(): Promise<void> {
       target: train.targetSpeed,
       braking: train.targetSpeed < Math.abs(train.state.speed) - 0.3,
       airborne: train.airborne || train.isFalling,
-      surface: runSurface(gimmicks, train.currentRail.id, train.frontS),
+      surface: runSurface(gimmicks, train.currentRail.id, train.frontS, stage.file.environment.surface),
       rocket: train.rocketBurning,
       underwater: train.submerged,
       quiet: false,
@@ -751,13 +819,16 @@ async function boot(): Promise<void> {
       audio.playButterfly();
       butterflyBellAt = simTime + 1.5;
     }
+    // v1.10 (4-1): at an ice station the notch to go to glows ("ゆっくり", then "とまる").
+    const iceNotch = ice.hint === 'stop' ? STOP_NOTCH : ice.hint === 'slow' ? ICE_SLOW_NOTCH : null;
     if (runner) {
       lightButton.setGlow(runner.lightHint);
       jumpButton.setHopper(runner.hopperId !== '');
-      const hint = runner.leverHintSpeed;
+      const hint = runner.phase === 'driving' ? runner.leverHintSpeed : null;
       // The notch the partner names (ゆっくり): judged on the plain notch speeds, so the light does not change it.
-      ui.lever.setHint(hint === null ? null : (fastestNotchUnder(hint, 1) ?? fastestNotchUnder(hint, train.speedScale)));
-    }
+      const silk = hint === null ? null : (fastestNotchUnder(hint, 1) ?? fastestNotchUnder(hint, train.speedScale));
+      ui.lever.setHint(runner.phase === 'driving' && iceNotch !== null ? iceNotch : silk);
+    } else if (hasIce) ui.lever.setHint(iceNotch);
 
     const pose = train.getPose();
     physics.setTrainPose(pose.position, pose.quaternion);
@@ -768,7 +839,7 @@ async function boot(): Promise<void> {
     view.update(dt, pose, fx);
     // 2-3: the lever does nothing while the rocket burns or on a slide: the knob and the speed word say so.
     ui.hud.setSpeedWord(train.rocketBurning ? 'ロケット！' : train.onSlide ? 'つるつる〜' : SPEED_LABELS[train.state.notch]);
-    ui.lever.setMark(train.rocketBurning ? 'rocket' : train.onSlide ? 'slide' : null);
+    ui.lever.setMark(train.rocketBurning ? 'rocket' : train.onSlide ? 'slide' : ice.current ? 'ice' : null);
     const why = rocket.why;
     rocketButton.set({
       pips: rocket.pips,
@@ -826,6 +897,12 @@ async function boot(): Promise<void> {
     app.dataset.diving = train.diving ? '1' : '0';
     app.dataset.submerged = train.submerged ? '1' : '0';
     app.dataset.underwater = view.isCameraUnderwater() ? '1' : '0';
+    if (hasIce) {
+      app.dataset.ice = ice.current ? '1' : '0';
+      app.dataset.iceHint = ice.hint;
+      app.dataset.thin = thinIce.status === 'shake' ? 'on' : thinIce.status;
+    }
+    if (mirrors.mirrors.length > 0) app.dataset.mirror = mirrors.active ? String(mirrors.active.index) : '';
     app.dataset.timer = timer ? String(timer.seconds) : '';
     app.dataset.timerState = timer?.state ?? '';
     if (runner) {
@@ -919,6 +996,10 @@ async function boot(): Promise<void> {
   const seabirds = new Set(
     stage.file.actors.filter((a) => a.type === 'cat' && (a.params as { look?: string } | undefined)?.look === 'seabird').map((a) => a.id),
   );
+  /** v1.10 (4-1): seals ("cat" look "seal") and snowbirds ("rock-roll" look "snowbird"): their own sounds. */
+  const lookOf = (a: { params?: Record<string, unknown> }): unknown => a.params?.look;
+  const seals = new Set(stage.file.actors.filter((a) => a.type === 'cat' && lookOf(a) === 'seal').map((a) => a.id));
+  const snowbirds = new Set(stage.file.actors.filter((a) => a.type === 'rock-roll' && lookOf(a) === 'snowbird').map((a) => a.id));
   let lastFailReason: string | null = null;
   let skippedAt = -Infinity;
   const skipGuard = (): number => (performance.now() - skippedAt < SKIP_CARD_WINDOW_MS ? SKIP_CARD_GUARD_SECONDS : 0);
@@ -957,7 +1038,7 @@ async function boot(): Promise<void> {
       fx.dip = Math.max(fx.dip, dip * shakeScale());
       fx.shake = Math.max(fx.shake, shake * shakeScale());
       // A bumped rock has its own rounder "ぽよん" (played with its bonk), and so does the water (v1.10).
-      if (lastFailReason !== 'rock' && lastFailReason !== 'dive') audio.playBoing();
+      if (lastFailReason !== 'rock' && lastFailReason !== 'dive' && lastFailReason !== 'crack') audio.playBoing();
     },
     resetLever: () => ui.lever.setNotch(STOP_NOTCH),
     gauge: (state) => gauge.set(state),
@@ -1017,7 +1098,11 @@ async function boot(): Promise<void> {
     }
     // v1.7 (2-3): rocks, seabirds and the falling bridge.
     if (e.type === 'fail') lastFailReason = e.reason;
-    if (e.type === 'rock') {
+    if (e.type === 'rock' && snowbirds.has(e.id)) {
+      // v1.10 (4-1): little birds in a row: "ぴよぴよ" as they line up and set off, wings flapping when surprised.
+      if (e.state === 'wobble' || e.state === 'roll') audio.playSnowbirds();
+      if (e.state === 'bonk') audio.playFlap();
+    } else if (e.type === 'rock') {
       if (e.state === 'wobble') audio.playRockWobble();
       if (e.state === 'roll') {
         const seconds = e.seconds ?? ROCK_ROLL.crossSeconds;
@@ -1031,6 +1116,7 @@ async function boot(): Promise<void> {
       }
     }
     if (e.type === 'actor:state' && (e.state === 'awake' || e.state === 'flee') && seabirds.has(e.id)) audio.playFlap();
+    if (e.type === 'actor:state' && (e.state === 'awake' || e.state === 'flee') && seals.has(e.id)) audio.playSeal();
     if (e.type === 'rail:cut' && e.style === 'fall' && !e.instant) audio.playBridgeFall();
   });
 
@@ -1050,7 +1136,7 @@ async function boot(): Promise<void> {
     if (runner?.skipCutscene()) skippedAt = performance.now();
   });
 
-  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes });
+  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, ice, thinIce, mirrors });
   runner.knowAbilities(abilities);
   runner.setLight(lightOn);
   if (resumeFrom > 0) {
@@ -1082,6 +1168,9 @@ boot().catch((err: unknown) => {
   p.appendChild(msg);
   uiEl.appendChild(p);
 });
+
+/** v1.10 (4-1): the "ゆっくり" notch (the ice station's first glow). */
+const ICE_SLOW_NOTCH = 2;
 
 /** The fastest notch whose speed (scaled by the light) is at most `limit` m/s: the lever's glowing hint. */
 function fastestNotchUnder(limit: number, scale: number): number | null {

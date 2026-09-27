@@ -70,6 +70,13 @@ const REVERSE_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
   <path d="M12 3 7 8l5 5" fill="none" stroke="#2b3a4a" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
+/** v1.10 (4-1): the magnet light (chapter 5): a U magnet with a little light shining from it (the grey "?" picture). */
+const MAGNET_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+  <path d="M9 6v10a7 7 0 0 0 14 0V6" fill="none" stroke="#2b3a4a" stroke-width="5"/>
+  <path d="M6.5 6h5M20.5 6h5" stroke="#fff" stroke-width="2.4"/>
+  <path d="M16 26v4M9 25l-2 3M23 25l2 3" stroke="#2b3a4a" stroke-width="2.2" stroke-linecap="round"/>
+</svg>`;
+
 /** The whistle's picture (same as its button's). */
 const WHISTLE_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
   <path d="M4 14h12l8-6v16l-8-6H4z" fill="#2b3a4a"/>
@@ -94,6 +101,8 @@ export function abilityIcon(ability: AbilityId): string {
       return DIVE_ICON;
     case 'reverse':
       return REVERSE_ICON;
+    case 'magnetLight':
+      return MAGNET_ICON;
     default:
       return '';
   }

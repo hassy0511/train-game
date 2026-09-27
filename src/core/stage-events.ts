@@ -39,7 +39,9 @@ export type StageEvent =
         // v1.8: back from a record's side track (not a failure: no dip, no shake)
         | 'spur'
         // v1.10: "ぽよん" off a floater, or water without the dome (soft)
-        | 'dive';
+        | 'dive'
+        // v1.10 (4-1): through thin ice, "ぽちゃん" (soft: the train bobs back up)
+        | 'crack';
     }
   /**
    * Back to a station after a failure (or a resume). `boarded`: passengers who already got on this run, per station
@@ -106,6 +108,15 @@ export type StageEvent =
   | { type: 'dive'; state: 'dive' | 'surface' | 'bounce' | 'bob'; long?: boolean; railId?: string; s?: number }
   /** v1.10: the bubble dome went on or off (`instant`: a rewind or a resume put it on, no inflating). */
   | { type: 'dome'; on: boolean; instant: boolean }
+  /** v1.10 (4-1): slowing down on ice (the wheels throw up sparkling ice dust) or not any more. */
+  | { type: 'ice'; sparkle: boolean }
+  /**
+   * v1.10 (4-1): thin ice `index` (gimmicks[]): "shake" (too slow on it, "ぴしぴし"), "crack" (it broke under the
+   * train, "ぽちゃん"), "clear" (the last bogie got across).
+   */
+  | { type: 'thin'; index: number; state: 'shake' | 'crack' | 'clear' }
+  /** v1.10 (4-1): the light caught in ice mirror `index` (gimmicks[]): "きらーん". */
+  | { type: 'mirror'; index: number; state: 'flash' }
   /** v1.7: a countdown started ("run"), got low, was beaten ("safe"), ran out ("up") or was put away ("off"). */
   | { type: 'countdown'; state: 'run' | 'low' | 'safe' | 'up' | 'off' };
 

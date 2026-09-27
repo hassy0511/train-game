@@ -42,6 +42,12 @@ const SEABIRD_MODELS = { sleep: 'seabird-sleep', awake: 'seabird' };
 function isSeabird(actor: ResolvedActor): boolean {
   return actor.type === 'cat' && (actor.params as { look?: string }).look === 'seabird';
 }
+/** v1.10 (4-1): a "cat" with params.look "seal" is a seal basking on the rail (it slides off on its belly when whistled). */
+const SEAL_MODELS = { sleep: 'seal-sleep', awake: 'seal' };
+
+function isSeal(actor: ResolvedActor): boolean {
+  return actor.type === 'cat' && (actor.params as { look?: string }).look === 'seal';
+}
 /** Where the large dinosaur's neck joins its body (model space, m; NECK_PIVOT in assets/blender/dinos.py). */
 const NECK_PIVOT = new Vector3(0, 8.0, 4.8);
 const PLATFORM_CLEARANCE = 1.7;
@@ -155,6 +161,8 @@ export class ActorLayer {
   private readonly lookModels = new Map<string, { sleep: string; awake: string }>();
   private readonly necks = new Map<string, { neck: Object3D; down: boolean; t: number }>();
   private readonly records = new Map<string, ResolvedRecord>();
+  /** v1.10 (4-1): ids of the figures cutscenes brought on (an ice mirror may show them). */
+  private readonly spawned = new Set<string>();
 
   constructor(
     private readonly models: ModelLibrary,
@@ -184,6 +192,7 @@ export class ActorLayer {
     for (const actor of actors) {
       this.actorTypes.set(actor.id, actor.type);
       if (isSeabird(actor)) this.lookModels.set(actor.id, SEABIRD_MODELS);
+      if (isSeal(actor)) this.lookModels.set(actor.id, SEAL_MODELS);
     }
     // Nuts and squirrels are drawn by the forest gimmicks, grasshoppers by the meadow ones and rocks by the volcano
     // ones (they move on their own).
@@ -298,7 +307,7 @@ export class ActorLayer {
   private async addCrossingGates(actors: ResolvedActor[]): Promise<void> {
     // A seabird basks on an open line (a sea cliff), not at a level crossing: no gate for it.
     const placements = actors
-      .filter((actor) => actor.type === 'cat' && !isSeabird(actor))
+      .filter((actor) => actor.type === 'cat' && !isSeabird(actor) && !isSeal(actor))
       .map((actor) => ({
         model: 'crossing-gate',
         position: actor.position.clone().add(new Vector3(-3, 0, 0).applyQuaternion(actor.quaternion)),
@@ -573,6 +582,7 @@ export class ActorLayer {
         await this.animatePassengers(event.stationId, event.board, event.alight);
         break;
       case 'actor:spawn': {
+        this.spawned.add(event.id);
         const placing = this.place(event.id, event.model, event.position, event.quaternion);
         this.pendingSpawns.set(event.id, placing);
         await placing;
@@ -658,6 +668,16 @@ export class ActorLayer {
       default:
         break;
     }
+  }
+
+  /** v1.10 (4-1): the figures a cutscene brought on that are on screen now (for an ice mirror's reflection). */
+  cutsceneFigures(): Object3D[] {
+    const out: Object3D[] = [];
+    for (const id of this.spawned) {
+      const o = this.objects.get(id);
+      if (o) out.push(o);
+    }
+    return out;
   }
 
   update(dt: number): void {
