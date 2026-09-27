@@ -305,7 +305,42 @@ function angleDiff(a, b) {
 const main = new Line('main', mainPts);
 const miharashi = new Line('miharashi', branchPts);
 const kudari = new Line('kudari', kudariPts);
-const LINES = { main, miharashi, kudari };
+
+/**
+ * docs/PHASE8_CHAPTER3_4.md 第 2 部 §4.2, read with §0.2 (dives are short arcs on water-surface rails): the bubble
+ * spring moves to the harbour's sea (under the wobbly bridge the rail could not reach the sea floor), and a side
+ * track for "もぐる" leaves main at 200 to the right (the sea side), comes down a low bank onto the sea and runs on
+ * floats to a buffer on the water. Diving from it finds the spring on the sea floor below.
+ */
+const UMI_JUNCTION = 200;
+const umiStart = mainPts[UMI_JUNCTION];
+/** Down from main's 5.6 m to 0.4 m over the sea (floating), between 15 and 75 m along the side track. */
+const UMI_DROP_FROM = 15;
+const UMI_DROP = 60;
+const UMI_FLOAT_Y = 0.4;
+const umiGrade = (umiStart.y - UMI_FLOAT_Y) / UMI_DROP;
+const umiPts = walkPath(
+  umiStart,
+  polyHeading(mainPts, UMI_JUNCTION),
+  [
+    ['R', 50, 45],
+    ['S', 170],
+  ],
+  profile(
+    [
+      [UMI_DROP_FROM, 0],
+      [UMI_DROP, -umiGrade],
+      [300, 0],
+    ],
+    8,
+  ).grade,
+);
+const umi = new Line('umi', umiPts);
+const LINES = { main, miharashi, kudari, umi };
+
+/** Record ③ on the sea floor beside the dive side track (`umi` 170, 6 m right; the sea floor is at −14). */
+const SPRING_AT = 170;
+const SPRING = umi.point(SPRING_AT, 6);
 
 // ---------------------------------------------------------------------------------------------------------------
 // Checks against the design tables (§6.2–§6.4, §6.6)
@@ -321,6 +356,10 @@ const check = (ok, text) => {
 check(Math.abs(main.length - 1830) < 1e-6, `main length ${main.length.toFixed(2)} (table 1830)`);
 check(Math.abs(miharashi.length - 189) < 1e-6, `miharashi length ${miharashi.length.toFixed(2)} (table 189)`);
 check(Math.abs(kudari.length - 1055) < 0.5, `kudari length ${kudari.length.toFixed(2)} (table 1,055)`);
+{
+  const end = umi.at(umi.length);
+  check(Math.abs(end.y - UMI_FLOAT_Y) < 0.15, `umi (the dive side track): ${umi.length.toFixed(1)} m, ends ${end.y.toFixed(2)} m over the sea (design 215 m, floating 0.4)`);
+}
 check(MERGE_AT === 1358, `miharashi merges at main ${MERGE_AT} (table 1358), height off ${branchDy.toFixed(2)} m, end moved ${branchEndOff.toFixed(2)} m onto main`);
 
 /** [label, rail, s, [x, z] or [x, y, z] from the tables]. The tables give whole metres. */
@@ -375,10 +414,19 @@ for (const line of Object.values(LINES)) {
   // Nothing dips into the cone: at least 2.0 m above it everywhere (the hugging stretches are exactly 2 m).
   let low = { d: Infinity };
   for (const q of SAMPLES) {
+    // (The dive side track comes down its low bank to the sea: checked on its own below.)
+    if (q.rail === 'umi') continue;
     const d = q.y - coneAt(q.x, q.z);
     if (d < low.d) low = { d, q };
   }
   check(low.d >= 1.99, `lowest rail over the cone: ${low.d.toFixed(2)} m (${low.q.rail} ${low.q.s}; design 2.0)`);
+  let bank = { d: Infinity };
+  for (const q of SAMPLES) {
+    if (q.rail !== 'umi' || coneAt(q.x, q.z) <= 0) continue;
+    const d = q.y - coneAt(q.x, q.z);
+    if (d < bank.d) bank = { d, q };
+  }
+  check(bank.d >= 0.6, `the dive side track over the shore: ${bank.d.toFixed(2)} m at the least (umi ${bank.q?.s}; the ballast is 0.6 deep)`);
   // The one crossing: kudari 174 over main 702, 25 m up.
   let cross = { d: Infinity };
   for (const a of SAMPLES) {
@@ -470,8 +518,8 @@ const GIMMICKS = [
   { type: 'camera', railId: 'main', from: 230, to: 345, params: { mode: 'chase' } },
   // §6.3: steam on the lookout.
   { type: 'fog', railId: 'miharashi', from: 78, to: 118, params: { near: 2, far: 22, lightFar: 70 } },
-  // §9: the bubble column over record ③ on the inlet's seabed (looks only; the lead-in to chapter 3's dive).
-  { type: 'bubbles', params: { position: [-390, 0, 170], count: 14, height: 8, radius: 2.5 } },
+  // §9: the bubble column over record ③, rising from the harbour's sea floor (looks only; chapter 3's dive finds it).
+  { type: 'bubbles', params: { position: [round(SPRING.x), -13.5, round(SPRING.z)], count: 24, height: 13.5, radius: 2 } },
   // §6.5: seabirds circling the volcano (looks only), over the rim and the upper slopes.
   { type: 'flock', params: { model: 'seabird', count: 8, center: [0, 118, 0], radius: 150, speed: 0.06 } },
 ];
@@ -533,9 +581,9 @@ const RECORDS = [
     name: 'うみの そこの あわ いずみ',
     note: 'うみの なかから あわが… もぐれたら いけるかも',
     requires: 'dive',
-    // No model of its own in §8: the "?" of the picture book until chapter 3 (as 2-2's puddle record).
-    model: 'cloud-crystal',
-    position: [-390, -12, 170],
+    model: 'spring-vent',
+    hint: 'うみの そこで あわが… もぐって みよう！',
+    onRail: { railId: 'umi', at: SPRING_AT, lateral: 6, heightFromRail: round(-14 - umi.at(SPRING_AT).y, 2) },
   },
 ];
 
@@ -560,7 +608,11 @@ const MISSIONS = [
       stationNear: 'なかやまえきだ。ゆっくり！',
       complete: 'のぼれた！ ロケット すごいね！',
     },
-    hints: [{ railId: 'main', at: 335, text: 'わあ、うみが みえる！' }],
+    hints: [
+      // §4.2: the hint about the bubbles moved here from M3, where the side track to them starts.
+      { railId: 'main', at: 145, text: 'うみの なかから あわが… なんだろう？' },
+      { railId: 'main', at: 335, text: 'わあ、うみが みえる！' },
+    ],
   },
   {
     id: 'm2',
@@ -612,7 +664,6 @@ const MISSIONS = [
     },
     hints: [
       { railId: 'kudari', at: 160, text: 'したに さっきの せんろ！' },
-      { railId: 'kudari', at: 300, text: 'うみの なかから あわが… なんだろう？' },
       { railId: 'kudari', at: 335, text: 'かんそくじょえきだ。ゆっくり！' },
       { railId: 'kudari', at: 915, text: 'みさきえきだ！ ゆっくり！' },
     ],
@@ -919,6 +970,8 @@ const stage = {
     fog: { color: '#dff0f6', near: 200, far: 620 },
     lighting: 'day',
     ground: { y: 0, size: 3200, color: '#3d9ad6' },
+    // v1.10: the sea is water one can dive in (the ground's colour is its surface; its floor is 14 m down).
+    water: [{ y: 0, floor: -14, look: 'sea' }],
     bgm: 'volcano',
     fall: 'cloud',
   },
@@ -933,8 +986,20 @@ const stage = {
       base: { look: 'rock', toGround: true, skip: [{ from: 158, to: 190 }, { from: 390, to: round(kudari.length, 2) }] },
       end: { type: 'buffer' },
     },
+    // Back from its buffer on the sea to main 210 (past the junction).
+    {
+      id: 'umi',
+      points: umi.points(),
+      // A low bank down to the sea; the floating part has its floats (drawn by the game) instead.
+      base: { look: 'rock', toGround: true, skip: [{ from: UMI_DROP_FROM + UMI_DROP - 10, to: round(umi.length, 2) }] },
+      end: { type: 'buffer' },
+      spur: { back: { railId: 'main', at: 210 } },
+    },
   ],
-  junctions: [{ id: 'j-miharashi', railId: 'main', at: JUNCTION_AT, left: 'miharashi', right: 'main', default: 'right' }],
+  junctions: [
+    { id: 'j-miharashi', railId: 'main', at: JUNCTION_AT, left: 'miharashi', right: 'main', default: 'right' },
+    { id: 'to-umi', railId: 'main', at: UMI_JUNCTION, left: 'main', right: 'umi', default: 'left', needs: 'dive' },
+  ],
   stations: STATIONS,
   props,
   actors: ACTORS,
