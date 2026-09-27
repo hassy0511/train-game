@@ -756,3 +756,68 @@ type LineKey = /* v1.8 */ | 'diveNear' | 'diveBoing' | 'diveBoingAfter';
 
 ### テスト用の しるし
 `#app` の `data-dive`（`''`／`near` ＝ 丸が もぐる／`on` ＝ ドーム）、`data-diving`（先頭が もぐって いる 1）、`data-submerged`（先頭車が 水の 中 1）、`data-underwater`（カメラが 水の 中 1）、`data-dive-bounces`（ぽよんの 回数）、`data-dives`（もぐった 回数）、`data-bobs`（ぷくぷくの 回数）、`data-records`（テストコースで 見つけた 記録）。`#jump` の `data-mode`（`jump`／`dive`）・`data-diving`・`data-glow`
+
+### 3-1「うみのそこ」の 足し（v1.10、2026-09-27）
+設計は `docs/PHASE8_CHAPTER3_4.md` 第 3 部（§0 の 読みかえで）。実例は `src/stages/3-1.json`（`scripts/layout-3-1.mjs` が 作る）。どれも 省略可。
+
+```ts
+floaters?: { /* ... */ say?: string }[];
+// その うきものの DIVE.hintDistance（60 m）手前で 1 回 言う（書いて いなければ ミッションの floatNear）。すぐ 出す
+
+// actors[]: くじら（線路の よこの 水の 中に onRail で 置く。reactsTo は "whistle"）
+{ id, type: 'whale', reactsTo: 'whistle', onRail: { railId, at, lateral, heightFromRail },
+  params: { until: number; callRange?: 80; lead?: 10; lateral?: -12; height?: 4; trail?: 30 } }
+// callRange m 手前から until まで 汽笛が 光る。汽笛で うたって（1.6 秒）おへんじ → 先頭の lead m 前・lateral m 右
+// （マイナスは 左）・線路の height m 上を いっしょに 泳ぐ → 先頭が until を こえたら 先へ 泳いで きえる。
+// よばずに 通りすぎると trail m うしろを ついてくる（まだ よべる）。しっぱいは ない。一度 なかよく なれば、
+// until より 前へ 戻っても いっしょに 泳ぐ
+
+// gimmicks[] "updraft" の params に: look?: 'wind' | 'current'; whale?: <くじらの id>
+// current = あわの 輪と あわの 流れ（風の 輪の かわり）。whale を 書くと、その くじらが いっしょに 泳いで いる
+// ときだけ 押す（いない ときは 輪が うすく、入口で currentWait）
+// gimmicks[] "jump-pad" の params に: look?: 'pad' | 'whale'
+// whale = ジャンプだいの かわりに くじら（ふだんは 水の 中、汽笛で 浮かび、のると しおふき）。決まりは ジャンプだいの まま
+
+interface JunctionDef {
+  // ...
+  bubbles?: { left: 'rise' | 'sink'; right: 'rise' | 'sink'; say?: string };
+  // あわの 分かれ道: 分かれた 先に あわの 柱（12 m と 28 m）。rise ＝ しろ・みずいろで のぼる（ほんもの）、
+  // sink ＝ ピンクに ぐるぐるで しずむ（サカサ）。矢印にも 同じ しるし。sink の 側は 分かれ道より 手前へ
+  // 合流する ループ か deadEnd（まちがえても 先へ 進めない。しっぱいに しない）
+}
+
+// gimmicks[] "fog" の params に: color?: '#rrggbb'（水の 中で その 区間の 色。ふかい ところ）
+
+type CutsceneStep = /* ... */
+  | { fx: 'pop'; id?: string }                       // 大きな あわが「ぱちん」（id の 人・物の ところで しぶき）
+  | { card: { title; button; icon?; mirror?: boolean } };  // mirror: 紙の 札に 題を 左右 反転で（ぐるぐるの しるし）
+```
+
+| もの | 決まり（全部 `src/train/params.ts` の `WHALE`・`BUBBLE_FORK` と ステージの JSON） |
+|---|---|
+| あわの 分かれ道 | 90 m 手前で `say`（なければ `bubbleNear`）を ミッションで 1 回。rise の 側へ 進むと `bubbleTrue`（「きらりん」）。ライトを つけて 40 m 以内に 入ると sink の ぐるぐるが 光り、`bubbleRevealed` を ステージで 1 回（進路は かえない）。`fog` 区間の 中で 100 m 以内に あると ライトが 光る。sink の 側へ 行った あとは 80 m 手前から ライトが 光る |
+| くじら | 汽笛が 光りはじめると `whaleCall`（すぐ）。`whaleNear` は 90 m 手前。おへんじで `whaleSang` |
+| うきものに ぽよん | しっぱいの 理由 `floater`（やわらかい）。`floatHit` → `floatHitAfter` → 戻り先 |
+
+せりふの キー（v1.10 の 3-1 分）:
+| キー | 場面 | 既定 |
+|---|---|---|
+| `diveGo` | ミッションで はじめて もぐった | なし |
+| `diveReady` | ミッションで はじめて もぐるが 光った（すぐ 出す） | なし |
+| `floatNear` | うきものの 60 m 手前（うきものの `say` が あれば そちら） | なし |
+| `floatHit` / `floatHitAfter` | うきものに ぽよん／その あと | ぽよん！ ぶつかっちゃった〜／ひかったら もぐるを おしてね |
+| `whaleNear` / `whaleCall` / `whaleSang` | くじらの 90 m 手前／汽笛が 光った／おへんじ | なし／きてきで あいさつ しよう！／おへんじ してくれた！ |
+| `currentIn` / `currentWait` | くじらの ながれに 入った（押す／くじらが いない） | なし／くじらさんを よんでみよう！ |
+| `bubbleNear` / `bubbleTrue` / `bubbleRevealed` | あわの 分かれ道 | あわが ふたつ！ どっちかな？／せいかい！ ほんものの あわ！／ぐるぐる もよう！ サカサの あわだ |
+
+- 能力 `magnetLight` の 名前は「じしゃくライト」（5 章。まだ どこでも もらえない。3-1 の 記録③は 図鑑と 地図で「？」、絵は じしゃく）
+- 見た目: 水の 上の 線路（`Rail.surfaces`）は 道床の かわりに 木の 板と 左右の うき（6 m おき、しろ と みずいろ）。水の 中の カメラでは 光の すじ。くじら・ながれ・あわの 柱・ふかい ところの ひかる つぶ は `src/view/three/sea.ts`、仮の 形は `sea-placeholders.ts`（チケット 0011）
+- 読み込み時の 検査: `bubbles` は 片方 rise・片方 sink、左右 両方 あり、`dive`・`needs`・`signReversed` と いっしょに しない、sink の 側は 手前へ 合流する ループ か deadEnd。`whale` は onRail・reactsTo "whistle"・`until` が 自分より 先、数は 正しい 形。`updraft` の `look` は wind／current、`whale` は くじらの id、`speed` > 0。`jump-pad` の `look` は pad／whale。`fog` の `color` は `#rrggbb`。うきものの `say` は 文字。`card.mirror` は true／false、`fx` は sneeze／pop（`id` は pop だけ）
+- テスト用の しるし: `#app` の `data-whales`（`kujira:follow` など）、`data-bubble-revealed`（ライトで ぐるぐるが 光った あわの 分かれ道の id）。矢印の `data-bubbles`（`rise`／`sink`）。紙の 札は `#card.is-mirror`
+
+### 1・2 章の もぐる 記録（v1.10、2026-09-27）
+第 2 部 §4 を §0.2（もぐるは 水の 上で 押す たびに 短く）で 読みかえた。支線は どちらも 水の 上へ 出て、記録の 手前で もぐるが 光る（`requires: "dive"` の 記録が 30 m 以内の 前）。押せば もぐって 見つかる。車止めで 止まると 本線へ 戻る（`spur`）。
+| ステージ | 足した もの |
+|---|---|
+| 2-2 | みずたまり（main 520–560）が ほんとうの 池に（`water`: 水面 −1.8、底 −8、`look: "puddle"`、main と 同じ 向きの 64 × 42 m。本線の ジャンプは そのまま: 本線の レールは 水面より 1.8 m 上で「水の 上」に ならない）。分かれ道 `to-mizutamari`（main 385、左、`needs: "dive"`）と 支線 `mizutamari`（173 m、main の 左 12 m、池の 中で 水の 上へ、車止め、もどる 先 main 395）。記録 `mizutamari` は 池の そこの `record-marble`（おおきな ビーだま） |
+| 2-3 | 海が `water`（水面 0、底 −14、`look: "sea"`）に。分かれ道 `to-umi`（main 200、右 ＝ 海の 側、`needs: "dive"`）と 支線 `umi`（約 210 m、低い 土手を くだって 海の 上を うきで 走る、車止め、もどる 先 main 210）。記録 `bubble-spring` は 支線 170 の 右 6 m の 海の そこ（`spring-vent`）、その 上に あわの 柱。M3 の ヒント「うみの なかから あわが…」は M1 の main 145 へ |
