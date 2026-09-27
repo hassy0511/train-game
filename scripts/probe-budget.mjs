@@ -9,6 +9,9 @@
  * frame is over budget.
  * Every camera is measured everywhere, also where a stage zone would pick the view for the player, so the probe
  * errs on the heavy side. The opening is not started: actors stand where the stage JSON puts them.
+ * The cutscenes' fixed cameras are measured too, as the camera "cutscene": the train at the station nearest what the
+ * camera looks at, once as the stage starts and once after the ending's lasting effects (3-3's lighthouse and festival),
+ * each followed by the first frame of every camera back from it (the far plane still reaches as far as the fixed one's).
  * The title screen's camera (PHASE7_FINISH §4 item 6: it swings around the train standing at the start) is measured
  * first, as the camera "title", at TITLE_ANGLES on both sides of the train (the game uses the side away from the
  * platform).
@@ -147,6 +150,55 @@ function instrument() {
     await frame();
     return out;
   };
+  /**
+   * The cutscenes' fixed cameras: the train at the station nearest where each one looks (`stations`: [railId, at]),
+   * one measured frame each; then again with the ending's lasting effects on (3-3: the lighthouse, the festival).
+   */
+  window.__probeFixed = async (cams, stations, CAMERAS) => {
+    const out = [];
+    const network = window.__debugTrain.network;
+    const measure = async (label) => {
+      for (const [name, at, lookAt, reach] of cams) {
+        let best = null;
+        for (const [railId, s] of stations) {
+          const p = network.getRail(railId).frameAt(s).position;
+          const d = Math.hypot(p.x - lookAt[0], p.z - lookAt[2]);
+          if (!best || d < best.d) best = { d, railId, s };
+        }
+        if (best) window.__debugTrain.rewindTo(best.s, best.railId);
+        await frame();
+        view.setFixedCamera({ at, lookAt, reach });
+        await frame();
+        tally = new Map();
+        await frame();
+        const { calls, triangles } = renderer.info.render;
+        out.push({ camera: 'cutscene', name: `${name}${label}`, calls, tris: triangles, objects: [...tally] });
+        tally = null;
+        // Back to the player's camera: for a moment the far plane still reaches as far as the fixed camera's did
+        // (it comes back in with the fog), so the first frame of each camera there counts too.
+        for (const camera of CAMERAS) {
+          view.setFixedCamera({ at, lookAt, reach });
+          // As in a cutscene: the fog eases out to the fixed camera's reach first (a few seconds of it).
+          const fogTo = view.camera.far - 40;
+          for (let k = 0; k < 240 && (view.getScene().fog?.far ?? fogTo) < fogTo * 0.97; k++) await frame();
+          view.setFixedCamera(null);
+          view.setCamera(camera, true);
+          tally = new Map();
+          await frame();
+          const after = renderer.info.render;
+          out.push({ camera: 'cutscene', name: `${name}${label} → ${camera}`, calls: after.calls, tris: after.triangles, objects: [...tally] });
+          tally = null;
+        }
+      }
+    };
+    await measure('');
+    view.onStageEvent({ type: 'beacon', instant: true });
+    view.onStageEvent({ type: 'festival', instant: true });
+    await measure(' +festival');
+    view.setFixedCamera(null);
+    await frame();
+    return out;
+  };
   /** Puts the train at `s` on `railId` and returns one measured frame per camera. */
   window.__probeAt = async (railId, s, cameras) => {
     window.__debugTrain.rewindTo(s, railId);
@@ -197,7 +249,7 @@ try {
     await page.goto(`${origin}/?stage=${stage.id}`);
     await page.waitForSelector('#app[data-ready="1"]', { state: 'attached', timeout: 120_000 });
     const rails = await page.evaluate(instrument);
-    const byCamera = new Map(['title', ...CAMERAS].map((camera) => [camera, { stage: stage.id, camera, frames: 0, calls: null, tris: null, worst: null }]));
+    const byCamera = new Map(['title', ...CAMERAS, 'cutscene'].map((camera) => [camera, { stage: stage.id, camera, frames: 0, calls: null, tris: null, worst: null }]));
     const titleFrames = await page.evaluate(([orbit, angles]) => window.__probeTitle(orbit, angles), [TITLE_ORBIT, TITLE_ANGLES]);
     for (const f of titleFrames) {
       const frame = { ...f, stage: stage.id, rail: 'title', s: `${f.angle}°` };
@@ -225,10 +277,25 @@ try {
         }
       }
     }
+    const fixed = Object.entries(stage.cutscenes ?? {}).flatMap(([id, steps]) =>
+      steps.flatMap((st, i) => (st.camera === 'fixed' ? [[`${id}#${i}`, st.at, st.lookAt, st.reach]] : [])),
+    );
+    if (fixed.length > 0) {
+      const frames = await page.evaluate(([cams, stations, cameras]) => window.__probeFixed(cams, stations, cameras), [fixed, stage.stations.map((st) => [st.railId, st.at]), CAMERAS]);
+      for (const f of frames) {
+        const frame = { ...f, stage: stage.id, rail: 'cutscene', s: f.name };
+        const row = byCamera.get('cutscene');
+        row.frames += 1;
+        if (!row.calls || f.calls > row.calls.calls) row.calls = frame;
+        if (!row.tris || f.tris > row.tris.tris) row.tris = frame;
+        if (!row.worst || load(f) > load(row.worst)) row.worst = frame;
+        if (over(f)) failures.push(frame);
+      }
+    }
     console.log(
       `stage ${stage.id}: ${rails.map((r) => `${r.id} ${Math.round(r.length)} m`).join(', ')}; ${points} points × ${CAMERAS.length} cameras, title camera × ${TITLE_ANGLES.length} angles`,
     );
-    for (const row of byCamera.values()) results.push({ ...row, stage: stage.id });
+    for (const row of byCamera.values()) if (row.frames > 0) results.push({ ...row, stage: stage.id });
     await page.close();
   }
 } finally {

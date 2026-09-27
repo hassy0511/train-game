@@ -817,6 +817,8 @@ body {
 #ui > .toast,
 #ui > .cargo-strip,
 #ui > .hud-speed,
+#ui > .shower-vignette,
+#ui > .dive-vignette,
 #ui > .debug-panel {
   pointer-events: none;
 }
@@ -3080,4 +3082,71 @@ body {
 
 .card.is-mirror .big-button {
   order: 2;
+}
+
+/* v1.10 (3-2): the crayon drawing on the paper boat's sail (card icon "drawing"): drawing paper with a crayon train,
+   the title under it in the usual way. */
+.card.is-drawing .card-drawing {
+  width: min(62vw, 420px);
+  height: auto;
+  padding: 18px 22px;
+  border-radius: 8px;
+  background: #fffdf4;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  transform: rotate(-1.5deg);
+  margin-bottom: 18px;
+}
+
+/* v1.10 (3-2): under a waterfall in the cab: white streaks of water run down the window. */
+.shower-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease-out;
+  overflow: hidden;
+  z-index: 1;
+}
+
+#app[data-shower='1'][data-camera='cab'] .shower-vignette {
+  opacity: 1;
+  transition-duration: 0.4s;
+}
+
+#app[data-shower='0'] .shower-vignette,
+#app:not([data-shower]) .shower-vignette {
+  transition-duration: 0.6s;
+}
+
+.shower-vignette i {
+  position: absolute;
+  top: -40%;
+  width: 3px;
+  height: 40%;
+  border-radius: 2px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.75));
+  animation: shower-streak 0.9s linear infinite;
+}
+
+@keyframes shower-streak {
+  to {
+    transform: translateY(350%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shower-vignette i {
+    animation: none;
+    top: 10%;
+  }
+}
+
+/* v1.10 (3-3): the countdown's moon: a cream moon (no face) coming up over the sea line as the time runs down. */
+.timer-art .timer-moon {
+  transition: transform 0.4s ease-out;
+}
+
+/* v1.10 (3-3): in a cutscene only the button to press stays lit; the others fade. */
+#app[data-cutscene-press] .round-button:not(.is-press) {
+  opacity: 0.35;
 }

@@ -870,6 +870,14 @@ export class Train {
       const d = fork.at + lead - b;
       if (d > 0 && d < length * 0.9) return true;
     }
+    // v1.10 (3-2, 3-3): a surface stretch running on down under water: a dive still going on when the lead bogie gets
+    // there takes the train down (without one it is "ぽよん").
+    const rail = this.currentRail;
+    const surface = spanAt(rail.surfaces, b);
+    if (surface && rail.dives.some((d) => Math.abs(d.from - surface.to) <= 2)) {
+      const d = surface.to - b;
+      if (d > 0 && d < length * 0.9) return true;
+    }
     return false;
   }
 

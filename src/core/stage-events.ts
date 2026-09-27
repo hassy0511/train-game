@@ -100,6 +100,19 @@ export type StageEvent =
     }
   /** v1.7: the volcano sneezes (a big smoke ring; the time-up and the ending). */
   | { type: 'sneeze' }
+  /**
+   * v1.10 (3-3): a countdown ran out: how it looks follows its picture ("volcano": the sneeze; "moon": the moon comes
+   * up over the sea; "clock": a soft white).
+   */
+  | { type: 'timeUp'; icon: 'volcano' | 'clock' | 'moon' }
+  /** v1.10 (3-3): the lighthouse's lamp comes on (`instant`: a skipped cutscene, no sweep of the light). */
+  | { type: 'beacon'; instant?: boolean }
+  /** v1.10 (3-3): the festival: the moon, the glowing balls, the lanterns (`instant`: skipped, as it ends up). */
+  | { type: 'festival'; instant?: boolean }
+  /** v1.10 (3-2): the shower under a waterfall starts or stops on the train. */
+  | { type: 'shower'; on: boolean }
+  /** v1.10 (3-3): the whistle sounded (the glowing motes of a dark stretch flash). */
+  | { type: 'whistle' }
   /** v1.7: the volcano's everyday small smoke ring ("ぽふっ"), every VOLCANO_PUFF seconds. */
   | { type: 'volcano:puff' }
   /**

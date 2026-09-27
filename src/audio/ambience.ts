@@ -32,6 +32,8 @@ export class Ambience {
     private readonly ctx: BaseAudioContext,
     out: AudioNode,
     readonly kind: AmbienceKind,
+    /** v1.10 (3-3): the sea's faraway volcano grumble only where there is a volcano (2-3; not 3-1 or 3-3). */
+    private readonly volcano = true,
   ) {
     this.bus = ctx.createGain();
     this.bus.gain.value = 0;
@@ -161,7 +163,7 @@ export class Ambience {
       case 'sea':
         // Waves coming in, and the volcano grumbling very softly far away.
         this.layer('pink', 'lowpass', 900, 0.6, 0.08, 0.8, 7);
-        this.layer('brown', 'lowpass', 90, 0.7, 0.05, 0.3, 17);
+        if (this.volcano) this.layer('brown', 'lowpass', 90, 0.7, 0.05, 0.3, 17);
         break;
       case 'underwater':
         // A soft, muffled hush of deep water, and a faraway murmur swaying slowly.

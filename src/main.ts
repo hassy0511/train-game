@@ -10,6 +10,8 @@ import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/load
 import type { AbilityId, GimmickDef, Vec3 } from './stage/types';
 import type { RunSurface } from './audio/run-sound';
 import {
+  DOOR_REMIND_SECONDS,
+  FESTIVAL,
   JUMP,
   LEVER_NOTCHES,
   LIGHT,
@@ -49,6 +51,8 @@ import { DiveSystem } from './gimmick/dive';
 import { IceSystem, iceZones, thinIceZones } from './gimmick/ice';
 import { ThinIceSystem } from './gimmick/thin-ice';
 import { MirrorSystem } from './gimmick/mirror';
+import { fallsLoudness, underFalls, waterfalls } from './gimmick/waterfall';
+import { Vector3 } from 'three';
 import { showZukan } from './ui/zukan';
 import { loadSettings, saveSettings, VOLUME_GAIN, type Settings } from './core/settings';
 import { showSettings } from './ui/settings';
@@ -318,8 +322,9 @@ async function boot(): Promise<void> {
   const hasIce = iceZones(stage.file.gimmicks).length > 0 || thinIceZones(stage.file.gimmicks).length > 0;
   const whistle = new Whistle();
   const audio = new AudioEngine();
-  // The island's quiet sound around the train (from the first tap on; under the title too).
-  audio.setAmbience(stage.file.environment.ambience ?? null);
+  // The island's quiet sound around the train (from the first tap on; under the title too). v1.10 (3-3): the sea's
+  // faraway volcano only where there is a volcano.
+  audio.setAmbience(stage.file.environment.ambience ?? null, stage.file.props.some((p) => p.model === 'volcano'));
   const events = new StageEventBus();
 
   const view = createSceneView(params);
@@ -362,6 +367,19 @@ async function boot(): Promise<void> {
   const cutsceneActors = new Set<string>();
   const rockStates = new Map<string, string>();
 
+  /**
+   * v1.10 (3-3): a cutscene waiting for one button (`press`): that button alone does something (and glows); `done`
+   * ends the wait.
+   */
+  let cutscenePress: { ability: 'light' | 'whistle' | 'rocket' | 'jump'; done: () => void } | null = null;
+  const pressWanted = (ability: 'light' | 'whistle' | 'rocket' | 'jump'): boolean | null => {
+    if (!cutscenePress) return null;
+    if (cutscenePress.ability !== ability) return false;
+    const done = cutscenePress.done;
+    cutscenePress = null;
+    done();
+    return true;
+  };
   const ui = createUi(uiEl, {
     speedLabels: SPEED_LABELS,
     initialNotch: STOP_NOTCH,
@@ -373,7 +391,14 @@ async function boot(): Promise<void> {
     },
     onWhistle: () => {
       audio.unlock();
-      if (whistle.trigger()) audio.playWhistle();
+      if (pressWanted('whistle') === false) return;
+      if (whistle.trigger()) {
+        audio.playWhistle();
+        // v1.10 (3-3): in the dark the glowing motes flash ("ちりりん").
+        const fog = zoneAt(stage.file.gimmicks, 'fog', train.state.railId, train.frontS);
+        if (fog && typeof fog.params?.color === 'string') audio.playGlimmer();
+        events.post({ type: 'whistle' });
+      }
     },
     onJunction: (side) => {
       // v1.8: a side way that needs an ability the player does not have yet stays shut ("ロケットが あれば…").
@@ -389,6 +414,7 @@ async function boot(): Promise<void> {
   const actionButtons = uiEl.querySelector('.action-buttons') as HTMLElement;
   const jumpButton = createJumpButton(actionButtons, () => {
     audio.unlock();
+    if (pressWanted('jump') !== null) return;
     // v1.10: the seat is "もぐる" near water (the train's events play its sounds).
     const press = dive.press();
     if (press.kind === 'dive') return;
@@ -403,8 +429,13 @@ async function boot(): Promise<void> {
   let lightOn = false;
   let lightReadyAt = 0;
   const lightButton = createLightButton(actionButtons, () => {
+    // v1.10 (3-3): a cutscene asking for another button: the light waits.
+    const wanted = pressWanted('light');
+    if (wanted === false) return;
+    // Asked for in a cutscene, it comes on (never off).
+    if (wanted === true && lightOn) return;
     // Toggle, with a short lockout so a double tap does not flicker it.
-    if (simTime < lightReadyAt) return;
+    if (wanted === null && simTime < lightReadyAt) return;
     lightReadyAt = simTime + LIGHT.cooldown;
     lightOn = !lightOn;
     audio.unlock();
@@ -417,6 +448,7 @@ async function boot(): Promise<void> {
   });
   const rocketButton = createRocketButton(actionButtons, () => {
     audio.unlock();
+    if (pressWanted('rocket') !== null) return;
     const result = rocket.press();
     if (!result.ok) runner?.onRocketRefused(result);
   });
@@ -461,7 +493,7 @@ async function boot(): Promise<void> {
   // Stage camera zones (gimmicks "camera"): e.g. the outside view while the train rides a loop upside down.
   let zoneCamera: CameraMode | null = null;
   // v1.7: a cutscene's camera standing still (the ending's view from the sea).
-  let fixedCamera: { at: Vec3; lookAt: Vec3 } | null = null;
+  let fixedCamera: { at: Vec3; lookAt: Vec3; reach?: number } | null = null;
   // The title screen's camera circling the train (set while the title is up).
   let orbiting = false;
   const applyCamera = (snap = false): void => {
@@ -614,6 +646,38 @@ async function boot(): Promise<void> {
     }
     if (e.type === 'record:found') foundRecords.add(e.id);
   });
+  // v1.10 (3-2): waterfalls: their "さーーっ" by how near they are, and the shower on the roof (the cab's window gets
+  // streaks of water; CSS shows them by #app[data-shower]).
+  const falls = waterfalls(stage.file.gimmicks, stage.file.environment.water ?? []);
+  let showerOn = false;
+  if (falls.length > 0) {
+    app.dataset.shower = '0';
+    const showerVignette = document.createElement('div');
+    showerVignette.className = 'shower-vignette';
+    showerVignette.innerHTML = Array.from({ length: 14 }, (_, i) => `<i style="left:${(i * 7.3 + 3) % 100}%;animation-delay:${((i * 0.37) % 0.9).toFixed(2)}s"></i>`).join('');
+    uiEl.prepend(showerVignette);
+  }
+  const roofs = Array.from({ length: 3 }, () => new Vector3());
+  const updateFalls = (): void => {
+    if (falls.length === 0) return;
+    const pose = train.getPose();
+    const cars = [pose, ...pose.cars];
+    cars.forEach((c, i) => {
+      if (roofs[i]) roofs[i].set(0, 3.6, 0).applyQuaternion(c.quaternion).add(c.position);
+    });
+    audio.setWaterfall(fallsLoudness(falls, pose.position));
+    const on = underFalls(falls, roofs.slice(0, cars.length));
+    if (on === showerOn) return;
+    showerOn = on;
+    app.dataset.shower = on ? '1' : '0';
+    if (on) {
+      showers += 1;
+      app.dataset.showers = String(showers);
+      audio.playShower();
+    }
+    events.post({ type: 'shower', on });
+  };
+  let showers = 0;
   // In the cab under water: the dome's rim round the screen edge (CSS shows it by #app[data-underwater]).
   const diveVignette = document.createElement('div');
   diveVignette.className = 'dive-vignette';
@@ -744,6 +808,7 @@ async function boot(): Promise<void> {
     if (paused) {
       // Game time stands still; keep drawing so a resize or the returning view stay right.
       view.update(0, train.getPose(), fx);
+      audio.setWaterfall(0);
       audio.updateRun(0, { speed: 0, target: 0, braking: false, airborne: false, surface: 'rail', quiet: true });
       return;
     }
@@ -783,6 +848,7 @@ async function boot(): Promise<void> {
       events.post({ type: 'ice', sparkle: iceSparkle });
     }
     audio.setUnderwater(train.submerged);
+    updateFalls();
     // Under water the island's sound turns to the underwater bed, and the rails to a soft "ことっ" with bubbles.
     audio.setAmbienceUnderwater(train.submerged);
     view.setSubmerged(train.submerged);
@@ -823,7 +889,11 @@ async function boot(): Promise<void> {
     }
     // v1.10 (4-1): at an ice station the notch to go to glows ("ゆっくり", then "とまる").
     const iceNotch = ice.hint === 'stop' ? STOP_NOTCH : ice.hint === 'slow' ? ICE_SLOW_NOTCH : null;
-    if (runner) {
+    if (cutscenePress) {
+      // v1.10 (3-3): a cutscene waits for one button: it alone glows.
+      lightButton.setGlow(cutscenePress.ability === 'light');
+      ui.whistle.setGlow(cutscenePress.ability === 'whistle');
+    } else if (runner) {
       lightButton.setGlow(runner.lightHint);
       jumpButton.setHopper(runner.hopperId !== '');
       const hint = runner.phase === 'driving' ? runner.leverHintSpeed : null;
@@ -907,6 +977,7 @@ async function boot(): Promise<void> {
     if (mirrors.mirrors.length > 0) app.dataset.mirror = mirrors.active ? String(mirrors.active.index) : '';
     app.dataset.timer = timer ? String(timer.seconds) : '';
     app.dataset.timerState = timer?.state ?? '';
+    app.dataset.timerIcon = timer?.icon ?? '';
     if (runner) {
       app.dataset.phase = runner.phase;
       app.dataset.mission = String(runner.missionIndex);
@@ -917,6 +988,7 @@ async function boot(): Promise<void> {
       app.dataset.butterfly = runner.butterflyState;
       app.dataset.fragile = runner.fragileStatus;
       app.dataset.whales = runner.whaleStates;
+      app.dataset.actors = runner.actorStates;
       app.dataset.bubbleRevealed = runner.bubbleRevealedId;
       // Under a card (a cutscene's own, or a learned ability's) it waits: the card is the child's tap.
       skipButton?.setVisible(clearedBefore && !paused && runner.canSkip && !cardUp());
@@ -1004,6 +1076,9 @@ async function boot(): Promise<void> {
   const lookOf = (a: { params?: Record<string, unknown> }): unknown => a.params?.look;
   const seals = new Set(stage.file.actors.filter((a) => a.type === 'cat' && lookOf(a) === 'seal').map((a) => a.id));
   const snowbirds = new Set(stage.file.actors.filter((a) => a.type === 'rock-roll' && lookOf(a) === 'snowbird').map((a) => a.id));
+  /** v1.10 (3-2, 3-3): the duck family ("dino-small" look "duck") and sea turtles ("cat" look "turtle"). */
+  const ducks = new Set(stage.file.actors.filter((a) => a.type === 'dino-small' && lookOf(a) === 'duck').map((a) => a.id));
+  const turtles = new Set(stage.file.actors.filter((a) => a.type === 'cat' && lookOf(a) === 'turtle').map((a) => a.id));
   let lastFailReason: string | null = null;
   /** v1.10 (3-1): jump pads that are a whale's back (it surfaces with a song and throws the train with its spout). */
   const whalePads = new Set(
@@ -1028,6 +1103,47 @@ async function boot(): Promise<void> {
     card: (title, button, icon, mirror) => {
       audio.playCard();
       return showCard(uiEl, title, button, icon, skipGuard(), undefined, { mirror });
+    },
+    // v1.10 (3-3): the runner opens and closes a cutscene's doors itself (it knows the station).
+    door: () => undefined,
+    press: (ability, say, fx, cancel) =>
+      new Promise<void>((resolve) => {
+        const buttons = { light: lightButton, whistle: null, rocket: rocketButton, jump: jumpButton } as const;
+        const el = ability === 'whistle' ? document.getElementById('whistle') : document.getElementById(ability === 'jump' ? 'jump' : ability);
+        let over = false;
+        const finish = (pressed: boolean): void => {
+          if (over) return;
+          over = true;
+          cutscenePress = null;
+          delete app.dataset.cutscenePress;
+          el?.classList.remove('is-press');
+          if (buttons[ability] === lightButton) lightButton.setGlow(false);
+          if (ability === 'whistle') ui.whistle.setGlow(false);
+          if (fx === 'beacon') {
+            app.dataset.beacon = '1';
+            if (pressed) audio.playBeacon();
+            events.post({ type: 'beacon', instant: !pressed });
+          }
+          resolve();
+        };
+        cutscenePress = { ability, done: () => finish(true) };
+        app.dataset.cutscenePress = ability;
+        el?.classList.add('is-press');
+        if (say) {
+          void bubbles.say(say);
+          void (async () => {
+            while (!over) {
+              await waitSeconds(DOOR_REMIND_SECONDS);
+              if (!over) void bubbles.say(say);
+            }
+          })();
+        }
+        void cancel?.then(() => finish(false));
+      }),
+    festival: async () => {
+      events.post({ type: 'festival' });
+      audio.playFestival();
+      await waitSeconds(FESTIVAL.seconds);
     },
     clearCard: (title, button, rewards) => {
       audio.playCard();
@@ -1073,8 +1189,8 @@ async function boot(): Promise<void> {
     },
     fanfare: () => audio.playFanfare(),
     music: (id) => audio.playMusic(id ?? stage.file.environment.bgm),
-    fixedCamera: (at, lookAt) => {
-      const next = at && lookAt ? { at, lookAt } : null;
+    fixedCamera: (at, lookAt, reach) => {
+      const next = at && lookAt ? { at, lookAt, reach } : null;
       // Nothing to do when no fixed camera was set (every cutscene end): the eased return must not snap.
       if (!next && !fixedCamera) return;
       fixedCamera = next;
@@ -1106,6 +1222,14 @@ async function boot(): Promise<void> {
     if (e.type === 'jump' && nearWhalePad()) audio.playSpout();
     if (e.type === 'bubbles:true') audio.playBubbleTrue();
     if (e.type === 'volcano:puff') audio.playVolcanoPuff();
+    // v1.10 (3-2, 3-3): a sign turning the right way round, the ducks, the sea turtle, the moon at a time-up.
+    if (e.type === 'sign:reveal') audio.playSignFlip();
+    if (e.type === 'actor:state' && e.state === 'cross' && ducks.has(e.id)) audio.playDuck();
+    if (e.type === 'actor:state' && e.state === 'awake' && turtles.has(e.id)) audio.playTurtleWake();
+    if (e.type === 'timeUp') {
+      app.dataset.timeup = e.icon;
+      if (e.icon === 'moon') audio.playMoonUp();
+    }
     if (e.type === 'countdown') {
       const was = hurrying;
       hurrying = e.state === 'run' || e.state === 'low';

@@ -2,9 +2,11 @@ import { BoxGeometry, Group, Mesh, MeshLambertMaterial } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { placeholderSize } from '../placeholder-sizes';
 import { buildForestPlaceholder } from './forest-placeholders';
+import { buildHarbourPlaceholder } from './harbour-placeholders';
 import { buildIcePlaceholder } from './ice-placeholders';
 import { buildMeadowPlaceholder } from './meadow-placeholders';
 import { buildRecordPlaceholder } from './record-placeholders';
+import { buildRiverPlaceholder } from './river-placeholders';
 import { buildSeaPlaceholder } from './sea-placeholders';
 import { buildSkyPlaceholder } from './sky-placeholders';
 import { buildVolcanoPlaceholder } from './volcano-placeholders';
@@ -51,6 +53,8 @@ export class ModelLibrary {
         buildVolcanoPlaceholder(name) ??
         buildSeaPlaceholder(name) ??
         buildIcePlaceholder(name) ??
+        buildRiverPlaceholder(name) ??
+        buildHarbourPlaceholder(name) ??
         buildRecordPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(drawn ?? makePlaceholder(name));

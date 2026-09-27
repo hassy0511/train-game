@@ -45,7 +45,27 @@ test('sounds page: every effect plays, is heard and does not clip; the running s
   }
   await page.locator('#dive').click();
   await expect(page.locator('#dive')).toHaveAttribute('aria-pressed', 'true');
-  for (const id of ['ice-crack', 'ice-splash', 'mirror', 'plow', 'plow-bump', 'snow-wave', 'snow-catch']) {
+  // v1.10 (3-2, 3-3): the river's and the harbour's effects too.
+  for (const id of [
+    'ice-crack',
+    'ice-splash',
+    'mirror',
+    'plow',
+    'plow-bump',
+    'snow-wave',
+    'snow-catch',
+    'shower',
+    'boat-bump',
+    'duck',
+    'frog',
+    'fish-leap',
+    'sign-flip',
+    'turtle-wake',
+    'beacon',
+    'festival',
+    'moon-up',
+    'glimmer',
+  ]) {
     await page.locator(`button[data-sound="${id}"]`).click();
   }
   await page.screenshot({ path: resolve(OUT, '95-sounds-page.png'), fullPage: true });

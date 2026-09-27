@@ -20,6 +20,17 @@ const CLOCK = `<svg class="timer-art" viewBox="0 0 40 32" aria-hidden="true">
 </svg>`;
 
 /**
+ * v1.10 (3-3): the moon over the sea (no face): it comes up from behind the sea line as the time runs down, half out
+ * with COUNTDOWN.lowAt s left of a 75 s countdown. The sea is drawn over it, so the part below the line is hidden.
+ */
+const MOON = `<svg class="timer-art" viewBox="0 0 40 32" aria-hidden="true">
+  <rect x="0" y="0" width="40" height="24" rx="4" fill="#3b4f8f"/>
+  <g class="timer-moon"><circle cx="20" cy="24" r="8" fill="#fff4d6"/><circle cx="17" cy="22" r="1.6" fill="#f3e3b8"/></g>
+  <path d="M0 24h40v6a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2z" fill="#2f7fbf"/>
+  <path d="M3 27c3-1.5 5-1.5 8 0s5 1.5 8 0 5-1.5 8 0 5 1.5 8 0" fill="none" stroke="#bfe9ff" stroke-width="1.4" stroke-linecap="round"/>
+</svg>`;
+
+/**
  * v1.7: the countdown panel at the top, beside the speed word: a picture, an orange band that shrinks and the
  * seconds left. Never red, never blinking; "セーフ！" in green when beaten.
  */
@@ -48,7 +59,14 @@ export function createCountdownPanel(root: HTMLElement): CountdownPanel {
       el.dataset.state = view.state;
       if (view.icon !== lastIcon) {
         lastIcon = view.icon;
-        icon.innerHTML = view.icon === 'clock' ? CLOCK : VOLCANO;
+        icon.innerHTML = view.icon === 'clock' ? CLOCK : view.icon === 'moon' ? MOON : VOLCANO;
+        el.dataset.icon = view.icon;
+      }
+      if (view.icon === 'moon') {
+        // Up from behind the sea line as the time runs down (all the way out at 0).
+        const rise = view.state === 'safe' ? 0 : 1 - view.fraction;
+        const moon = icon.querySelector<SVGGElement>('.timer-moon');
+        moon?.setAttribute('transform', `translate(0 ${(8 * (1 - rise / 0.87)).toFixed(2)})`);
       }
       fill.style.transform = `scaleX(${view.state === 'safe' ? 1 : view.fraction})`;
       num.textContent = view.state === 'safe' ? 'セーフ！' : String(view.seconds);
