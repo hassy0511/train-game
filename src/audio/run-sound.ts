@@ -150,6 +150,8 @@ export class RunSound {
   private sinceJoint = RUN_SOUND.joint * 0.5;
   private wasAirborne = false;
   private lastSpeed = 0;
+  /** The last frame was braking (the lever, or the train stopping on its own before a buffer). */
+  private lastBraking = false;
   /** The train got going since it last stood still (so stopping lets out the brakes' air). */
   private ranSinceStop = false;
   private movingFor = 0;
@@ -397,14 +399,17 @@ export class RunSound {
     }
 
     // Stopped after a run (braked down to a standstill, not put back by a rewind): the brakes let out their
-    // air, "ぷしゅー".
+    // air, "ぷしゅー". Braking counts however fast the last frame was: on a slow frame the train can reach the
+    // buffer's stop point a little fast and be held there at once.
     if (speed > 2) this.ranSinceStop = true;
-    if (!input.quiet && !input.airborne && this.ranSinceStop && speed <= 0.05 && this.lastSpeed > 0 && this.lastSpeed < 1.5) {
+    const braked = this.lastSpeed < 1.5 || this.lastBraking;
+    if (!input.quiet && !input.airborne && this.ranSinceStop && speed <= 0.05 && this.lastSpeed > 0 && braked) {
       this.release(0.25);
       this.releases += 1;
     }
     if (speed <= 0.05) this.ranSinceStop = false;
     this.lastSpeed = input.quiet ? 0 : speed;
+    this.lastBraking = !input.quiet && input.braking;
 
     this.level = rumble + roll + slide + motor + wind;
   }

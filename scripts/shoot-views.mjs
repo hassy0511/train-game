@@ -55,6 +55,18 @@ const VIEWS = {
     ['flip', 200, 'chase'],
     ['top', 240, 'side'], // こずえのえき
   ],
+  '4-1': [
+    ['main', 60, 'chase'], // みずうみえき, the lake ahead
+    ['main', 330, 'cab'], // on the ice, the frost flowers
+    ['main', 745, 'side'], // つりばえき and the fishing huts
+    ['main', 930, 'chase'], // thin ice ①
+    ['main', 1640, 'cab'], // the way off to the ice hole
+    ['ana', 110, 'chase'], // the hole and the floe
+    ['main', 2075, 'side'], // こじまえき
+    ['main', 2600, 'cab'], // the first mirror ahead
+    ['kagami1', 75, 'cab'], // face to face with the mirror
+    ['main', 3200, 'chase'], // きしべえき, the big mirror
+  ],
 };
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');

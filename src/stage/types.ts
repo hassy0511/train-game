@@ -1,4 +1,5 @@
 import type { Quaternion, Vector3 } from 'three';
+import type { RunSurface } from '../audio/run-sound';
 import type { RailNetwork } from '../rail/types';
 
 /** Stage JSON schema v1 (additions up to v1.10). See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
@@ -27,6 +28,20 @@ export interface EnvironmentDef {
    * surface (the jump button turns into "もぐる") and which run under water (Rail.surfaces / Rail.dives).
    */
   water?: WaterDef[];
+  /** v1.10 (4-1): snow falling round the camera (looks only). */
+  snow?: SnowDef;
+  /**
+   * v1.10: what the track sounds like where no "sound" zone says otherwise (default "rail"). Ice and thin ice sound
+   * like ice by themselves.
+   */
+  surface?: RunSurface;
+}
+
+/** v1.10 (4-1): falling snow: `count` flakes (0–2000) in a box `radius` m round the camera, falling `fall` m/s. */
+export interface SnowDef {
+  count: number;
+  radius?: number;
+  fall?: number;
 }
 
 /** v1.10: how a water looks (surface, floor and the colour under water). */
@@ -50,7 +65,15 @@ export interface WaterDef {
   look?: WaterLook;
   /** Colour and seeing distance (m) under water; defaults by `look`. */
   under?: { color?: string; far?: number };
+  /**
+   * v1.10 (4-1), look "ice" only: open water in the ice (a circle, or a rect as in `area`). With holes, a rail counts as
+   * on the water only inside one (elsewhere it runs on the ice), and it may go under the ice only through one.
+   */
+  holes?: WaterHole[];
 }
+
+/** v1.10 (4-1): a hole in an ice-covered water: { center, radius } or { rect } (as a water's area). */
+export type WaterHole = { center: [number, number]; radius: number } | { rect: { center: [number, number]; size: [number, number]; rotationY?: number; corner?: number } };
 
 /** v1.10 (set by the loader, never written): a stretch of a rail on the surface of, or under, `water` (index). */
 export interface WaterSpan {
@@ -400,7 +423,22 @@ export type MissionLines = Partial<
     | 'currentWait'
     | 'bubbleNear'
     | 'bubbleTrue'
-    | 'bubbleRevealed',
+    | 'bubbleRevealed'
+    // v1.10 (4-1 こおり・うすい こおり・かがみ)
+    | 'iceNear'
+    | 'iceStop'
+    | 'iceBrake'
+    | 'iceOvershoot'
+    | 'iceOvershootAfter'
+    | 'crackShake'
+    | 'crackFall'
+    | 'crackAfter'
+    | 'crackEmpty'
+    | 'crackEmptyAfter'
+    | 'thinIceClear'
+    | 'mirrorNear'
+    | 'mirrorFlash'
+    | 'mirrorFake',
     string
   >
 >;
@@ -498,6 +536,57 @@ export interface RocketZoneParams {
   line?: string;
   /** Said on a press here. */
   pressLine?: string;
+}
+
+/** v1.10 (4-1): params of an "ice" gimmick (the stretch `from`–`to` of `railId`, judged at the train front). */
+export interface IceParams {
+  /** How hard the brakes work on it (above 0, at most 1). Default ICE.grip (0.4). */
+  grip?: number;
+  /** Said once on getting onto it (again after a fail). */
+  line?: string | null;
+  /** A sign (sign-ice) at its start. Default true. */
+  sign?: boolean;
+}
+
+/** v1.10 (4-1): params of a "thin-ice" gimmick (only the rocket is fast enough to get across). */
+export interface ThinIceParams {
+  /** Default THIN_ICE.minSpeed (24 m/s). */
+  minSpeed?: number;
+  /** Default THIN_ICE.grace (0.8 s). */
+  grace?: number;
+  /** Its line comes this far before it (m). Default THIN_ICE.warn (120). */
+  warn?: number;
+  /** Where the train front goes back to after "ぽちゃん" (on the same rail). Default from − THIN_ICE.rewindBefore. */
+  rewindAt?: number;
+  line?: string | null;
+  /** A sign (sign-thin-ice) at its start. Default true. */
+  sign?: boolean;
+}
+
+/** v1.10 (4-1): params of a "mirror" gimmick (an ice mirror standing at `position`, looks and a few lines). */
+export interface MirrorParams {
+  /** Bottom centre of the mirror (world m). */
+  position: Vec3;
+  /** Degrees about +Y; 0 = the glass faces +Z. */
+  rotationY?: number;
+  /** Default 22 m. */
+  width?: number;
+  /** Default 14 m. */
+  height?: number;
+  /** Default MIRROR.range. */
+  range?: number;
+  /** Default MIRROR.flashRange. */
+  flashRange?: number;
+  /** Default MIRROR.reflectRadius. */
+  reflectRadius?: number;
+  /** The false way (a dead end) that runs up to this mirror. */
+  railId?: string;
+  /** The junction with a reversed sign whose false way this is (its default side is `railId`). */
+  junction?: string;
+  /** The light button glows before the junction until the sign is seen through. Default false. */
+  lightHint?: boolean;
+  /** What shows in it: "train" (default) and "cutscene" (the figures a cutscene brings on). */
+  reflect?: ('train' | 'cutscene')[];
 }
 
 /**

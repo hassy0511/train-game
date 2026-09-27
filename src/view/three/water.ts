@@ -32,7 +32,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { EnvironmentDef, FloaterDef, FloaterLook, StageData, WaterDef, WaterLook } from '../../stage/types';
-import { areaOutline, inArea, WATER_FLOOR, WATER_UNDER } from '../../stage/water';
+import { areaOutline, holeArea, inArea, WATER_FLOOR, WATER_UNDER } from '../../stage/water';
 import { FLOATER, TRAIN } from '../../train/params';
 
 /**
@@ -44,6 +44,9 @@ import { FLOATER, TRAIN } from '../../train/params';
 
 /** The surface seen from above, by look (a sea without an area takes the ground's colour). */
 const SURFACE_COLOR: Record<WaterLook, string> = { sea: '#3aa0d8', lake: '#4fb3dc', puddle: '#7cc7d0', ice: '#dff4fb' };
+/** v1.10 (4-1): open water in the holes of an ice-covered water, and the ice plate round them. */
+const OPEN_WATER_COLOR = '#6CC3E6';
+const ICE_PLATE_COLOR = '#CFEAF6';
 /** The surface seen from under the water: a bright ceiling. */
 const CEILING_COLOR = '#bfe9ff';
 /** The dome's size around a car (m): half across, half up, half along. */
@@ -229,7 +232,8 @@ export class WaterLayer {
     this.waters = env.water ?? [];
     const first = this.waters[0];
     // Surfaces (all waters in one mesh; one colour: the first water's look, or the ground's for a sea).
-    const seaColor = first && !first.area && env.ground ? env.ground.color : SURFACE_COLOR[first?.look ?? 'sea'];
+    const iced = (w: WaterDef | undefined): boolean => !!w && w.look === 'ice' && (w.holes?.length ?? 0) > 0;
+    const seaColor = first && !first.area && env.ground ? env.ground.color : iced(first) ? OPEN_WATER_COLOR : SURFACE_COLOR[first?.look ?? 'sea'];
     this.surfaceColor = new Color(seaColor);
     this.surfaceMaterial = new MeshLambertMaterial({
       color: this.surfaceColor.clone(),
@@ -241,6 +245,7 @@ export class WaterLayer {
     const size = env.ground?.size ?? 1200;
     const surfaces: BufferGeometry[] = [];
     const bowls: BufferGeometry[] = [];
+    const plates: BufferGeometry[] = [];
     for (const w of this.waters) {
       const look = w.look ?? 'sea';
       const floorColor = WATER_FLOOR[look];
@@ -251,7 +256,15 @@ export class WaterLayer {
       }
       const outline = areaOutline(w.area);
       const shape = new Shape(outline.map(([x, z]) => xz(x, z)));
-      surfaces.push(flatShape(new ShapeGeometry(shape), w.y));
+      if (iced(w)) {
+        // v1.10 (4-1): the water is open only in its holes; the rest is a plate of ice (a bright ceiling from below).
+        for (const h of w.holes ?? []) {
+          const hole = areaOutline(holeArea(h)).map(([x, z]) => xz(x, z));
+          surfaces.push(flatShape(new ShapeGeometry(new Shape(hole)), w.y));
+          shape.holes.push(new Path(hole));
+        }
+        plates.push(flatShape(new ShapeGeometry(shape), w.y + 0.02));
+      } else surfaces.push(flatShape(new ShapeGeometry(shape), w.y));
       bowls.push(paint(flatShape(new ShapeGeometry(shape), w.floor), floorColor));
       // The pond's wall, from the ground (or the surface) down to the floor.
       const top = Math.max(env.ground?.y ?? w.y, w.y);
@@ -272,6 +285,12 @@ export class WaterLayer {
       surface.name = 'water-surface';
       surface.renderOrder = 2;
       this.group.add(surface);
+    }
+    const plateGeometry = mergeAll(plates.map((g) => stripTo(g, ['position', 'normal'])));
+    if (plateGeometry) {
+      const plate = new Mesh(plateGeometry, new MeshLambertMaterial({ color: ICE_PLATE_COLOR, side: DoubleSide }));
+      plate.name = 'water-ice';
+      this.group.add(plate);
     }
     const bowlGeometry = mergeAll(bowls.map((g) => stripTo(g, ['position', 'normal', 'color'])));
     if (bowlGeometry) {

@@ -168,6 +168,11 @@ export class Train {
   jumpBoost: { power: number; height: number } | null = null;
   /** 2-3: the slope under the train front, or null on the level. */
   slope: SlopeUnder | null = null;
+  /**
+   * v1.10 (4-1): how hard the lever's brakes (and the automatic stop before a buffer) work under the train front: 1,
+   * or the ice's grip (set every frame by the ice system). The game's sudden stops and the rocket ignore it.
+   */
+  grip = 1;
   /** 2-3: seconds of rocket burn left (0 = not burning). */
   private rocketLeft = 0;
   /** 2-3: after a burn, slowing back to the lever's speed (at least ROCKET.settle m/s²). */
@@ -577,14 +582,14 @@ export class Train {
     const st = this.state;
     const notch = LEVER_NOTCHES[st.notch];
     let target: number = notch.speed * this.speedScale;
-    let brake: number = notch.brake;
+    let brake: number = notch.brake * this.grip;
     const stopAt = this.stopDistance(rail);
     if (stopAt !== null) {
       const remaining = stopAt - st.s;
-      const brakeDistance = (st.speed * st.speed) / (2 * BRAKING);
+      const brakeDistance = (st.speed * st.speed) / (2 * BRAKING * this.grip);
       if (remaining <= brakeDistance + 1) {
         target = 0;
-        brake = Math.max(brake, BRAKING);
+        brake = Math.max(brake, BRAKING * this.grip);
       }
     }
     return { target, brake };

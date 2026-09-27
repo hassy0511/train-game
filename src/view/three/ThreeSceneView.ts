@@ -28,6 +28,8 @@ import { buildGapPits, buildJumpDevice, buildLightBeam, Flocks, JunctionSigns, S
 import { ForestGimmicks } from './forest';
 import { MeadowGimmicks } from './meadow';
 import { VolcanoGimmicks } from './volcano-gimmicks';
+import { IceGimmicks } from './ice';
+import { iceZones, thinIceZones } from '../../gimmick/ice';
 import { slopeZones } from '../../gimmick/slope';
 import type { RailBaseDef, ResolvedProp } from '../../stage/types';
 import { ActorLayer } from './actors';
@@ -68,6 +70,11 @@ interface FallingPiece {
   own: boolean;
 }
 
+/** v1.10 (4-1): track bed colours on snow, ice and thin ice. */
+const SNOW_BED = '#E8EEF4';
+const ICE_BED = '#BFE3F2';
+const THIN_ICE_BED = '#8CC3E0';
+
 /** v1.7: a field-of-view boost (degrees) while the rocket burns. */
 const ROCKET_FOV = 6;
 
@@ -100,6 +107,8 @@ export class ThreeSceneView implements SceneView {
   private forest: ForestGimmicks | null = null;
   private meadow: MeadowGimmicks | null = null;
   private volcano: VolcanoGimmicks | null = null;
+  /** v1.10 (4-1): ice sheets, thin ice, snow, snowbirds and ice mirrors (null on a stage without them). */
+  private ice: IceGimmicks | null = null;
   /** v1.7: slope beds and rock bases, kept for rebuilding the track after a cut. */
   private trackLooks: TrackLooks | undefined;
   /** v1.7: props with a tag, each in its own group (a cut can drop them). */
@@ -133,7 +142,10 @@ export class ThreeSceneView implements SceneView {
 
   async init(container: HTMLElement, stage: StageData, network: RailNetwork): Promise<void> {
     this.stage = stage;
-    const renderer = new WebGLRenderer({ antialias: true });
+    // v1.10 (4-1): a stencil buffer for the ice mirrors' window.
+    const renderer = new WebGLRenderer({ antialias: true, stencil: true });
+    // Counted over the whole frame (the mirror pass is a second render call); reset at the start of update().
+    renderer.info.autoReset = false;
     renderer.outputColorSpace = SRGBColorSpace;
     renderer.shadowMap.enabled = false;
     renderer.toneMapping = NoToneMapping;
@@ -156,9 +168,15 @@ export class ThreeSceneView implements SceneView {
     const bases = new Map<string, RailBaseDef>();
     for (const r of stage.file.rails) if (r.base) bases.set(r.id, r.base);
     const slopes = slopeZones(stage.file.gimmicks);
+    // v1.10 (4-1): the bed is white on snow, pale blue on ice and a deeper blue on thin ice.
+    const beds = [
+      ...(stage.file.environment.surface === 'snow' ? stage.file.rails.map((r) => ({ railId: r.id, from: 0, to: Infinity, color: SNOW_BED })) : []),
+      ...iceZones(stage.file.gimmicks).map((z) => ({ railId: z.railId, from: z.from, to: z.to, color: ICE_BED })),
+      ...thinIceZones(stage.file.gimmicks).map((z) => ({ railId: z.railId, from: z.from, to: z.to, color: THIN_ICE_BED })),
+    ];
     this.trackLooks =
-      bases.size > 0 || slopes.length > 0
-        ? { bases, slopes, groundY: stage.file.environment.ground?.y ?? null }
+      bases.size > 0 || slopes.length > 0 || beds.length > 0
+        ? { bases, slopes, groundY: stage.file.environment.ground?.y ?? null, beds }
         : undefined;
     const rails = buildRailScene(network, this.boughSkips, this.railLooks, this.trackLooks);
     this.rails = rails.group;
@@ -208,6 +226,14 @@ export class ThreeSceneView implements SceneView {
       this.sea = new SeaGimmicks(stage, this.train, (id) => this.actors?.positionOf(id) ?? null);
       this.scene.add(this.sea.group);
     }
+    const g = stage.file.gimmicks;
+    const icy = g.some((x) => ['ice-sheet', 'thin-ice', 'mirror'].includes(x.type)) || !!stage.file.environment.snow;
+    const birds = stage.file.actors.some((a) => (a.params as { look?: string } | undefined)?.look === 'snowbird');
+    if (icy || birds) {
+      this.ice = new IceGimmicks(stage, this.train);
+      this.scene.add(this.ice.group);
+      if (stage.file.environment.surface === 'snow') IceGimmicks.brightenSnow(this.scene);
+    }
     // Tagged props stay separate so a cutscene can drop them (the old bridge's girders).
     for (const prop of stage.props) {
       if (!prop.tag) continue;
@@ -242,6 +268,7 @@ export class ThreeSceneView implements SceneView {
       this.meadow.init(this.models),
       this.volcano.init(this.models),
       this.sea?.init(this.models),
+      this.ice?.init(this.models),
     ]);
     // The train, cars and partner only ever move as a whole (door bands, the light beam and the jump unit are
     // objects of their own), so each draws baked, in one call.
@@ -321,6 +348,7 @@ export class ThreeSceneView implements SceneView {
     this.meadow?.onEvent(event);
     this.volcano?.onEvent(event);
     this.sea?.onEvent(event);
+    this.ice?.onEvent(event);
     if (event.type === 'ability' && event.id === 'rocket') void this.volcano?.addRocketUnit(this.models);
     if (event.type === 'rocket') this.fovTarget = event.state === 'burn' && !this.calm ? ROCKET_FOV : 0;
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
@@ -498,6 +526,7 @@ export class ThreeSceneView implements SceneView {
 
   update(dt: number, pose: TrainPose, fx: CameraFx): void {
     if (!this.renderer) return;
+    this.renderer.info.reset();
     this.train.position.copy(pose.position);
     this.train.quaternion.copy(pose.quaternion);
     this.cars.forEach((car, i) => {
@@ -510,6 +539,8 @@ export class ThreeSceneView implements SceneView {
     // On a swaying silk bridge the cars sag with it (the cab view goes with the lead car).
     const silkDip = this.train.position.clone();
     this.meadow?.rideSilk([this.train, ...this.cars]);
+    // v1.10 (4-1): through thin ice the cars sink half-way and bob (the cab goes with the lead car).
+    this.ice?.rideSink([this.train, ...this.cars]);
     silkDip.subVectors(this.train.position, silkDip);
 
     if (this.fixedCamera) {
@@ -550,6 +581,12 @@ export class ThreeSceneView implements SceneView {
     this.meadow?.update(dt, cab);
     this.volcano?.update(dt);
     this.sea?.update(dt);
+    if (this.ice) {
+      this.ice.trainRail = pose.railId;
+      this.ice.trainFront = pose.s + TRAIN.length / 2;
+      this.ice.trainSpeed = pose.speed;
+      this.ice.update(dt, this.camera);
+    }
     this.updateFalling(dt);
     // A little wider view while the rocket burns (not a shake).
     const fov = this.fovBoost + (this.fovTarget - this.fovBoost) * Math.min(1, dt * 4);
@@ -569,6 +606,13 @@ export class ThreeSceneView implements SceneView {
     this.cameraPosition.copy(this.camera.position);
     this.sky?.position.copy(this.cameraPosition);
     this.renderer.render(this.scene, this.camera);
+    // v1.10 (4-1): what the nearest ice mirror shows, drawn into its window.
+    this.ice?.renderReflection(this.renderer, this.scene, this.camera, [this.train, ...this.cars], this.actors?.cutsceneFigures() ?? []);
+  }
+
+  /** v1.10 (4-1): the ice mirror reflecting now (its gimmicks[] index), or −1 (test hook). */
+  get mirrorIndex(): number {
+    return this.ice?.activeIndex ?? -1;
   }
 
   setSubmerged(on: boolean): void {

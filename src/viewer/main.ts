@@ -21,6 +21,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import manifest from '../../assets/models.json';
 import { buildForestPlaceholder } from '../view/three/forest-placeholders';
+import { buildIcePlaceholder } from '../view/three/ice-placeholders';
 import { buildMeadowPlaceholder } from '../view/three/meadow-placeholders';
 import { buildRecordPlaceholder } from '../view/three/record-placeholders';
 import { buildSeaPlaceholder } from '../view/three/sea-placeholders';
@@ -30,10 +31,10 @@ import { buildVolcanoPlaceholder } from '../view/three/volcano-placeholders';
 const GROUPS: [string, RegExp][] = [
   ['のりもの', /^(train-|car-|rocket-unit)/],
   ['しらべもの', /^(dino-egg|footprint)/],
-  ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird|squirrel|grasshopper|butterfly|spider|seabird)/],
+  ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird|squirrel|grasshopper|butterfly|spider|seabird|seal|snowbird)/],
   ['えき・せんろ', /^(platform|station|stop|buffer|crossing|direction|jump|updraft|sky-buoy|sign-|old-bridge)/],
   ['たてもの', /^(house|shop|tower|hq|observatory)/],
-  ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud|canopy|branch|bough|leaf|grass|clover|meadow|water|dandelion|volcano|mesa|pumice|sandbar|reef|sand-island|palm|kelp|coral|spring-vent)/],
+  ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud|canopy|branch|bough|leaf|grass|clover|meadow|water|dandelion|volcano|mesa|pumice|sandbar|reef|sand-island|palm|kelp|coral|spring-vent|snow|ice-|tunnel)/],
   ['うみ', /^(whale|fish|current-ring|awa-)/],
   ['こもの', /.*/],
 ];
@@ -81,6 +82,7 @@ const drawn = (name: string): Group | null =>
   buildMeadowPlaceholder(name) ??
   buildVolcanoPlaceholder(name) ??
   buildSeaPlaceholder(name) ??
+  buildIcePlaceholder(name) ??
   buildRecordPlaceholder(name);
 const pending = manifest._pending.models.filter((n) => !built.has(n) && drawn(n) !== null);
 const load = async (name: string): Promise<Group> =>
