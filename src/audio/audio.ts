@@ -35,7 +35,34 @@ export class AudioEngine {
       this.live = live;
       this.attach(live);
     }
-    if (this.live?.state === 'suspended') void this.live.resume();
+    const live = this.live;
+    // Suspended at first, or "interrupted" by iOS after a call or a trip to another app.
+    if (!live || live.state === 'running') return;
+    void live.resume();
+    // Old iOS Safari also wants a sound started inside the gesture: one silent sample.
+    const blip = live.createBufferSource();
+    blip.buffer = live.createBuffer(1, 1, live.sampleRate);
+    blip.connect(live.destination);
+    blip.start();
+  }
+
+  /**
+   * Unlocks the sound on the player's gestures. On a touch screen Safari lets sound start only in the handler of a
+   * finished tap (touchend, pointerup, click), not when the finger goes down; so all of those are listened to, for
+   * good: iOS can suspend the sound again later (a call, another app), and the next tap brings it back.
+   */
+  listenForGestures(target: EventTarget = window): void {
+    const wake = (): void => {
+      if (this.live?.state !== 'running') this.unlock();
+    };
+    for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) {
+      target.addEventListener(type, wake, { capture: true, passive: true });
+    }
+  }
+
+  /** The sound's state ("none" before the first tap): a hook for tests. */
+  get state(): string {
+    return this.live?.state ?? 'none';
   }
 
   /**

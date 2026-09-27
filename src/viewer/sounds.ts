@@ -10,6 +10,7 @@ import { ACCELERATION, LEVER_NOTCHES } from '../train/params';
  * (window.__measure, for the smoke test): nothing should clip, nothing should be silent.
  */
 const audio = new AudioEngine();
+audio.listenForGestures();
 const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
 $('build').textContent = `build ${__BUILD_ID__}`;
 
