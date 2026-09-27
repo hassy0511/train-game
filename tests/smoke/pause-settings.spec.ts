@@ -221,7 +221,11 @@ function fullProgress(): { schema: 1; cleared: string[]; abilities: string[]; re
     cleared: stages.map((s) => s.id),
     abilities: [...new Set(stages.flatMap((s) => s.unlocks))],
     records: stages.flatMap((s) => s.records.map((r) => r.id)),
-    mapLinks: world.links.filter(([, to]) => !to.startsWith('teaser:')).map(([from, to]) => `${from}>${to}`),
+    // Rails between stages there are (not yet the rail through the cloud gate to chapter 3's islands: あいことば
+    // version 1 carries chapters 1 and 2 only, and version 2 comes with chapters 3 and 4, PHASE8_CHAPTER3_4 §5).
+    mapLinks: world.links
+      .filter(([from, to]) => stages.some((s) => s.id === from) && stages.some((s) => s.id === to))
+      .map(([from, to]) => `${from}>${to}`),
   };
 }
 
