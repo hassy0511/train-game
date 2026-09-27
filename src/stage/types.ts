@@ -21,9 +21,12 @@ export interface EnvironmentDef {
   ambience?: AmbienceKind;
 }
 
-/** v1.9: the sound around an island. */
-export type AmbienceKind = 'town' | 'valley' | 'sky' | 'forest' | 'meadow' | 'sea';
-export const AMBIENCE_KINDS: readonly AmbienceKind[] = ['town', 'valley', 'sky', 'forest', 'meadow', 'sea'];
+/**
+ * v1.9: the sound around an island. v1.10 adds underwater (it also comes on by itself while the train is under
+ * water), river, ice and snow.
+ */
+export type AmbienceKind = 'town' | 'valley' | 'sky' | 'forest' | 'meadow' | 'sea' | 'underwater' | 'river' | 'ice' | 'snow';
+export const AMBIENCE_KINDS: readonly AmbienceKind[] = ['town', 'valley', 'sky', 'forest', 'meadow', 'sea', 'underwater', 'river', 'ice', 'snow'];
 
 export type RailEndDef =
   | { type: 'buffer' }

@@ -1,3 +1,4 @@
+import { RUN_SURFACES, type RunSurface } from '../audio/run-sound';
 import { SONGS } from '../audio/songs';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
@@ -350,9 +351,9 @@ export function validateStageFile(raw: unknown): StageFile {
       if (p.icon !== undefined && !['none', 'sleep', 'bridge'].includes(String(p.icon))) fail(`gimmicks[${i}] rocket: params.icon must be none, sleep or bridge`);
       for (const k of ['line', 'pressLine']) if (p[k] !== undefined && !isString(p[k])) fail(`gimmicks[${i}] rocket: params.${k} must be text`);
     }
-    if (g.type === 'sound' && !['rail', 'silk', 'bridge', 'wood', 'soft'].includes(String(p.surface))) {
-      // v1.9: what the track sounds like on this stretch (the running sound).
-      fail(`gimmicks[${i}] sound: params.surface must be rail, silk, bridge, wood or soft`);
+    if (g.type === 'sound' && !RUN_SURFACES.includes(p.surface as RunSurface)) {
+      // v1.9: what the track sounds like on this stretch (the running sound; v1.10 adds ice, snow and tunnel).
+      fail(`gimmicks[${i}] sound: params.surface must be one of ${RUN_SURFACES.join(', ')}`);
     }
     if (g.type === 'camera' && !['cab', 'chase', 'side', 'top'].includes(String((g.params as Record<string, unknown> | undefined)?.mode))) {
       fail(`gimmicks[${i}] camera: params.mode must be cab, chase, side or top`);
