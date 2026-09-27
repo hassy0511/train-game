@@ -4,6 +4,7 @@ import { placeholderSize } from '../placeholder-sizes';
 import { buildForestPlaceholder } from './forest-placeholders';
 import { buildMeadowPlaceholder } from './meadow-placeholders';
 import { buildRecordPlaceholder } from './record-placeholders';
+import { buildSeaPlaceholder } from './sea-placeholders';
 import { buildSkyPlaceholder } from './sky-placeholders';
 import { buildVolcanoPlaceholder } from './volcano-placeholders';
 
@@ -47,6 +48,7 @@ export class ModelLibrary {
         buildForestPlaceholder(name) ??
         buildMeadowPlaceholder(name) ??
         buildVolcanoPlaceholder(name) ??
+        buildSeaPlaceholder(name) ??
         buildRecordPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(drawn ?? makePlaceholder(name));

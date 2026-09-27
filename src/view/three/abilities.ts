@@ -365,7 +365,9 @@ export class SkyGimmicks {
     const rings: ModelPlacement[] = [];
     for (const [index, g] of gimmicks.entries()) {
       if (g.railId === undefined || g.from === undefined) continue;
-      if (g.type === 'jump-pad') {
+      // v1.10 (3-1): a whale's back as a jump pad, and a sea current, are drawn by the sea layer (sea.ts).
+      const look = (g.params as { look?: string } | undefined)?.look;
+      if (g.type === 'jump-pad' && look !== 'whale') {
         const t = resolvePlacement({ onRail: { railId: g.railId, at: g.from, heightFromRail: 0 } }, this.stage.network, null);
         const pad = (await models.load('jump-pad')).clone(true);
         pad.position.copy(t.position);
@@ -377,7 +379,7 @@ export class SkyGimmicks {
         this.group.add(pad, sparkle);
         this.pads.set(index, { pad, sparkle, left: 0 });
       }
-      if (g.type === 'updraft' && g.to !== undefined) {
+      if (g.type === 'updraft' && g.to !== undefined && look !== 'current') {
         for (let s = g.from + 6; s <= g.to; s += 14) {
           const t = resolvePlacement({ onRail: { railId: g.railId, at: s, heightFromRail: 0 } }, this.stage.network, null);
           rings.push({ model: 'updraft-ring', position: t.position, quaternion: t.quaternion, scale: 1 });
@@ -402,6 +404,12 @@ export class SkyGimmicks {
 
   /** How white the sky is right now (0 = clear, 1 = inside a thick fog stretch). */
   mist = 0;
+  /** v1.10 (3-1): the fog stretch the train is in has a colour of its own (under water, a deep blue), or null. */
+  zoneColor: string | null = null;
+  /** The fog's reach (m) as it eases through the fog stretches (0 before the first frame). */
+  get fogReach(): number {
+    return this.fogFar;
+  }
 
   /** Per frame: pad state, and the fog for where the train is (fog stretches thicken it; the light thins it). */
   update(dt: number, railId: string, frontS: number, fog: Fog | null, baseFog: { near: number; far: number } | null): void {
@@ -418,6 +426,8 @@ export class SkyGimmicks {
     let near = baseFog.near;
     let far = baseFog.far;
     const zone = zoneAt(this.stage.file.gimmicks, 'fog', railId, frontS);
+    const color = (zone?.params as { color?: string } | undefined)?.color;
+    if (color) this.zoneColor = color;
     if (zone) {
       near = param(zone, 'near', 2);
       far = this.lightOn ? param(zone, 'lightFar', 70) : param(zone, 'far', 22);

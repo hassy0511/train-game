@@ -187,7 +187,7 @@ export class ActorLayer {
     }
     // Nuts and squirrels are drawn by the forest gimmicks, grasshoppers by the meadow ones and rocks by the volcano
     // ones (they move on their own).
-    const drawnElsewhere = new Set(['trigger', 'nut', 'squirrel', 'grasshopper', 'rock-roll', 'rock-drop']);
+    const drawnElsewhere = new Set(['trigger', 'nut', 'squirrel', 'grasshopper', 'rock-roll', 'rock-drop', 'whale']);
     await Promise.all(
       actors
         .filter((actor) => !drawnElsewhere.has(actor.type))
@@ -438,6 +438,15 @@ export class ActorLayer {
     const generation = (this.generations.get(id) ?? 0) + 1;
     this.generations.set(id, generation);
     return generation;
+  }
+
+  /** v1.10: where figure `id` is now (a cutscene's big bubble pops there), or null. */
+  positionOf(id: string): Vector3 | null {
+    const object = this.objects.get(id);
+    if (!object) return null;
+    // Round models have their origin at the bottom: the middle of one is up by half its height.
+    const box = new Box3().setFromObject(object);
+    return box.isEmpty() ? object.position.clone() : box.getCenter(new Vector3());
   }
 
   /** Puts `model` in as `id` (replacing what is there). Resolves to null when a later place or a remove won. */
