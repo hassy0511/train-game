@@ -42,12 +42,14 @@ test('sounds page: every effect plays, is heard and does not clip; the running s
     expect(m.rms, `${m.id} is silent`).toBeGreaterThan(0.001);
   }
   const runs = measured.filter((m) => m.id.startsWith('run-'));
-  expect(runs.map((m) => m.id)).toEqual(['run-rail', 'run-bridge', 'run-wood', 'run-silk', 'run-soft']);
+  expect(runs.map((m) => m.id)).toEqual(['run-rail', 'run-bridge', 'run-wood', 'run-silk', 'run-soft', 'run-rocket']);
   // 4 s at 22 m/s from half a joint: 88 m, a joint every 12 m.
   for (const m of runs) expect(m.joints).toBe(7);
   // Silk and petals are hushed; the bridge rings louder than plain rail.
   const rms = Object.fromEntries(runs.map((m) => [m.id, m.rms]));
   expect(rms['run-silk']).toBeLessThan(rms['run-rail'] * 0.7);
   expect(rms['run-bridge']).toBeGreaterThan(rms['run-rail']);
+  // The rocket's roar is heard over the rails.
+  expect(rms['run-rocket']).toBeGreaterThan(rms['run-rail'] * 1.2);
   expect(errors).toEqual([]);
 });

@@ -1,4 +1,5 @@
 import { MusicPlayer } from './music';
+import { noiseBuffer, noiseSource, type NoiseColor } from './noise';
 import { RunSound, type RunInput } from './run-sound';
 
 /** Synthesized sound effects and music (no audio assets, fully original). The context unlocks on the first tap. */
@@ -15,6 +16,8 @@ export class AudioEngine {
   private sfx: GainNode | null = null;
   /** The train running ("たたん・たたん", "ごーっ"), made when the context is. */
   private run: RunSound | null = null;
+  /** A small, soft room (a short reverb) that bells and chimes ring into. */
+  private room: ConvolverNode | null = null;
   private sfxLevel = 1;
   /** Steps through a few notes of G major so the butterfly's bell does not repeat one pitch. */
   private butterflyNote = 0;
@@ -47,6 +50,12 @@ export class AudioEngine {
     this.sfx = ctx.createGain();
     this.sfx.gain.value = this.sfxLevel;
     this.sfx.connect(master);
+    this.room = ctx.createConvolver();
+    this.room.buffer = roomImpulse(ctx);
+    const roomLevel = ctx.createGain();
+    roomLevel.gain.value = 0.6;
+    this.room.connect(roomLevel);
+    roomLevel.connect(this.sfx);
     this.run = new RunSound(ctx, this.sfx);
     if (!withMusic) return;
     this.music = new MusicPlayer(ctx, master);
@@ -95,50 +104,164 @@ export class AudioEngine {
     return this.song;
   }
 
-  /** Stage clear: a short rising fanfare. */
-  playFanfare(): void {
-    const notes: [number, number][] = [
-      [523, 0],
-      [659, 120],
-      [784, 240],
-      [1047, 380],
-    ];
-    for (const [f, delay] of notes) this.tone(f, delay === 380 ? 0.6 : 0.18, 'triangle', 0.18, f, delay / 1000);
-  }
-
-  /** A record found: a sparkly three-note arpeggio. */
-  playRecord(): void {
-    for (const [f, delay] of [
-      [1175, 0],
-      [1568, 90],
-      [2093, 180],
-    ] as [number, number][]) {
-      this.tone(f, 0.35, 'sine', 0.12, f, delay / 1000);
-    }
-  }
-
   /** Sound-effect volume, 0..1 (applies to sounds started from now on and to ones still playing). */
   setSoundVolume(gain: number): void {
     this.sfxLevel = gain;
     if (this.sfx) this.sfx.gain.value = gain;
   }
 
-  /** A two-tone steam-whistle-like chord with a soft attack and a short tail. */
+  // ---- building blocks --------------------------------------------------------------------------------------
+
+  /**
+   * Where one sound goes: straight to the effects bus at `level`, and `wet` of it into the small room (a short,
+   * soft reverb that makes bells and chimes ring). Null before the context exists.
+   */
+  private out(wet = 0, level = 1): AudioNode | null {
+    const ctx = this.ctx;
+    if (!ctx || !this.sfx) return null;
+    const g = ctx.createGain();
+    g.gain.value = level;
+    g.connect(this.sfx);
+    if (wet > 0 && this.room) {
+      const send = ctx.createGain();
+      send.gain.value = wet;
+      g.connect(send);
+      send.connect(this.room);
+    }
+    return g;
+  }
+
+  /**
+   * One enveloped oscillator on the audio clock, `delay` s from now: a short attack to `gain`, then an
+   * exponential tail that is gone after `seconds`.
+   */
+  private ping(
+    freq: number,
+    delay: number,
+    seconds: number,
+    type: OscillatorType,
+    gain: number,
+    endFreq = freq,
+    attack = 0.004,
+    dest: AudioNode | null = this.out(),
+  ): void {
+    const ctx = this.ctx;
+    if (!ctx || !dest) return;
+    const at = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, at);
+    if (endFreq !== freq) osc.frequency.exponentialRampToValueAtTime(endFreq, at + seconds);
+    g.gain.value = 0.0001;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(gain, at + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + seconds);
+    osc.connect(g);
+    g.connect(dest);
+    osc.start(at);
+    osc.stop(at + seconds + 0.05);
+  }
+
+  /**
+   * A burst of filtered noise ("しゅっ", "ぼふっ", "ざっ"): `color` noise through a `filter` at `freq` (sweeping to
+   * `endFreq`), rising to `gain` over `attack` and gone after `seconds`.
+   */
+  private hiss(o: {
+    color?: NoiseColor;
+    delay?: number;
+    seconds: number;
+    gain: number;
+    attack?: number;
+    filter?: BiquadFilterType;
+    freq: number;
+    endFreq?: number;
+    q?: number;
+    dest?: AudioNode | null;
+  }): void {
+    const ctx = this.ctx;
+    const dest = o.dest === undefined ? this.out() : o.dest;
+    if (!ctx || !dest) return;
+    const at = ctx.currentTime + (o.delay ?? 0);
+    const src = noiseSource(ctx, o.color ?? 'white', at);
+    const f = ctx.createBiquadFilter();
+    f.type = o.filter ?? 'bandpass';
+    f.Q.value = o.q ?? 1;
+    f.frequency.setValueAtTime(o.freq, at);
+    if (o.endFreq !== undefined) f.frequency.exponentialRampToValueAtTime(o.endFreq, at + o.seconds);
+    const g = ctx.createGain();
+    g.gain.value = 0.0001;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(o.gain, at + (o.attack ?? 0.005));
+    g.gain.exponentialRampToValueAtTime(0.0001, at + o.seconds);
+    src.connect(f);
+    f.connect(g);
+    g.connect(dest);
+    src.stop(at + o.seconds + 0.05);
+  }
+
+  /** A small music-box bell (like the music's bell voice): a sine and a quiet partial two octaves up. */
+  private bell(freq: number, delay: number, gain: number, ring: number, dest: AudioNode | null = this.out(0.35)): void {
+    this.ping(freq, delay, ring, 'sine', gain, freq, 0.004, dest);
+    this.ping(freq * 4, delay, ring * 0.3, 'sine', gain * 0.2, freq * 4, 0.002, dest);
+    this.ping(freq * 2.76, delay, ring * 0.15, 'sine', gain * 0.1, freq * 2.76, 0.002, dest);
+  }
+
+  /** "こつん": a tiny woodblock — a quick, slightly falling body and an off-key click on top. */
+  private knock(freq: number, delay: number, gain: number, dest: AudioNode | null = this.out(0.1)): void {
+    this.ping(freq, delay, 0.09, 'triangle', gain, freq * 0.9, 0.002, dest);
+    this.ping(freq * 2.76, delay, 0.035, 'sine', gain * 0.35, freq * 2.76, 0.001, dest);
+    this.hiss({ delay, seconds: 0.02, gain: gain * 0.4, freq: freq * 4, q: 2, dest });
+  }
+
+  /** "どすん" (soft): a low sine drop and a puff of low noise. */
+  private thump(freq: number, delay: number, gain: number, seconds = 0.22, dest: AudioNode | null = this.out()): void {
+    this.ping(freq, delay, seconds, 'sine', gain, freq * 0.5, 0.004, dest);
+    this.hiss({ color: 'brown', delay, seconds: seconds * 0.8, gain: gain * 0.9, filter: 'lowpass', freq: 380, q: 0.7, dest });
+  }
+
+  // ---- the effects ------------------------------------------------------------------------------------------
+
+  /** Stage clear: a rising fanfare on bright chords, the last one ringing out. */
+  playFanfare(): void {
+    const out = this.out(0.3);
+    const steps: [number[], number, number][] = [
+      [[523, 659], 0, 0.2],
+      [[659, 784], 0.12, 0.2],
+      [[784, 988], 0.24, 0.2],
+      [[523, 659, 784, 1047], 0.38, 1.1],
+    ];
+    for (const [chord, delay, len] of steps) {
+      for (const f of chord) {
+        this.ping(f, delay, len, 'triangle', 0.1, f, 0.008, out);
+        this.ping(f * 2, delay, len * 0.6, 'sine', 0.03, f * 2, 0.008, out);
+      }
+    }
+    this.hiss({ delay: 0.38, seconds: 0.9, gain: 0.02, filter: 'highpass', freq: 6000, attack: 0.05, dest: out });
+  }
+
+  /** A record found: a sparkly three-note arpeggio with a shimmer. */
+  playRecord(): void {
+    [1175, 1568, 2093].forEach((f, i) => this.bell(f, i * 0.09, 0.1, 0.6));
+    this.hiss({ delay: 0.05, seconds: 0.6, gain: 0.015, filter: 'highpass', freq: 7000, attack: 0.08, dest: this.out(0.4) });
+  }
+
+  /** A two-tone steam-whistle-like chord with a breath of air, a soft attack and a short tail in the room. */
   playWhistle(): void {
     const ctx = this.ctx;
-    if (!ctx) return;
+    const dest = this.out(0.25);
+    if (!ctx || !dest) return;
     const now = ctx.currentTime;
     const master = ctx.createGain();
     master.gain.setValueAtTime(0.0001, now);
-    master.gain.exponentialRampToValueAtTime(0.35, now + 0.06);
-    master.gain.setValueAtTime(0.35, now + 0.55);
+    master.gain.exponentialRampToValueAtTime(0.3, now + 0.06);
+    master.gain.setValueAtTime(0.3, now + 0.55);
     master.gain.exponentialRampToValueAtTime(0.0001, now + 0.95);
-
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(1800, now);
     master.connect(filter);
-    filter.connect(this.sfx ?? ctx.destination);
+    filter.connect(dest);
 
     for (const base of [392, 523]) {
       const osc = ctx.createOscillator();
@@ -157,76 +280,88 @@ export class AudioEngine {
       osc.stop(now + 1.0);
       vibrato.stop(now + 1.0);
     }
+    // The steam: breathy noise around the chord, a little ahead of it.
+    this.hiss({ color: 'pink', seconds: 0.95, gain: 0.05, attack: 0.04, freq: 1300, q: 1.5, dest });
+    this.hiss({ seconds: 0.25, gain: 0.03, attack: 0.01, filter: 'highpass', freq: 3000, dest });
   }
 
-  /** Short helper for one-shot tones, `delay` s from now on the audio clock. */
-  private tone(freq: number, seconds: number, type: OscillatorType, gain = 0.2, endFreq = freq, delay = 0): void {
-    const ctx = this.ctx;
-    if (!ctx) return;
-    const now = ctx.currentTime + delay;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, now);
-    if (endFreq !== freq) osc.frequency.exponentialRampToValueAtTime(endFreq, now + seconds);
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(gain, now + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
-    osc.connect(g);
-    g.connect(this.sfx ?? ctx.destination);
-    osc.start(now);
-    osc.stop(now + seconds + 0.05);
-  }
-
-  /** Stop grade: a rising two-note chime for perfect, one note for ok. */
+  /** Stop grade: a bell for ok; for perfect, two rising bells and a little sparkle. */
   playStop(kind: 'perfect' | 'ok'): void {
-    this.tone(660, 0.18, 'sine', 0.2);
-    if (kind === 'perfect') this.tone(990, 0.3, 'sine', 0.2, 990, 0.14);
+    this.bell(660, 0, 0.16, 0.6);
+    if (kind === 'perfect') {
+      this.bell(990, 0.14, 0.16, 0.9);
+      this.bell(1320, 0.14, 0.06, 0.9);
+      this.hiss({ delay: 0.14, seconds: 0.5, gain: 0.012, filter: 'highpass', freq: 7000, attack: 0.05, dest: this.out(0.4) });
+    }
   }
 
+  /** Doors: "ぷしゅー" of air, the doors gliding, and a soft thud at the end. */
   playDoor(open: boolean): void {
-    this.tone(open ? 300 : 420, 0.25, 'triangle', 0.15, open ? 420 : 300);
+    const o = this.out(0.1, 1.6);
+    this.hiss({ color: 'white', seconds: 0.45, gain: 0.06, attack: 0.02, freq: 2600, endFreq: 1600, q: 0.9, dest: o });
+    this.ping(open ? 300 : 420, 0.05, 0.3, 'triangle', 0.08, open ? 420 : 300, 0.03, o);
+    this.knock(open ? 160 : 190, 0.33, 0.12, o);
   }
 
-  /** Comical "boing" for a fail. */
+  /** Comical "boing" for a fail: a springy drop with a soft landing under it (not scary). */
   playBoing(): void {
-    this.tone(220, 0.45, 'square', 0.12, 110);
+    const o = this.out(0.15, 1.6);
+    this.ping(220, 0, 0.45, 'square', 0.08, 110, 0.006, o);
+    this.ping(440, 0, 0.3, 'triangle', 0.05, 220, 0.004, o);
+    this.thump(120, 0.02, 0.12, 0.25, o);
   }
 
-  /** Brake squeal for the hard brake. */
+  /** The hard brake: a shorter, softer squeal with the hiss of the brakes and a low shudder. */
   playSqueal(): void {
-    this.tone(1800, 0.5, 'sawtooth', 0.05, 900);
+    const o = this.out(0.1, 2);
+    this.ping(1800, 0, 0.5, 'sawtooth', 0.025, 900, 0.02, o);
+    this.ping(2200, 0, 0.45, 'sine', 0.03, 1500, 0.02, o);
+    this.hiss({ color: 'pink', seconds: 0.7, gain: 0.07, attack: 0.02, filter: 'highpass', freq: 2200, dest: o });
+    this.hiss({ color: 'brown', seconds: 0.5, gain: 0.1, filter: 'lowpass', freq: 200, q: 0.7, dest: o });
   }
 
+  /** A card comes up: two soft bells. */
   playCard(): void {
-    this.tone(523, 0.12, 'triangle', 0.15);
-    this.tone(784, 0.2, 'triangle', 0.15, 784, 0.11);
+    this.bell(523, 0, 0.13, 0.5);
+    this.bell(784, 0.11, 0.13, 0.7);
   }
 
-  /** "ぴょん": a quick rising hop. */
+  /** "ぴょん": a quick rising hop with a whoosh of air and a springy body. */
   playJump(): void {
-    this.tone(330, 0.22, 'sine', 0.2, 880);
+    const o = this.out(0.1, 2.2);
+    this.ping(330, 0, 0.22, 'sine', 0.16, 880, 0.004, o);
+    this.ping(180, 0, 0.18, 'triangle', 0.1, 360, 0.004, o);
+    this.hiss({ seconds: 0.35, gain: 0.05, attack: 0.03, freq: 500, endFreq: 1800, q: 0.8, dest: o });
   }
 
-  /** Soft thump on landing. */
+  /** Landing: a soft "どすん" (the running sound adds its "がたん"). */
   playLand(): void {
-    this.tone(160, 0.18, 'triangle', 0.18, 90);
+    const o = this.out(0, 2);
+    this.thump(130, 0, 0.2, 0.26, o);
+    this.ping(160, 0, 0.18, 'triangle', 0.1, 90, 0.004, o);
   }
 
-  /** "ひゅ〜… ぽよん": a slow slide down, then a soft bounce (not scary). */
+  /** "ひゅ〜… ぽよん": a slow slide down with wind, then a soft bounce (not scary). */
   playFall(): void {
-    this.tone(900, 0.8, 'sine', 0.12, 220);
-    this.tone(260, 0.35, 'sine', 0.18, 520, 0.85);
+    this.ping(900, 0, 0.8, 'sine', 0.1, 220, 0.02, this.out(0.15));
+    this.hiss({ seconds: 0.85, gain: 0.05, attack: 0.1, freq: 1800, endFreq: 500, q: 0.8 });
+    this.ping(260, 0.85, 0.35, 'sine', 0.16, 520, 0.004, this.out(0.15));
+    this.thump(110, 0.85, 0.1, 0.2);
   }
 
+  /** The light: a small click and a soft rising (on) or falling (off) glow. */
   playLight(on: boolean): void {
-    this.tone(on ? 1200 : 700, 0.08, 'square', 0.06);
+    const o = this.out(0.3, 2);
+    this.knock(on ? 1400 : 1100, 0, 0.06, o);
+    this.ping(on ? 600 : 900, 0.02, 0.25, 'sine', 0.06, on ? 900 : 600, 0.02, o);
   }
 
   /** "ぴょこん": a grasshopper climbs onto the roof — a short rising tone, then a little wooden knock. */
   playHopperBoard(): void {
-    this.tone(520, 0.12, 'sine', 0.16, 1040);
-    this.knock(700, 0.12, 0.16);
+    const o = this.out(0.2, 1.4);
+    this.ping(520, 0, 0.12, 'sine', 0.14, 1040, 0.004, o);
+    this.knock(700, 0.12, 0.14, o);
+    this.hiss({ delay: 0.1, seconds: 0.06, gain: 0.03, freq: 2500, q: 1.5, dest: o });
   }
 
   /**
@@ -236,7 +371,8 @@ export class AudioEngine {
   playHopperJump(): void {
     this.playJump();
     const ctx = this.ctx;
-    if (!ctx) return;
+    const dest = this.out(0.2);
+    if (!ctx || !dest) return;
     const at = ctx.currentTime + 0.04;
     const len = 0.7;
     const osc = ctx.createOscillator();
@@ -261,7 +397,7 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, at + len);
     osc.connect(lp);
     lp.connect(g);
-    g.connect(this.sfx ?? ctx.destination);
+    g.connect(dest);
     osc.start(at);
     lfo.start(at);
     osc.stop(at + len + 0.05);
@@ -274,16 +410,19 @@ export class AudioEngine {
     this.bell(notes[this.butterflyNote++ % notes.length], 0, 0.06, 0.45);
   }
 
-  /** "ぱあっ": a flower opens — four bells rising, then a soft G major chord. */
+  /** "ぱあっ": a flower opens — four bells rising, a soft G major chord, and a breath of air. */
   playBloom(): void {
-    [784, 988, 1175, 1568].forEach((f, i) => this.bell(f, i * 0.08, 0.1, 0.7));
-    for (const f of [392, 494, 587, 784]) this.ping(f, 0.3, 1.3, 'triangle', 0.05, f, 0.08);
+    [784, 988, 1175, 1568].forEach((f, i) => this.bell(f, i * 0.08, 0.09, 0.8));
+    const pad = this.out(0.4);
+    for (const f of [392, 494, 587, 784]) this.ping(f, 0.3, 1.3, 'triangle', 0.045, f, 0.08, pad);
+    this.hiss({ color: 'pink', delay: 0.25, seconds: 1, gain: 0.025, attack: 0.25, freq: 2500, q: 0.7, dest: pad });
   }
 
-  /** The silk bridge sways (going too fast): a small, soft "びよびよ". The fail itself is playBoing(). */
+  /** The silk bridge sways (going too fast): a small, soft "びよびよ" with a rustle. The fail itself is playBoing(). */
   playSilkShake(): void {
     const ctx = this.ctx;
-    if (!ctx) return;
+    const dest = this.out(0.15);
+    if (!ctx || !dest) return;
     const at = ctx.currentTime;
     const len = 0.5;
     const osc = ctx.createOscillator();
@@ -300,107 +439,124 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(0.08, at + 0.04);
     g.gain.exponentialRampToValueAtTime(0.0001, at + len);
     osc.connect(g);
-    g.connect(this.sfx ?? ctx.destination);
+    g.connect(dest);
     osc.start(at);
     lfo.start(at);
     osc.stop(at + len + 0.05);
     lfo.stop(at + len + 0.05);
+    this.hiss({ color: 'pink', seconds: 0.45, gain: 0.03, attack: 0.05, freq: 3500, q: 1.2 });
   }
 
-  /**
-   * One enveloped oscillator on the audio clock, `delay` s from now: a short attack to `gain`, then an
-   * exponential tail that is gone after `seconds`.
-   */
-  private ping(freq: number, delay: number, seconds: number, type: OscillatorType, gain: number, endFreq = freq, attack = 0.004): void {
-    const ctx = this.ctx;
-    if (!ctx) return;
-    const at = ctx.currentTime + delay;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, at);
-    if (endFreq !== freq) osc.frequency.exponentialRampToValueAtTime(endFreq, at + seconds);
-    g.gain.value = 0.0001;
-    g.gain.setValueAtTime(0.0001, at);
-    g.gain.exponentialRampToValueAtTime(gain, at + attack);
-    g.gain.exponentialRampToValueAtTime(0.0001, at + seconds);
-    osc.connect(g);
-    g.connect(this.sfx ?? ctx.destination);
-    osc.start(at);
-    osc.stop(at + seconds + 0.05);
-  }
-
-  /** A small music-box bell (like the music's bell voice): a sine and a quiet partial two octaves up. */
-  private bell(freq: number, delay: number, gain: number, ring: number): void {
-    this.ping(freq, delay, ring, 'sine', gain);
-    this.ping(freq * 4, delay, ring * 0.3, 'sine', gain * 0.2, freq * 4, 0.002);
-  }
-
-  /** "こつん": a tiny woodblock — a quick, slightly falling body and an off-key click on top. */
-  private knock(freq: number, delay: number, gain: number): void {
-    this.ping(freq, delay, 0.09, 'triangle', gain, freq * 0.9, 0.002);
-    this.ping(freq * 2.76, delay, 0.035, 'sine', gain * 0.35, freq * 2.76, 0.001);
-  }
-
-  /** v1.7: the rocket fires: "ぼぼぼ… しゅごー" (a low rumble rising into a rush). */
+  /** v1.7: the rocket lights: "ぼぼぼ… しゅごー" (low pops, then a rush; the burn itself is in the running sound). */
   playRocket(): void {
-    for (let i = 0; i < 3; i++) this.tone(110 + i * 12, 0.12, 'square', 0.06, 90, i * 0.11);
-    this.tone(260, 1.4, 'sawtooth', 0.05, 900, 0.3);
+    const o = this.out(0.1, 1.5);
+    for (let i = 0; i < 3; i++) {
+      const d = i * 0.11;
+      this.ping(110 + i * 12, d, 0.12, 'square', 0.04, 90, 0.004, o);
+      this.hiss({ color: 'brown', delay: d, seconds: 0.12, gain: 0.16, filter: 'lowpass', freq: 300, q: 0.8, dest: o });
+    }
+    this.hiss({ delay: 0.3, seconds: 1.2, gain: 0.1, attack: 0.15, freq: 400, endFreq: 2400, q: 0.7, dest: o });
+    this.hiss({ color: 'brown', delay: 0.3, seconds: 1.2, gain: 0.18, attack: 0.1, filter: 'lowpass', freq: 180, q: 0.7, dest: o });
   }
 
   /** v1.7: the rocket stops: "ぷしゅっ". */
   playPuff(): void {
-    this.tone(1400, 0.22, 'triangle', 0.08, 300);
+    const o = this.out(0.1, 3);
+    this.hiss({ seconds: 0.3, gain: 0.07, attack: 0.005, freq: 2400, endFreq: 800, q: 0.9, dest: o });
+    this.ping(1400, 0, 0.22, 'triangle', 0.05, 300, 0.004, o);
   }
 
-  /** v1.7: slipping back down a slope: a sliding whistle going down ("ずるずる〜"). */
+  /** v1.7: slipping back down a slope: a sliding whistle going down over a rumble of gravel ("ずるずる〜"). */
   playSlip(): void {
-    this.tone(700, 1.1, 'sine', 0.12, 180);
+    this.ping(700, 0, 1.1, 'sine', 0.1, 180, 0.02, this.out(0.1));
+    for (let i = 0; i < 8; i++) {
+      this.hiss({ color: 'brown', delay: i * 0.13, seconds: 0.16, gain: 0.12 * (1 - i * 0.08), filter: 'lowpass', freq: 420, q: 0.8 });
+    }
   }
 
-  /** v1.7: the volcano sneezes: "ぷしゅーっ… ぽふーん" (soft, not a bang). */
+  /** v1.7: the volcano sneezes: "ぷしゅーっ… ぽふーん" (a swelling hiss, then a soft, round puff — not a bang). */
   playSneeze(): void {
-    this.tone(500, 0.5, 'triangle', 0.08, 1100);
-    this.tone(180, 0.7, 'sine', 0.2, 70, 0.52);
+    this.ping(500, 0, 0.5, 'triangle', 0.06, 1100, 0.02);
+    this.hiss({ color: 'pink', seconds: 0.5, gain: 0.07, attack: 0.35, freq: 800, endFreq: 2200, q: 0.8 });
+    this.ping(180, 0.52, 0.7, 'sine', 0.18, 70, 0.01, this.out(0.2));
+    this.hiss({ color: 'brown', delay: 0.52, seconds: 0.8, gain: 0.2, attack: 0.02, filter: 'lowpass', freq: 260, q: 0.7 });
   }
 
   /** v1.7: the volcano's everyday smoke ring: a small, soft "ぽふっ" (quiet: it comes every few seconds). */
   playVolcanoPuff(): void {
-    this.ping(150, 0, 0.35, 'sine', 0.1, 75, 0.02);
-    this.ping(420, 0.02, 0.18, 'triangle', 0.03, 260, 0.01);
+    this.ping(150, 0, 0.35, 'sine', 0.08, 75, 0.02);
+    this.ping(420, 0.02, 0.18, 'triangle', 0.025, 260, 0.01);
+    this.hiss({ color: 'brown', seconds: 0.4, gain: 0.09, attack: 0.02, filter: 'lowpass', freq: 220, q: 0.7 });
   }
 
-  /** v1.7: a rolling rock about to go: "ぐらぐら" (low wooden rocking, left-right-left-right). */
+  /** v1.7: a rolling rock about to go: "ぐらぐら" (low wooden rocking, left-right-left-right, with a scrape). */
   playRockWobble(): void {
-    [0, 0.13, 0.26, 0.39].forEach((d, i) => this.knock(i % 2 ? 150 : 175, d, 0.14));
+    [0, 0.13, 0.26, 0.39].forEach((d, i) => {
+      this.knock(i % 2 ? 150 : 175, d, 0.13);
+      this.hiss({ color: 'brown', delay: d, seconds: 0.1, gain: 0.08, filter: 'lowpass', freq: 300 });
+    });
   }
 
-  /** v1.7: a rock rolls across the rail for `seconds`: "ごろごろ" (low knocks that fade, at most 2 s). */
+  /** v1.7: a rock rolls across the rail for `seconds`: "ごろごろ" (low knocks over a rumble that fade, at most 2 s). */
   playRockRoll(seconds: number): void {
     const len = Math.min(2, Math.max(0.4, seconds));
-    for (let d = 0, i = 0; d < len; d += 0.11, i++) this.knock([95, 110, 85, 120][i % 4], d, 0.16 * (1 - (0.6 * d) / len));
+    for (let d = 0, i = 0; d < len; d += 0.11, i++) {
+      const fade = 1 - (0.6 * d) / len;
+      this.knock([95, 110, 85, 120][i % 4], d, 0.14 * fade);
+      this.hiss({ color: 'brown', delay: d, seconds: 0.14, gain: 0.1 * fade, filter: 'lowpass', freq: 240, q: 0.7 });
+    }
   }
 
-  /** v1.7: the train bumps a rock: "ぽよん" (the fail boing, an octave higher and rounder). */
+  /** v1.7: the train bumps a rock: "ぽよん" (the fail boing, an octave higher and rounder, with a soft bump). */
   playRockBonk(): void {
-    this.tone(440, 0.4, 'triangle', 0.16, 220);
-    this.tone(330, 0.3, 'sine', 0.12, 520, 0.18);
+    this.ping(440, 0, 0.4, 'triangle', 0.14, 220, 0.004, this.out(0.15));
+    this.ping(330, 0.18, 0.3, 'sine', 0.1, 520, 0.004, this.out(0.15));
+    this.thump(140, 0, 0.12, 0.2);
   }
 
-  /** v1.7: something small lands in the sea: "ぽちゃん" (a water drop: a quick rise, then a little bubble). */
+  /** v1.7: something small lands in the sea: "ぽちゃん" (a splash of water, a quick rise, then a little bubble). */
   playSplash(delay = 0): void {
-    this.ping(500, delay, 0.1, 'sine', 0.16, 1500, 0.003);
-    this.ping(1100, delay + 0.09, 0.16, 'sine', 0.07, 700, 0.003);
+    const wet = this.out(0.3, 2);
+    this.hiss({ delay, seconds: 0.25, gain: 0.06, attack: 0.003, freq: 1800, endFreq: 900, q: 0.8, dest: wet });
+    this.ping(500, delay, 0.1, 'sine', 0.14, 1500, 0.003, wet);
+    this.ping(1100, delay + 0.09, 0.16, 'sine', 0.06, 700, 0.003, wet);
+    this.ping(1500, delay + 0.2, 0.08, 'sine', 0.03, 1900, 0.003, wet);
   }
 
   /** v1.7: the wobbly bridge goes: "がらがら… ぽちゃん" (wooden planks tumbling down, then the splash). */
   playBridgeFall(): void {
-    for (let i = 0; i < 9; i++) this.knock(420 - i * 25 + (i % 2) * 40, i * 0.09, 0.14);
+    for (let i = 0; i < 9; i++) this.knock(420 - i * 25 + (i % 2) * 40, i * 0.09, 0.13);
+    this.hiss({ color: 'brown', seconds: 0.9, gain: 0.12, attack: 0.05, filter: 'lowpass', freq: 350, q: 0.7 });
     this.playSplash(1.1);
   }
 
-  /** v1.7: a seabird takes off: "ぱたぱた" (soft wing flaps, no call). */
+  /** v1.7: a seabird takes off: "ぱたぱた" (soft wing flaps of air, no call). */
   playFlap(): void {
-    for (let i = 0; i < 5; i++) this.ping(260 + (i % 2) * 30, i * 0.075, 0.05, 'triangle', 0.08 * (1 - i * 0.12), 180, 0.004);
+    const o = this.out(0, 2.5);
+    for (let i = 0; i < 5; i++) {
+      const g = 1 - i * 0.12;
+      this.hiss({ color: 'pink', delay: i * 0.075, seconds: 0.06, gain: 0.08 * g, attack: 0.01, freq: 700, q: 0.8, dest: o });
+      this.ping(260 + (i % 2) * 30, i * 0.075, 0.05, 'triangle', 0.04 * g, 180, 0.004, o);
+    }
   }
+}
+
+/** The room's echo: 1.1 s of noise fading out, darker as it fades (made once per context). */
+function roomImpulse(ctx: BaseAudioContext): AudioBuffer {
+  const seconds = 1.1;
+  const length = Math.floor(ctx.sampleRate * seconds);
+  const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
+  const noise = noiseBuffer(ctx, 'white').getChannelData(0);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buffer.getChannelData(ch);
+    let low = 0;
+    for (let i = 0; i < length; i++) {
+      const t = i / length;
+      // Each channel reads the noise from another place, so the echo is wide.
+      const n = noise[(i * 2 + ch * 7919) % noise.length] * 2;
+      low += (n - low) * (0.6 - 0.5 * t);
+      data[i] = low * (1 - t) ** 3 * 0.5;
+    }
+  }
+  return buffer;
 }

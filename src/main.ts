@@ -563,6 +563,7 @@ async function boot(): Promise<void> {
       braking: train.targetSpeed < Math.abs(train.state.speed) - 0.3,
       airborne: train.airborne || train.isFalling,
       surface: runSurface(gimmicks, train.currentRail.id, train.frontS),
+      rocket: train.rocketBurning,
       quiet: false,
     });
     app.dataset.runJoints = String(audio.runStats.joints);

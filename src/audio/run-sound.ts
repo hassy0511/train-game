@@ -17,6 +17,8 @@ export interface RunInput {
   /** The lead bogie is off the rail (a jump): no rail sounds, only the wind. */
   airborne: boolean;
   surface: RunSurface;
+  /** 2-3: the rocket burns ("しゅごーっ" for as long as it lasts). */
+  rocket?: boolean;
   /** Game paused, a card up, or a fade: everything goes quiet. */
   quiet: boolean;
 }
@@ -31,7 +33,7 @@ export const RUN_SOUND = {
   joint: 12,
   bogie: 2.4,
   clack: 0.2,
-  rumble: 0.13,
+  rumble: 0.1,
   rumbleFloor: 0.03,
   roll: 0.05,
   motor: 0.035,
@@ -39,7 +41,8 @@ export const RUN_SOUND = {
   airWind: 0.07,
   brakeHiss: 0.03,
   squeal: 0.012,
-  release: 0.14,
+  release: 0.2,
+  rocket: 0.12,
   /** Seconds to glide to a new level (so a jump or a pause fades rather than clicks). */
   glide: 0.08,
 } as const;
@@ -77,6 +80,7 @@ export class RunSound {
   private readonly hissGain: GainNode;
   private readonly squealOsc: OscillatorNode;
   private readonly squealGain: GainNode;
+  private readonly rocketGain: GainNode;
   /** Metres run on the rail since the last joint. */
   private sinceJoint = RUN_SOUND.joint * 0.5;
   private wasAirborne = false;
@@ -174,6 +178,33 @@ export class RunSound {
     this.squealOsc.connect(this.squealGain);
     this.squealOsc.start(now);
     wobble.start(now);
+
+    // The rocket's roar: a rush of noise over a low rumble, fluttering a little like a flame.
+    this.rocketGain = gain();
+    const flame = ctx.createGain();
+    flame.gain.value = 0.8;
+    flame.connect(this.rocketGain);
+    const flutter = ctx.createOscillator();
+    flutter.frequency.value = 11;
+    const flutterDepth = ctx.createGain();
+    flutterDepth.gain.value = 0.2;
+    flutter.connect(flutterDepth);
+    flutterDepth.connect(flame.gain);
+    flutter.start(now);
+    const rush = ctx.createBiquadFilter();
+    rush.type = 'bandpass';
+    rush.frequency.value = 1100;
+    rush.Q.value = 0.6;
+    rush.connect(flame);
+    noiseSource(ctx, 'pink', now).connect(rush);
+    const roar = ctx.createBiquadFilter();
+    roar.type = 'lowpass';
+    roar.frequency.value = 170;
+    const roarLevel = ctx.createGain();
+    roarLevel.gain.value = 1.6;
+    roar.connect(roarLevel);
+    roarLevel.connect(flame);
+    noiseSource(ctx, 'brown', now).connect(roar);
   }
 
   /** Called every frame with the game's dt (s). */
@@ -215,6 +246,8 @@ export class RunSound {
     const wind = input.quiet ? 0 : R.wind * fast ** 1.3 + (input.airborne ? R.airWind : 0);
     set(this.windGain.gain, wind, 0.15);
     set(this.windFilter.frequency, 500 + 1500 * Math.min(v, 1.4) + (input.airborne ? 400 : 0));
+
+    set(this.rocketGain.gain, input.rocket && !input.quiet ? R.rocket : 0, input.rocket ? 0.12 : 0.3);
 
     const braking = input.braking && onRail && speed > 0.5;
     set(this.hissGain.gain, braking ? R.brakeHiss * (0.4 + 0.6 * Math.min(v, 1)) : 0, 0.1);

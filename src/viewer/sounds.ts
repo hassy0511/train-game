@@ -24,7 +24,7 @@ const button = (label: string, onClick: () => void): HTMLButtonElement => {
 };
 
 // The pretend train: the lever's speed, reached at the game's acceleration; braking at the stop notch's rate.
-const train = { speed: 0, notch: 1, surface: 'rail' as RunSurface, airFor: 0 };
+const train = { speed: 0, notch: 1, surface: 'rail' as RunSurface, airFor: 0, burnFor: 0 };
 const notchRow = $('notches');
 const notchButtons = LEVER_NOTCHES.map((n, i) => {
   const b = button(n.label, () => {
@@ -53,6 +53,11 @@ const surfaceButtons = SURFACE_LABELS.map(([id, label]) => {
   $('surfaces').appendChild(b);
   return b;
 });
+$('burn').addEventListener('click', () => {
+  audio.unlock();
+  audio.playRocket();
+  train.burnFor = 3;
+});
 $('hop').addEventListener('click', () => {
   audio.unlock();
   if (train.speed > 3) train.airFor = 1.6;
@@ -66,12 +71,14 @@ const tick = (now: number): void => {
   if (train.speed < n.speed) train.speed = Math.min(n.speed, train.speed + ACCELERATION * dt);
   else train.speed = Math.max(n.speed, train.speed - n.brake * dt);
   train.airFor = Math.max(0, train.airFor - dt);
+  train.burnFor = Math.max(0, train.burnFor - dt);
   audio.updateRun(dt, {
     speed: train.speed,
     target: n.speed,
     braking: n.speed < train.speed - 0.3,
     airborne: train.airFor > 0,
     surface: train.surface,
+    rocket: train.burnFor > 0,
     quiet: false,
   });
   const kmh = Math.round(train.speed * 3.6);
@@ -118,7 +125,7 @@ function levels(id: string, data: Float32Array): Measure {
   return { id, peak, rms: Math.sqrt(sum / data.length) };
 }
 
-/** Renders each effect (3 s) and the running sound at each surface (4 s at びゅーん) offline. */
+/** Renders each effect (3 s) and the running sound on each surface and with the rocket (4 s at びゅーん) offline. */
 async function measure(): Promise<Measure[]> {
   const out: Measure[] = [];
   for (const s of SOUNDS) {
@@ -128,13 +135,14 @@ async function measure(): Promise<Measure[]> {
     s.play(engine);
     out.push(levels(s.id, (await ctx.startRendering()).getChannelData(0)));
   }
-  for (const [surface] of SURFACE_LABELS) {
+  const runs: [string, RunSurface, boolean][] = [...SURFACE_LABELS.map(([s]): [string, RunSurface, boolean] => [s, s, false]), ['rocket', 'rail', true]];
+  for (const [name, surface, rocket] of runs) {
     const seconds = 4;
     const ctx = new OfflineAudioContext(1, RATE * seconds, RATE);
     const engine = new AudioEngine();
     engine.attach(ctx);
     const step = 1 / 30;
-    const input: RunInput = { speed: RUN_SOUND.full, target: RUN_SOUND.full, braking: false, airborne: false, surface, quiet: false };
+    const input: RunInput = { speed: RUN_SOUND.full, target: RUN_SOUND.full, braking: false, airborne: false, surface, rocket, quiet: false };
     for (let t = step; t < seconds - step; t += step) {
       void ctx.suspend(t).then(() => {
         engine.updateRun(step, input);
@@ -143,7 +151,7 @@ async function measure(): Promise<Measure[]> {
     }
     engine.updateRun(step, input);
     const data = (await ctx.startRendering()).getChannelData(0);
-    out.push({ ...levels(`run-${surface}`, data), joints: engine.runStats.joints } as Measure);
+    out.push({ ...levels(`run-${name}`, data), joints: engine.runStats.joints } as Measure);
   }
   return out;
 }
