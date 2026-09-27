@@ -338,7 +338,7 @@ async function boot(): Promise<void> {
     events.post({ type: 'ability', id: ability });
   };
   for (const ability of abilities) showAbility(ability);
-  window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
+  audio.listenForGestures();
 
   const bubbles = createBubbles(uiEl, PARTNER_NAME);
   const gauge = createStopGauge(uiEl);
@@ -527,6 +527,7 @@ async function boot(): Promise<void> {
     const dt = Math.min((now - last) / 1000, MAX_DT);
     last = now;
     app.dataset.paused = paused ? '1' : '0';
+    app.dataset.audio = audio.state;
     app.dataset.music = audio.musicId ?? '';
     if (paused) {
       // Game time stands still; keep drawing so a resize or the returning view stay right.
