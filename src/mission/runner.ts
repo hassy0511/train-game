@@ -5,6 +5,8 @@ import { LargeDino, makeDino, MidDino, SmallDino, type Dino } from '../actors/di
 import { RollingNut, Squirrel } from '../actors/nut';
 import { Grasshopper } from '../actors/grasshopper';
 import { DroppingRock, ROCK_HIT_AFTER, RollingRock } from '../actors/rock';
+import { Whale } from '../actors/whale';
+import type { DiveSystem } from '../gimmick/dive';
 import type { RocketPress, RocketSystem } from '../gimmick/rocket';
 import type { SlopeSystem, SlopeZone } from '../gimmick/slope';
 import { Countdown, type CountdownView } from './countdown';
@@ -26,9 +28,11 @@ import type {
   StageData,
   StationDef,
 } from '../stage/types';
-import { param } from '../gimmick/zones';
+import { param, zoneAt } from '../gimmick/zones';
 import {
+  BUBBLE_FORK,
   COUNTDOWN,
+  DIVE,
   DOOR_REMIND_SECONDS,
   FALL,
   JUMP,
@@ -89,6 +93,8 @@ export interface MissionPorts extends CutscenePorts {
 export interface MissionSystems {
   rocket: RocketSystem;
   slopes: SlopeSystem;
+  /** v1.10: the jump seat's "もぐる" face and glow (for the partner's "いまだ！ もぐる！"). */
+  dive?: DiveSystem;
 }
 
 export type MissionPhase = 'idle' | 'driving' | 'stopped' | 'doors' | 'cutscene' | 'failing' | 'clear';
@@ -148,7 +154,15 @@ type DefaultLine =
   | 'spurBack'
   | 'diveNear'
   | 'diveBoing'
-  | 'diveBoingAfter';
+  | 'diveBoingAfter'
+  | 'floatHit'
+  | 'floatHitAfter'
+  | 'whaleCall'
+  | 'whaleSang'
+  | 'currentWait'
+  | 'bubbleNear'
+  | 'bubbleTrue'
+  | 'bubbleRevealed';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -211,6 +225,15 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   diveNear: 'みずだ！ もぐるを おして！',
   diveBoing: 'ぽよん！ もぐるの わすれた〜',
   diveBoingAfter: 'ひかったら もぐるを おしてね',
+  // v1.10 (3-1). No default: diveGo, diveReady, floatNear, whaleNear, currentIn (said only when the mission has them).
+  floatHit: 'ぽよん！ ぶつかっちゃった〜',
+  floatHitAfter: 'ひかったら もぐるを おしてね',
+  whaleCall: 'きてきで あいさつ しよう！',
+  whaleSang: 'おへんじ してくれた！',
+  currentWait: 'くじらさんを よんでみよう！',
+  bubbleNear: 'あわが ふたつ！ どっちかな？',
+  bubbleTrue: 'せいかい！ ほんものの あわ！',
+  bubbleRevealed: 'ぐるぐる もよう！ サカサの あわだ',
 };
 
 /**
@@ -225,11 +248,22 @@ const NEED_LINES: Partial<Record<AbilityId, string>> = {
 };
 const NEED_LINE_OTHER = 'いまは まだ いけないみたい…';
 
+/** Car front to car centre (m): a fork is taken when the car centre passes it. */
+const TRAIN_HALF = 6;
+
 /** Lever labels by jump hint, for the partner's "つぎの きれめは ふつう で とべる". */
 const HINT_NOTCH: Record<NonNullable<GapDef['hint']>, number> = { normal: 3, fast: 4, max: 5 };
 
 /** Card titles for newly learned abilities. */
-export const ABILITY_NAMES: Partial<Record<AbilityId, string>> = { jump: 'ジャンプ', light: 'ライト', whistle: 'きてき', rocket: 'ロケット', dive: 'もぐる' };
+export const ABILITY_NAMES: Partial<Record<AbilityId, string>> = {
+  jump: 'ジャンプ',
+  light: 'ライト',
+  whistle: 'きてき',
+  rocket: 'ロケット',
+  dive: 'もぐる',
+  // Chapter 5's ability (not given anywhere yet): 3-1's third record waits for it.
+  magnetLight: 'じしゃくライト',
+};
 
 /**
  * v1.8: the ability a record needs is in use right now (null: nothing needed): the light on, in the air (jump), the
@@ -314,6 +348,24 @@ export class MissionRunner {
   private movingSaid = false;
   /** v1.10: "みずだ！ もぐるを おして！" was said in this mission. */
   private diveNearSaid = false;
+  /** v1.10 (3-1): the first dive and the first glow of "もぐる" in this mission were named. */
+  private diveGoSaid = false;
+  private diveReadySaid = false;
+  private readonly dive: DiveSystem | null;
+  /** v1.10 (3-1): floaters named this try. */
+  private readonly floaterLines = new Set<string>();
+  private readonly whales: Whale[];
+  /** v1.10 (3-1): the current (whale updraft) the train front is in, by gimmick index, or −1. */
+  private inCurrent = -1;
+  /** v1.10 (3-1) bubble forks: pointed out (this mission), coming up (not passed yet), taken the sinking way before. */
+  private readonly bubbleNearSaid = new Set<string>();
+  private readonly bubbleTrueSaid = new Set<string>();
+  private readonly bubbleArmed = new Set<string>();
+  private readonly bubbleWrong = new Set<string>();
+  private readonly bubbleShown = new Set<string>();
+  private bubbleRevealedSaid = false;
+  /** Test hook: the last bubble fork whose sinking swirl the light showed. */
+  bubbleRevealedId = '';
   /** In the 'doors' phase: false while waiting for the door button, true once the doors are open. */
   private doorsOpen = false;
   private hintsFired = new Set<number>();
@@ -340,6 +392,8 @@ export class MissionRunner {
     this.groundY = stage.file.environment.ground?.y ?? null;
     this.rocket = systems?.rocket ?? null;
     this.slopes = systems?.slopes ?? null;
+    this.dive = systems?.dive ?? null;
+    this.whales = stage.actors.filter((a) => a.type === 'whale' && a.onRail).map((a) => new Whale(a, train));
     this.rollingRocks = stage.actors.filter((a) => a.type === 'rock-roll').map((a) => new RollingRock(a, train));
     this.droppingRocks = stage.actors.filter((a) => a.type === 'rock-drop').map((a) => new DroppingRock(a, train));
     this.listenRocketAndSlopes();
@@ -377,7 +431,14 @@ export class MissionRunner {
     // v1.10: "ぽよん" off a floater or the water: a soft fail, back before it.
     train.events.on('waterBounce', (e) => {
       if (this.phase !== 'driving') return;
-      this.finishDrive({ kind: 'fail', reason: 'dive', rewind: e.rewind });
+      // v1.10 (3-1): off a floater it is its own soft fail ("ぶつかっちゃった"); off the water "もぐるの わすれた".
+      this.finishDrive({ kind: 'fail', reason: e.floater ? 'floater' : 'dive', rewind: e.rewind });
+    });
+    // v1.10 (3-1): the first dive of a mission ("わあ… うみの なかだ！").
+    train.events.on('dived', () => {
+      if (this.phase !== 'driving' || this.diveGoSaid) return;
+      this.diveGoSaid = true;
+      if (this.lines.diveGo) this.ports.sayAsync(this.lines.diveGo);
     });
   }
 
@@ -449,6 +510,7 @@ export class MissionRunner {
   get lightHint(): boolean {
     if (this.phase !== 'driving' || this.lightOn) return false;
     if (this.bridges.lightHint(this.lightOn)) return true;
+    if (this.bubbleLightHint) return true;
     for (const id of this.wrongTurns) {
       const j = this.stage.file.junctions.find((x) => x.id === id);
       if (!j || this.revealed.has(j.id)) continue;
@@ -674,6 +736,10 @@ export class MissionRunner {
       this.lines = mission.lines ?? {};
       this.movingSaid = false;
       this.diveNearSaid = false;
+      this.diveGoSaid = false;
+      this.diveReadySaid = false;
+      this.bubbleNearSaid.clear();
+      this.bubbleTrueSaid.clear();
       this.hintsFired.clear();
       this.rocketReadySaid = false;
       this.rocketGoSaid = false;
@@ -741,6 +807,9 @@ export class MissionRunner {
       }
     });
     this.updateGapHints();
+    this.updateWater();
+    this.updateWhales(dt);
+    this.updateBubbleForks();
     this.updatePads(dt);
     this.updateJunctionSigns();
     this.updateRecords();
@@ -1014,6 +1083,10 @@ export class MissionRunner {
       hopper.reset();
     }
     this.train.jumpBoost = null;
+    for (const whale of this.whales) this.events.post({ type: 'whale', id: whale.actor.id, state: whale.reset(target) });
+    this.bubbleArmed.clear();
+    if (this.bubbleShown.size > 0) this.events.post({ type: 'bubbles:reset' });
+    this.bubbleShown.clear();
     this.bridges.reset();
     this.postButterflies();
     this.fragiles.reset();
@@ -1076,8 +1149,129 @@ export class MissionRunner {
       }
     }
     if (this.squirrels.some((s) => s.inWhistleRange)) glow = true;
+    if (this.whales.some((w) => w.callable)) glow = true;
     if (this.hopperFree && this.hoppers.some((h) => h.inWhistleRange)) glow = true;
     this.ports.whistleHint(glow);
+  }
+
+  /**
+   * v1.10 (3-1): the partner names each floater coming up (its own `say`, else floatNear) once per try, and says
+   * diveReady the first time in a mission the "もぐる" button glows. Both only matter now: said at once.
+   */
+  private updateWater(): void {
+    if (!this.abilities.has('dive')) return;
+    for (const f of this.stage.file.floaters ?? []) {
+      if (this.floaterLines.has(f.id)) continue;
+      const d = this.train.distanceAhead(f.railId, f.at);
+      if (d === null || d <= 0 || d > DIVE.hintDistance) continue;
+      this.floaterLines.add(f.id);
+      const text = f.say ?? this.lines.floatNear;
+      if (text) this.ports.sayNow(text);
+    }
+    if (!this.diveReadySaid && this.dive?.glow) {
+      this.diveReadySaid = true;
+      if (this.lines.diveReady) this.ports.sayNow(this.lines.diveReady);
+    }
+  }
+
+  /**
+   * v1.10 (3-1): whales. The partner points one out, asks for the whistle (at once: it is only useful now) and names
+   * its current as the train runs into it (pushing when the whale swims along, waiting for it otherwise).
+   */
+  private updateWhales(dt: number): void {
+    for (const whale of this.whales) {
+      for (const o of whale.update(dt)) {
+        if (o.kind === 'near') {
+          if (this.lines.whaleNear) this.ports.sayAsync(this.lines.whaleNear);
+        } else if (o.kind === 'call') {
+          this.ports.sayNow(this.lines.whaleCall ?? DEFAULT_LINES.whaleCall);
+        } else this.events.post({ type: 'whale', id: whale.actor.id, state: o.state });
+      }
+    }
+    const zone = zoneAt(this.stage.file.gimmicks, 'updraft', this.train.state.railId, this.train.frontS);
+    const index = zone ? this.stage.file.gimmicks.indexOf(zone) : -1;
+    if (index === this.inCurrent) return;
+    this.inCurrent = index;
+    if (!zone || typeof zone.params?.whale !== 'string') return;
+    const key = `current:${index}`;
+    if (this.zoneLines.has(key)) return;
+    this.zoneLines.add(key);
+    if (this.updraftOn(zone)) {
+      if (this.lines.currentIn) this.ports.sayAsync(this.lines.currentIn);
+    } else this.ports.sayNow(this.lines.currentWait ?? DEFAULT_LINES.currentWait);
+  }
+
+  /** v1.10 (3-1): an updraft pushes, unless it belongs to a whale that is not swimming along. */
+  updraftOn(zone: { params?: Record<string, unknown> }): boolean {
+    const id = zone.params?.whale;
+    if (typeof id !== 'string') return true;
+    return this.whales.some((w) => w.actor.id === id && w.following);
+  }
+
+  /** Test hook: every whale's state, "kujira:follow". */
+  get whaleStates(): string {
+    return this.whales.map((w) => `${w.actor.id}:${w.state}`).join(',');
+  }
+
+  /**
+   * v1.10 (3-1) bubble forks: pointed out BUBBLE_FORK.nearDistance m before (once a mission), the light shows the
+   * swirl on the sinking side within LIGHT.revealDistance m (the way is not chosen for the child), and taking the
+   * rising way is "せいかい！" (once a mission per fork). Taking the sinking way is remembered: the light button glows
+   * before that fork after (as after a reversed sign).
+   */
+  private updateBubbleForks(): void {
+    const t = this.train;
+    for (const j of this.stage.file.junctions) {
+      const b = j.bubbles;
+      if (!b) continue;
+      const d = t.distanceAhead(j.railId, j.at);
+      if (d !== null && d > 0 && d <= BUBBLE_FORK.nearDistance) {
+        this.bubbleArmed.add(j.id);
+        if (!this.bubbleNearSaid.has(j.id)) {
+          this.bubbleNearSaid.add(j.id);
+          this.ports.sayAsync(b.say ?? this.lines.bubbleNear ?? DEFAULT_LINES.bubbleNear);
+        }
+        if (this.lightOn && d <= LIGHT.revealDistance && !this.bubbleShown.has(j.id)) {
+          this.bubbleShown.add(j.id);
+          this.bubbleRevealedId = j.id;
+          this.events.post({ type: 'bubbles:reveal', junctionId: j.id });
+          if (!this.bubbleRevealedSaid) {
+            this.bubbleRevealedSaid = true;
+            this.ports.sayAsync(this.lines.bubbleRevealed ?? DEFAULT_LINES.bubbleRevealed);
+          }
+        }
+        continue;
+      }
+      if (!this.bubbleArmed.has(j.id)) continue;
+      // Passed: on along its own rail (the car centre past the fork), or onto the other way.
+      const straight = t.state.railId === j.railId && d !== null && d < -TRAIN_HALF;
+      const turned = t.state.railId !== j.railId && (t.state.railId === j.left || t.state.railId === j.right);
+      if (!straight && !turned) continue;
+      this.bubbleArmed.delete(j.id);
+      if (this.bubbleShown.delete(j.id)) this.events.post({ type: 'bubbles:reset' });
+      const side = j.left === t.state.railId ? 'left' : 'right';
+      if (b[side] === 'sink') {
+        this.bubbleWrong.add(j.id);
+      } else if (!this.bubbleTrueSaid.has(j.id)) {
+        this.bubbleTrueSaid.add(j.id);
+        this.ports.sayAsync(this.lines.bubbleTrue ?? DEFAULT_LINES.bubbleTrue);
+        this.events.post({ type: 'bubbles:true', junctionId: j.id });
+        this.events.post({ type: 'partner:emote', kind: 'cheer' });
+      }
+    }
+  }
+
+  /** v1.10 (3-1): the light button glows for a bubble fork (in the dark, or one that fooled the train before). */
+  private get bubbleLightHint(): boolean {
+    const t = this.train;
+    const dark = zoneAt(this.stage.file.gimmicks, 'fog', t.state.railId, t.frontS) !== null;
+    for (const j of this.stage.file.junctions) {
+      if (!j.bubbles || this.bubbleShown.has(j.id)) continue;
+      const d = t.distanceAhead(j.railId, j.at);
+      if (d === null || d <= 0) continue;
+      if ((dark && d <= BUBBLE_FORK.lightGlow) || (this.bubbleWrong.has(j.id) && d <= BUBBLE_FORK.wrongGlow)) return true;
+    }
+    return false;
   }
 
   /** "つぎの きれめは ふつう で とべる！" once per gap and attempt. */
@@ -1225,6 +1419,12 @@ export class MissionRunner {
 
   private onWhistle(): void {
     if (this.phase !== 'driving') return;
+    for (const whale of this.whales) {
+      if (!whale.onWhistle()) continue;
+      this.events.post({ type: 'whale', id: whale.actor.id, state: 'sing' });
+      this.ports.sayAsync(this.lines.whaleSang ?? DEFAULT_LINES.whaleSang);
+      this.events.post({ type: 'partner:emote', kind: 'jump' });
+    }
     for (const pad of this.pads) {
       const d = this.train.distanceAhead(pad.railId, pad.at);
       if (d === null || d > pad.range || d <= -FALL.bogieLead) continue;
@@ -1375,7 +1575,13 @@ export class MissionRunner {
     const calm = reason === 'spur';
     // The silk, a rock, a slip, the sneeze, "ぽよん" off the water and a dead end are soft: a small dip, no shake.
     const soft =
-      reason === 'fragile' || reason === 'rock' || reason === 'slip' || reason === 'timeUp' || reason === 'dive' || reason === 'deadEnd';
+      reason === 'fragile' ||
+      reason === 'rock' ||
+      reason === 'slip' ||
+      reason === 'timeUp' ||
+      reason === 'dive' ||
+      reason === 'floater' ||
+      reason === 'deadEnd';
     if (!calm) this.ports.cameraFx(scary ? 1 : soft ? 0.3 : 0.5, soft ? 0 : 1);
     const key: DefaultLine = outcome.line ?? FAIL_LINES[reason] ?? (reason as DefaultLine);
     for (const line of (this.lines[key] ?? DEFAULT_LINES[key]).split('\n')) await this.ports.say(line, 'partner');
@@ -1383,6 +1589,7 @@ export class MissionRunner {
     if (reason === 'dino') await this.ports.say(this.lines.dangerAfter ?? DEFAULT_LINES.dangerAfter, 'partner');
     if (reason === 'fragile') await this.ports.say(this.lines.fragileBoingAfter ?? DEFAULT_LINES.fragileBoingAfter, 'partner');
     if (reason === 'dive') await this.ports.say(this.lines.diveBoingAfter ?? DEFAULT_LINES.diveBoingAfter, 'partner');
+    if (reason === 'floater') await this.ports.say(this.lines.floatHitAfter ?? DEFAULT_LINES.floatHitAfter, 'partner');
     if (reason === 'slip') {
       // After an empty gauge: the mission's advice for that ("save them for the slope"); else "press when it glows".
       const after: DefaultLine = outcome.line === 'slipEmpty' ? 'slipEmptyAfter' : 'slipAfter';
@@ -1415,6 +1622,8 @@ export class MissionRunner {
       this.events.post({ type: 'pad', index: pad.index, visible: false });
     }
     this.ports.whistleHint(false);
+    this.floaterLines.clear();
+    this.inCurrent = -1;
     this.gapHints.clear();
     this.signLines.clear();
     this.revealed.clear();
@@ -1548,6 +1757,7 @@ const FAIL_LINES: Partial<Record<FailReason, DefaultLine>> = {
   timeUp: 'timeUp',
   spur: 'spurBack',
   dive: 'diveBoing',
+  floater: 'floatHit',
 };
 const BRIDGE_LINES: Record<NonNullable<BridgeOutcome>['kind'], DefaultLine> = {
   near: 'butterflyNear',

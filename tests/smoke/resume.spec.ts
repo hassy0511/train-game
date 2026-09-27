@@ -350,15 +350,14 @@ test('resume 2-3 mission 3 (the countdown) to the clear: "▶▶" on the ending,
   expect((await saved(page)).resume).toEqual({ stage: '2-3', mission: 2, stops: 4, perfect: 2, found: ['sulfur-crystal'] });
   await page.locator('#card-button').click();
 
-  // Cleared: the resume is forgotten; the title offers the map again (everything is cleared).
+  // Cleared: the resume is forgotten; the title offers the next island (chapter 3's first, 3-1) to go on to.
   await expect(page.locator('#map')).toBeVisible({ timeout: 30_000 });
   const after = await saved(page);
   expect(after.resume).toBeUndefined();
   expect(after.cleared).toContain('2-3');
   await page.goto('/');
   await ready(page, '1-1');
-  await expect(page.locator('#title-continue')).toHaveCount(0);
-  await expect(page.locator('#title-map')).toHaveClass(/is-primary/);
+  await expect(page.locator('#title-continue')).toHaveText('つづきから（うみのそこ）');
   await expect(page.locator('#title-start')).toHaveText('はじめる');
   expect(errors).toEqual([]);
 });
@@ -529,5 +528,35 @@ test('the map asks how to start an island with a saved mission: "つづきから
   await ready(page, '2-1');
   await tapUntil(page, '#card');
   await expect(page.locator('#card')).toContainText('ミッション 2');
+  expect(errors).toEqual([]);
+});
+
+test('resume 3-1 mission 2 at the station on the sea floor: the dome is on already, no "ぽよん", no splash', async ({ page }) => {
+  const errors = watchErrors(page);
+  await seed(page, {
+    cleared: ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3'],
+    abilities: ['whistle', 'jump', 'light', 'rocket'],
+    mapLinks: [...ALL_LINKS, '1-1>3-1'],
+    resume: { stage: '3-1', mission: 1 },
+  });
+  await page.goto('/?stage=3-1&go=1&resume=1');
+  await ready(page, '3-1');
+  const app = page.locator('#app');
+  await tapUntil(page, '#card');
+  await expect(page.locator('#card')).toContainText('くじらの ながれ');
+  // さんごえき (umi 1000) is under water: the train stands there in its dome, the seat is "もぐる", no dive was made.
+  await standsAt(page, 'umi', 1000);
+  await expect(app).toHaveAttribute('data-dive', 'on');
+  await expect(app).toHaveAttribute('data-submerged', '1');
+  await expect(app).toHaveAttribute('data-dives', '0');
+  await expect(page.locator('#cargo')).toHaveAttribute('data-passengers', '2');
+  await page.locator('#card-button').click();
+  await waitDriving(page);
+  await setNotch(page, NORMAL);
+  await waitGame(page, 3);
+  await expect(app).toHaveAttribute('data-dive-bounces', '0');
+  await expect(app).toHaveAttribute('data-underwater', '1');
+  await expect(page.locator('#jump')).toHaveAttribute('data-mode', 'dive');
+  await page.screenshot({ path: resolve(OUT, '94-resume-3-1-m2.png') });
   expect(errors).toEqual([]);
 });

@@ -230,8 +230,10 @@ test('chapter 2 done (its ring seen before): the rail to the gate, the page turn
   await expect(page.locator('.map-dot.is-on')).toHaveAttribute('data-page', '2');
   await expect(page.locator('#map-prev')).toBeVisible();
   await expect(page.locator('#map-next')).toBeHidden();
-  // Chapter 3's islands are "?" until their stages come; chapter 4's too. No "?" island for chapter 5 yet.
-  for (const id of [...CH3, ...CH4]) await expect(page.locator(`.map-island[data-island="${id}"]`)).toHaveClass(/is-unknown/);
+  // 3-1 (its stage is there) is open, the next island to play; the rest of chapter 3 and chapter 4 are "?" until
+  // their stages come. No "?" island for chapter 5 yet.
+  await expect(page.locator('.map-island[data-island="3-1"]')).toHaveClass(/is-next/);
+  for (const id of [...CH3.slice(1), ...CH4]) await expect(page.locator(`.map-island[data-island="${id}"]`)).toHaveClass(/is-unknown/);
   await expect(page.locator('.map-island.is-teaser')).toHaveCount(0);
   await page.waitForTimeout(400);
   await page.screenshot({ path: resolve(OUT, 'map-page2.png') });
@@ -242,8 +244,10 @@ test('chapter 2 done (its ring seen before): the rail to the gate, the page turn
   await expect(page.locator('#map-page-title')).toHaveText('1しょう・2しょう');
   await expect(page.locator('#map-prev')).toBeHidden();
   await expect(page.locator('#map-next')).toBeVisible();
+  // 3-1, the next island, is over on page 2: ▶ beckons (it bobs, so the clicks on it are forced).
+  await expect(page.locator('#map-next')).toHaveClass(/is-beckon/);
   await page.screenshot({ path: resolve(OUT, 'map-page1-with-gate.png') });
-  await page.locator('#map-next').click();
+  await page.locator('#map-next').click({ force: true });
   await turned(page, 2);
   await page.locator('.map-gate[data-gate="enter"]').click();
   await turned(page, 1);
@@ -270,18 +274,18 @@ test('chapter 2 done (its ring seen before): the rail to the gate, the page turn
   await turned(page, 1);
   await page.locator('.map-island[data-island="2-1"]').click();
   await expect(page.locator('.map-choose')).toBeVisible();
-  await page.locator('#map-next').click();
+  await page.locator('#map-next').click({ force: true });
   await expect(page.locator('.map-choose')).toHaveCount(0);
   await turned(page, 2);
 
-  // Once only: opened again, nothing grows; it opens on page 1 (the highest cleared island is there).
+  // Once only: opened again, nothing grows; it opens on page 2 (§3.5: the next island, 3-1, is there).
   await page.locator('#map-close').click();
   await openMap(page);
-  await expect(map).toHaveAttribute('data-page', '1');
+  await expect(map).toHaveAttribute('data-page', '2');
   await expect(map).not.toHaveAttribute('data-growing', /.+/);
-  await expect(page.locator(`[data-link="${GATE}"]`)).toHaveClass(/is-laid/);
-  await expect(page.locator(`[data-link="${GATE}"]`)).not.toHaveClass(/is-growing/);
-  await expect(page.locator('#map-next')).toBeVisible();
+  await expect(page.locator(`[data-link-enter="${GATE}"]`)).toHaveClass(/is-laid/);
+  await expect(page.locator(`[data-link-enter="${GATE}"]`)).not.toHaveClass(/is-growing/);
+  await expect(page.locator('#map-prev')).toBeVisible();
   expect(errors).toEqual([]);
 });
 

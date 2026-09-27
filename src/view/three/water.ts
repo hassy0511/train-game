@@ -1,4 +1,5 @@
 import {
+  AdditiveBlending,
   BoxGeometry,
   BufferGeometry,
   CanvasTexture,
@@ -12,10 +13,12 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   MeshLambertMaterial,
   Object3D,
   Path,
   PerspectiveCamera,
+  PlaneGeometry,
   Points,
   PointsMaterial,
   Quaternion,
@@ -52,6 +55,10 @@ const DOME_OUT = 0.25;
 /** Bubbles drifting round the camera under water: how many, in a cube this many metres across. */
 const MOTES = 200;
 const MOTE_SPAN = 30;
+/** Shafts of light slanting down from the surface round the camera under water (PHASE8 part 2 §2.7). */
+const SHAFTS = 8;
+const SHAFT_LENGTH = 26;
+
 /** The pond wall and floor get a little darker than the floor colour. */
 const WALL_SHADE = 0.8;
 
@@ -196,8 +203,11 @@ export class WaterLayer {
   private readonly surfaceMaterial: MeshLambertMaterial;
   private readonly surfaceColor: Color;
   private readonly ceilingColor = new Color(CEILING_COLOR);
+  private readonly ceilingGlow = new Color('#6fb6d8');
+  private readonly noGlow = new Color('#000000');
   private readonly things: Mesh | null = null;
   private readonly motes: Points;
+  private readonly shafts: InstancedMesh;
   private readonly dome: InstancedMesh;
   private readonly domeMaterial: ShaderMaterial;
   /** 0 = gone … 1 = full; `domeWant` is where it is going. */
@@ -306,6 +316,18 @@ export class WaterLayer {
     this.motes.visible = false;
     this.motes.frustumCulled = false;
     this.group.add(this.motes);
+    // Light shafts: long soft planes, brightest at the top, added to the picture (one batch).
+    const shaft = new PlaneGeometry(2.6, SHAFT_LENGTH);
+    shaft.translate(0, -SHAFT_LENGTH / 2, 0);
+    this.shafts = new InstancedMesh(
+      shaft,
+      new MeshBasicMaterial({ map: shaftTexture(), transparent: true, opacity: 0.22, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false }),
+      SHAFTS,
+    );
+    this.shafts.name = 'water-shafts';
+    this.shafts.visible = false;
+    this.shafts.frustumCulled = false;
+    this.group.add(this.shafts);
     // The bubble dome: one stretched sphere per car, drawn together; a light rim, nearly clear in the middle.
     this.domeMaterial = new ShaderMaterial({
       uniforms: { opacity: { value: 1 } },
@@ -401,15 +423,33 @@ export class WaterLayer {
     const under = this.under !== null;
     this.surfaceMaterial.color.copy(under ? this.ceilingColor : this.surfaceColor);
     this.surfaceMaterial.opacity = under ? 0.7 : 0.78;
+    // Seen from below the surface faces away from the sun: it glows a little itself, a bright ceiling (not a dark lid).
+    this.surfaceMaterial.emissive.copy(under ? this.ceilingGlow : this.noGlow);
     this.motes.visible = under;
     if (under) {
       // The cube of bubbles follows the camera in whole steps, drifting up slowly.
       const step = MOTE_SPAN / 3;
       this.motes.position.set(Math.round(p.x / step) * step, Math.round(p.y / step) * step + ((this.time * 0.4) % step), Math.round(p.z / step) * step);
     }
+    this.shafts.visible = under;
+    if (under && this.under) this.placeShafts(p, this.under.water);
     if (this.things) this.things.position.y = Math.sin(this.time * 1.3) * 0.08;
     this.updateDome(dt, cars);
     return under;
+  }
+
+  /** The shafts stand round the camera in a loose ring, tilted a little, from the surface down, swaying slowly. */
+  private placeShafts(camera: Vector3, water: WaterDef): void {
+    for (let i = 0; i < SHAFTS; i++) {
+      const a = (i / SHAFTS) * Math.PI * 2 + i * 0.7;
+      const r = 7 + 14 * hash(i * 5 + 1);
+      this.v.set(camera.x + Math.cos(a) * r, water.y - 0.2, camera.z + Math.sin(a) * r);
+      this.q.setFromEuler(new Euler(0.22 + Math.sin(this.time * 0.3 + i) * 0.04, a * 0.5 + i, 0.18, 'YXZ'));
+      this.s.set(0.7 + hash(i * 3) * 0.8, 1, 1);
+      this.m.compose(this.v, this.q, this.s);
+      this.shafts.setMatrixAt(i, this.m);
+    }
+    this.shafts.instanceMatrix.needsUpdate = true;
   }
 
   private updateDome(dt: number, cars: Object3D[]): void {
@@ -443,6 +483,26 @@ function stripTo(g: BufferGeometry, names: string[]): BufferGeometry {
   if (out !== g) g.dispose();
   for (const name of Object.keys(out.attributes)) if (!names.includes(name)) out.deleteAttribute(name);
   return out;
+}
+
+/** A light shaft's picture: white fading down its length and out to its sides (drawn once). */
+function shaftTexture(): CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 32;
+  canvas.height = 128;
+  const g = canvas.getContext('2d');
+  if (!g) return null;
+  for (let y = 0; y < 128; y++) {
+    const down = 1 - y / 128;
+    const grad = g.createLinearGradient(0, 0, 32, 0);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.5, `rgba(235,250,255,${(down * down).toFixed(3)})`);
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, y, 32, 1);
+  }
+  return new CanvasTexture(canvas);
 }
 
 /** A small round bubble (a light ring with a bright spot) for the drifting bubbles, drawn once. */

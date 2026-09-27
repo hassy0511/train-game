@@ -83,12 +83,14 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
     const c = st.card;
     if (!isObject(c) || !isString(c.title) || !isString(c.button)) fail(`${where}: card needs title and button`);
     if (c.icon !== undefined && c.icon !== 'badge') fail(`${where}: card icon`);
+    if (c.mirror !== undefined && typeof c.mirror !== 'boolean') fail(`${where}: card mirror must be true or false`);
   } else if ('camera' in st) {
     if (st.camera === 'fixed') {
       if (!isVec3(st.at) || !isVec3(st.lookAt)) fail(`${where}: a fixed camera needs "at" and "lookAt" [x, y, z]`);
     } else if (!['cab', 'chase', 'side', 'top'].includes(String(st.camera))) fail(`${where}: camera`);
   } else if ('fx' in st) {
-    if (st.fx !== 'sneeze') fail(`${where}: fx must be "sneeze"`);
+    if (st.fx !== 'sneeze' && st.fx !== 'pop') fail(`${where}: fx must be "sneeze" or "pop"`);
+    if (st.id !== undefined && (st.fx !== 'pop' || !isString(st.id))) fail(`${where}: only fx "pop" takes an "id" (a cutscene figure)`);
   } else if ('caption' in st) {
     if (!isString(st.caption)) fail(`${where}: "caption" must be text`);
     if (st.seconds !== undefined && !isNumber(st.seconds)) fail(`${where}: "seconds" must be a number`);
@@ -211,6 +213,24 @@ export function validateStageFile(raw: unknown): StageFile {
       if (j.dive && (j.needs !== undefined || j.signReversed === true)) fail(`junction "${j.id}": a dive fork has no sign (no "needs", no "signReversed")`);
       if (j.dive && (j.left === undefined || j.right === undefined)) fail(`junction "${j.id}": a dive fork needs both left and right`);
     }
+    if (j.bubbles !== undefined) {
+      // v1.10 (3-1): a bubble fork: one way rises (the true one), the other sinks.
+      const b = j.bubbles;
+      const kinds = ['rise', 'sink'];
+      if (!isObject(b) || !kinds.includes(String(b.left)) || !kinds.includes(String(b.right)) || b.left === b.right) {
+        fail(`junction "${j.id}": bubbles needs left and right, one "rise" and one "sink"`);
+      }
+      if (b.say !== undefined && !isString(b.say)) fail(`junction "${j.id}": bubbles.say must be text`);
+      if (j.left === undefined || j.right === undefined) fail(`junction "${j.id}": a bubble fork needs both left and right`);
+      if (j.dive === true || j.needs !== undefined || j.signReversed === true) fail(`junction "${j.id}": a bubble fork has no dive, needs or signReversed`);
+      // The sinking side must lead back before the fork (a loop) or end: a wrong guess never gets the train further.
+      const sinkRail = (rails as Record<string, unknown>[]).find((r) => r.id === j[b.left === 'sink' ? 'left' : 'right']);
+      const end = sinkRail?.end as Record<string, unknown> | undefined;
+      const loops = end?.type === 'merge' && end.railId === j.railId && isNumber(end.at) && end.at < (j.at as number);
+      if (!sinkRail || sinkRail.id === j.railId || !(loops || sinkRail.deadEnd === true)) {
+        fail(`junction "${j.id}": the sinking side must be a loop back before the fork or a dead end`);
+      }
+    }
     if (j.needs !== undefined) {
       if (!ABILITIES.includes(String(j.needs))) fail(`junction "${j.id}": "needs" must be an ability`);
       const other = j.default === 'left' ? 'right' : 'left';
@@ -253,6 +273,14 @@ export function validateStageFile(raw: unknown): StageFile {
         fail(`actor "${a.id}": rewind must be a place on its rail (a number) or { railId, at }`);
       }
       for (const k of ['say', 'hitAfter']) if (ap[k] !== undefined && !isString(ap[k])) fail(`actor "${a.id}": "${k}" must be text`);
+    }
+    if (a.type === 'whale') {
+      // v1.10 (3-1): a whale greeted by the whistle, swimming along until `until`.
+      if (!isObject(a.onRail)) fail(`actor "${a.id}": a whale is placed with onRail`);
+      if (a.reactsTo !== 'whistle') fail(`actor "${a.id}": a whale reacts to the whistle`);
+      if (!isNumber(ap.until) || ap.until <= (a.onRail as Record<string, number>).at) fail(`actor "${a.id}": params.until must be after the whale`);
+      for (const k of ['callRange', 'lead', 'trail']) if (ap[k] !== undefined && !(isNumber(ap[k]) && (ap[k] as number) > 0)) fail(`actor "${a.id}": params.${k} must be > 0`);
+      for (const k of ['lateral', 'height']) if (ap[k] !== undefined && !isNumber(ap[k])) fail(`actor "${a.id}": params.${k} must be a number`);
     }
   }
 
@@ -362,6 +390,16 @@ export function validateStageFile(raw: unknown): StageFile {
       // v1.9: what the track sounds like on this stretch (the running sound; v1.10 adds ice, snow and tunnel).
       fail(`gimmicks[${i}] sound: params.surface must be one of ${RUN_SURFACES.join(', ')}`);
     }
+    if (g.type === 'updraft') {
+      // v1.10 (3-1): a current (bubble rings) that belongs to a whale.
+      if (p.look !== undefined && p.look !== 'wind' && p.look !== 'current') fail(`gimmicks[${i}] updraft: params.look must be wind or current`);
+      if (p.whale !== undefined && !(raw.actors as Record<string, unknown>[]).some((a) => a.id === p.whale && a.type === 'whale')) {
+        fail(`gimmicks[${i}] updraft: params.whale must be the id of a whale actor`);
+      }
+      if (p.speed !== undefined && !(isNumber(p.speed) && p.speed > 0)) fail(`gimmicks[${i}] updraft: params.speed must be > 0`);
+    }
+    if (g.type === 'jump-pad' && p.look !== undefined && p.look !== 'pad' && p.look !== 'whale') fail(`gimmicks[${i}] jump-pad: params.look must be pad or whale`);
+    if (g.type === 'fog' && p.color !== undefined && !(typeof p.color === 'string' && COLOR.test(p.color))) fail(`gimmicks[${i}] fog: params.color must be #rrggbb`);
     if (g.type === 'camera' && !['cab', 'chase', 'side', 'top'].includes(String((g.params as Record<string, unknown> | undefined)?.mode))) {
       fail(`gimmicks[${i}] camera: params.mode must be cab, chase, side or top`);
     }
@@ -381,6 +419,7 @@ export function validateStageFile(raw: unknown): StageFile {
       if (rw !== undefined && !isNumber(rw) && !(isObject(rw) && isString(rw.railId) && railIds.has(rw.railId) && isNumber(rw.at))) {
         fail(`floater "${f.id}": rewind must be a place on its rail (a number) or { railId, at }`);
       }
+      if (f.say !== undefined && !isString(f.say)) fail(`floater "${f.id}": "say" must be text`);
     }
   }
 

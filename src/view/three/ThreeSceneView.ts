@@ -37,6 +37,7 @@ import { ModelLibrary } from './models';
 import { addModelPlacements, addProps } from './props';
 import { buildDetachedRailPiece, buildRailScene, buildTrack, type TrackLook, type TrackLooks } from './rail-mesh';
 import { WaterLayer } from './water';
+import { SeaGimmicks } from './sea';
 
 /** The camera draws this far past the stage fog's far end (m). */
 const FOG_CULL_MARGIN = 40;
@@ -123,6 +124,10 @@ export class ThreeSceneView implements SceneView {
   private orbitTime = 0;
   /** v1.10: the stage's water (null without any). */
   private water: WaterLayer | null = null;
+  /** v1.10 (3-1): whales, currents, bubble forks (null on a stage without them). */
+  private sea: SeaGimmicks | null = null;
+  private readonly underColor = new Color();
+  private readonly zoneTint = new Color();
   /** v1.10: what the scene looked like above water, while the camera is under it. */
   private aboveWater: { background: Color | null; fog: Fog | null; fogColor: Color | null } | null = null;
 
@@ -199,6 +204,10 @@ export class ThreeSceneView implements SceneView {
       this.water = new WaterLayer(stage);
       this.scene.add(this.water.group);
     }
+    if (SeaGimmicks.wanted(stage)) {
+      this.sea = new SeaGimmicks(stage, this.train, (id) => this.actors?.positionOf(id) ?? null);
+      this.scene.add(this.sea.group);
+    }
     // Tagged props stay separate so a cutscene can drop them (the old bridge's girders).
     for (const prop of stage.props) {
       if (!prop.tag) continue;
@@ -232,6 +241,7 @@ export class ThreeSceneView implements SceneView {
       this.forest.init(this.models),
       this.meadow.init(this.models),
       this.volcano.init(this.models),
+      this.sea?.init(this.models),
     ]);
     // The train, cars and partner only ever move as a whole (door bands, the light beam and the jump unit are
     // objects of their own), so each draws baked, in one call.
@@ -310,6 +320,7 @@ export class ThreeSceneView implements SceneView {
     this.forest?.onEvent(event);
     this.meadow?.onEvent(event);
     this.volcano?.onEvent(event);
+    this.sea?.onEvent(event);
     if (event.type === 'ability' && event.id === 'rocket') void this.volcano?.addRocketUnit(this.models);
     if (event.type === 'rocket') this.fovTarget = event.state === 'burn' && !this.calm ? ROCKET_FOV : 0;
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
@@ -538,6 +549,7 @@ export class ThreeSceneView implements SceneView {
     this.forest?.update(dt);
     this.meadow?.update(dt, cab);
     this.volcano?.update(dt);
+    this.sea?.update(dt);
     this.updateFalling(dt);
     // A little wider view while the rocket burns (not a shake).
     const fov = this.fovBoost + (this.fovTarget - this.fovBoost) * Math.min(1, dt * 4);
@@ -590,11 +602,15 @@ export class ThreeSceneView implements SceneView {
         if (this.sky) this.sky.visible = false;
       }
       const fog = this.scene.fog as Fog;
-      fog.color.set(look.color);
+      // v1.10 (3-1): a fog stretch with its own colour (the deep place) darkens the water to it and pulls the reach
+      // in (the light lets it out again), easing as the stretch's own fog does.
+      const mist = this.sky3?.zoneColor ? (this.sky3.mist > 0.01 ? this.sky3.mist : 0) : 0;
+      const color = mist > 0 && this.sky3?.zoneColor ? this.underColor.set(look.color).lerp(this.zoneTint.set(this.sky3.zoneColor), Math.min(1, mist)) : this.underColor.set(look.color);
+      fog.color.copy(color);
       fog.near = 1;
-      fog.far = look.far;
-      if (this.scene.background instanceof Color) this.scene.background.set(look.color);
-      else this.scene.background = new Color(look.color);
+      fog.far = mist > 0 ? Math.min(look.far, Math.max(4, this.sky3?.fogReach ?? look.far)) : look.far;
+      if (this.scene.background instanceof Color) this.scene.background.copy(color);
+      else this.scene.background = color.clone();
     } else if (this.aboveWater) {
       const was = this.aboveWater;
       this.aboveWater = null;

@@ -3017,3 +3017,66 @@ body {
     opacity: 0;
   }
 }
+
+/* v1.10 (3-1): a bubble fork's arrows carry their column's bubbles (rising white / sinking pink) in a round badge
+   on the arrow's lower corner (the ability disc keeps the upper one). */
+.arrow-bubbles:empty {
+  display: none;
+}
+
+.arrow-bubbles {
+  position: absolute;
+  bottom: -16px;
+  right: -12px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #eaf8ff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.arrow[data-bubbles='sink'] .arrow-bubbles {
+  background: #fff0f8;
+}
+
+.arrow-bubbles svg {
+  width: 38px;
+  height: 38px;
+}
+
+/* v1.10 (3-1): Sakasa's note (card mirror): a small sheet of paper with the title written mirror-wise and a pink swirl
+   in its corner, on the usual dim backdrop. */
+.card.is-mirror h1 {
+  position: relative;
+  min-width: 300px;
+  padding: 44px 64px 52px;
+  border-radius: 10px;
+  background: #fff8e6;
+  color: #5a4a3a;
+  font-size: 64px;
+  letter-spacing: 0.12em;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  transform: scaleX(-1) rotate(-2deg);
+}
+
+.card.is-mirror .card-swirl {
+  order: 1;
+  width: 64px;
+  height: 64px;
+  margin-top: -84px;
+  margin-left: 250px;
+  position: relative;
+  z-index: 1;
+}
+
+.card.is-mirror h1 {
+  order: 0;
+}
+
+.card.is-mirror .big-button {
+  order: 2;
+}

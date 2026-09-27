@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * The picture book from the title (docs/PHASE7_FINISH.md §4 item 2), from a prepared save: one row per island,
- * 「みつけた n/18」, the pictures of found records, "?" cards with the grey picture of the ability they still need,
+ * 「みつけた n/21」, the pictures of found records, "?" cards with the grey picture of the ability they still need,
  * and 「とじる」 in sight at the bottom however far down the child has scrolled.
  */
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), 'output');
@@ -73,8 +73,8 @@ test('picture book: rows per island, count, pictures, grey ability pictures, clo
     mapLinks: CHAIN,
   });
   await openZukan(page);
-  await expect(page.locator('#zukan-count')).toHaveText('みつけた 6/18');
-  await expect(page.locator('.zukan-row')).toHaveCount(6);
+  await expect(page.locator('#zukan-count')).toHaveText('みつけた 6/21');
+  await expect(page.locator('.zukan-row')).toHaveCount(7);
   await expect(page.locator('.zukan-row[data-stage="1-1"] .zukan-row-count')).toHaveText('2/3');
   await expect(page.locator('.zukan-card.is-found')).toHaveCount(6);
   // Needs the rocket (not learned): grey rocket picture. The balloon needs the jump, which the child has: plain "?".
@@ -86,6 +86,10 @@ test('picture book: rows per island, count, pictures, grey ability pictures, clo
   // Later chapters' abilities: dive, reverse.
   await expect(page.locator('.zukan-card[data-record="mizutamari"] .zukan-later[data-ability="dive"]')).toHaveCount(1);
   await expect(page.locator('.zukan-card[data-record="upside-island"] .zukan-later[data-ability="reverse"]')).toHaveCount(1);
+  // 3-1: the sea pearl needs the dive, the iron star the magnet light (chapter 4).
+  await expect(page.locator('.zukan-card[data-record="sea-pearl"] .zukan-later[data-ability="dive"]')).toHaveCount(1);
+  await expect(page.locator('.zukan-card[data-record="iron-star"] .zukan-later[data-ability="magnetLight"]')).toHaveCount(1);
+  await expect(page.locator('.zukan-card[data-record="iron-star"] .zukan-later svg')).toHaveCount(1);
   // The book is taller than the screen; 「とじる」 is in sight before any scrolling.
   const tall = await page.locator('#zukan').evaluate((e) => e.scrollHeight > e.clientHeight);
   expect(tall).toBe(true);
@@ -115,7 +119,7 @@ test('picture book with the rocket: the rocket "?" loses its grey picture, a fou
     mapLinks: [...CHAIN, '2-1>2-2', '2-2>2-3'],
   });
   await openZukan(page);
-  await expect(page.locator('#zukan-count')).toHaveText('みつけた 2/18');
+  await expect(page.locator('#zukan-count')).toHaveText('みつけた 2/21');
   await expect(page.locator('.zukan-card[data-record="treetop"] .zukan-later')).toHaveCount(0);
   await expect(page.locator('.zukan-card[data-record="treetop"] .zukan-mark')).toHaveText('？');
   await expect(page.locator('.zukan-card[data-record="cliff-nest"] .zukan-name')).toHaveText('がけの うえの す');

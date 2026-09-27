@@ -10,8 +10,8 @@
     "fog": { "color": "#dff0f6", "near": 200, "far": 620 },
     "lighting": "day",
     "ground": { "y": 0, "size": 3200, "color": "#3d9ad6" },
+    "water": [{ "y": 0, "floor": -14, "look": "sea" }],
     "bgm": "volcano",
-    "ambience": "sea",
     "fall": "cloud"
   },
   "start": { "railId": "main", "at": 45, "direction": 1 },
@@ -107,9 +107,26 @@
       ],
       "base": { "look": "rock", "toGround": true, "skip": [{ "from": 158, "to": 190 }, { "from": 390, "to": 1055.27 }] },
       "end": { "type": "buffer" }
+    },
+    {
+      "id": "umi",
+      "points": [
+        [-181.81, 5.61, -330.13], [-184.46, 5.61, -325.89], [-187.52, 5.61, -321.94], [-190.96, 5.55, -318.31], [-194.74, 5.22, -315.06],
+        [-198.81, 4.79, -312.2], [-203.15, 4.35, -309.76], [-207.72, 3.92, -307.77], [-217.25, 3.05, -304.87], [-226.83, 2.18, -302.15],
+        [-236.41, 1.31, -299.44], [-246, 0.51, -296.72], [-255.62, 0.4, -293.99], [-265.24, 0.4, -291.26], [-274.86, 0.4, -288.53],
+        [-284.48, 0.4, -285.8], [-294.1, 0.4, -283.07], [-303.72, 0.4, -280.34], [-313.34, 0.4, -277.61], [-322.97, 0.4, -274.88],
+        [-332.59, 0.4, -272.16], [-342.21, 0.4, -269.43], [-351.83, 0.4, -266.7], [-361.45, 0.4, -263.97], [-371.07, 0.4, -261.24],
+        [-375.18, 0.4, -260.08]
+      ],
+      "base": { "look": "rock", "toGround": true, "skip": [{ "from": 65, "to": 209.27 }] },
+      "end": { "type": "buffer" },
+      "spur": { "back": { "railId": "main", "at": 210 } }
     }
   ],
-  "junctions": [{ "id": "j-miharashi", "railId": "main", "at": 1185, "left": "miharashi", "right": "main", "default": "right" }],
+  "junctions": [
+    { "id": "j-miharashi", "railId": "main", "at": 1185, "left": "miharashi", "right": "main", "default": "right" },
+    { "id": "to-umi", "railId": "main", "at": 200, "left": "main", "right": "umi", "default": "left", "needs": "dive" }
+  ],
   "stations": [
     { "id": "minato", "name": "みなとえき", "railId": "main", "at": 45, "platformSide": "left" },
     { "id": "nakayama", "name": "なかやまえき", "railId": "main", "at": 820, "platformSide": "right" },
@@ -243,8 +260,9 @@
       "name": "うみの そこの あわ いずみ",
       "note": "うみの なかから あわが… もぐれたら いけるかも",
       "requires": "dive",
-      "model": "cloud-crystal",
-      "position": [-390, -12, 170]
+      "model": "spring-vent",
+      "hint": "うみの そこで あわが… もぐって みよう！",
+      "onRail": { "railId": "umi", "at": 170, "lateral": 6, "heightFromRail": -14.4 }
     }
   ],
   "missions": [
@@ -267,7 +285,7 @@
         "stationNear": "なかやまえきだ。ゆっくり！",
         "complete": "のぼれた！ ロケット すごいね！"
       },
-      "hints": [{ "railId": "main", "at": 335, "text": "わあ、うみが みえる！" }]
+      "hints": [{ "railId": "main", "at": 145, "text": "うみの なかから あわが… なんだろう？" }, { "railId": "main", "at": 335, "text": "わあ、うみが みえる！" }]
     },
     {
       "id": "m2",
@@ -319,7 +337,6 @@
       },
       "hints": [
         { "railId": "kudari", "at": 160, "text": "したに さっきの せんろ！" },
-        { "railId": "kudari", "at": 300, "text": "うみの なかから あわが… なんだろう？" },
         { "railId": "kudari", "at": 335, "text": "かんそくじょえきだ。ゆっくり！" },
         { "railId": "kudari", "at": 915, "text": "みさきえきだ！ ゆっくり！" }
       ]
@@ -353,11 +370,10 @@
       "params": { "allow": false, "icon": "sleep", "line": "しーっ… とりが ねてるよ", "pressLine": "しーっ… ロケットは おやすみ" }
     },
     { "type": "rocket", "railId": "kudari", "from": 740, "to": 885, "params": { "allow": false, "icon": "bridge", "line": "ぐらぐらばし！ ロケットは だめ" } },
-    { "type": "sound", "railId": "kudari", "from": 745, "to": 885, "params": { "surface": "wood" } },
     { "type": "rocket", "railId": "kudari", "from": 640, "to": 690, "params": { "glow": true, "line": "まっすぐだ！ ロケットで いそげ！" } },
     { "type": "camera", "railId": "main", "from": 230, "to": 345, "params": { "mode": "chase" } },
     { "type": "fog", "railId": "miharashi", "from": 78, "to": 118, "params": { "near": 2, "far": 22, "lightFar": 70 } },
-    { "type": "bubbles", "params": { "position": [-390, 0, 170], "count": 14, "height": 8, "radius": 2.5 } },
+    { "type": "bubbles", "params": { "position": [-339, -13.5, -276.6], "count": 24, "height": 13.5, "radius": 2 } },
     { "type": "flock", "params": { "model": "seabird", "count": 8, "center": [0, 118, 0], "radius": 150, "speed": 0.06 } }
   ],
   "opening": "opening",
