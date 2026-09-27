@@ -43,7 +43,9 @@ export type StageEvent =
         // v1.10 (3-1): "ぽよん" off a floater (soft; its own line)
         | 'floater'
         // v1.10 (4-1): through thin ice, "ぽちゃん" (soft: the train bobs back up)
-        | 'crack';
+        | 'crack'
+        // v1.10 (4-2): "ぽすっ" into a snow wall without the snowplow (soft: a snowy window, the wiper)
+        | 'plow';
     }
   /**
    * Back to a station after a failure (or a resume). `boarded`: passengers who already got on this run, per station
@@ -144,6 +146,23 @@ export type StageEvent =
   | { type: 'thin'; index: number; state: 'shake' | 'crack' | 'clear' }
   /** v1.10 (4-1): the light caught in ice mirror `index` (gimmicks[]): "きらーん". */
   | { type: 'mirror'; index: number; state: 'flash' }
+  /** v1.10 (4-2): the snowplow's blade went down or up (`instant`: a rewind or a resume, no motion or sound). */
+  | { type: 'plow:blade'; down: boolean; instant: boolean }
+  /**
+   * v1.10 (4-2): snow wall `index` (gimmicks[]) now stands whole, with the train's dent ("ぽすっ"), or burst, its buried
+   * stretch cleared up to `cleared` (s on its rail). `instant`: no burst of snow (a rewind or a resume).
+   */
+  | { type: 'plow:wall'; index: number; state: 'whole' | 'dented' | 'burst'; cleared: number; instant: boolean }
+  /** v1.10 (4-2): the train front burst snow wall `index` ("ずぼーん！"); `boosted`: with the rocket (twice the snow). */
+  | { type: 'plow:burst'; index: number; boosted: boolean }
+  /** v1.10 (4-2): the snowplow is clearing a buried stretch now (snow flying off both sides) or not any more. */
+  | { type: 'plow:spray'; on: boolean }
+  /** v1.10 (4-2): "ぽすっ" into snow wall `index`. */
+  | { type: 'plow:bump'; index: number }
+  /** v1.10 (4-2): a cutscene turned the sky to evening over `seconds` s (the lanterns come on with it). */
+  | { type: 'sky'; sky: 'evening'; seconds: number }
+  /** v1.10 (4-2): the light shows (or no longer shows) the swirl marks on the props with `trace`. */
+  | { type: 'trace'; on: boolean }
   /** v1.7: a countdown started ("run"), got low, was beaten ("safe"), ran out ("up") or was put away ("off"). */
   | { type: 'countdown'; state: 'run' | 'low' | 'safe' | 'up' | 'off' };
 

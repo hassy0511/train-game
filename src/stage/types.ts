@@ -5,10 +5,7 @@ import type { RailNetwork } from '../rail/types';
 /** Stage JSON schema v1 (additions up to v1.10). See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
 export type Vec3 = [number, number, number];
 
-/**
- * `plow` (ゆきかき, chapter 4, PHASE8 §0.4) is named ahead of its stage: 3-2's third record waits for it, and nothing
- * gives it yet (like `magnetLight`, chapter 5).
- */
+/** `plow` (ゆきかき) is chapter 4's, given by 4-2 (3-2's third record waits for it); `magnetLight` is chapter 5's. */
 export type AbilityId = 'whistle' | 'light' | 'jump' | 'rocket' | 'dive' | 'plow' | 'magnetLight' | 'reverse';
 
 export interface EnvironmentDef {
@@ -20,9 +17,9 @@ export interface EnvironmentDef {
   bgm: string | null;
   /**
    * v1.3: how a fall looks: "dark" (default, fade to black) or "cloud" (caught by a cloud, fade to white).
-   * v1.10: "water" (a soft fade to water blue).
+   * v1.10: "water" (a soft fade to water blue), "snow" (a soft white with a little blue, 4-2).
    */
-  fall?: 'dark' | 'cloud' | 'leaf' | 'water';
+  fall?: 'dark' | 'cloud' | 'leaf' | 'water' | 'snow';
   /** v1.3: a soft sea of clouds far below (stages in the sky). */
   cloudSea?: { y: number };
   /** v1.9: the quiet sound around the island (src/audio/ambience.ts); omitted = none. */
@@ -159,6 +156,8 @@ export interface GapDef {
   pit?: boolean;
   /** v1.6 (set by the loader): this gap is the stream a flower bridge (gimmicks[bridge]) closes. */
   bridge?: number;
+  /** v1.10 (4-2): said after falling here, instead of fellShort / fellNoJump (e.g. "ジャンプだいは きてきで でるよ"). */
+  line?: string;
 }
 
 export interface RailDef {
@@ -188,8 +187,11 @@ export interface RailDef {
  * reaches the ground plane, wider at the bottom (a ridge). `skip`: stretches without it (an arch, a bridge).
  */
 export interface RailBaseDef {
-  /** v1.10 (3-3) "pier": a wooden pier (a plank deck and square posts down to the ground) instead of rock. */
-  look: 'rock' | 'pier';
+  /**
+   * v1.10 (3-3) "pier": a wooden pier (a plank deck and square posts down to the ground) instead of rock. v1.10 (4-2)
+   * "snow": a snowy ridge (white and pale blue) instead of rock.
+   */
+  look: 'rock' | 'pier' | 'snow';
   depth?: number;
   toGround?: boolean;
   skip?: { from: number; to: number }[];
@@ -242,6 +244,11 @@ export interface StationDef {
   platformSide: 'left' | 'right';
   /** Overrides for the global stop rule (all fields optional). */
   stop?: Partial<StopRule>;
+  /**
+   * v1.10 (4-2, set by the loader, never written): the stop line lies in a buried stretch behind a snow wall
+   * (`plow-wall`): the platform and its sign are under snow until the snowplow clears it.
+   */
+  buried?: boolean;
 }
 
 export interface WorldPlacement {
@@ -267,6 +274,12 @@ export type PropDef = Placement & {
   physics?: PhysicsType;
   /** v1.7: a name a cutscene can refer to (cutRail "props": these fall with the cut track). */
   tag?: string;
+  /**
+   * v1.10 (4-2): a mark (Sakasa's swirl) on it glows while the light is on and the train front is within
+   * LIGHT.revealDistance m. `traceLine` is said the first time one glows in a stage run.
+   */
+  trace?: boolean;
+  traceLine?: string;
 };
 
 export type ReactsTo = 'whistle' | 'light' | 'none';
@@ -463,7 +476,14 @@ export type MissionLines = Partial<
     | 'thinIceClear'
     | 'mirrorNear'
     | 'mirrorFlash'
-    | 'mirrorFake',
+    | 'mirrorFake'
+    // v1.10 (4-2 ゆきかき)
+    | 'plowNear'
+    | 'plowGo'
+    | 'plowLong'
+    | 'plowUp'
+    | 'plowBump'
+    | 'plowBumpAfter',
     string
   >
 >;
@@ -541,7 +561,12 @@ export type CutsceneStep =
   /** Full-screen dark caption that fades after `seconds`. */
   | { caption: string; seconds?: number }
   /** v1.2: grant an ability (its button appears) and show the "learned" card. */
-  | { unlock: AbilityId };
+  | { unlock: AbilityId }
+  /**
+   * v1.10 (4-2): the sky, the light and the fog turn to `sky` ("evening") over `seconds` s and stay so for the rest
+   * of the stage (the lanterns come on with it).
+   */
+  | { sky: 'evening'; seconds?: number };
 
 export interface GimmickDef {
   type: string;
@@ -549,6 +574,41 @@ export interface GimmickDef {
   from?: number;
   to?: number;
   params?: Record<string, unknown>;
+}
+
+/**
+ * v1.10 (4-2): params of a "plow-wall" gimmick: a snow wall on `railId` at `from` (the train front bursts it with the
+ * snowplow down, or bumps it softly without), and a buried stretch behind it up to `to` (omitted: the wall only,
+ * PLOW.wallDepth m deep).
+ */
+export interface PlowWallParams {
+  /** "snow" (default), "sand" or "foam": looks and sounds only. */
+  look?: 'snow' | 'sand' | 'foam';
+  /** Said the first time the jump seat turns into "ゆきかき" for this wall (default the mission's plowNear). */
+  line?: string | null;
+  /** Where the train front goes back to after bumping it (default `from − PLOW.rewindBefore` on its rail). */
+  rewind?: { railId: string; at: number };
+  /** Looks: m (default 5, 8), and the purple sign beside it (default true). */
+  height?: number;
+  width?: number;
+  sign?: boolean;
+}
+
+/**
+ * v1.10 (4-2, set by the loader, never written): a snow wall at `from` and the buried stretch behind it up to `to`
+ * (`index` is its place in gimmicks[]).
+ */
+export interface PlowSpan {
+  index: number;
+  railId: string;
+  from: number;
+  to: number;
+  rewind: { railId: string; at: number };
+  line: string | null;
+  look: 'snow' | 'sand' | 'foam';
+  height: number;
+  width: number;
+  sign: boolean;
 }
 
 /** v1.7: params of a "slope" gimmick (the stretch `from`–`to` of `railId`, judged at the train front). */
@@ -723,6 +783,9 @@ export interface ResolvedProp {
   tag?: string;
   /** Where it was placed along a rail, when it was. */
   onRail?: { railId: string; at: number };
+  /** v1.10 (4-2): see PropDef.trace. */
+  trace?: boolean;
+  traceLine?: string;
 }
 
 /** A record with its placement resolved. */

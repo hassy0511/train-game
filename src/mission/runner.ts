@@ -7,6 +7,8 @@ import { Grasshopper } from '../actors/grasshopper';
 import { DroppingRock, ROCK_HIT_AFTER, RollingRock } from '../actors/rock';
 import { Whale } from '../actors/whale';
 import type { DiveSystem } from '../gimmick/dive';
+import type { PlowSystem } from '../gimmick/plow';
+import type { JumpSeat } from '../gimmick/seat-face';
 import type { RocketPress, RocketSystem } from '../gimmick/rocket';
 import type { IceSystem, ThinIceZone } from '../gimmick/ice';
 import type { ThinIceSystem } from '../gimmick/thin-ice';
@@ -103,6 +105,9 @@ export interface MissionSystems {
   ice?: IceSystem;
   thinIce?: ThinIceSystem;
   mirrors?: MirrorSystem;
+  /** v1.10 (4-2): the snow walls and the jump seat's "ゆきかき" face (made by the caller). */
+  plow?: PlowSystem;
+  seat?: JumpSeat;
 }
 
 export type MissionPhase = 'idle' | 'driving' | 'stopped' | 'doors' | 'cutscene' | 'failing' | 'clear';
@@ -179,7 +184,10 @@ type DefaultLine =
   | 'crackEmpty'
   | 'crackEmptyAfter'
   | 'mirrorFlash'
-  | 'mirrorFake';
+  | 'mirrorFake'
+  | 'plowNear'
+  | 'plowBump'
+  | 'plowBumpAfter';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -261,6 +269,10 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   crackEmptyAfter: 'こんどは ロケットを とっておこう',
   mirrorFlash: 'きらーん！ あれは かがみ だ！',
   mirrorFake: 'わっ！ ワンダーごうが もう 1だい！？',
+  // v1.10 (4-2 ゆきかき). plowGo, plowLong and plowUp have no default: only said when the mission has them.
+  plowNear: 'ゆきの かべ！ ゆきかきを おして！',
+  plowBump: 'ぽすっ！ ゆきに ささった〜',
+  plowBumpAfter: 'ひかったら ゆきかきを おしてね',
 };
 
 /**
@@ -272,8 +284,7 @@ const NEED_LINES: Partial<Record<AbilityId, string>> = {
   jump: 'ジャンプが できたら いけそう…',
   light: 'ライトが あれば みえそう…',
   dive: 'もぐれたら いけそう…',
-  // v1.10: chapter 4's snowplow (3-2's third record waits for it).
-  plow: 'ゆきを どかせたら いけそう…',
+  plow: 'ゆきかきが あれば いけそう…',
 };
 const NEED_LINE_OTHER = 'いまは まだ いけないみたい…';
 
@@ -290,7 +301,7 @@ export const ABILITY_NAMES: Partial<Record<AbilityId, string>> = {
   whistle: 'きてき',
   rocket: 'ロケット',
   dive: 'もぐる',
-  // Chapter 4's ability (not given yet in chapter 3): 3-2's third record waits for it.
+  // v1.10 (4-2): chapter 4's, given by 4-2 (3-2's third record waits for it).
   plow: 'ゆきかき',
   // Chapter 5's ability (not given anywhere yet): 3-1's third record waits for it.
   magnetLight: 'じしゃくライト',
@@ -312,6 +323,9 @@ export function abilityInUse(ability: AbilityId | null, train: Train, lightOn: b
       return train.rocketUsedHere;
     case 'dive':
       return train.diving;
+    case 'plow':
+      // v1.10 (4-2): clearing a buried stretch with the snowplow.
+      return train.plowing;
     default:
       // Abilities of later chapters (reverse, ...) have no rule yet: such records stay "?".
       return false;
@@ -393,6 +407,18 @@ export class MissionRunner {
   private diveGoSaid = false;
   private diveReadySaid = false;
   private readonly dive: DiveSystem | null;
+  /** v1.10 (4-2): the snow walls, and the snowplow lines said in this mission. */
+  private readonly plow: PlowSystem | null;
+  private plowNearSaid = false;
+  private plowGoSaid = false;
+  private plowLongSaid = false;
+  private plowUpSaid = false;
+  /** Metres cleared in a row with the snowplow (for plowLong). */
+  private plowRun = 0;
+  private plowRunFrom: number | null = null;
+  /** v1.10 (4-2): the light shows the swirl marks on the trace props now; their line was said this stage run. */
+  private traceOn = false;
+  private traceSaid = false;
   /** v1.10 (3-1): floaters named this try. */
   private readonly floaterLines = new Set<string>();
   private readonly whales: Whale[];
@@ -434,6 +460,7 @@ export class MissionRunner {
     this.rocket = systems?.rocket ?? null;
     this.slopes = systems?.slopes ?? null;
     this.dive = systems?.dive ?? null;
+    this.plow = systems?.plow ?? null;
     this.whales = stage.actors.filter((a) => a.type === 'whale' && a.onRail).map((a) => new Whale(a, train));
     this.ice = systems?.ice ?? null;
     this.thinIce = systems?.thinIce ?? null;
@@ -479,12 +506,94 @@ export class MissionRunner {
       // v1.10 (3-1): off a floater it is its own soft fail ("ぶつかっちゃった"); off the water "もぐるの わすれた".
       this.finishDrive({ kind: 'fail', reason: e.floater ? 'floater' : 'dive', rewind: e.rewind });
     });
+    // v1.10 (4-2): "ぽすっ" into a snow wall without the snowplow: a soft fail, back before the wall.
+    train.events.on('snowBump', (e) => {
+      if (this.phase !== 'driving') return;
+      this.finishDrive({ kind: 'fail', reason: 'plow', rewind: e.rewind });
+    });
+    // v1.10 (4-2): the first "ずぼーん！" of a mission.
+    train.events.on('wallBurst', () => {
+      if (this.phase !== 'driving' || this.plowGoSaid) return;
+      this.plowGoSaid = true;
+      if (this.lines.plowGo) this.ports.sayAsync(this.lines.plowGo);
+    });
+    systems?.seat?.events.on('plowNear', ({ span }) => this.onPlowNear(span.index, span.line));
+    systems?.seat?.events.on('plowUp', () => {
+      if (this.phase !== 'driving' || this.plowUpSaid) return;
+      this.plowUpSaid = true;
+      if (this.lines.plowUp) this.ports.sayNow(this.lines.plowUp);
+    });
     // v1.10 (3-1): the first dive of a mission ("わあ… うみの なかだ！").
     train.events.on('dived', () => {
       if (this.phase !== 'driving' || this.diveGoSaid) return;
       this.diveGoSaid = true;
       if (this.lines.diveGo) this.ports.sayAsync(this.lines.diveGo);
     });
+  }
+
+  /**
+   * v1.10 (4-2): the jump seat turned into "ゆきかき" for wall `index`: its own line (once per try), else the mission's
+   * plowNear the first time in the mission. Said at once: it is only useful now.
+   */
+  private onPlowNear(index: number, line: string | null): void {
+    if (this.phase !== 'driving') return;
+    if (line) {
+      const key = `plow:${index}`;
+      if (this.zoneLines.has(key)) return;
+      this.zoneLines.add(key);
+      this.plowNearSaid = true;
+      this.ports.sayNow(line);
+      return;
+    }
+    if (this.plowNearSaid) return;
+    this.plowNearSaid = true;
+    this.ports.sayNow(this.lines.plowNear ?? DEFAULT_LINES.plowNear);
+  }
+
+  /** v1.10 (4-2): "ざざざ〜！ ずっと ゆきかき！" once in a mission, 20 m into clearing a buried stretch. */
+  private updatePlowLines(): void {
+    if (!this.train.plowing) {
+      this.plowRunFrom = null;
+      return;
+    }
+    const f = this.train.frontS;
+    this.plowRunFrom ??= f;
+    this.plowRun = f - this.plowRunFrom;
+    if (this.plowRun >= 20 && !this.plowLongSaid) {
+      this.plowLongSaid = true;
+      if (this.lines.plowLong) this.ports.sayAsync(this.lines.plowLong);
+    }
+  }
+
+  /**
+   * v1.10 (4-2): with the light on, the swirl marks on the props with `trace` glow while the train front is within
+   * LIGHT.revealDistance m of one; the first time in a stage run its `traceLine` is said.
+   */
+  private updateTraces(): void {
+    const traces = this.stage.props.filter((p) => p.trace);
+    if (traces.length === 0) return;
+    const pos = this.train.getPose().position;
+    let near: (typeof traces)[number] | null = null;
+    if (this.lightOn) {
+      for (const p of traces) {
+        if (p.position.distanceTo(pos) <= LIGHT.revealDistance) {
+          near = p;
+          break;
+        }
+      }
+    }
+    const on = near !== null;
+    if (on !== this.traceOn) {
+      this.traceOn = on;
+      this.events.post({ type: 'trace', on });
+    }
+    if (near && !this.traceSaid) {
+      const line = traces.find((p) => p.traceLine)?.traceLine;
+      if (line) {
+        this.traceSaid = true;
+        this.ports.sayNow(line);
+      }
+    }
   }
 
   /** v1.10: the jump seat turned into "もぐる": the partner says so, the first time in a mission. */
@@ -806,6 +915,9 @@ export class MissionRunner {
     const station = this.station(steps[steps.length - 1].stationId);
     const target = { railId: station.railId, at: station.at };
     this.train.rewindTo(station.at, station.railId);
+    // v1.10 (4-2): the snow walls on the way here are burst; a buried stretch the station is in is cleared up to it.
+    const passed = this.wayTo(target);
+    this.train.preparePlowResume((sp) => passed.some((leg) => leg.railId === sp.railId && sp.from >= leg.from && sp.from <= leg.to));
     this.lastStop = target;
     this.lastStationId = station.id;
     this.passengers = passengers;
@@ -874,6 +986,10 @@ export class MissionRunner {
       this.diveNearSaid = false;
       this.diveGoSaid = false;
       this.diveReadySaid = false;
+      this.plowNearSaid = false;
+      this.plowGoSaid = false;
+      this.plowLongSaid = false;
+      this.plowUpSaid = false;
       this.bubbleNearSaid.clear();
       this.bubbleTrueSaid.clear();
       this.iceSaid.clear();
@@ -950,6 +1066,8 @@ export class MissionRunner {
     this.updatePads(dt);
     this.updateJunctionSigns();
     this.updateMirrorLines();
+    this.updatePlowLines();
+    this.updateTraces();
     this.updateRecords();
     if (this.checkDeadEnd() || this.checkSpur()) return;
     const outcome = this.stop?.update(dt) ?? null;
@@ -1545,7 +1663,9 @@ export class MissionRunner {
     else if (this.hoppers.some((h) => h.railId === railId && h.state === 'sit' && same(h.gap))) reason = 'hopper';
     // Short with the light on: the light caps the speed, which is what made the jump too short.
     else if (short && this.lightOn) line = 'fellLight';
-    this.finishDrive({ kind: 'fail', reason, line, rewind: gap.rewind ?? { railId, at: gap.from - REWIND_DISTANCE } });
+    // v1.10 (4-2): a gap may have its own line (the snowy valley: "ジャンプだいは きてきで でるよ").
+    const text = gap.bridge === undefined ? gap.line : undefined;
+    this.finishDrive({ kind: 'fail', reason, line, text, rewind: gap.rewind ?? { railId, at: gap.from - REWIND_DISTANCE } });
   }
 
   /** Lever moved while locked: explain why. */
@@ -1750,6 +1870,7 @@ export class MissionRunner {
       reason === 'floater' ||
       reason === 'deadEnd' ||
       reason === 'crack' ||
+      reason === 'plow' ||
       iceStation;
     if (!calm) this.ports.cameraFx(scary ? 1 : soft ? 0.3 : 0.5, soft ? 0 : 1);
     const key: DefaultLine = outcome.line ?? (iceStation ? 'iceOvershoot' : undefined) ?? FAIL_LINES[reason] ?? (reason as DefaultLine);
@@ -1760,6 +1881,7 @@ export class MissionRunner {
     if (reason === 'fragile') await this.ports.say(this.lines.fragileBoingAfter ?? DEFAULT_LINES.fragileBoingAfter, 'partner');
     if (reason === 'dive') await this.ports.say(this.lines.diveBoingAfter ?? DEFAULT_LINES.diveBoingAfter, 'partner');
     if (reason === 'floater') await this.ports.say(this.lines.floatHitAfter ?? DEFAULT_LINES.floatHitAfter, 'partner');
+    if (reason === 'plow') await this.ports.say(this.lines.plowBumpAfter ?? DEFAULT_LINES.plowBumpAfter, 'partner');
     if (iceStation) await this.ports.say(this.lines.iceOvershootAfter ?? DEFAULT_LINES.iceOvershootAfter, 'partner');
     if (reason === 'crack') {
       const after: DefaultLine = outcome.line === 'crackEmpty' ? 'crackEmptyAfter' : 'crackAfter';
@@ -1947,6 +2069,7 @@ const FAIL_LINES: Partial<Record<FailReason, DefaultLine>> = {
   dive: 'diveBoing',
   floater: 'floatHit',
   crack: 'crackFall',
+  plow: 'plowBump',
 };
 const BRIDGE_LINES: Record<NonNullable<BridgeOutcome>['kind'], DefaultLine> = {
   near: 'butterflyNear',
@@ -1963,7 +2086,7 @@ interface FailOutcome {
   line?: DefaultLine;
   /** Said after the reason's line (a rock's "hitAfter"; v1.10 an animal's own "after"). */
   after?: string;
-  /** v1.10 (3-3): say this text instead of the reason's line (an animal's own "danger"). */
+  /** Say this text instead of the reason's line: v1.10 (3-3) an animal's own "danger", (4-2) a gap's own `line`. */
   text?: string;
   /** Where to put the train front back; default: REWIND_DISTANCE before the station. */
   rewind?: { railId: string; at: number };
