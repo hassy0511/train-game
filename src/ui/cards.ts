@@ -19,6 +19,11 @@ const WAVE = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
   <circle cx="30" cy="20" r="3.5" fill="#fff" stroke="#3fa7d6" stroke-width="2"/>
 </svg>`;
 
+/** v1.10 (3-1): Sakasa's mark on the mirror-written note: a pink swirl in the paper's corner. */
+const SWIRL = `<svg class="card-swirl" viewBox="0 0 64 64" aria-hidden="true">
+  <path d="M32 32c0-3 4-3 4 0 0 5-8 5-8 0 0-7 12-7 12 0 0 9-16 9-16 0 0-11 20-11 20 0 0 13-24 13-24 0" fill="none" stroke="#e8579f" stroke-width="3.5" stroke-linecap="round"/>
+</svg>`;
+
 /** Chapter 4's end (ice and snow): a snow crystal. */
 const SNOW = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
   <circle cx="60" cy="60" r="54" fill="#6f9fe0" stroke="#ffd166" stroke-width="6"/>
@@ -130,13 +135,20 @@ export function showCard(
   icon?: CardIcon,
   guardSeconds = 0,
   rewards?: CardRewards,
+  options: { mirror?: boolean } = {},
 ): Promise<void> {
   return new Promise((resolve) => {
     const el = document.createElement('div');
     el.className = 'overlay card';
     el.id = 'card';
+    if (options.mirror) {
+      // v1.10 (3-1): a small note on paper, written mirror-wise (a child cannot read it; the swirl says who wrote it).
+      el.classList.add('is-mirror');
+      el.insertAdjacentHTML('beforeend', SWIRL);
+    }
     if (icon) el.insertAdjacentHTML('beforeend', { badge: BADGE, ring: RING, wave: WAVE, snow: SNOW }[icon]);
     const h = document.createElement('h1');
+    if (options.mirror) h.setAttribute('aria-label', 'ぐるぐる もようの てがみ');
     const lines = title.split('\n');
     lines.forEach((line, i) => {
       if (i > 0) h.appendChild(document.createElement('br'));

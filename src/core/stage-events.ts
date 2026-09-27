@@ -39,7 +39,9 @@ export type StageEvent =
         // v1.8: back from a record's side track (not a failure: no dip, no shake)
         | 'spur'
         // v1.10: "ぽよん" off a floater, or water without the dome (soft)
-        | 'dive';
+        | 'dive'
+        // v1.10 (3-1): "ぽよん" off a floater (soft; its own line)
+        | 'floater';
     }
   /**
    * Back to a station after a failure (or a resume). `boarded`: passengers who already got on this run, per station
@@ -106,6 +108,18 @@ export type StageEvent =
   | { type: 'dive'; state: 'dive' | 'surface' | 'bounce' | 'bob'; long?: boolean; railId?: string; s?: number }
   /** v1.10: the bubble dome went on or off (`instant`: a rewind or a resume put it on, no inflating). */
   | { type: 'dome'; on: boolean; instant: boolean }
+  /**
+   * v1.10 (3-1): a whale (actor `id`): waiting at home, singing back to the whistle, swimming along beside the train,
+   * trailing behind it, or swimming away ahead.
+   */
+  | { type: 'whale'; id: string; state: 'idle' | 'sing' | 'follow' | 'trail' | 'away' }
+  /** v1.10 (3-1): the light showed the swirl on the sinking bubbles of bubble fork `junctionId` (reset: hidden again). */
+  | { type: 'bubbles:reveal'; junctionId: string }
+  | { type: 'bubbles:reset' }
+  /** v1.10 (3-1): the train took the rising (true) way at bubble fork `junctionId` ("せいかい！"). */
+  | { type: 'bubbles:true'; junctionId: string }
+  /** v1.10 (3-1): a big bubble pops ("ぱちん") at cutscene figure `id` (or in front of the camera). */
+  | { type: 'pop'; id?: string }
   /** v1.7: a countdown started ("run"), got low, was beaten ("safe"), ran out ("up") or was put away ("off"). */
   | { type: 'countdown'; state: 'run' | 'low' | 'safe' | 'up' | 'off' };
 

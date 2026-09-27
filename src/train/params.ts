@@ -277,3 +277,20 @@ export const FLOATER: Record<'log' | 'raft' | 'lily' | 'wave' | 'ice', { length:
   wave: { length: 5, draft: 0.8 },
   ice: { length: 4, draft: 0.7 },
 };
+
+/**
+ * v1.10 (3-1): a whale beside the rail (actors "whale"). The whistle glows from `callRange` m before it while it can
+ * be greeted; the partner points it out `near` m before (callRange + 10). Greeted, it sings for `singSeconds` s and
+ * swims along `lead` m ahead of the train front, `lateral` m to the right (negative = left) and `height` m over the
+ * rail; not greeted, it trails `trail` m behind. It catches up or drops back at up to `catchSpeed` m/s beyond the
+ * train's own speed. Stage JSON overrides callRange, lead, lateral, height and trail per whale.
+ */
+export const WHALE = { callRange: 80, near: 90, lead: 10, lateral: -12, height: 4, trail: 30, singSeconds: 1.6, catchSpeed: 8 } as const;
+
+/**
+ * v1.10 (3-1): bubble forks (junctions[].bubbles). Columns of bubbles stand `columns` m along each way out; the
+ * partner points the fork out `nearDistance` m before it. With the light on, a sinking column's swirl lights up within
+ * LIGHT.revealDistance of the fork. In a fog stretch the light button glows from `lightGlow` m before a bubble fork,
+ * and after the sinking side was taken, from `wrongGlow` m before that fork.
+ */
+export const BUBBLE_FORK = { columns: [12, 28], nearDistance: 90, lightGlow: 100, wrongGlow: 80 } as const;
