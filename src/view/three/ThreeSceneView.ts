@@ -40,12 +40,15 @@ import { addModelPlacements, addProps } from './props';
 import { buildDetachedRailPiece, buildRailScene, buildTrack, type TrackLook, type TrackLooks } from './rail-mesh';
 import { WaterLayer } from './water';
 import { SeaGimmicks } from './sea';
+import { RiverGimmicks } from './river';
+import { HarbourGimmicks } from './harbour';
 
 /** The camera draws this far past the stage fog's far end (m). */
 const FOG_CULL_MARGIN = 40;
 /**
  * v1.7: a fixed (cutscene) camera is a wide shot from far out (2-3's ending, from the sea): while it is on, the
  * fog and the draw distance reach this many times further, so the far side of the picture is not lost in the fog.
+ * v1.10: the default of the cutscene step's `reach` (a close shot says 1).
  */
 const FIXED_CAMERA_REACH = 2.5;
 
@@ -127,7 +130,7 @@ export class ThreeSceneView implements SceneView {
   private jumpDevice: Object3D | null = null;
   private clock = 0;
   /** v1.7: a cutscene camera standing still. */
-  private fixedCamera: { at: Vector3; lookAt: Vector3 } | null = null;
+  private fixedCamera: { at: Vector3; lookAt: Vector3; reach: number } | null = null;
   /** The title screen's camera swinging around the train, and how long it has been on (s). */
   private orbit: OrbitCamera | null = null;
   private orbitTime = 0;
@@ -135,6 +138,9 @@ export class ThreeSceneView implements SceneView {
   private water: WaterLayer | null = null;
   /** v1.10 (3-1): whales, currents, bubble forks (null on a stage without them). */
   private sea: SeaGimmicks | null = null;
+  /** v1.10 (3-2): waterfalls; (3-3): the lighthouse, the festival and the moon (null on a stage without them). */
+  private river: RiverGimmicks | null = null;
+  private harbour: HarbourGimmicks | null = null;
   private readonly underColor = new Color();
   private readonly zoneTint = new Color();
   /** v1.10: what the scene looked like above water, while the camera is under it. */
@@ -165,8 +171,8 @@ export class ThreeSceneView implements SceneView {
     );
     this.boughSkips = [...boughSkips, ...MeadowGimmicks.trackSkips(stage)];
     this.railLooks = Object.fromEntries(stage.file.rails.flatMap((r) => (r.look && r.look !== 'rail' ? [[r.id, r.look]] : [])));
-    const bases = new Map<string, RailBaseDef>();
-    for (const r of stage.file.rails) if (r.base) bases.set(r.id, r.base);
+    const bases = new Map<string, RailBaseDef[]>();
+    for (const r of stage.file.rails) if (r.base) bases.set(r.id, Array.isArray(r.base) ? r.base : [r.base]);
     const slopes = slopeZones(stage.file.gimmicks);
     // v1.10 (4-1): the bed is white on snow, pale blue on ice and a deeper blue on thin ice.
     const beds = [
@@ -225,6 +231,14 @@ export class ThreeSceneView implements SceneView {
     if (SeaGimmicks.wanted(stage)) {
       this.sea = new SeaGimmicks(stage, this.train, (id) => this.actors?.positionOf(id) ?? null);
       this.scene.add(this.sea.group);
+    }
+    if (RiverGimmicks.wanted(stage)) {
+      this.river = new RiverGimmicks(stage);
+      this.scene.add(this.river.group);
+    }
+    if (HarbourGimmicks.wanted(stage)) {
+      this.harbour = new HarbourGimmicks(stage);
+      this.scene.add(this.harbour.group);
     }
     const g = stage.file.gimmicks;
     const icy = g.some((x) => ['ice-sheet', 'thin-ice', 'mirror'].includes(x.type)) || !!stage.file.environment.snow;
@@ -349,6 +363,10 @@ export class ThreeSceneView implements SceneView {
     this.volcano?.onEvent(event);
     this.sea?.onEvent(event);
     this.ice?.onEvent(event);
+    this.river?.onEvent(event);
+    this.harbour?.onEvent(event);
+    // v1.10 (3-3): at the festival the jellyfish lanterns float up.
+    if (event.type === 'festival') this.flocks?.lift('lantern-jelly', 3, event.instant ? 0 : 2.5);
     if (event.type === 'ability' && event.id === 'rocket') void this.volcano?.addRocketUnit(this.models);
     if (event.type === 'rocket') this.fovTarget = event.state === 'burn' && !this.calm ? ROCKET_FOV : 0;
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
@@ -481,15 +499,16 @@ export class ThreeSceneView implements SceneView {
     this.cameraSnap = this.cameraSnap || snap;
   }
 
-  setFixedCamera(fixed: { at: [number, number, number]; lookAt: [number, number, number] } | null): void {
+  setFixedCamera(fixed: { at: [number, number, number]; lookAt: [number, number, number]; reach?: number } | null): void {
     const was = this.fixedCamera !== null;
-    this.fixedCamera = fixed ? { at: new Vector3(...fixed.at), lookAt: new Vector3(...fixed.lookAt) } : null;
-    if (was !== (fixed !== null)) {
-      this.cameraSnap = true;
-      // Further out for the wide shot (the fog follows in update()). After it, the far plane comes back in with the
-      // easing fog (easeFarBack), never inside it: a far plane cut short of a thin fog shows a hard horizon.
-      if (fixed && this.baseFog && this.baseFar > 0) {
-        this.camera.far = this.baseFog.far * FIXED_CAMERA_REACH + FOG_CULL_MARGIN;
+    this.fixedCamera = fixed ? { at: new Vector3(...fixed.at), lookAt: new Vector3(...fixed.lookAt), reach: fixed.reach ?? FIXED_CAMERA_REACH } : null;
+    if (was !== (fixed !== null)) this.cameraSnap = true;
+    // Further out for the wide shot (the fog follows in update()). After it, the far plane comes back in with the
+    // easing fog (easeFarBack), never inside it: a far plane cut short of a thin fog shows a hard horizon.
+    if (this.fixedCamera && this.baseFog && this.baseFar > 0) {
+      const far = Math.max(this.baseFar, this.baseFog.far * this.fixedCamera.reach + FOG_CULL_MARGIN);
+      if (far > this.camera.far) {
+        this.camera.far = far;
         this.camera.updateProjectionMatrix();
       }
     }
@@ -516,7 +535,8 @@ export class ThreeSceneView implements SceneView {
   private fogReach(): { near: number; far: number } | null {
     const fog = this.baseFog;
     if (!fog || !this.fixedCamera) return fog;
-    return { near: fog.near * FIXED_CAMERA_REACH, far: fog.far * FIXED_CAMERA_REACH };
+    const reach = this.fixedCamera.reach;
+    return { near: fog.near * reach, far: fog.far * reach };
   }
 
   setCalm(calm: boolean): void {
@@ -581,6 +601,7 @@ export class ThreeSceneView implements SceneView {
     this.meadow?.update(dt, cab);
     this.volcano?.update(dt);
     this.sea?.update(dt);
+    this.river?.update(dt);
     if (this.ice) {
       this.ice.trainRail = pose.railId;
       this.ice.trainFront = pose.s + TRAIN.length / 2;
@@ -605,6 +626,7 @@ export class ThreeSceneView implements SceneView {
     this.updateWater(dt, cab);
     this.cameraPosition.copy(this.camera.position);
     this.sky?.position.copy(this.cameraPosition);
+    this.harbour?.update(dt, this.cameraPosition);
     this.renderer.render(this.scene, this.camera);
     // v1.10 (4-1): what the nearest ice mirror shows, drawn into its window.
     this.ice?.renderReflection(this.renderer, this.scene, this.camera, [this.train, ...this.cars], this.actors?.cutsceneFigures() ?? []);

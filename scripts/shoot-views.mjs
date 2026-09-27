@@ -55,6 +55,33 @@ const VIEWS = {
     ['flip', 200, 'chase'],
     ['top', 240, 'side'], // こずえのえき
   ],
+  '3-2': [
+    ['kawa', 60, 'cab'], // ささぶねえき: the valley, the falls far ahead
+    ['kawa', 300, 'chase'], // the raft
+    ['kawa', 476, 'side'], // the rapids' gap
+    ['kawa', 880, 'chase'], // the lily pads
+    ['kawa', 1300, 'cab'], // the falls and the rainbow ahead
+    ['kawa', 1520, 'chase'], // the plunge pool
+    ['kawa', 1700, 'side'], // behind the falls
+    ['kawa', 1700, 'cab'],
+    ['kawa', 2060, 'cab'], // the meadow, the ducks
+    ['kawa', 2560, 'cab'], // the forest pond
+    ['fuchi', 100, 'chase'], // the jade's side track
+    ['kawa', 2922, 'chase'], // わきみずえき
+  ],
+  '3-3': [
+    ['main', 60, 'cab'], // みさきえき: the pier into the sunset
+    ['main', 230, 'side'], // the pier's first gap
+    ['main', 470, 'chase'], // into the sea
+    ['main', 540, 'cab'], // the sleeping turtle
+    ['main', 1150, 'chase'], // the red ring
+    ['main', 1560, 'cab'], // the star trench (dark), the false sign
+    ['main', 1930, 'side'], // ほしぞこえき
+    ['main', 2300, 'side'], // the whale's current
+    ['main', 2710, 'cab'], // ていぼうえき
+    ['main', 2990, 'chase'], // under the festival rafts
+    ['main', 3180, 'chase'], // とうだいえき
+  ],
   '4-1': [
     ['main', 60, 'chase'], // みずうみえき, the lake ahead
     ['main', 330, 'cab'], // on the ice, the frost flowers

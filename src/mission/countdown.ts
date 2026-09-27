@@ -1,4 +1,4 @@
-import type { CountdownDef, StationDef } from '../stage/types';
+import type { CountdownDef, CountdownIcon, StationDef } from '../stage/types';
 import { COUNTDOWN, STOP_RULE } from '../train/params';
 import type { Train } from '../train/train';
 
@@ -11,7 +11,7 @@ export interface CountdownView {
   seconds: number;
   /** Share of the time left, 0..1 (the shrinking band). */
   fraction: number;
-  icon: 'volcano' | 'clock';
+  icon: CountdownIcon;
 }
 
 /**

@@ -1,6 +1,10 @@
 import {
   BackSide,
+  BufferGeometry,
   Color,
+  Float32BufferAttribute,
+  Points,
+  PointsMaterial,
   DirectionalLight,
   Fog,
   HemisphereLight,
@@ -37,6 +41,32 @@ void main() {
   gl_FragColor = vec4(mix(mix(bottomColor, topColor, gradient), mistColor, mist), 1.0);
 }
 `;
+
+/**
+ * v1.10 (3-3): faint stars in the upper half of the sky (one Points draw, riding on the sky dome so they follow the
+ * camera; the sky hides under water, and they with it). Seeded: the same sky every time.
+ */
+function buildStars(count: number): Points {
+  const positions = new Float32Array(count * 3);
+  let seed = 0x5eed;
+  const random = (): number => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+  for (let i = 0; i < count; i++) {
+    const a = random() * Math.PI * 2;
+    // More of them high up (towards the deep blue), none near the pink horizon.
+    const up = 0.35 + 0.65 * Math.sqrt(random());
+    const r = Math.sqrt(1 - up * up);
+    positions.set([Math.cos(a) * r * SKY_RADIUS * 0.9, up * SKY_RADIUS * 0.9, Math.sin(a) * r * SKY_RADIUS * 0.9], i * 3);
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  const stars = new Points(geometry, new PointsMaterial({ color: '#fff8e0', size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0.8, fog: false, depthWrite: false }));
+  stars.name = 'stars';
+  stars.frustumCulled = false;
+  return stars;
+}
 
 /** Builds the stage environment and returns the sky that must follow the camera. */
 export function addEnvironment(scene: Scene, environment: EnvironmentDef): Mesh {
@@ -75,14 +105,18 @@ export function addEnvironment(scene: Scene, environment: EnvironmentDef): Mesh 
     scene.add(sea);
   }
   scene.add(sky);
+  if (environment.stars) sky.add(buildStars(environment.stars.count));
 
-  const hemisphere = new HemisphereLight(0xffffff, 0x99bb77, 0.9);
+  // v1.10 (3-3) "evening": a warm low sun from the pink side of the sky and a bluer ground light (not darker overall).
+  const evening = environment.lighting === 'evening';
+  const hemisphere = evening ? new HemisphereLight(0xffd9b8, 0x6a7ab0, 0.95) : new HemisphereLight(0xffffff, 0x99bb77, 0.9);
   hemisphere.name = `${environment.lighting}-hemisphere`;
   scene.add(hemisphere);
 
-  const sun = new DirectionalLight(0xffffff, 1.2);
+  const sun = new DirectionalLight(evening ? 0xffc89a : 0xffffff, evening ? 1.05 : 1.2);
   sun.name = `${environment.lighting}-sun`;
-  sun.position.set(1, 2, 0.5).normalize().multiplyScalar(100);
+  if (evening) sun.position.set(-1, 0.28, -0.35).normalize().multiplyScalar(100);
+  else sun.position.set(1, 2, 0.5).normalize().multiplyScalar(100);
   sun.target.position.set(0, 0, 0);
   scene.add(sun, sun.target);
 

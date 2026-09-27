@@ -341,3 +341,20 @@ export const THIN_ICE = {
  * way the partner calls out `fakeWarn` m before the mirror. `tint`: the glass's light blue over the reflection.
  */
 export const MIRROR = { range: 260, flashRange: 200, reflectRadius: 80, hintDistance: 100, fakeWarn: 45, tint: 0.25, flashCone: 40 } as const;
+
+/**
+ * v1.10 (3-2): waterfalls (gimmicks "waterfall", looks and sound only). Defaults for its params: the water is thrown
+ * `throw` m out from the lip, the rock ledge juts `lip` m, the curtain lets `sheetOpacity` of the light through. Its
+ * "さーーっ" is heard from `hearFar` m and loudest within `hearNear` m. A car whose roof is between the lip and the
+ * curtain gets the shower ("ざーっ").
+ */
+export const WATERFALL = { throw: 8, lip: 1, rainbow: false, sheetOpacity: 0.55, hearFar: 350, hearNear: 40 } as const;
+
+/** v1.10 (3-2): a leaping school (flock mode "leap"): each one jumps `height` m out of the water for `seconds` s, every `every` s or so. */
+export const LEAP = { height: 1.2, seconds: 0.8, every: 5 } as const;
+
+/**
+ * v1.10 (3-3): the festival (cutscene fx "festival"): it takes `seconds` s; `bursts` glowing balls come up from the
+ * sea; the jellyfish lanterns rise `jellyRise` m; the moon comes up in `moonRise` s.
+ */
+export const FESTIVAL = { seconds: 2.5, bursts: 3, jellyRise: 3, moonRise: 0.8 } as const;
