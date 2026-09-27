@@ -505,7 +505,8 @@ test('stage 2-3 full run: the rocket, steep slopes and slides, rocks, the countd
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
   expect(saved.cleared).toContain('2-3');
   // Chapter 2's end on the map (PHASE7_FINISH §3): the last rail closes the ring from 2-3 back to the first town,
-  // the golden light runs round, the card, then chapter 3's single "?" island floats in.
+  // the golden light runs round, the card, then the rail grows on to the cloud gate and the map turns to page 2
+  // (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3.6).
   await expect(page.locator('[data-link="2-3>1-1"]')).toHaveClass(/is-laid/);
   await expect(page.locator('#map-close')).toBeHidden();
   await expect(page.locator('[data-link="2-3>1-1"]')).toHaveClass(/is-lit/, { timeout: 20_000 });
@@ -513,20 +514,12 @@ test('stage 2-3 full run: the rocket, steep slopes and slides, rocks, the countd
   await expect(page.locator('#card')).toContainText('2しょう クリア', { timeout: 20_000 });
   expect((await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'))).mapLinks).not.toContain('2-3>1-1');
   await page.locator('#card-button').click();
-  await expect(page.locator('#map')).toHaveAttribute('data-finale', 'done');
   expect((await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'))).mapLinks).toContain('2-3>1-1');
-  const teaser = page.locator('.map-island.is-teaser');
-  const dotted = page.locator('[data-link="1-1>teaser:3"]');
-  await expect(teaser).toBeVisible();
-  await expect(dotted).toBeVisible();
-  // It floats in (toBeVisible ignores opacity): wait for the fade-in to be really over before the picture.
-  await expect(teaser).not.toHaveClass(/is-appear/, { timeout: 20_000 });
-  await expect.poll(() => teaser.evaluate((e) => getComputedStyle(e).opacity)).toBe('1');
-  await dotted.evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished.catch(() => undefined))));
-  await expect.poll(() => dotted.evaluate((e) => getComputedStyle(e).opacity)).toBe('1');
-  await teaser.dispatchEvent('click');
-  await expect(page.locator('.map-say')).toHaveText('つづきは また こんど！');
-  await page.locator('.map-say').evaluate((e) => Promise.all(e.getAnimations().map((a) => a.finished.catch(() => undefined))));
+  await expect(page.locator('[data-link="1-1>3-1"]')).toHaveClass(/is-growing/);
+  await expect(page.locator('#map')).toHaveAttribute('data-page', '2', { timeout: 20_000 });
+  await expect(page.locator('#map')).toHaveAttribute('data-finale', 'done', { timeout: 20_000 });
+  expect((await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'))).mapLinks).toContain('1-1>3-1');
+  await expect(page.locator('.map-gate[data-gate="enter"]')).toBeVisible();
   await expect(page.locator('#map-close')).toHaveText('タイトルへ');
   await page.screenshot({ path: resolve(OUT, '73-map.png') });
   await page.locator('#map-close').click();

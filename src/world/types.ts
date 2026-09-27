@@ -1,5 +1,10 @@
-/** src/world/world.json: the world map (docs/PHASE4_DESIGN.md). */
+/**
+ * src/world/world.json: the world map (docs/PHASE4_DESIGN.md), in pages of two chapters each
+ * (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3).
+ */
 export interface WorldFile {
+  /** The map's pages: the heading shown beside "ちず" on each. */
+  pages?: WorldPage[];
   chapters: WorldChapter[];
   islands: WorldIsland[];
   /**
@@ -9,26 +14,59 @@ export interface WorldFile {
   links: WorldLink[];
 }
 
+export interface WorldPage {
+  id: number;
+  /** Beside "ちず" once there is more than one page to see, e.g. "3しょう みず・4しょう こおりと ゆき". */
+  title: string;
+}
+
 export type WorldLink = [string, string] | [string, string, WorldLinkOptions];
+
+/** A point on a page in % of the map area, with the curve's control point for the rail to or from it. */
+export interface WorldGatePoint {
+  x: number;
+  y: number;
+  via?: [number, number];
+}
 
 export interface WorldLinkOptions {
   /** Control point of the curve in % of the map (x, y). Default: above the midpoint (a gentle arc). */
   via?: [number, number];
+  /** Not laid before this chapter is done, even with `from` cleared (the rail out of a finished chapter). */
+  afterChapter?: number;
+  /**
+   * A rail to another page goes through the cloud gate ("くもの もん"): on `from`'s page it runs to the gate at
+   * `exit`, on `to`'s page from the gate at `enter` on to `to`. One link key ("1-1>3-1") for both halves.
+   */
+  exit?: WorldGatePoint;
+  enter?: WorldGatePoint;
 }
 
 export interface WorldChapter {
   id: number;
+  /** The map page its islands are on (two chapters a page). */
+  page: number;
   title: string;
-  /** Shown once, the first time the map draws `link` (docs/PHASE7_FINISH.md §3). */
+  /**
+   * Shown once, the first time the map draws `link` (docs/PHASE7_FINISH.md §3). Without a link, the first time
+   * the map opens with the chapter done; then "finale:<id>" in the save's mapLinks marks it seen.
+   */
   finale?: {
     /** "from>to": the rail that closes the chapter. */
-    link: string;
+    link?: string;
     /** The island ids in order: a golden light runs round them once, hopping each island. */
     ring?: string[];
+    /** The island ids in order along one road (not closed): the light runs along it once. Not counted for done. */
+    path?: string[];
+    /**
+     * gold (default): the light round the ring, islands hop. water: a blue light along the path, islands bob,
+     * then snow on the next chapter's islands. aurora: a band of light across the sky, islands twinkle in turn.
+     */
+    light?: 'gold' | 'water' | 'aurora';
     /** Card text (lines split by "\n", 20 characters at most per line) and its button. */
     card: string;
     button: string;
-    icon?: 'badge' | 'ring';
+    icon?: 'badge' | 'ring' | 'wave' | 'snow';
   };
   /** A chapter without stages yet: one "?" island with a dotted line, once `after` is cleared. */
   teaser?: {

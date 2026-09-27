@@ -6,7 +6,34 @@ const BADGE = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
   <circle cx="60" cy="60" r="9" fill="#ffd166" stroke="#2b3a4a" stroke-width="3"/>
 </svg>`;
 
-export type CardIcon = 'badge' | 'ring';
+export type CardIcon = 'badge' | 'ring' | 'wave' | 'snow';
+
+/** Chapter 3's end (water): a wave with bubbles over the sea. */
+const WAVE = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
+  <circle cx="60" cy="60" r="54" fill="#bfe9ff" stroke="#ffd166" stroke-width="6"/>
+  <path d="M10 70 C24 52 38 52 48 64 C56 74 68 72 70 60 C72 44 92 40 104 56 L110 60 A54 54 0 0 1 10 70 Z" fill="#3fa7d6"/>
+  <path d="M16 84 C30 74 42 76 54 84 C66 92 80 92 104 80 A54 54 0 0 1 16 84 Z" fill="#1d7fb8"/>
+  <path d="M70 60 C72 48 86 44 96 52" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="40" cy="36" r="7" fill="#fff" stroke="#3fa7d6" stroke-width="2.5"/>
+  <circle cx="56" cy="24" r="4.5" fill="#fff" stroke="#3fa7d6" stroke-width="2"/>
+  <circle cx="30" cy="20" r="3.5" fill="#fff" stroke="#3fa7d6" stroke-width="2"/>
+</svg>`;
+
+/** Chapter 4's end (ice and snow): a snow crystal. */
+const SNOW = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
+  <circle cx="60" cy="60" r="54" fill="#6f9fe0" stroke="#ffd166" stroke-width="6"/>
+  <g stroke="#fff" stroke-width="6" stroke-linecap="round" fill="none">
+    ${[0, 60, 120]
+      .map(
+        (a) => `<g transform="rotate(${a} 60 60)">
+      <path d="M60 22 V98"/>
+      <path d="M60 36 L50 28 M60 36 L70 28 M60 84 L50 92 M60 84 L70 92"/>
+    </g>`,
+      )
+      .join('')}
+  </g>
+  <circle cx="60" cy="60" r="8" fill="#fff"/>
+</svg>`;
 
 /** Chapter 2's end: six islands joined by rail into a ring. */
 const RING = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
@@ -108,7 +135,7 @@ export function showCard(
     const el = document.createElement('div');
     el.className = 'overlay card';
     el.id = 'card';
-    if (icon) el.insertAdjacentHTML('beforeend', icon === 'ring' ? RING : BADGE);
+    if (icon) el.insertAdjacentHTML('beforeend', { badge: BADGE, ring: RING, wave: WAVE, snow: SNOW }[icon]);
     const h = document.createElement('h1');
     const lines = title.split('\n');
     lines.forEach((line, i) => {
