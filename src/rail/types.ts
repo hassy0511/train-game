@@ -1,5 +1,5 @@
 import type { Vector3 } from 'three';
-import type { RailEndDef } from '../stage/types';
+import type { RailEndDef, WaterSpan } from '../stage/types';
 
 /** Position and orientation of a point on a rail. `right` is `tangent × up` (the train's right-hand side). */
 export interface RailFrame {
@@ -15,6 +15,10 @@ export interface Rail {
   readonly length: number;
   readonly gaps: { from: number; to: number }[];
   readonly end: RailEndDef;
+  /** v1.10 (set by the loader): stretches on a water surface (the jump button is "もぐる" there), sorted by `from`. */
+  surfaces: WaterSpan[];
+  /** v1.10 (set by the loader): stretches under water, sorted by `from`. */
+  dives: WaterSpan[];
   /** `s` is the distance from the rail start in meters. Outside [0, length] the end tangent is extrapolated. */
   frameAt(s: number): RailFrame;
   inGap(s: number): boolean;

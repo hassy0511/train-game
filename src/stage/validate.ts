@@ -3,8 +3,8 @@ import { SONGS } from '../audio/songs';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import type { RailNetwork } from '../rail/types';
-import { FLOWER_BRIDGE, FRAGILE, GRASSHOPPER, REWIND_DISTANCE, ROCK_ROLL, ROCKET, SLOPE } from '../train/params';
-import { AMBIENCE_KINDS, type AmbienceKind, type Placement, type StageFile } from './types';
+import { DIVE, FLOATER, FLOWER_BRIDGE, FRAGILE, GRASSHOPPER, RECORD, REWIND_DISTANCE, ROCK_ROLL, ROCKET, SLOPE, TRAIN } from '../train/params';
+import { AMBIENCE_KINDS, FLOATER_LOOKS, WATER_LOOKS, type AmbienceKind, type FloaterLook, type Placement, type StageFile, type WaterLook } from './types';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
 const ABILITIES = ['whistle', 'light', 'jump', 'rocket', 'dive', 'magnetLight', 'reverse'];
@@ -125,11 +125,12 @@ export function validateStageFile(raw: unknown): StageFile {
   if (env.bgm !== null && (typeof env.bgm !== 'string' || !(env.bgm in SONGS))) {
     fail(`"environment.bgm" must be null or a song in src/audio/songs.ts (${Object.keys(SONGS).join(', ')})`);
   }
-  if (env.fall !== undefined && !['dark', 'cloud', 'leaf'].includes(String(env.fall))) fail('"environment.fall" must be dark, cloud or leaf');
+  if (env.fall !== undefined && !['dark', 'cloud', 'leaf', 'water'].includes(String(env.fall))) fail('"environment.fall" must be dark, cloud, leaf or water');
   if (env.cloudSea !== undefined && (!isObject(env.cloudSea) || !isNumber(env.cloudSea.y))) fail('"environment.cloudSea" needs y');
   if (env.ambience !== undefined && !AMBIENCE_KINDS.includes(env.ambience as AmbienceKind)) {
     fail(`"environment.ambience" must be one of ${AMBIENCE_KINDS.join(', ')}`);
   }
+  if (env.water !== undefined) checkWater(env.water);
 
   const rails = requireArray(raw, 'rails');
   if (rails.length === 0) fail('at least one rail is required');
@@ -204,6 +205,12 @@ export function validateStageFile(raw: unknown): StageFile {
     }
     if (j.default !== 'left' && j.default !== 'right') fail(`junction "${j.id}": "default" must be left or right`);
     if (j[j.default] === undefined) fail(`junction "${j.id}": default side "${j.default}" has no target`);
+    if (j.diveSide !== undefined) fail(`junction "${j.id}": "diveSide" is set by the loader (write "dive": true)`);
+    if (j.dive !== undefined) {
+      if (typeof j.dive !== 'boolean') fail(`junction "${j.id}": "dive" must be true or false`);
+      if (j.dive && (j.needs !== undefined || j.signReversed === true)) fail(`junction "${j.id}": a dive fork has no sign (no "needs", no "signReversed")`);
+      if (j.dive && (j.left === undefined || j.right === undefined)) fail(`junction "${j.id}": a dive fork needs both left and right`);
+    }
     if (j.needs !== undefined) {
       if (!ABILITIES.includes(String(j.needs))) fail(`junction "${j.id}": "needs" must be an ability`);
       const other = j.default === 'left' ? 'right' : 'left';
@@ -360,9 +367,59 @@ export function validateStageFile(raw: unknown): StageFile {
     }
   });
 
+  if (raw.floaters !== undefined) {
+    if (!Array.isArray(raw.floaters)) fail('"floaters" must be an array');
+    const floaterIds = new Set<string>();
+    for (const f of raw.floaters as unknown[]) {
+      if (!isObject(f) || !isString(f.id)) fail('each floater needs an "id"');
+      if (floaterIds.has(f.id)) fail(`duplicate floater id "${f.id}"`);
+      floaterIds.add(f.id);
+      if (!isString(f.railId) || !railIds.has(f.railId) || !isNumber(f.at)) fail(`floater "${f.id}": needs a known railId and "at"`);
+      if (f.look !== undefined && !FLOATER_LOOKS.includes(f.look as FloaterLook)) fail(`floater "${f.id}": "look" must be one of ${FLOATER_LOOKS.join(', ')}`);
+      if (f.length !== undefined && !(isNumber(f.length) && f.length > 0 && f.length <= 16)) fail(`floater "${f.id}": "length" must be above 0 and at most 16 m`);
+      const rw = f.rewind;
+      if (rw !== undefined && !isNumber(rw) && !(isObject(rw) && isString(rw.railId) && railIds.has(rw.railId) && isNumber(rw.at))) {
+        fail(`floater "${f.id}": rewind must be a place on its rail (a number) or { railId, at }`);
+      }
+    }
+  }
+
   checkMeadow(raw as unknown as StageFile);
 
   return raw as unknown as StageFile;
+}
+
+const COLOR = /^#[0-9a-fA-F]{6}$/;
+
+/** v1.10: `environment.water` (PHASE8 part 2 §2.13). */
+function checkWater(water: unknown): void {
+  if (!Array.isArray(water)) fail('"environment.water" must be an array');
+  water.forEach((w, i) => {
+    const where = `environment.water[${i}]`;
+    if (!isObject(w) || !isNumber(w.y) || !isNumber(w.floor)) fail(`${where}: needs "y" and "floor" numbers`);
+    if (w.floor >= w.y) fail(`${where}: "floor" must be below "y"`);
+    if (w.look !== undefined && !WATER_LOOKS.includes(w.look as WaterLook)) fail(`${where}: "look" must be one of ${WATER_LOOKS.join(', ')}`);
+    const pair = (v: unknown): boolean => Array.isArray(v) && v.length === 2 && v.every(isNumber);
+    const a = w.area;
+    if (a !== undefined) {
+      if (!isObject(a)) fail(`${where}: "area" must be { circle } or { rect }`);
+      if ('circle' in a) {
+        const c = a.circle;
+        if (!isObject(c) || !pair(c.center) || !isNumber(c.radius) || c.radius <= 0) fail(`${where}: circle needs center [x, z] and radius > 0`);
+      } else if ('rect' in a) {
+        const r = a.rect;
+        if (!isObject(r) || !pair(r.center) || !pair(r.size) || !(r.size as number[]).every((n) => n > 0)) fail(`${where}: rect needs center [x, z] and size [across, along] > 0`);
+        if (r.rotationY !== undefined && !isNumber(r.rotationY)) fail(`${where}: rect rotationY must be a number`);
+        if (r.corner !== undefined && !(isNumber(r.corner) && r.corner >= 0)) fail(`${where}: rect corner must be >= 0`);
+      } else fail(`${where}: "area" must be { circle } or { rect }`);
+    }
+    if (w.under !== undefined) {
+      const u = w.under;
+      if (!isObject(u)) fail(`${where}: "under" must be { color, far }`);
+      if (u.color !== undefined && !(typeof u.color === 'string' && COLOR.test(u.color))) fail(`${where}: under.color must be #rrggbb`);
+      if (u.far !== undefined && !(isNumber(u.far) && u.far > 0)) fail(`${where}: under.far must be > 0`);
+    }
+  });
 }
 
 /** A gap as the running game sees it: `rails[].gaps` plus the streams the loader adds for flower bridges. */
@@ -540,5 +597,100 @@ export function validateStageLayout(file: StageFile, network: RailNetwork): void
       const rail = network.getRail(until.railId);
       if (until.at < 0 || until.at > rail.length) fail(`mission "${m.id}" countdown: until at=${until.at} is outside rail "${until.railId}"`);
     }
+  }
+}
+
+/**
+ * v1.10 checks on the water stretches the loader worked out (Rail.surfaces / Rail.dives) and the loader's dive-fork
+ * sides (PHASE8 part 2 §2.13, part 3 §4.9): the jump seat never has to be a jump and "もぐる" at once, floaters float
+ * over a surface stretch, a dive fork has exactly one side going under water, dive records can be reached.
+ */
+export function validateWaterLayout(file: StageFile, network: RailNetwork): void {
+  const waters = file.environment.water ?? [];
+  // Dive forks: on a surface stretch, exactly one side going under water within DIVE.forkReach m (the loader set
+  // it), deep enough to take the whole dive, and the surface side as the default.
+  for (const j of file.junctions) {
+    if (!j.dive) continue;
+    const where = `junction "${j.id}"`;
+    const rail = network.getRail(j.railId);
+    if (!rail.surfaces.some((sp) => j.at >= sp.from && j.at <= sp.to)) fail(`${where}: a dive fork must be on a stretch on the water surface`);
+    if (!j.diveSide) fail(`${where}: exactly one side must go under water within ${DIVE.forkReach} m of the fork`);
+    if (j.default === j.diveSide) fail(`${where}: "default" must be the side that stays on the surface`);
+    const deep = network.getRail(j[j.diveSide] as string);
+    const from = deep.id === j.railId ? j.at : 0;
+    const topY = rail.frameAt(j.at).position.y;
+    const span = deep.dives.find((d) => d.to >= from && d.from <= from + DIVE.forkReach);
+    let lowest = Infinity;
+    if (span) for (let s = span.from; s <= span.to; s += 1) lowest = Math.min(lowest, deep.frameAt(s).position.y);
+    if (topY - lowest < DIVE.depth) fail(`${where}: its dive side must go at least ${DIVE.depth} m below the fork`);
+  }
+  // Every under-water stretch goes deep enough for the whole train and its dome somewhere.
+  for (const rail of network.rails.values()) {
+    for (const d of rail.dives) {
+      const water = waters[d.water];
+      let lowest = Infinity;
+      for (let s = d.from; s <= d.to; s += 1) lowest = Math.min(lowest, rail.frameAt(s).position.y);
+      if (water.y - lowest < TRAIN.height + 0.9) fail(`rail "${rail.id}": the stretch under water at ${d.from.toFixed(0)}–${d.to.toFixed(0)} must reach ${TRAIN.height + 0.9} m below the surface`);
+    }
+  }
+  // Nothing to jump near the water: no gap, jump pad, bough, silk bridge or flower bridge from DIVE.clearBefore m
+  // before a water stretch to DIVE.clearAfter m after it (on the same rail).
+  const near = (railId: string, from: number, to: number): string | null => {
+    const rail = network.getRail(railId);
+    for (const sp of [...rail.surfaces, ...rail.dives]) {
+      if (from <= sp.to + DIVE.clearAfter && to >= sp.from - DIVE.clearBefore) return `the water at ${sp.from.toFixed(0)}–${sp.to.toFixed(0)}`;
+    }
+    return null;
+  };
+  for (const r of file.rails) {
+    for (const g of r.gaps ?? []) {
+      const w = near(r.id, g.from, g.to);
+      if (w) fail(`rail "${r.id}" gap ${g.from}–${g.to}: too near ${w} (no jumping within ${DIVE.clearBefore} m before to ${DIVE.clearAfter} m after)`);
+    }
+  }
+  file.gimmicks.forEach((g, i) => {
+    if (!['jump-pad', 'bough', 'fragile', 'flower-bridge'].includes(g.type) || g.railId === undefined || g.from === undefined) return;
+    const w = near(g.railId, g.from, g.to ?? g.from);
+    if (w) fail(`gimmicks[${i}] ${g.type}: too near ${w}`);
+  });
+  // Floaters float over a surface stretch, 40 m or more apart on one rail, and send the train back to a place on
+  // land or on the surface, before themselves.
+  const floaters = file.floaters ?? [];
+  for (const f of floaters) {
+    const where = `floater "${f.id}"`;
+    const rail = network.getRail(f.railId);
+    const half = (f.length ?? FLOATER[f.look ?? 'log'].length) / 2;
+    if (!rail.surfaces.some((sp) => f.at - half >= sp.from && f.at + half <= sp.to)) fail(`${where}: must float over a stretch on the water surface`);
+    for (const o of floaters) {
+      if (o !== f && o.railId === f.railId && Math.abs(o.at - f.at) < 40) fail(`floaters "${f.id}" and "${o.id}": must be 40 m apart`);
+    }
+    const rw = f.rewind;
+    const target = typeof rw === 'object' ? rw : { railId: f.railId, at: rw ?? f.at - DIVE.rewindBefore };
+    const back = network.rails.get(target.railId);
+    if (!back || target.at < 0 || target.at > back.length) fail(`${where}: rewind at=${target.at} is outside rail "${target.railId}"`);
+    if (back.dives.some((d) => target.at >= d.from && target.at <= d.to)) fail(`${where}: must not rewind under water`);
+    if (target.railId === f.railId && target.at >= f.at - half) fail(`${where}: must rewind to before itself`);
+  }
+  // A dive record is within RECORD.distance of a water stretch (dived there, it is always found). Stages without
+  // water yet (2-2, 2-3: their dive records come with their own water later) are left alone.
+  for (const r of file.records) {
+    if (r.requires !== 'dive' || waters.length === 0) continue;
+    let ok = false;
+    if ('onRail' in r) {
+      const rail = network.getRail(r.onRail.railId);
+      const at = r.onRail.at;
+      ok = [...rail.surfaces, ...rail.dives].some((sp) => at >= sp.from - RECORD.distance && at <= sp.to + RECORD.distance);
+    } else {
+      const [x, , z] = r.position;
+      for (const rail of network.rails.values()) {
+        for (const sp of [...rail.surfaces, ...rail.dives]) {
+          for (let s = sp.from; s <= sp.to && !ok; s += 2) {
+            const p = rail.frameAt(s).position;
+            ok = Math.hypot(p.x - x, p.z - z) <= RECORD.distance;
+          }
+        }
+      }
+    }
+    if (!ok) fail(`record "${r.id}": a dive record must be within ${RECORD.distance} m of a stretch on or under water`);
   }
 }

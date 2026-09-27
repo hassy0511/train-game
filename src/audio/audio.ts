@@ -81,7 +81,7 @@ export class AudioEngine {
     master.connect(ctx.destination);
     this.sfx = ctx.createGain();
     this.sfx.gain.value = this.sfxLevel;
-    this.sfx.connect(master);
+    this.sfx.connect(this.underwaterFilter(ctx, master));
     this.room = ctx.createConvolver();
     this.room.buffer = roomImpulse(ctx);
     const roomLevel = ctx.createGain();
@@ -703,7 +703,81 @@ export class AudioEngine {
     this.ping(160, 0, 0.3, 'sine', 0.15, 90, 0.006, o);
     this.hiss({ delay: 0.05, seconds: 0.4, gain: 0.02, attack: 0.05, filter: 'highpass', freq: 5000, dest: o });
   }
+
+  // ---- v1.10: water ("もぐる") --------------------------------------------------------------------------------
+
+  /** Lowpass between the effects bus and the master (open above water); made in attach(). */
+  private underwaterLp: BiquadFilterNode | null = null;
+  private underwaterOn = false;
+
+  /** The effects bus's way to the master, through the under-water lowpass (called once per context by attach()). */
+  private underwaterFilter(ctx: BaseAudioContext, master: AudioNode): AudioNode {
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.Q.value = 0.5;
+    lp.frequency.value = this.underwaterOn ? UNDERWATER_CUTOFF : OPEN_CUTOFF;
+    lp.connect(master);
+    this.underwaterLp = lp;
+    return lp;
+  }
+
+  /**
+   * v1.10: the train under water: the sounds in the world (everything on the effects bus) go soft and muffled, in
+   * about 0.3 s; the music does not. Asking again for the same does nothing (cheap to call every frame).
+   */
+  setUnderwater(on: boolean): void {
+    if (on === this.underwaterOn) return;
+    this.underwaterOn = on;
+    const lp = this.underwaterLp;
+    if (!lp || !this.ctx) return;
+    lp.frequency.setTargetAtTime(on ? UNDERWATER_CUTOFF : OPEN_CUTOFF, this.ctx.currentTime, 0.1);
+  }
+
+  /** v1.10: a dive: "ぷくっ" (a round bubble going up), then a soft "ざぶん" and a few small bubbles. */
+  playDive(): void {
+    const o = this.out(0.25, 2);
+    this.ping(300, 0, 0.25, 'sine', 0.14, 700, 0.004, o);
+    this.ping(600, 0.03, 0.12, 'sine', 0.04, 900, 0.003, o);
+    this.hiss({ color: 'pink', delay: 0.1, seconds: 0.5, gain: 0.09, attack: 0.02, filter: 'lowpass', freq: 2400, endFreq: 500, q: 0.7, dest: o });
+    this.hiss({ color: 'brown', delay: 0.1, seconds: 0.35, gain: 0.12, filter: 'lowpass', freq: 320, q: 0.7, dest: o });
+    [900, 1300, 1100].forEach((f, i) => this.ping(f, 0.32 + i * 0.07, 0.06, 'sine', 0.04, f * 1.5, 0.003, o));
+  }
+
+  /**
+   * v1.10: up again. "ぷかっ" (`long` false: the front out of a dive): a quick, round pop. "ぷはっ" (the last car
+   * out of the water, the dome off): water running off, then a brighter pop and a little sparkle.
+   */
+  playSurface(long = false): void {
+    const o = this.out(0.3, 2);
+    const at = long ? 0.12 : 0;
+    if (long) {
+      this.hiss({ seconds: 0.4, gain: 0.07, attack: 0.005, freq: 2200, endFreq: 900, q: 0.8, dest: o });
+      this.hiss({ color: 'brown', seconds: 0.3, gain: 0.08, filter: 'lowpass', freq: 400, q: 0.7, dest: o });
+    }
+    this.ping(long ? 600 : 500, at, 0.14, 'sine', 0.14, long ? 1200 : 1000, 0.003, o);
+    this.ping(long ? 900 : 760, at + 0.06, 0.1, 'sine', 0.05, long ? 1500 : 1100, 0.003, o);
+    if (long) this.hiss({ delay: at + 0.05, seconds: 0.4, gain: 0.012, filter: 'highpass', freq: 7000, attack: 0.05, dest: o });
+  }
+
+  /** v1.10: "ぽよん" on the water: the surface gives like jelly (a soft wobble down and back up) and a small splash. */
+  playWaterBounce(): void {
+    const o = this.out(0.2, 1.8);
+    this.ping(360, 0, 0.3, 'sine', 0.14, 200, 0.005, o);
+    this.ping(200, 0.22, 0.35, 'sine', 0.12, 420, 0.005, o);
+    this.ping(720, 0.22, 0.2, 'triangle', 0.03, 840, 0.005, o);
+    this.hiss({ color: 'pink', delay: 0.05, seconds: 0.3, gain: 0.05, attack: 0.01, freq: 1500, endFreq: 700, q: 0.8, dest: o });
+  }
+
+  /** v1.10: a press that only bobs the train (stopped, on land, on the sea floor): "ぷくぷく", three small bubbles. */
+  playBubbles(): void {
+    const o = this.out(0.25, 2);
+    [520, 760, 640].forEach((f, i) => this.ping(f, i * 0.09, 0.08, 'sine', 0.07, f * 1.6, 0.003, o));
+  }
 }
+
+/** v1.10: the effects bus's lowpass above water (open) and under it (muffled), Hz. */
+const OPEN_CUTOFF = 20000;
+const UNDERWATER_CUTOFF = 900;
 
 /** The room's echo: 1.1 s of noise fading out, darker as it fades (made once per context). */
 function roomImpulse(ctx: BaseAudioContext): AudioBuffer {

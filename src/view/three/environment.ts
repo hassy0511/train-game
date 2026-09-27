@@ -12,6 +12,7 @@ import {
   SphereGeometry,
 } from 'three';
 import type { EnvironmentDef } from '../../stage/types';
+import { buildWaterGround } from './water';
 
 export const SKY_RADIUS = 550;
 
@@ -85,7 +86,11 @@ export function addEnvironment(scene: Scene, environment: EnvironmentDef): Mesh 
   sun.target.position.set(0, 0, 0);
   scene.add(sun, sun.target);
 
-  if (environment.ground) {
+  if (environment.water && environment.water.length > 0) {
+    // v1.10: the ground has holes where the ponds are (or is the sea's surface and floor, drawn by the water layer).
+    const ground = buildWaterGround(environment);
+    if (ground) scene.add(ground);
+  } else if (environment.ground) {
     const ground = new Mesh(
       new PlaneGeometry(environment.ground.size, environment.ground.size),
       new MeshLambertMaterial({ color: environment.ground.color }),

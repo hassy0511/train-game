@@ -4,7 +4,7 @@ import { AudioEngine } from './audio/audio';
 import { GAME_TITLE, GAME_TITLE_LINES, PARTNER_NAME } from './config';
 import { StageEventBus } from './core/stage-events';
 import { addToProgress, loadProgress, setResume, type Resume } from './core/progress';
-import { ABILITY_NAMES, MissionRunner, type MissionPorts } from './mission/runner';
+import { ABILITY_NAMES, abilityInUse, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
 import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/loader';
 import type { AbilityId, GimmickDef, Vec3 } from './stage/types';
@@ -13,6 +13,7 @@ import {
   JUMP,
   LEVER_NOTCHES,
   LIGHT,
+  RECORD,
   RESOLUTION_MIN_FPS,
   RESOLUTION_SLOW_SECONDS,
   RESOLUTION_STEPS,
@@ -44,6 +45,7 @@ import { createCountdownPanel } from './ui/countdown-panel';
 import { createSkipButton, type SkipButton } from './ui/skip-button';
 import { RocketSystem } from './gimmick/rocket';
 import { SlopeSystem } from './gimmick/slope';
+import { DiveSystem } from './gimmick/dive';
 import { showZukan } from './ui/zukan';
 import { loadSettings, saveSettings, VOLUME_GAIN, type Settings } from './core/settings';
 import { showSettings } from './ui/settings';
@@ -280,14 +282,22 @@ async function boot(): Promise<void> {
   const [stage, physics] = await Promise.all([loadStage(stageId), PhysicsWorld.create()]);
   for (const rail of stage.file.rails) railLooks.set(rail.id, rail.look);
   const hasMissions = stage.file.missions.length > 0;
-  // The hidden test course has every button, so the jump, the light and the rocket can be tried there.
+  // The hidden test course has every button, so the jump, the light, the rocket and diving can be tried there.
   const abilities = new Set<AbilityId>(
-    hasMissions ? [...loadProgress().abilities, ...(await inheritedAbilities(stageId))] : ['whistle', 'jump', 'light', 'rocket'],
+    hasMissions ? [...loadProgress().abilities, ...(await inheritedAbilities(stageId))] : ['whistle', 'jump', 'light', 'rocket', 'dive'],
   );
-  const train = new Train(stage.network, stage.file.junctions, stage.file.start);
+  const train = new Train(stage.network, stage.file.junctions, stage.file.start, {
+    waters: stage.file.environment.water ?? [],
+    floaters: stage.file.floaters ?? [],
+  });
   // 2-3: slopes and the rocket also work on the test course (no mission runner there).
   const slopes = new SlopeSystem(stage.file.gimmicks, train);
   const rocket = new RocketSystem(stage.file.gimmicks, train, slopes);
+  // v1.10: records found so far (the save's; the test course's only for this run), for the dive button's glow.
+  const foundRecords = new Set<string>(hasMissions ? loadProgress().records : []);
+  // v1.10: near water the jump seat turns into "もぐる".
+  const dive = new DiveSystem(train, stage.records, (id) => foundRecords.has(id));
+  let diveBounces = 0;
   const whistle = new Whistle();
   const audio = new AudioEngine();
   // The island's quiet sound around the train (from the first tap on; under the title too).
@@ -361,7 +371,10 @@ async function boot(): Promise<void> {
   const actionButtons = uiEl.querySelector('.action-buttons') as HTMLElement;
   const jumpButton = createJumpButton(actionButtons, () => {
     audio.unlock();
-    const result = train.jump();
+    // v1.10: the seat is "もぐる" near water (the train's events play its sounds).
+    const press = dive.press();
+    if (press.kind === 'dive') return;
+    const result = press.result;
     if (result === 'ok') {
       // With a grasshopper on the roof the jump goes "びよーん".
       if (train.jumpBoost) audio.playHopperJump();
@@ -391,6 +404,11 @@ async function boot(): Promise<void> {
   const showAbility = (ability: AbilityId): void => {
     abilities.add(ability);
     if (ability === 'jump') jumpButton.show();
+    if (ability === 'dive') {
+      // "もぐる" takes the jump's seat (no new round button).
+      dive.enabled = true;
+      jumpButton.show();
+    }
     if (ability === 'light') lightButton.show();
     if (ability === 'rocket') {
       rocket.enabled = true;
@@ -408,7 +426,7 @@ async function boot(): Promise<void> {
   const cargo = createCargoStrip(uiEl);
   const toast = createToast(uiEl);
   /** What a fall fades to: black, a white cloud (1-3) or a green leaf (2-1). */
-  const FALL_COLORS = { dark: '#000000', cloud: '#ffffff', leaf: '#d6efb4' } as const;
+  const FALL_COLORS = { dark: '#000000', cloud: '#ffffff', leaf: '#d6efb4', water: '#cdeefe' } as const;
   const fade = createFade(uiEl, FALL_COLORS[stage.file.environment.fall ?? 'dark']);
   const doorButton = createDoorButton(actionButtons);
   const countdownPanel = createCountdownPanel(uiEl);
@@ -487,6 +505,59 @@ async function boot(): Promise<void> {
       await fade(false, 0.4);
     })();
   });
+
+  // v1.10: diving. The sounds, the view's dome and splashes; "ぽよん" is the runner's fail (the test course puts the
+  // train back itself).
+  let dives = 0;
+  let bobs = 0;
+  app.dataset.dives = '0';
+  app.dataset.bobs = '0';
+  app.dataset.diveBounces = '0';
+  train.events.on('dived', () => {
+    dives += 1;
+    app.dataset.dives = String(dives);
+    audio.playDive();
+    events.post({ type: 'dive', state: 'dive', railId: train.state.railId, s: train.frontS });
+  });
+  train.events.on('surfaced', ({ long }) => {
+    audio.playSurface(long);
+    events.post({ type: 'dive', state: 'surface', long, railId: train.state.railId, s: train.frontS });
+  });
+  train.events.on('bob', () => {
+    bobs += 1;
+    app.dataset.bobs = String(bobs);
+    audio.playBubbles();
+    events.post({ type: 'dive', state: 'bob' });
+  });
+  train.events.on('dome', ({ on, instant }) => events.post({ type: 'dome', on, instant }));
+  events.post({ type: 'dome', on: train.domeOn, instant: true });
+  train.events.on('waterBounce', ({ rewind, railId, s }) => {
+    diveBounces += 1;
+    app.dataset.diveBounces = String(diveBounces);
+    audio.playWaterBounce();
+    events.post({ type: 'dive', state: 'bounce', railId, s });
+    if (hasMissions) return;
+    void (async () => {
+      await waitSeconds(0.8);
+      await fade(true, 0.4);
+      train.rewindTo(rewind.at, rewind.railId);
+      rocket.reset();
+      rocket.refill();
+      ui.lever.setNotch(STOP_NOTCH);
+      events.post({ type: 'rewind' });
+      await fade(false, 0.4);
+    })();
+  });
+  dive.events.on('near', () => runner?.onDiveNear());
+  events.on('event', (e) => {
+    if (e.type === 'rewind') dive.reset();
+    if (e.type === 'record:found') foundRecords.add(e.id);
+  });
+  // In the cab under water: the dome's rim round the screen edge (CSS shows it by #app[data-underwater]).
+  const diveVignette = document.createElement('div');
+  diveVignette.className = 'dive-vignette';
+  diveVignette.innerHTML = '<i></i><i></i><i></i>';
+  uiEl.prepend(diveVignette);
 
   train.events.on('hardBrake', () => {
     fx.dip = Math.max(fx.dip, 0.5 * shakeScale());
@@ -585,6 +656,24 @@ async function boot(): Promise<void> {
       if (frameErrors <= 5) console.error('frame error', err);
     }
   };
+  /**
+   * v1.10: the test course has no runner: its records are found here the same way (not saved), so a dive record can
+   * be tried there.
+   */
+  const findTestCourseRecords = (): void => {
+    for (const record of stage.records) {
+      if (foundRecords.has(record.def.id) || !abilityInUse(record.def.requires, train, lightOn)) continue;
+      const d = record.onRail
+        ? train.distanceAhead(record.onRail.railId, record.onRail.at)
+        : record.position.distanceTo(train.getPose().position);
+      if (d === null || Math.abs(d) > RECORD.distance) continue;
+      foundRecords.add(record.def.id);
+      app.dataset.records = [...foundRecords].join(',');
+      events.post({ type: 'record:found', id: record.def.id });
+      toast.show(`みつけた！\n${record.def.name}`, 'perfect');
+      audio.playRecord();
+    }
+  };
   const tick = (now: number): void => {
     const dt = Math.min((now - last) / 1000, MAX_DT);
     last = now;
@@ -622,6 +711,11 @@ async function boot(): Promise<void> {
     rocket.update();
 
     train.update(dt);
+    dive.update(dt);
+    audio.setUnderwater(train.submerged);
+    // Under water the island's sound turns to the underwater bed, and the rails to a soft "ことっ" with bubbles.
+    audio.setAmbienceUnderwater(train.submerged);
+    view.setSubmerged(train.submerged);
     audio.updateRun(dt, {
       speed: Math.abs(train.state.speed),
       target: train.targetSpeed,
@@ -629,6 +723,7 @@ async function boot(): Promise<void> {
       airborne: train.airborne || train.isFalling,
       surface: runSurface(gimmicks, train.currentRail.id, train.frontS),
       rocket: train.rocketBurning,
+      underwater: train.submerged,
       quiet: false,
     });
     app.dataset.runJoints = String(audio.runStats.joints);
@@ -636,8 +731,12 @@ async function boot(): Promise<void> {
     boughs.update(dt);
     whistle.update(dt);
     ui.whistle.setProgress(whistle.progress);
-    jumpButton.set(train.jumpProgress, train.jumpWouldClear || (runner?.jumpHint ?? false), train.state.speed < JUMP.minSpeed);
+    jumpButton.setMode(dive.face);
+    jumpButton.setDiving(train.domeOn);
+    if (dive.face === 'dive') jumpButton.set(train.diveProgress, dive.glow && (runner === null || runner.phase === 'driving'), false);
+    else jumpButton.set(train.jumpProgress, train.jumpWouldClear || (runner?.jumpHint ?? false), train.state.speed < JUMP.minSpeed);
     runner?.update(dt);
+    if (!runner) findTestCourseRecords();
     // 2-3: the volcano's everyday smoke ring, more often while a countdown runs.
     if (hasVolcano) {
       volcanoPuffIn -= dt;
@@ -723,6 +822,10 @@ async function boot(): Promise<void> {
     app.dataset.push = train.rocketPushing ? '1' : '0';
     app.dataset.slope = slopes.kind;
     app.dataset.slip = train.isSlipping ? '1' : '0';
+    app.dataset.dive = train.domeOn ? 'on' : dive.face === 'dive' ? 'near' : '';
+    app.dataset.diving = train.diving ? '1' : '0';
+    app.dataset.submerged = train.submerged ? '1' : '0';
+    app.dataset.underwater = view.isCameraUnderwater() ? '1' : '0';
     app.dataset.timer = timer ? String(timer.seconds) : '';
     app.dataset.timerState = timer?.state ?? '';
     if (runner) {
@@ -853,8 +956,8 @@ async function boot(): Promise<void> {
     cameraFx: (dip, shake) => {
       fx.dip = Math.max(fx.dip, dip * shakeScale());
       fx.shake = Math.max(fx.shake, shake * shakeScale());
-      // A bumped rock has its own rounder "ぽよん" (played with its bonk).
-      if (lastFailReason !== 'rock') audio.playBoing();
+      // A bumped rock has its own rounder "ぽよん" (played with its bonk), and so does the water (v1.10).
+      if (lastFailReason !== 'rock' && lastFailReason !== 'dive') audio.playBoing();
     },
     resetLever: () => ui.lever.setNotch(STOP_NOTCH),
     gauge: (state) => gauge.set(state),

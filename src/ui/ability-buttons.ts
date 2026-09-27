@@ -6,6 +6,10 @@ export interface JumpButton {
   set(progress: number, glow: boolean, idle: boolean): void;
   /** A grasshopper rides on the roof: the ring turns green and the icon becomes a grasshopper (2-2). */
   setHopper(on: boolean): void;
+  /** v1.10: the seat's face: "jump", or "dive" near water (blue, "もぐる"; a quick turn when it changes). */
+  setMode(mode: 'jump' | 'dive'): void;
+  /** v1.10: diving now (bubbles rise in the face). */
+  setDiving(on: boolean): void;
 }
 
 export interface LightButton {
@@ -129,8 +133,18 @@ function roundButton(root: HTMLElement, id: string, label: string, icon: string,
 
 /** Jump: fires on pointerdown. Grey while stopped, cooldown ring after landing, glows when now is the moment. */
 export function createJumpButton(root: HTMLElement, onPress: () => void): JumpButton {
-  const button = roundButton(root, 'jump', 'ジャンプ', JUMP_ICON.replace('class="icon"', 'class="icon icon-jump"') + HOPPER_ICON, 'is-jump');
+  const button = roundButton(
+    root,
+    'jump',
+    'ジャンプ',
+    JUMP_ICON.replace('class="icon"', 'class="icon icon-jump"') + HOPPER_ICON + DIVE_ICON.replace('class="icon"', 'class="icon icon-dive"'),
+    'is-jump',
+  );
   button.dataset.hopper = '0';
+  button.dataset.mode = 'jump';
+  button.dataset.diving = '0';
+  button.querySelector('.face')?.insertAdjacentHTML('beforeend', '<span class="dive-bubbles" aria-hidden="true"><i></i><i></i><i></i></span>');
+  const label = button.querySelector('.label') as HTMLElement;
   button.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     onPress();
@@ -152,6 +166,21 @@ export function createJumpButton(root: HTMLElement, onPress: () => void): JumpBu
     },
     setHopper(on): void {
       button.dataset.hopper = on ? '1' : '0';
+    },
+    setMode(mode): void {
+      if (button.dataset.mode === mode) return;
+      button.dataset.mode = mode;
+      const text = mode === 'dive' ? 'もぐる' : 'ジャンプ';
+      label.textContent = text;
+      button.setAttribute('aria-label', text);
+      // The face turns round once as it changes (restart the animation).
+      button.classList.remove('is-turning');
+      void button.offsetWidth;
+      button.classList.add('is-turning');
+    },
+    setDiving(on): void {
+      const v = on ? '1' : '0';
+      if (button.dataset.diving !== v) button.dataset.diving = v;
     },
   };
 }
