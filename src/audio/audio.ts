@@ -291,6 +291,20 @@ export class AudioEngine {
     this.hiss({ delay: 0.05, seconds: 0.6, gain: 0.015, filter: 'highpass', freq: 7000, attack: 0.08, dest: this.out(0.4) });
   }
 
+  /** The map's water light reaches an island (chapter 3's end): a round, wet "ぽこん" of a bubble coming up. */
+  playBubblePop(): void {
+    const wet = this.out(0.3, 1.4);
+    this.ping(380, 0, 0.16, 'sine', 0.16, 900, 0.004, wet);
+    this.ping(760, 0.05, 0.1, 'sine', 0.05, 1300, 0.003, wet);
+    this.hiss({ delay: 0.01, seconds: 0.06, gain: 0.02, freq: 1400, q: 3, dest: wet });
+  }
+
+  /** Powder snow falls on the map's islands: a soft "しゃらん" (a quick run of high bells over a hush of air). */
+  playSnowShimmer(): void {
+    [2093, 2637, 3136, 2349, 2794].forEach((f, i) => this.bell(f, i * 0.06, 0.05, 0.7));
+    this.hiss({ seconds: 0.9, gain: 0.012, attack: 0.15, filter: 'highpass', freq: 6500, dest: this.out(0.4) });
+  }
+
   /** A two-tone steam-whistle-like chord with a breath of air, a soft attack and a short tail in the room. */
   playWhistle(): void {
     const ctx = this.ctx;

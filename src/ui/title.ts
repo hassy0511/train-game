@@ -23,8 +23,11 @@ const RAIL = `<svg class="title-rail" viewBox="0 0 440 30" aria-hidden="true">
 export interface TitleOptions {
   /** The title in lines (two: "ワンダーごうと" / "ふしぎな せかい"). */
   lines?: readonly string[];
-  /** Chapters so far with a star once all their islands are cleared ("1しょう ★ 2しょう ☆"); shown from the first star. */
-  chapters?: { label: string; done: boolean }[];
+  /**
+   * Chapters so far with a star once all their islands are cleared ("1しょう ★ 2しょう ☆"); shown from the first star.
+   * `faint`: its first island is not open yet (a chapter still ahead).
+   */
+  chapters?: { label: string; done: boolean; faint?: boolean }[];
   /**
    * Label of the "continue" button: a mission to go on from ("つづきから（2-1 ミッション 2）") or the next stage
    * ("つづきから（きょうりゅうの たに）"); omitted = no button.
@@ -107,7 +110,7 @@ export function showTitle(root: HTMLElement, title: string, options: TitleOption
       row.className = 'title-chapters';
       for (const c of chapters) {
         const item = document.createElement('span');
-        item.className = c.done ? 'title-chapter is-done' : 'title-chapter';
+        item.className = `title-chapter${c.done ? ' is-done' : ''}${c.faint && !c.done ? ' is-faint' : ''}`;
         const star = document.createElement('span');
         star.className = 'title-star';
         star.textContent = c.done ? '★' : '☆';

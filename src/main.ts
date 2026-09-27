@@ -52,6 +52,7 @@ import { createPause } from './ui/pause';
 import { linkKey, showMap, type MapChoice, type MapFinale, type MapIsland, type MapTeaser } from './ui/map';
 import world from './world/world.json';
 import type { WorldChapter, WorldFile } from './world/types';
+import { crossPages, knownPages, linkOptions, openingPage, type PageFacts } from './world/pages';
 
 const app = document.getElementById('app') as HTMLElement;
 const viewEl = document.getElementById('view') as HTMLElement;
@@ -97,9 +98,11 @@ function registerOffline(): void {
 
 /**
  * The world map, from the stages and the save. The rail to a newly opened island grows in once (the links
- * shown are saved right away, so leaving early does not replay it). A chapter's closing rail is the exception
- * (docs/PHASE7_FINISH.md §3): its light and card play, and only once the card is closed is the link saved, so
- * leaving in the middle shows it again next time. It waits for the whole chapter to be cleared.
+ * shown are saved right away, so leaving early does not replay it). A chapter's end is the exception
+ * (docs/PHASE7_FINISH.md §3, docs/PHASE8_CHAPTER3_4.md 第 1 部 §4): its light and card play, and only once the card
+ * is closed is its link (or "finale:<id>" for an end without one) saved, so leaving in the middle shows it again
+ * next time. It waits for the whole chapter to be cleared. Rails through the cloud gate to another page, and rails
+ * that wait for the end's card, grow after it and are saved once they are all in (§3.6).
  */
 async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: string; closeLabel?: string }): Promise<MapChoice> {
   const file = world as unknown as WorldFile;
@@ -124,38 +127,85 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
       resumeMission: resume?.stage === island.id ? resume.mission : undefined,
     });
   }
+  const done = (id: number): boolean => {
+    const chapter = file.chapters.find((c) => c.id === id);
+    return !!chapter && chapterDone(file, chapter, progress.cleared);
+  };
+  // A rail is laid once its `from` is cleared, and a rail out of a chapter (`afterChapter`) once that chapter is done.
   const laid = file.links
-    .filter(([from, to]) => !to.startsWith('teaser:') && progress.cleared.includes(from))
+    .filter(([from, to, opts]) => !to.startsWith('teaser:') && progress.cleared.includes(from) && (opts?.afterChapter === undefined || done(opts.afterChapter)))
     .map(([from, to]) => linkKey(from, to));
   // A chapter's closing rail waits for the whole chapter (a stage opened on its own with ?stage= does not
   // finish it): until then it is drawn but neither new nor saved, so its finale still plays the first time
   // the chapter is really done.
-  const waiting = new Set(
-    file.chapters.filter((c) => c.finale && !chapterDone(file, c, progress.cleared)).map((c) => c.finale?.link),
-  );
+  const waiting = new Set(file.chapters.filter((c) => c.finale?.link && !done(c.id)).map((c) => c.finale?.link));
   const fresh = laid.filter((key) => !progress.mapLinks.includes(key) && !waiting.has(key));
-  // The latest chapter whose closing rail is drawn now.
-  const ending = [...file.chapters].reverse().find((c) => c.finale && fresh.includes(c.finale.link))?.finale;
-  addToProgress('mapLinks', fresh.filter((key) => key !== ending?.link));
-  const finale: MapFinale | undefined = ending && {
-    link: ending.link,
-    ring: ending.ring,
-    onHop: () => audio.playRecord(),
-    onShown: async () => {
-      if (ending.ring) audio.playFanfare();
-      else audio.playCard();
-      await showCard(root, ending.card, ending.button, ending.icon, FINALE_CARD_GUARD_SECONDS);
-      addToProgress('mapLinks', [ending.link]);
-    },
-  };
-  // The next chapter's "?" island, once the chapter its `after` island belongs to is done.
-  const later = file.chapters.find((c) => {
-    if (!c.teaser) return false;
-    const before = file.chapters.find((b) => b.id === file.islands.find((i) => i.id === c.teaser?.after)?.chapter);
-    return progress.cleared.includes(c.teaser.after) && !!before && chapterDone(file, before, progress.cleared);
+  // The latest chapter whose end shows now: its closing rail is new, or (an end without one) it is done and not seen.
+  const endingChapter = [...file.chapters].reverse().find((c) => {
+    if (!c.finale) return false;
+    return c.finale.link ? fresh.includes(c.finale.link) : done(c.id) && !progress.mapLinks.includes(`finale:${c.id}`);
   });
-  const teaser: MapTeaser | undefined = later?.teaser && { id: `teaser:${later.id}`, ...later.teaser };
-  return showMap(root, file, { islands, laid, fresh, finale, teaser, ...options });
+  const ending = endingChapter?.finale;
+  // Through the gate to another page, or waiting for this end's card: they grow after it, saved once they are in.
+  const later = fresh.filter(
+    (key) => key !== ending?.link && (crossPages(file, key) !== null || (!!endingChapter && linkOptions(file, key)?.afterChapter === endingChapter.id)),
+  );
+  addToProgress('mapLinks', fresh.filter((key) => key !== ending?.link && !later.includes(key)));
+  let finale: MapFinale | undefined;
+  if (endingChapter && ending) {
+    const light = ending.light ?? 'gold';
+    const last = ending.path?.[ending.path.length - 1];
+    const lastChapter = file.islands.find((i) => i.id === last)?.chapter;
+    const opens = islands.find((i) => i.id === last && i.unlocked && !i.cleared);
+    finale = {
+      chapter: endingChapter.id,
+      link: ending.link,
+      ring: ending.ring,
+      path: ending.path,
+      light,
+      // The water light ends on the next chapter's first island: it wakes up then, and snow falls on its chapter.
+      wake: light === 'water' && opens ? [opens.id] : undefined,
+      snow: light === 'water' ? file.islands.filter((i) => i.chapter === lastChapter).map((i) => i.id) : undefined,
+      onHop: () => (light === 'water' ? audio.playBubblePop() : audio.playRecord()),
+      onSnow: () => audio.playSnowShimmer(),
+      onShown: async () => {
+        if (ending.ring || ending.path) audio.playFanfare();
+        else audio.playCard();
+        await showCard(root, ending.card, ending.button, ending.icon, FINALE_CARD_GUARD_SECONDS);
+        addToProgress('mapLinks', [ending.link ?? `finale:${endingChapter.id}`]);
+      },
+    };
+  }
+  // The next chapter's "?" island, once the chapter its `after` island belongs to is done.
+  const coming = file.chapters.find((c) => {
+    if (!c.teaser) return false;
+    const before = file.islands.find((i) => i.id === c.teaser?.after)?.chapter;
+    return progress.cleared.includes(c.teaser.after) && before !== undefined && done(before);
+  });
+  const teaser: MapTeaser | undefined = coming?.teaser && { id: `teaser:${coming.id}`, ...coming.teaser };
+  // Which pages the child knows about, and the one to open on (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3.4–3.5).
+  const facts: PageFacts = {
+    unlocked: islands.filter((i) => i.title && i.unlocked).map((i) => i.id),
+    cleared: progress.cleared,
+    laid,
+    fresh,
+    teaser: teaser?.id,
+    next: options.next,
+    finale: endingChapter?.id,
+  };
+  const pages = knownPages(file, facts);
+  return showMap(root, file, {
+    islands,
+    laid,
+    fresh,
+    later,
+    onLinkShown: (key) => addToProgress('mapLinks', [key]),
+    finale,
+    teaser,
+    pages,
+    page: openingPage(file, facts, pages),
+    ...options,
+  });
 }
 
 /** A chapter's end card: its button comes after this long (the map ignored taps until then; the child may still be tapping). */
@@ -168,15 +218,27 @@ function chapterDone(file: WorldFile, chapter: WorldChapter, cleared: string[]):
   return ids.length > 0 && ids.every((id) => cleared.includes(id));
 }
 
-/** Chapters with islands, and whether every one of their islands is cleared (the title's stars). */
-function chapterStars(): { label: string; done: boolean }[] {
+/**
+ * Chapters with islands, and whether every one of their islands is cleared (the title's stars). A chapter whose
+ * first island is not open yet (or has no stage yet) is shown faint.
+ */
+async function chapterStars(): Promise<{ label: string; done: boolean; faint: boolean }[]> {
   const file = world as unknown as WorldFile;
   const cleared = loadProgress().cleared;
-  return file.chapters
-    .map((c) => ({ id: c.id, islands: file.islands.filter((i) => i.chapter === c.id) }))
-    .filter((c) => c.islands.length > 0)
-    .map((c) => ({ label: `${c.id}しょう`, done: c.islands.every((i) => cleared.includes(i.id)) }));
+  const out: { label: string; done: boolean; faint: boolean }[] = [];
+  for (const chapter of file.chapters) {
+    const ids = file.islands
+      .filter((i) => i.chapter === chapter.id)
+      .map((i) => i.id)
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    if (ids.length === 0) continue;
+    const first = await peekStage(ids[0]);
+    const open = !!first && first.unlock.requires.every((r) => cleared.includes(r));
+    out.push({ label: `${chapter.id}しょう`, done: ids.every((id) => cleared.includes(id)), faint: !open });
+  }
+  return out;
 }
+
 
 /**
  * What the track sounds like under the train front: a "sound" zone (v1.9) wins; else silk rails are silk, and a
@@ -691,7 +753,7 @@ async function boot(): Promise<void> {
     audio.playMusic('title');
     const choice = await showTitle(uiEl, GAME_TITLE, {
       lines: GAME_TITLE_LINES,
-      chapters: chapterStars(),
+      chapters: await chapterStars(),
       continueLabel: resume
         ? `つづきから（${resume.stage} ミッション ${resume.mission + 1}）`
         : next && next.id !== stageId

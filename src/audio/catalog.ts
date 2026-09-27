@@ -42,4 +42,6 @@ export const SOUNDS: SoundEntry[] = [
   { group: 'おしらせ', id: 'boing', label: 'しっぱい（ぼよん）', play: (a) => a.playBoing() },
   { group: 'おしらせ', id: 'record', label: 'きろく みつけた', play: (a) => a.playRecord() },
   { group: 'おしらせ', id: 'fanfare', label: 'クリア', play: (a) => a.playFanfare() },
+  { group: 'ちず', id: 'bubble-pop', label: 'みずの ひかり（ぽこん）', play: (a) => a.playBubblePop() },
+  { group: 'ちず', id: 'snow-shimmer', label: 'こなゆき（しゃらん）', play: (a) => a.playSnowShimmer() },
 ];

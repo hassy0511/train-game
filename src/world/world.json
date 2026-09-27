@@ -1,8 +1,19 @@
 {
-  "_doc": "The world map (docs/PHASE4_DESIGN.md). Islands are placed in % of the map area (x from the left, y from the top). An island without a stage file yet is shown as a '?' silhouette. `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees. `chapters[].finale` plays once when its link is first drawn (a ring of lights, then a card); `chapters[].teaser` is a later chapter's single \"?\" island (docs/PHASE7_FINISH.md §3). A link's optional `via` is the curve's control point in %.",
+  "_doc": "The world map (docs/PHASE4_DESIGN.md), in pages of two chapters (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3): a chapter's `page` is where its islands are; `pages[].title` is the heading beside \"ちず\" once there is more than one page. Islands are placed in % of the map area (x from the left, y from the top) of their page. An island without a stage file yet is shown as a '?' silhouette. `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees. `chapters[].finale` plays once when its link is first drawn, or without a link once the chapter is done (a light — gold round a `ring`, water along a `path`, or an aurora — then a card); `chapters[].teaser` is a later chapter's single \"?\" island on the page of its `from` island (docs/PHASE7_FINISH.md §3). A link's optional `via` is the curve's control point in %; `afterChapter` holds it back until that chapter is done; `exit`/`enter` take it to another page through the cloud gate (the gate's place on each page, with the curve to it).",
+  "pages": [
+    {
+      "id": 1,
+      "title": "1しょう・2しょう"
+    },
+    {
+      "id": 2,
+      "title": "3しょう みず・4しょう こおりと ゆき"
+    }
+  ],
   "chapters": [
     {
       "id": 1,
+      "page": 1,
       "title": "1しょう はじまり",
       "finale": {
         "link": "1-3>2-1",
@@ -12,6 +23,7 @@
     },
     {
       "id": 2,
+      "page": 1,
       "title": "2しょう いきものの せかい",
       "finale": {
         "link": "2-3>1-1",
@@ -30,13 +42,51 @@
     },
     {
       "id": 3,
-      "title": "3しょう みずとこおり",
+      "page": 2,
+      "title": "3しょう みず",
+      "finale": {
+        "link": "3-3>4-1",
+        "path": [
+          "3-1",
+          "3-2",
+          "3-3",
+          "4-1"
+        ],
+        "light": "water",
+        "card": "3しょう クリア！\nみずの せかいが\nぜんぶ つながった！",
+        "button": "つぎへ",
+        "icon": "wave"
+      }
+    },
+    {
+      "id": 4,
+      "page": 2,
+      "title": "4しょう こおりと ゆき",
+      "finale": {
+        "path": [
+          "3-1",
+          "3-2",
+          "3-3",
+          "4-1",
+          "4-2",
+          "4-3"
+        ],
+        "light": "aurora",
+        "card": "4しょう クリア！\nこおりと ゆきの せかいも\nぜんぶ つながった！",
+        "button": "やったね！",
+        "icon": "snow"
+      }
+    },
+    {
+      "id": 5,
+      "page": 3,
+      "title": "5しょう ふしぎな せかい",
       "teaser": {
-        "label": "3しょう",
-        "x": 16,
-        "y": 26,
-        "from": "1-1",
-        "after": "2-3",
+        "label": "5しょう",
+        "x": 91,
+        "y": 42,
+        "from": "4-3",
+        "after": "4-3",
         "line": "つづきは また こんど！"
       }
     }
@@ -183,7 +233,7 @@
             "scale": 0.8,
             "local": [
               0,
-              8.0,
+              8,
               4.8
             ]
           },
@@ -585,7 +635,7 @@
             ],
             "rotY": 20,
             "scale": 0.4,
-            "lift": 7.0
+            "lift": 7
           },
           {
             "model": "cloud-a",
@@ -673,6 +723,42 @@
           }
         ]
       }
+    },
+    {
+      "id": "3-1",
+      "chapter": 3,
+      "x": 17,
+      "y": 26
+    },
+    {
+      "id": "3-2",
+      "chapter": 3,
+      "x": 42,
+      "y": 20
+    },
+    {
+      "id": "3-3",
+      "chapter": 3,
+      "x": 67,
+      "y": 28
+    },
+    {
+      "id": "4-1",
+      "chapter": 4,
+      "x": 22,
+      "y": 74
+    },
+    {
+      "id": "4-2",
+      "chapter": 4,
+      "x": 48,
+      "y": 80
+    },
+    {
+      "id": "4-3",
+      "chapter": 4,
+      "x": 74,
+      "y": 72
     }
   ],
   "links": [
@@ -708,11 +794,60 @@
     ],
     [
       "1-1",
-      "teaser:3",
+      "3-1",
+      {
+        "afterChapter": 2,
+        "exit": {
+          "x": 14,
+          "y": 26,
+          "via": [
+            8,
+            46
+          ]
+        },
+        "enter": {
+          "x": 5,
+          "y": 54,
+          "via": [
+            6,
+            30
+          ]
+        }
+      }
+    ],
+    [
+      "3-1",
+      "3-2"
+    ],
+    [
+      "3-2",
+      "3-3"
+    ],
+    [
+      "3-3",
+      "4-1",
       {
         "via": [
-          8,
-          46
+          46,
+          50
+        ]
+      }
+    ],
+    [
+      "4-1",
+      "4-2"
+    ],
+    [
+      "4-2",
+      "4-3"
+    ],
+    [
+      "4-3",
+      "teaser:5",
+      {
+        "via": [
+          88,
+          64
         ]
       }
     ]
