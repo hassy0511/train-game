@@ -87,6 +87,15 @@ export interface TrackLooks {
   slopes: { railId: string; from: number; to: number; kind: 'up' | 'down' }[];
   bases: Map<string, RailBaseDef>;
   groundY: number | null;
+  /** v1.10 (4-1): stretches whose bed has its own colour (ice: pale blue, thin ice: deeper blue). Later ones win. */
+  beds?: { railId: string; from: number; to: number; color: string }[];
+}
+
+/** v1.10: the bed colour of a stretch (TrackLooks.beds), or null. */
+function bedColorAt(looks: TrackLooks | undefined, railId: string, s: number): string | null {
+  let color: string | null = null;
+  for (const b of looks?.beds ?? []) if (b.railId === railId && s >= b.from && s <= b.to) color = b.color;
+  return color;
 }
 
 interface GeometryData {
@@ -490,6 +499,8 @@ function buildChunkParts(
   const deckData: GeometryData = { positions: [], indices: [] };
   const floats: BufferGeometry[] = [];
   const onSurface = (s: number): boolean => rail.surfaces.some((sp) => s >= sp.from && s <= sp.to);
+  // v1.10: beds in their own colours (ice).
+  const bedData = new Map<string, GeometryData>();
   const base = looks?.bases.get(rail.id);
   const hasBase = (s: number): boolean =>
     !!base && !isInGap(rail, s) && !skipped(skips, s) && !(base.skip ?? []).some((k) => s > k.from && s < k.to);
@@ -505,7 +516,15 @@ function buildChunkParts(
     addRailSegment(railData, start, end, RAIL_HALF_GAUGE);
     const kind = slopeKindAt(looks, rail.id, mid);
     if (onSurface(mid)) addDeckSegment(deckData, start, end);
-    else addBallastSegment(kind === 'up' ? steepData : kind === 'down' ? slideData : ballastData, start, end);
+    else {
+      const bed = kind === null ? bedColorAt(looks, rail.id, mid) : null;
+      let bedTarget = ballastData;
+      if (bed) {
+        bedTarget = bedData.get(bed) ?? { positions: [], indices: [] };
+        bedData.set(bed, bedTarget);
+      }
+      addBallastSegment(kind === 'up' ? steepData : kind === 'down' ? slideData : bedTarget, start, end);
+    }
     if (base && hasBase(mid)) {
       const before = index === 0 ? -1 : (samples[index - 1] + startS) / 2;
       const after = index + 2 < samples.length ? (endS + samples[index + 2]) / 2 : rail.length + 1;
@@ -537,6 +556,7 @@ function buildChunkParts(
   if (ballastData.indices.length) parts.push(painted(makeGeometry(ballastData), BALLAST_COLOR));
   if (steepData.indices.length) parts.push(painted(makeGeometry(steepData), STEEP_BALLAST_COLOR));
   if (slideData.indices.length) parts.push(painted(makeGeometry(slideData), SLIDE_BALLAST_COLOR));
+  for (const [color, data] of bedData) if (data.indices.length) parts.push(painted(makeGeometry(data), new Color(color)));
   if (chevronData.indices.length) parts.push(painted(makeGeometry(chevronData), CHEVRON_COLOR));
   if (baseData.indices.length) {
     const groundY = looks?.groundY ?? null;

@@ -1,10 +1,11 @@
 import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
 import { buildRailNetwork } from '../rail/network';
 import type { RailNetwork } from '../rail/types';
+import { iceZones, thinIceZones } from '../gimmick/ice';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import type { Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
-import { validateStageFile, validateStageLayout, validateWaterLayout } from './validate';
+import { validateIceLayout, validateStageFile, validateStageLayout, validateWaterLayout } from './validate';
 import { computeWaterSpans, diveForkSide } from './water';
 
 // One chunk per stage file; stages load lazily.
@@ -59,6 +60,7 @@ export async function loadStage(id: string): Promise<StageData> {
   computeWaterSpans(file, network);
   for (const j of file.junctions) if (j.dive) j.diveSide = diveForkSide(j, network) ?? undefined;
   validateWaterLayout(file, network);
+  validateIceLayout(file, network);
   const groundY = file.environment.ground?.y ?? null;
 
   const props: ResolvedProp[] = [...file.props, ...autoSigns(file)].map((p) => {
@@ -130,6 +132,9 @@ function autoSigns(file: StageFile): PropDef[] {
   const out: PropDef[] = [];
   for (const z of slopeZones(file.gimmicks)) if (z.sign) out.push(sign(z.kind === 'up' ? 'sign-steep' : 'sign-slide', z.railId, z.from));
   for (const z of rocketZones(file.gimmicks)) if (!z.allow) out.push(sign('sign-no-rocket', z.railId, z.from));
+  // v1.10 (4-1): ice (a snow crystal) and thin ice (cracks and the rocket).
+  for (const z of iceZones(file.gimmicks)) if (z.sign) out.push(sign('sign-ice', z.railId, z.from));
+  for (const z of thinIceZones(file.gimmicks)) if (z.sign) out.push(sign('sign-thin-ice', z.railId, Math.max(0, z.from - 20)));
   return out;
 }
 

@@ -41,7 +41,9 @@ export type StageEvent =
         // v1.10: "ぽよん" off a floater, or water without the dome (soft)
         | 'dive'
         // v1.10 (3-1): "ぽよん" off a floater (soft; its own line)
-        | 'floater';
+        | 'floater'
+        // v1.10 (4-1): through thin ice, "ぽちゃん" (soft: the train bobs back up)
+        | 'crack';
     }
   /**
    * Back to a station after a failure (or a resume). `boarded`: passengers who already got on this run, per station
@@ -120,6 +122,15 @@ export type StageEvent =
   | { type: 'bubbles:true'; junctionId: string }
   /** v1.10 (3-1): a big bubble pops ("ぱちん") at cutscene figure `id` (or in front of the camera). */
   | { type: 'pop'; id?: string }
+  /** v1.10 (4-1): slowing down on ice (the wheels throw up sparkling ice dust) or not any more. */
+  | { type: 'ice'; sparkle: boolean }
+  /**
+   * v1.10 (4-1): thin ice `index` (gimmicks[]): "shake" (too slow on it, "ぴしぴし"), "crack" (it broke under the
+   * train, "ぽちゃん"), "clear" (the last bogie got across).
+   */
+  | { type: 'thin'; index: number; state: 'shake' | 'crack' | 'clear' }
+  /** v1.10 (4-1): the light caught in ice mirror `index` (gimmicks[]): "きらーん". */
+  | { type: 'mirror'; index: number; state: 'flash' }
   /** v1.7: a countdown started ("run"), got low, was beaten ("safe"), ran out ("up") or was put away ("off"). */
   | { type: 'countdown'; state: 'run' | 'low' | 'safe' | 'up' | 'off' };
 

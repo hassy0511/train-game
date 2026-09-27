@@ -10,11 +10,14 @@ export interface Lever {
   relayout(): void;
   /** Make one notch's mark glow ("this speed here"), or none. */
   setHint(notch: number | null): void;
-  /** v1.7: a mark on the knob while the lever does nothing: "rocket" (a flame), "slide" (sparkles), or none. */
-  setMark(mark: 'rocket' | 'slide' | null): void;
+  /**
+   * v1.7: a mark on the knob while the lever does nothing: "rocket" (a flame), "slide" (sparkles), or none. v1.10
+   * (4-1): "ice" (a snow crystal: the brakes are weak on ice).
+   */
+  setMark(mark: 'rocket' | 'slide' | 'ice' | null): void;
 }
 
-const KNOB_MARKS = `<svg class="knob-mark mark-rocket" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c3 4 6 7 6 12a6 6 0 0 1-12 0c0-3 1.5-5 3-7 0 3 1.5 4 3 4-1-4 0-6 0-9z" fill="#e8590c"/><path d="M12 12c1.5 1.5 2.5 3 2.5 4.5a2.5 2.5 0 0 1-5 0c0-1.5 1-3 2.5-4.5z" fill="#ffe066"/></svg><svg class="knob-mark mark-slide" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3l1.6 3.4L12 8l-3.4 1.6L7 13l-1.6-3.4L2 8l3.4-1.6zM17 10l1.2 2.6 2.8 1.4-2.8 1.4L17 18l-1.2-2.6L13 14l2.8-1.4z" fill="#1c7ed6"/></svg>`;
+const KNOB_MARKS = `<svg class="knob-mark mark-rocket" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c3 4 6 7 6 12a6 6 0 0 1-12 0c0-3 1.5-5 3-7 0 3 1.5 4 3 4-1-4 0-6 0-9z" fill="#e8590c"/><path d="M12 12c1.5 1.5 2.5 3 2.5 4.5a2.5 2.5 0 0 1-5 0c0-1.5 1-3 2.5-4.5z" fill="#ffe066"/></svg><svg class="knob-mark mark-slide" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3l1.6 3.4L12 8l-3.4 1.6L7 13l-1.6-3.4L2 8l3.4-1.6zM17 10l1.2 2.6 2.8 1.4-2.8 1.4L17 18l-1.2-2.6L13 14l2.8-1.4z" fill="#1c7ed6"/></svg><svg class="knob-mark mark-ice" viewBox="0 0 24 24" aria-hidden="true"><g stroke="#1c7ed6" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/><path d="M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"/></g></svg>`;
 
 /** Vertical master controller: drag with the thumb, snaps to detents, keeps its position when released. */
 export function createLever(root: HTMLElement, opts: LeverOptions): Lever {

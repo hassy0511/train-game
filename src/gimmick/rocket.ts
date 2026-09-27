@@ -70,6 +70,8 @@ export class RocketSystem {
   goal: { railId: string; at: number } | null = null;
   /** The uphill the button glows for, when it glows for one. */
   glowSlope: SlopeZone | null = null;
+  /** v1.10 (4-1): one more reason to glow (thin ice ahead that a press now gets the train across). */
+  extraGlow: (() => boolean) | null = null;
   private glowing = false;
   private inZone: RocketZone | null = null;
 
@@ -155,7 +157,8 @@ export class RocketSystem {
 
     const slope = this.enabled && this.why === '' ? this.slopeNeedingRocket() : null;
     const glowZone = this.enabled && this.why === '' && zone?.glow ? zone : null;
-    const glow = slope !== null || glowZone !== null;
+    const extra = this.enabled && this.why === '' && (this.extraGlow?.() ?? false);
+    const glow = slope !== null || glowZone !== null || extra;
     if (glow && !this.glowing) this.events.emit('glow', { slope, zone: glowZone });
     this.glowing = glow;
     this.glowSlope = slope;

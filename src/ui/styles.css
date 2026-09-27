@@ -2598,7 +2598,8 @@ body {
 }
 
 .lever-knob[data-mark='rocket'] .mark-rocket,
-.lever-knob[data-mark='slide'] .mark-slide {
+.lever-knob[data-mark='slide'] .mark-slide,
+.lever-knob[data-mark='ice'] .mark-ice {
   display: block;
 }
 
