@@ -18,13 +18,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The whole history, so the change can be compared with main (scripts/select-smoke.mjs).
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run smoke
+      - run: npm run build
+      # Every stage's full run on main (before a deploy) or with "[full]" in the PR title; otherwise the quick specs
+      # and the full runs of the stages the change touches (everything when shared code changed).
+      - id: pick
+        run: echo "specs=$(node scripts/select-smoke.mjs origin/main)" >> "$GITHUB_OUTPUT"
+        env:
+          FULL: ${{ (github.ref == 'refs/heads/main' && github.event_name == 'push') || contains(github.event.pull_request.title, '[full]') }}
+      - run: npx playwright test -c tests/smoke/playwright.config.ts ${{ steps.pick.outputs.specs }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
