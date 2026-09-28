@@ -23,6 +23,7 @@ import type { StageEvent } from '../../core/stage-events';
 import type { RailFrame } from '../../rail/types';
 import type { JunctionDef, StageData, WhaleParams } from '../../stage/types';
 import { TRAIN, WHALE } from '../../train/params';
+import { waterAt } from '../../stage/water';
 import type { ModelLibrary } from './models';
 import { sourceMeshes } from './props';
 import { SEA_TIME, WHALE_BLOWHOLE, WHALE_TAIL_ROOT, whaleBodyGeometry, whaleTailGeometry } from './sea-placeholders';
@@ -180,6 +181,10 @@ export class SeaGimmicks {
   private readonly s = new Vector3();
   private readonly bubble = bubbleTexture();
   private floorY: number;
+  /** v1.10 (3-3): the deep places' glowing motes, and how long they still flash after a whistle (s). */
+  private readonly deepMotes: Points[] = [];
+  private flash = 0;
+  private flashShown = false;
 
   constructor(
     private readonly stage: StageData,
@@ -213,7 +218,9 @@ export class SeaGimmicks {
       f.actors.some((a) => a.type === 'whale') ||
       f.junctions.some((j) => j.bubbles) ||
       f.gimmicks.some((g) => (g.params as { look?: string } | undefined)?.look === 'whale' || (g.params as { look?: string } | undefined)?.look === 'current') ||
-      f.props.some((p) => p.model === 'kelp')
+      f.props.some((p) => p.model === 'kelp') ||
+      // v1.10 (3-2): a dark stretch of its own colour in a water (the forest pond): its glowing motes.
+      (!!f.environment.water?.length && f.gimmicks.some((g) => g.type === 'fog' && typeof (g.params as { color?: string } | undefined)?.color === 'string'))
     );
   }
 
@@ -546,7 +553,11 @@ export class SeaGimmicks {
     for (let i = 0; i < MOTES; i++) {
       const f = rail.frameAt(from + hash(i) * (to - from));
       const p = f.position.clone().addScaledVector(f.right, (hash(i + 300) - 0.5) * 50);
-      positions.set([p.x, this.floorY + 1 + hash(i + 600) * 11, p.z], i * 3);
+      // v1.10 (3-2): in the water they are in (a pond is shallower than the sea), from its floor up under its surface.
+      const w = waterAt(this.stage.file.environment.water, p.x, p.z)?.water;
+      const floor = w?.floor ?? this.floorY;
+      const top = w ? w.y - 0.6 : floor + 12;
+      positions.set([p.x, floor + 1 + hash(i + 600) * Math.max(1, Math.min(11, top - floor - 1)), p.z], i * 3);
     }
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
@@ -556,12 +567,14 @@ export class SeaGimmicks {
       new PointsMaterial({ color: '#9fe8ff', size: 0.35, map: this.bubble, transparent: true, depthWrite: false, blending: AdditiveBlending, fog: false }),
     );
     motes.name = 'deep-motes';
+    this.deepMotes.push(motes);
     this.group.add(motes);
   }
 
   // ---- events and the frame ----
 
   onEvent(event: StageEvent): void {
+    if (event.type === 'whistle') this.flash = 0.5;
     if (event.type === 'whale') this.setWhale(event.id, event.state);
     if (event.type === 'bubbles:reveal') this.reveal(event.junctionId);
     if (event.type === 'bubbles:reset') this.reveal(null);
@@ -588,6 +601,13 @@ export class SeaGimmicks {
   update(dt: number): void {
     this.time += dt;
     SEA_TIME.value = this.time;
+    // v1.10 (3-3): the whistle makes the glowing motes flash for a moment.
+    if (this.flash > 0 || this.flashShown) {
+      this.flash = Math.max(0, this.flash - dt);
+      const k = this.flash / 0.5;
+      for (const m of this.deepMotes) (m.material as PointsMaterial).size = 0.35 * (1 + 1.6 * k);
+      this.flashShown = this.flash > 0;
+    }
     for (const w of this.whales.values()) this.updateWhale(w, dt);
     for (const pad of this.pads.values()) {
       if (pad.left > 0) pad.left = Math.max(0, pad.left - dt);

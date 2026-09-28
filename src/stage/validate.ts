@@ -20,11 +20,13 @@ import {
   THIN_ICE,
   TRAIN,
 } from '../train/params';
-import { openWaterAt } from './water';
-import { AMBIENCE_KINDS, FLOATER_LOOKS, WATER_LOOKS, type AmbienceKind, type FloaterLook, type Placement, type StageFile, type WaterLook } from './types';
+import { inArea, openWaterAt } from './water';
+import { AMBIENCE_KINDS, FLOATER_LOOKS, WATER_LOOKS, type AmbienceKind, type FloaterLook, type Placement, type StageFile, type WaterDef, type WaterLook } from './types';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
-const ABILITIES = ['whistle', 'light', 'jump', 'rocket', 'dive', 'magnetLight', 'reverse'];
+const ABILITIES = ['whistle', 'light', 'jump', 'rocket', 'dive', 'plow', 'magnetLight', 'reverse'];
+/** v1.10 (3-3): the buttons a cutscene may ask the child to press. */
+const PRESSABLE = ['light', 'whistle', 'rocket', 'jump'];
 const JUMP_HINTS = ['normal', 'fast', 'max'];
 
 class StageValidationError extends Error {
@@ -74,7 +76,13 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
   if (!isObject(st)) fail(`${where}: must be an object`);
   const onRailOk = (r: unknown): boolean =>
     isObject(r) && isString(r.railId) && railIds.has(r.railId) && isNumber(r.at);
-  if ('say' in st) {
+  // A press step may carry a line of its own ("say"): look at it first.
+  if ('press' in st) {
+    // v1.10 (3-3): the child presses one button in the cutscene.
+    if (!PRESSABLE.includes(String(st.press))) fail(`${where}: press must be one of ${PRESSABLE.join(', ')}`);
+    if (st.say !== undefined && !isString(st.say)) fail(`${where}: press "say" must be text`);
+    if (st.fx !== undefined && st.fx !== 'beacon') fail(`${where}: press fx must be "beacon"`);
+  } else if ('say' in st) {
     if (!isString(st.say)) fail(`${where}: "say" must be text`);
     if (st.name !== undefined && !isString(st.name)) fail(`${where}: "name" must be text`);
   } else if ('spawn' in st) {
@@ -99,15 +107,18 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
   } else if ('card' in st) {
     const c = st.card;
     if (!isObject(c) || !isString(c.title) || !isString(c.button)) fail(`${where}: card needs title and button`);
-    if (c.icon !== undefined && c.icon !== 'badge') fail(`${where}: card icon`);
+    if (c.icon !== undefined && c.icon !== 'badge' && c.icon !== 'drawing') fail(`${where}: card icon must be badge or drawing`);
     if (c.mirror !== undefined && typeof c.mirror !== 'boolean') fail(`${where}: card mirror must be true or false`);
   } else if ('camera' in st) {
     if (st.camera === 'fixed') {
       if (!isVec3(st.at) || !isVec3(st.lookAt)) fail(`${where}: a fixed camera needs "at" and "lookAt" [x, y, z]`);
+      if (st.reach !== undefined && !(typeof st.reach === 'number' && st.reach >= 1 && st.reach <= 4)) fail(`${where}: a fixed camera's "reach" must be 1 to 4`);
     } else if (!['cab', 'chase', 'side', 'top'].includes(String(st.camera))) fail(`${where}: camera`);
   } else if ('fx' in st) {
-    if (st.fx !== 'sneeze' && st.fx !== 'pop') fail(`${where}: fx must be "sneeze" or "pop"`);
+    if (st.fx !== 'sneeze' && st.fx !== 'pop' && st.fx !== 'festival') fail(`${where}: fx must be "sneeze", "pop" or "festival"`);
     if (st.id !== undefined && (st.fx !== 'pop' || !isString(st.id))) fail(`${where}: only fx "pop" takes an "id" (a cutscene figure)`);
+  } else if ('door' in st) {
+    if (st.door !== 'open' && st.door !== 'close') fail(`${where}: door must be "open" or "close"`);
   } else if ('caption' in st) {
     if (!isString(st.caption)) fail(`${where}: "caption" must be text`);
     if (st.seconds !== undefined && !isNumber(st.seconds)) fail(`${where}: "seconds" must be a number`);
@@ -157,6 +168,17 @@ export function validateStageFile(raw: unknown): StageFile {
     for (const k of ['radius', 'fall']) if (sn[k] !== undefined && !(isNumber(sn[k]) && (sn[k] as number) > 0)) fail(`"environment.snow.${k}" must be > 0`);
   }
   if (env.surface !== undefined && !RUN_SURFACES.includes(env.surface as RunSurface)) fail(`"environment.surface" must be one of ${RUN_SURFACES.join(', ')}`);
+  if (!['day', 'evening', 'night', 'cave'].includes(String(env.lighting))) fail('"environment.lighting" must be day, evening, night or cave');
+  if (env.stars !== undefined) {
+    // v1.10 (3-3): stars in the sky.
+    const st = env.stars;
+    if (!isObject(st) || !Number.isInteger(st.count) || (st.count as number) < 1 || (st.count as number) > 1000) fail('"environment.stars.count" must be a whole number 1–1000');
+  }
+  if (env.festival !== undefined) {
+    const fe = env.festival;
+    if (!isObject(fe) || !Array.isArray(fe.bursts) || fe.bursts.length === 0 || !fe.bursts.every(isVec3)) fail('"environment.festival.bursts" must be a list of [x, y, z]');
+    if (fe.moon !== undefined && !(isObject(fe.moon) && isNumber(fe.moon.azimuth) && isNumber(fe.moon.elevation))) fail('"environment.festival.moon" needs azimuth and elevation');
+  }
 
   const rails = requireArray(raw, 'rails');
   if (rails.length === 0) fail('at least one rail is required');
@@ -195,12 +217,21 @@ export function validateStageFile(raw: unknown): StageFile {
       if (r.deadEnd === true) fail(`rail "${r.id}": a spur is not a dead end (write one of them)`);
     }
     if (r.base !== undefined) {
-      const b = r.base;
-      if (!isObject(b) || b.look !== 'rock') fail(`rail "${r.id}": base needs look "rock"`);
-      if (b.depth !== undefined && (!isNumber(b.depth) || b.depth <= 0)) fail(`rail "${r.id}": base depth must be > 0`);
-      if (b.toGround !== undefined && typeof b.toGround !== 'boolean') fail(`rail "${r.id}": base toGround must be true or false`);
-      if (b.skip !== undefined && (!Array.isArray(b.skip) || !b.skip.every((k) => isObject(k) && isNumber(k.from) && isNumber(k.to) && k.to > k.from))) {
-        fail(`rail "${r.id}": base skip must be [{ from, to }]`);
+      // v1.10 (3-3): one base, or a list of bases each over its own stretch (`from`–`to`, not overlapping).
+      const list = Array.isArray(r.base) ? r.base : [r.base];
+      if (list.length === 0) fail(`rail "${r.id}": base list is empty`);
+      for (const b of list as unknown[]) {
+        if (!isObject(b) || (b.look !== 'rock' && b.look !== 'pier')) fail(`rail "${r.id}": base needs look "rock" or "pier"`);
+        if (b.depth !== undefined && (!isNumber(b.depth) || b.depth <= 0)) fail(`rail "${r.id}": base depth must be > 0`);
+        if (b.toGround !== undefined && typeof b.toGround !== 'boolean') fail(`rail "${r.id}": base toGround must be true or false`);
+        if (b.skip !== undefined && (!Array.isArray(b.skip) || !b.skip.every((k) => isObject(k) && isNumber(k.from) && isNumber(k.to) && k.to > k.from))) {
+          fail(`rail "${r.id}": base skip must be [{ from, to }]`);
+        }
+        if (Array.isArray(r.base) && !(isNumber(b.from) && isNumber(b.to) && b.to > b.from)) fail(`rail "${r.id}": each base in a list needs from < to`);
+      }
+      if (Array.isArray(r.base)) {
+        const spans = (r.base as { from: number; to: number }[]).map((b) => [b.from, b.to]).sort((a, b) => a[0] - b[0]);
+        for (let k = 1; k < spans.length; k++) if (spans[k][0] < spans[k - 1][1]) fail(`rail "${r.id}": bases must not overlap`);
       }
     }
     railIds.add(r.id);
@@ -290,7 +321,9 @@ export function validateStageFile(raw: unknown): StageFile {
     }
     if (a.type === 'grasshopper' && a.reactsTo === 'light') fail(`actor "${a.id}": a grasshopper hops on by itself ("none") or when whistled for ("whistle")`);
     const ap = (a.params ?? {}) as Record<string, unknown>;
-    if (a.type === 'cat' && ap.look !== undefined && !['cat', 'seabird', 'seal'].includes(String(ap.look))) fail(`actor "${a.id}": look must be cat, seabird or seal`);
+    if (a.type === 'cat' && ap.look !== undefined && !['cat', 'seabird', 'seal', 'turtle'].includes(String(ap.look))) fail(`actor "${a.id}": look must be cat, seabird, seal or turtle`);
+    if (a.type === 'cat') for (const k of ['say', 'woke', 'danger', 'after']) if (ap[k] !== undefined && !isString(ap[k])) fail(`actor "${a.id}": "${k}" must be text`);
+    if (a.type === 'dino-small' && ap.look !== undefined && ap.look !== 'dino' && ap.look !== 'duck') fail(`actor "${a.id}": look must be dino or duck`);
     if (a.type === 'rock-roll' && ap.look !== undefined && ap.look !== 'rock' && ap.look !== 'snowbird') fail(`actor "${a.id}": look must be rock or snowbird`);
     if (a.type === 'rock-roll' || a.type === 'rock-drop') {
       const rw = ap.rewind;
@@ -326,6 +359,13 @@ export function validateStageFile(raw: unknown): StageFile {
       cutsceneIds.add(id);
     }
   }
+  // v1.10 (3-3): a beacon needs a lighthouse to light, a festival its places.
+  for (const steps of Object.values((raw.cutscenes ?? {}) as Record<string, Record<string, unknown>[]>)) {
+    for (const st of steps) {
+      if ('press' in st && st.fx === 'beacon' && !(raw.props as Record<string, unknown>[]).some((p) => p.model === 'lighthouse')) fail('a press with fx "beacon" needs a "lighthouse" prop');
+      if (st.fx === 'festival' && env.festival === undefined) fail('fx "festival" needs "environment.festival"');
+    }
+  }
   for (const key of ['opening', 'ending'] as const) {
     const id = raw[key];
     if (id !== undefined && (!isString(id) || !cutsceneIds.has(id))) fail(`"${key}" must name a cutscene`);
@@ -351,7 +391,7 @@ export function validateStageFile(raw: unknown): StageFile {
         }
         if (c.assist !== undefined && (!isNumber(c.assist) || c.assist < 0)) fail(`${where}: "assist" must be >= 0`);
         if (c.assistMax !== undefined && (!isNumber(c.assistMax) || c.assistMax < 0)) fail(`${where}: "assistMax" must be >= 0`);
-        if (c.icon !== undefined && c.icon !== 'volcano' && c.icon !== 'clock') fail(`${where}: "icon" must be volcano or clock`);
+        if (c.icon !== undefined && !['volcano', 'clock', 'moon'].includes(String(c.icon))) fail(`${where}: "icon" must be volcano, clock or moon`);
         if (c.music !== undefined && (typeof c.music !== 'string' || !(c.music in SONGS))) fail(`${where}: "music" must be a song in src/audio/songs.ts`);
       }
     }
@@ -425,6 +465,13 @@ export function validateStageFile(raw: unknown): StageFile {
     }
     if (g.type === 'jump-pad' && p.look !== undefined && p.look !== 'pad' && p.look !== 'whale') fail(`gimmicks[${i}] jump-pad: params.look must be pad or whale`);
     if (g.type === 'fog' && p.color !== undefined && !(typeof p.color === 'string' && COLOR.test(p.color))) fail(`gimmicks[${i}] fog: params.color must be #rrggbb`);
+    if (g.type === 'fog' && p.glow !== undefined && typeof p.glow !== 'boolean') fail(`gimmicks[${i}] fog: params.glow must be true or false`);
+    if (g.type === 'flock') {
+      // v1.10 (3-2): a school that leaps out of the water.
+      if (p.mode !== undefined && p.mode !== 'circle' && p.mode !== 'leap') fail(`gimmicks[${i}] flock: params.mode must be circle or leap`);
+      if (p.mode === 'leap' && !isNumber(p.surface)) fail(`gimmicks[${i}] flock: a leaping school needs params.surface (the water's height)`);
+    }
+    if (g.type === 'waterfall') checkWaterfall(p, `gimmicks[${i}] waterfall`, (env.water ?? []) as Record<string, unknown>[]);
     if (g.type === 'camera' && !['cab', 'chase', 'side', 'top'].includes(String((g.params as Record<string, unknown> | undefined)?.mode))) {
       fail(`gimmicks[${i}] camera: params.mode must be cab, chase, side or top`);
     }
@@ -547,8 +594,28 @@ function checkWater(water: unknown): void {
       if (!isObject(u)) fail(`${where}: "under" must be { color, far }`);
       if (u.color !== undefined && !(typeof u.color === 'string' && COLOR.test(u.color))) fail(`${where}: under.color must be #rrggbb`);
       if (u.far !== undefined && !(isNumber(u.far) && u.far > 0)) fail(`${where}: under.far must be > 0`);
+      if (u.sparkle !== undefined && !(typeof u.sparkle === 'string' && COLOR.test(u.sparkle))) fail(`${where}: under.sparkle must be #rrggbb`);
     }
+    if (w.wall !== undefined && w.wall !== 'bowl' && w.wall !== 'cliff') fail(`${where}: "wall" must be bowl or cliff`);
+    if (w.flow !== undefined && !(pair(w.flow) && Math.hypot(...(w.flow as [number, number])) <= 3)) fail(`${where}: "flow" must be [x, z] m/s, at most 3`);
   });
+}
+
+/** v1.10 (3-2): a waterfall's params (PHASE8 第 4 部 §4.8): its lip on the edge of the water it falls into. */
+function checkWaterfall(p: Record<string, unknown>, where: string, waters: Record<string, unknown>[]): void {
+  const pair = (v: unknown): v is [number, number] => Array.isArray(v) && v.length === 2 && v.every(isNumber);
+  if (!pair(p.from) || !pair(p.to)) fail(`${where}: params.from and params.to must be [x, z]`);
+  if (!isNumber(p.top) || !isNumber(p.bottom) || p.top <= p.bottom) fail(`${where}: params.top must be above params.bottom`);
+  if (p.throw !== undefined && !(isNumber(p.throw) && p.throw >= 0 && p.throw <= 20)) fail(`${where}: params.throw must be 0–20`);
+  if (p.lip !== undefined && !(isNumber(p.lip) && p.lip >= 0 && p.lip <= 5)) fail(`${where}: params.lip must be 0–5`);
+  if (p.rainbow !== undefined && typeof p.rainbow !== 'boolean') fail(`${where}: params.rainbow must be true or false`);
+  const into = waters.find((w) => isNumber(w.y) && Math.abs((w.y as number) - (p.bottom as number)) <= 0.1);
+  if (!into) fail(`${where}: params.bottom must be the height of a water (environment.water[].y)`);
+  const from = p.from as [number, number];
+  const to = p.to as [number, number];
+  const mid: [number, number] = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
+  const area = into.area as WaterDef['area'];
+  if (area && !(inArea(area, mid[0], mid[1], 5) && !inArea(area, mid[0], mid[1], -5))) fail(`${where}: its lip must be on the edge of the water it falls into (within 5 m)`);
 }
 
 /** A gap as the running game sees it: `rails[].gaps` plus the streams the loader adds for flower bridges. */

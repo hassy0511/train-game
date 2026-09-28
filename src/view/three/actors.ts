@@ -48,6 +48,16 @@ const SEAL_MODELS = { sleep: 'seal-sleep', awake: 'seal' };
 function isSeal(actor: ResolvedActor): boolean {
   return actor.type === 'cat' && (actor.params as { look?: string }).look === 'seal';
 }
+/** v1.10 (3-3): a "cat" with params.look "turtle" is a sea turtle asleep on the rail under water (it swims off up). */
+const TURTLE_MODELS = { sleep: 'sea-turtle-sleep', awake: 'sea-turtle' };
+
+function isTurtle(actor: ResolvedActor): boolean {
+  return actor.type === 'cat' && (actor.params as { look?: string }).look === 'turtle';
+}
+/** v1.10 (3-2): a "dino-small" with params.look "duck" is a mother duck and her ducklings crossing. */
+function isDuck(actor: ResolvedActor): boolean {
+  return actor.type === 'dino-small' && (actor.params as { look?: string }).look === 'duck';
+}
 /** Where the large dinosaur's neck joins its body (model space, m; NECK_PIVOT in assets/blender/dinos.py). */
 const NECK_PIVOT = new Vector3(0, 8.0, 4.8);
 const PLATFORM_CLEARANCE = 1.7;
@@ -193,6 +203,8 @@ export class ActorLayer {
       this.actorTypes.set(actor.id, actor.type);
       if (isSeabird(actor)) this.lookModels.set(actor.id, SEABIRD_MODELS);
       if (isSeal(actor)) this.lookModels.set(actor.id, SEAL_MODELS);
+      if (isTurtle(actor)) this.lookModels.set(actor.id, TURTLE_MODELS);
+      if (isDuck(actor)) this.lookModels.set(actor.id, { sleep: 'duck-family', awake: 'duck-family' });
     }
     // Nuts and squirrels are drawn by the forest gimmicks, grasshoppers by the meadow ones and rocks by the volcano
     // ones (they move on their own).
@@ -307,7 +319,7 @@ export class ActorLayer {
   private async addCrossingGates(actors: ResolvedActor[]): Promise<void> {
     // A seabird basks on an open line (a sea cliff), not at a level crossing: no gate for it.
     const placements = actors
-      .filter((actor) => actor.type === 'cat' && !isSeabird(actor) && !isSeal(actor))
+      .filter((actor) => actor.type === 'cat' && !isSeabird(actor) && !isSeal(actor) && !isTurtle(actor))
       .map((actor) => ({
         model: 'crossing-gate',
         position: actor.position.clone().add(new Vector3(-3, 0, 0).applyQuaternion(actor.quaternion)),

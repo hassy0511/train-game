@@ -7,8 +7,8 @@ import type { CameraMode } from '../view/camera-rig';
 /** What the cutscene runner needs from the UI. */
 export interface CutscenePorts {
   say(text: string, who: Speaker, name?: string): Promise<void>;
-  /** v1.10 `mirror`: a note on paper with its title written mirror-wise. */
-  card(title: string, button: string, icon?: 'badge', mirror?: boolean): Promise<void>;
+  /** v1.10 `mirror`: a note on paper with its title written mirror-wise; icon "drawing" (3-2): a crayon picture. */
+  card(title: string, button: string, icon?: 'badge' | 'drawing', mirror?: boolean): Promise<void>;
   caption(text: string, seconds: number): Promise<void>;
   wait(seconds: number): Promise<void>;
   /** Temporarily override the player's camera (null = give it back). */
@@ -16,11 +16,20 @@ export interface CutscenePorts {
   /** Learn an ability: its button appears and a card says so. */
   unlock(ability: AbilityId): Promise<void>;
   /** v1.7: a camera standing still at `at` looking at `lookAt` (null = back to the usual camera). */
-  fixedCamera(at: Vec3 | null, lookAt?: Vec3): void;
+  fixedCamera(at: Vec3 | null, lookAt?: Vec3, reach?: number): void;
   /** v1.7: the volcano sneezes ("はっくしょーん！"). Resolves when it is over. */
   sneeze(): Promise<void>;
   /** v1.10: a big bubble pops ("ぱちん") at cutscene figure `id` (or in front of the camera). Resolves when it is over. */
   pop(id?: string): Promise<void>;
+  /**
+   * v1.10 (3-3): wait for the child to press `ability`'s button (it alone glows; `say` is said now and again every
+   * DOOR_REMIND_SECONDS). The press does what the button does; `fx` "beacon" then lights the lighthouse.
+   */
+  press(ability: 'light' | 'whistle' | 'rocket' | 'jump', say: string | undefined, fx: 'beacon' | undefined, cancel?: Promise<void>): Promise<void>;
+  /** v1.10 (3-3): the doors on the platform side open or close again (looks only; closed again after the cutscene). */
+  door(open: boolean): void;
+  /** v1.10 (3-3): the festival ("しゃらら〜ん"). Resolves when it is over. */
+  festival(): Promise<void>;
   /** PHASE7_FINISH §4 item 3: learn an ability quietly (its button appears; no card). Used by the fast-forward. */
   learn(ability: AbilityId): void;
   /** The cutscene is being skipped: put away the line and the caption showing now. */
@@ -73,7 +82,13 @@ export async function runCutscene(
       return;
     }
     const step = steps[i];
-    if ('say' in step) {
+    // A press step may carry a line of its own ("say"): look at it first.
+    if ('press' in step) {
+      // "▶▶" while waiting: the press counts as done (the port puts the button back and lights the lamp at once).
+      await race(ports.press(step.press, step.say, step.fx, skip?.promise));
+    } else if ('door' in step) {
+      ports.door(step.door === 'open');
+    } else if ('say' in step) {
       if (step.emote) events.post({ type: 'partner:emote', kind: step.emote });
       await race(ports.say(step.say, step.who ?? 'partner', step.name));
     } else if ('spawn' in step) {
@@ -96,7 +111,7 @@ export async function runCutscene(
       await ports.card(step.card.title, step.card.button, step.card.icon, step.card.mirror);
     } else if ('camera' in step) {
       if (step.camera === 'fixed') {
-        ports.fixedCamera(step.at, step.lookAt);
+        ports.fixedCamera(step.at, step.lookAt, step.reach);
         await race(ports.wait(0.3));
       } else {
         ports.fixedCamera(null);
@@ -106,6 +121,7 @@ export async function runCutscene(
     } else if ('fx' in step) {
       if (step.fx === 'sneeze') await race(ports.sneeze());
       else if (step.fx === 'pop') await race(ports.pop(step.id));
+      else if (step.fx === 'festival') await race(ports.festival());
     } else if ('caption' in step) {
       await race(ports.caption(step.caption, step.seconds ?? 3));
     } else if ('emote' in step) {
@@ -154,6 +170,11 @@ export function fastForwardCutscene(
       events.post({ type: 'rail:cut', railId, from, to, style, props, instant: true });
     } else if ('unlock' in step) {
       ports.learn(step.unlock);
+    } else if ('press' in step) {
+      // v1.10 (3-3): skipped, the press counts as done: the lighthouse is lit.
+      if (step.fx === 'beacon') events.post({ type: 'beacon', instant: true });
+    } else if ('fx' in step && step.fx === 'festival') {
+      events.post({ type: 'festival', instant: true });
     }
   }
   for (const spawn of spawned.values()) events.post(spawn);

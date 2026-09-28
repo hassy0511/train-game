@@ -68,6 +68,15 @@ const FLOAT_STEP = 6;
 const FLOAT_DEPTH = 0.45;
 const FLOAT_LATERAL = 1.85;
 const FLOAT_COLORS = [new Color('#F4F8FB'), new Color('#8ED3F0')];
+/**
+ * v1.10 (3-3): a wooden pier (rails[].base look "pier"): a wide plank deck instead of the ballast, planks of two
+ * shades, and a square post on either side every PIER_POST_STEP m down to the ground (the sea floor).
+ */
+const PIER_HALF_WIDTH = 2.2;
+const PIER_COLORS = [new Color('#B98A5E'), new Color('#A87B50')];
+const PIER_POST_COLOR = new Color('#8A6A48');
+const PIER_POST_STEP = 8;
+const PIER_POST_SIZE = 0.5;
 /** A base reaching the ground widens by this much per metre of height (a ridge). */
 const BASE_SPREAD = 0.5;
 /**
@@ -85,10 +94,50 @@ const RIDGE_COLOR_HEIGHT = 60;
  */
 export interface TrackLooks {
   slopes: { railId: string; from: number; to: number; kind: 'up' | 'down' }[];
-  bases: Map<string, RailBaseDef>;
+  /** v1.10 (3-3): a rail's bases (one, or several each over its own stretch `from`–`to`). */
+  bases: Map<string, RailBaseDef[]>;
   groundY: number | null;
   /** v1.10 (4-1): stretches whose bed has its own colour (ice: pale blue, thin ice: deeper blue). Later ones win. */
   beds?: { railId: string; from: number; to: number; color: string }[];
+}
+
+/** v1.10 (3-3): the base under `s` among a rail's bases (the first whose stretch holds it), or null. */
+function baseAt(bases: RailBaseDef[], s: number): RailBaseDef | null {
+  for (const b of bases) if ((b.from === undefined || s >= b.from) && (b.to === undefined || s <= b.to)) return b;
+  return null;
+}
+
+/** v1.10 (3-3): the pier's plank deck under one track segment (a flat slab, wider than the floating deck). */
+function addPierSegment(data: GeometryData, start: RailFrame, end: RailFrame): void {
+  const sTopL = point(start, -PIER_HALF_WIDTH, DECK_TOP_DEPTH);
+  const sTopR = point(start, PIER_HALF_WIDTH, DECK_TOP_DEPTH);
+  const eTopL = point(end, -PIER_HALF_WIDTH, DECK_TOP_DEPTH);
+  const eTopR = point(end, PIER_HALF_WIDTH, DECK_TOP_DEPTH);
+  const sBotL = point(start, -PIER_HALF_WIDTH, DECK_BOTTOM_DEPTH + 0.15);
+  const sBotR = point(start, PIER_HALF_WIDTH, DECK_BOTTOM_DEPTH + 0.15);
+  const eBotL = point(end, -PIER_HALF_WIDTH, DECK_BOTTOM_DEPTH + 0.15);
+  const eBotR = point(end, PIER_HALF_WIDTH, DECK_BOTTOM_DEPTH + 0.15);
+  addQuad(data, sTopL, sTopR, eTopR, eTopL);
+  addQuad(data, sTopR, sBotR, eBotR, eTopR);
+  addQuad(data, sTopL, eTopL, eBotL, sBotL);
+  addQuad(data, sBotL, eBotL, eBotR, sBotR);
+}
+
+/** v1.10 (3-3): one square pier post under the deck edge at `frame`, `side` −1/+1, down to `groundY`. */
+function addPierPost(data: GeometryData, frame: RailFrame, side: number, groundY: number): void {
+  const top = point(frame, side * (PIER_HALF_WIDTH - 0.4), DECK_BOTTOM_DEPTH);
+  if (top.y - groundY <= 0.1) return;
+  const h = PIER_POST_SIZE / 2;
+  const x = new Vector3(frame.right.x, 0, frame.right.z).normalize();
+  const z = new Vector3(frame.tangent.x, 0, frame.tangent.z).normalize();
+  const corner = (a: number, b: number, y: number): Vector3 => top.clone().setY(y).addScaledVector(x, a * h).addScaledVector(z, b * h);
+  const faces: [number, number, number, number][] = [
+    [1, -1, 1, 1],
+    [1, 1, -1, 1],
+    [-1, 1, -1, -1],
+    [-1, -1, 1, -1],
+  ];
+  for (const [a0, b0, a1, b1] of faces) addQuad(data, corner(a0, b0, top.y), corner(a0, b0, groundY), corner(a1, b1, groundY), corner(a1, b1, top.y));
 }
 
 /** v1.10: the bed colour of a stretch (TrackLooks.beds), or null. */
@@ -501,9 +550,19 @@ function buildChunkParts(
   const onSurface = (s: number): boolean => rail.surfaces.some((sp) => s >= sp.from && s <= sp.to);
   // v1.10: beds in their own colours (ice).
   const bedData = new Map<string, GeometryData>();
-  const base = looks?.bases.get(rail.id);
-  const hasBase = (s: number): boolean =>
+  const bases = looks?.bases.get(rail.id) ?? [];
+  // v1.10 (3-3): a pier's planks, in two shades, and its posts.
+  const pierData: GeometryData[] = [
+    { positions: [], indices: [] },
+    { positions: [], indices: [] },
+  ];
+  const postData: GeometryData = { positions: [], indices: [] };
+  const hasBase = (s: number, base: RailBaseDef | null = baseAt(bases, s)): boolean =>
     !!base && !isInGap(rail, s) && !skipped(skips, s) && !(base.skip ?? []).some((k) => s > k.from && s < k.to);
+  const isPier = (s: number): boolean => {
+    const b = baseAt(bases, s);
+    return !!b && b.look === 'pier' && hasBase(s, b);
+  };
   for (let index = 0; index < samples.length - 1; index += 1) {
     const startS = samples[index];
     const endS = samples[index + 1];
@@ -516,6 +575,7 @@ function buildChunkParts(
     addRailSegment(railData, start, end, RAIL_HALF_GAUGE);
     const kind = slopeKindAt(looks, rail.id, mid);
     if (onSurface(mid)) addDeckSegment(deckData, start, end);
+    else if (isPier(mid)) addPierSegment(pierData[Math.floor(mid / 4) % 2], start, end);
     else {
       const bed = kind === null ? bedColorAt(looks, rail.id, mid) : null;
       let bedTarget = ballastData;
@@ -525,10 +585,12 @@ function buildChunkParts(
       }
       addBallastSegment(kind === 'up' ? steepData : kind === 'down' ? slideData : bedTarget, start, end);
     }
-    if (base && hasBase(mid)) {
+    const base = baseAt(bases, mid);
+    if (base && base.look === 'rock' && hasBase(mid, base)) {
       const before = index === 0 ? -1 : (samples[index - 1] + startS) / 2;
       const after = index + 2 < samples.length ? (endS + samples[index + 2]) / 2 : rail.length + 1;
-      addBaseSegment(baseData, start, end, base, looks?.groundY ?? null, !hasBase(before), !hasBase(after));
+      const rockAt = (s: number): boolean => baseAt(bases, s)?.look === 'rock' && hasBase(s);
+      addBaseSegment(baseData, start, end, base, looks?.groundY ?? null, !rockAt(before), !rockAt(after));
     }
   }
   if (looks) {
@@ -537,6 +599,14 @@ function buildChunkParts(
       for (let s = z.from + CHEVRON_STEP / 2; s < z.to; s += CHEVRON_STEP) {
         if (s >= from && s < to && !isInGap(rail, s) && !skipped(skips, s)) addChevron(chevronData, rail.frameAt(s));
       }
+    }
+  }
+  const groundY = looks?.groundY ?? null;
+  if (groundY !== null) {
+    for (let s = Math.ceil(from / PIER_POST_STEP) * PIER_POST_STEP; s < Math.min(to, rail.length + 1e-6); s += PIER_POST_STEP) {
+      if (!isPier(s) || onSurface(s)) continue;
+      const frame = rail.frameAt(s);
+      for (const side of [-1, 1]) addPierPost(postData, frame, side, groundY);
     }
   }
   for (let s = Math.ceil(from / FLOAT_STEP) * FLOAT_STEP; s < Math.min(to, rail.length + 1e-6); s += FLOAT_STEP) {
@@ -558,10 +628,14 @@ function buildChunkParts(
   if (slideData.indices.length) parts.push(painted(makeGeometry(slideData), SLIDE_BALLAST_COLOR));
   for (const [color, data] of bedData) if (data.indices.length) parts.push(painted(makeGeometry(data), new Color(color)));
   if (chevronData.indices.length) parts.push(painted(makeGeometry(chevronData), CHEVRON_COLOR));
+  pierData.forEach((data, i) => {
+    if (data.indices.length) parts.push(painted(makeGeometry(data), PIER_COLORS[i]));
+  });
+  if (postData.indices.length) parts.push(painted(makeGeometry(postData), PIER_POST_COLOR));
   if (baseData.indices.length) {
-    const groundY = looks?.groundY ?? null;
     const geometry = makeGeometry(baseData);
-    parts.push(base?.toGround && groundY !== null ? paintedRidge(geometry, groundY) : painted(geometry, ROCK_BASE_COLOR));
+    const ridge = bases.some((b) => b.look === 'rock' && b.toGround);
+    parts.push(ridge && groundY !== null ? paintedRidge(geometry, groundY) : painted(geometry, ROCK_BASE_COLOR));
   }
   const sleepers: BufferGeometry[] = [];
   for (let s = Math.ceil(from / SLEEPER_STEP) * SLEEPER_STEP; s < Math.min(to, rail.length + 1e-6); s += SLEEPER_STEP) {

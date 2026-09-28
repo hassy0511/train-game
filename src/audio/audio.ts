@@ -23,6 +23,11 @@ export class AudioEngine {
   /** The island's sound around the train, and the one asked for (started once the context exists). */
   private ambience: Ambience | null = null;
   private ambienceKind: AmbienceKind | null = null;
+  /** v1.10 (3-3): whether the island's sea sound has the faraway volcano in it. */
+  private ambienceVolcano = true;
+  /** v1.10 (3-2): a waterfall's steady "さーーっ" (made the first time one is heard) and its level now. */
+  private falls: { gain: GainNode; stop: () => void } | null = null;
+  private fallsLevel = 0;
   private sfxLevel = 1;
   /** Steps through a few notes of G major so the butterfly's bell does not repeat one pitch. */
   private butterflyNote = 0;
@@ -104,12 +109,13 @@ export class AudioEngine {
   }
 
   /** The island's quiet sound around the train (null = none). Asking again for the one playing does nothing. */
-  setAmbience(kind: AmbienceKind | null): void {
+  setAmbience(kind: AmbienceKind | null, volcano = this.ambienceVolcano): void {
     this.ambienceKind = kind;
+    this.ambienceVolcano = volcano;
     const ctx = this.ctx;
     if (!ctx || !this.sfx || this.ambience?.kind === kind) return;
     this.ambience?.stop();
-    this.ambience = kind ? new Ambience(ctx, this.sfx, kind) : null;
+    this.ambience = kind ? new Ambience(ctx, this.sfx, kind, this.ambienceVolcano) : null;
     this.ambience?.setPaused(this.musicPaused);
   }
 
@@ -749,6 +755,133 @@ export class AudioEngine {
     const lp = this.underwaterLp;
     if (!lp || !this.ctx) return;
     lp.frequency.setTargetAtTime(on ? UNDERWATER_CUTOFF : OPEN_CUTOFF, this.ctx.currentTime, 0.1);
+  }
+
+  // ---- v1.10 (3-2 たきのかわ) -----------------------------------------------------------------------------
+
+  /**
+   * A waterfall's steady "さーーっ" (a soft hiss of falling water, no low roar), `level` 0–1 by how near it is. Cheap to
+   * call every frame; 0 fades it out (and pausing the game sets 0).
+   */
+  setWaterfall(level: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.sfx) return;
+    const want = Math.max(0, Math.min(1, level));
+    if (Math.abs(want - this.fallsLevel) < 0.01) return;
+    this.fallsLevel = want;
+    if (!this.falls && want > 0) {
+      const src = noiseSource(ctx, 'pink');
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 800;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 3000;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(hp);
+      hp.connect(lp);
+      lp.connect(gain);
+      gain.connect(this.sfx);
+      this.falls = { gain, stop: () => src.stop() };
+    }
+    this.falls?.gain.gain.setTargetAtTime(0.06 * want, ctx.currentTime, 0.3);
+  }
+
+  /** The shower under a waterfall on the roof: "ざーっ" (a light pattering rush of water), 1.5 s. */
+  playShower(): void {
+    const o = this.out(0.2, 1.4);
+    this.hiss({ seconds: 1.5, gain: 0.07, attack: 0.15, freq: 2000, q: 0.7, dest: o });
+    for (let i = 0; i < 10; i++) this.hiss({ delay: 0.1 + i * 0.12, seconds: 0.05, gain: 0.03, freq: 3500 + (i % 3) * 600, q: 3, dest: o });
+  }
+
+  /** The paper boat bumps the train: a small wooden "こつん". */
+  playBoatBump(): void {
+    this.knock(1200, 0, 0.12);
+  }
+
+  /** The mother duck calls ("があ", a soft honk, once) and the ducklings answer ("ぴよぴよ"). */
+  playDuck(): void {
+    const ctx = this.ctx;
+    const dest = this.out(0.15, 1.2);
+    if (!ctx || !dest) return;
+    const at = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(420, at);
+    osc.frequency.exponentialRampToValueAtTime(360, at + 0.28);
+    const mouth = ctx.createBiquadFilter();
+    mouth.type = 'bandpass';
+    mouth.frequency.setValueAtTime(1100, at);
+    mouth.frequency.exponentialRampToValueAtTime(700, at + 0.28);
+    mouth.Q.value = 3;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.09, at + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.3);
+    osc.connect(mouth);
+    mouth.connect(g);
+    g.connect(dest);
+    osc.start(at);
+    osc.stop(at + 0.35);
+    [0.45, 0.58, 0.72].forEach((d, i) => this.ping(2500 + i * 180, d, 0.07, 'sine', 0.035, 3000 + i * 150, 0.004, dest));
+  }
+
+  /** A frog on a leaf: "けろっ" (two short low notes), then a little "ぽちゃ" as it hops in. */
+  playFrog(): void {
+    const o = this.out(0.1);
+    this.ping(300, 0, 0.06, 'triangle', 0.08, 280, 0.003, o);
+    this.ping(260, 0.09, 0.07, 'triangle', 0.07, 240, 0.003, o);
+    this.hiss({ color: 'pink', delay: 0.3, seconds: 0.12, gain: 0.03, freq: 1200, endFreq: 600, q: 1, dest: o });
+  }
+
+  /** A fish leaps: "ぴちゃっ". */
+  playFishLeap(): void {
+    const o = this.out(0.2);
+    this.hiss({ seconds: 0.14, gain: 0.08, freq: 2400, endFreq: 1400, q: 1.2, dest: o });
+    this.ping(900, 0, 0.08, 'sine', 0.07, 600, 0.002, o);
+    this.ping(1300, 0.1, 0.06, 'sine', 0.04, 1000, 0.002, o);
+  }
+
+  /** A reversed sign turns the right way round: "くるっ… ぴかっ". */
+  playSignFlip(): void {
+    const o = this.out(0.2);
+    this.ping(500, 0, 0.3, 'triangle', 0.06, 1000, 0.01, o);
+    this.bell(1760, 0.35, 0.07, 0.5);
+  }
+
+  // ---- v1.10 (3-3 ほしのうみ) ------------------------------------------------------------------------------
+
+  /** The sea turtle wakes up: a round, sleepy "ぽわん" and a few bubbles as it swims off. */
+  playTurtleWake(): void {
+    const o = this.out(0.3, 1.4);
+    this.ping(400, 0, 0.35, 'sine', 0.1, 600, 0.02, o);
+    [700, 900, 800].forEach((f, i) => this.ping(f, 0.35 + i * 0.12, 0.07, 'sine', 0.03, f * 1.4, 0.003, o));
+  }
+
+  /** The lighthouse comes on: "ぴかーん" (a bright F–A–C chord going up, ringing). */
+  playBeacon(): void {
+    [698, 880, 1047, 1397].forEach((f, i) => this.bell(f, i * 0.12, 0.09, 1.2));
+    this.hiss({ delay: 0.3, seconds: 1, gain: 0.015, filter: 'highpass', freq: 6500, attack: 0.1, dest: this.out(0.4) });
+  }
+
+  /** The festival's glowing balls come up: "しゃらら〜ん" (eight soft high bells running up). No bang. */
+  playFestival(): void {
+    [1397, 1568, 1760, 2093, 2349, 2637, 2794, 3136].forEach((f, i) => this.bell(f, i * 0.05, 0.05, 0.9));
+    this.hiss({ seconds: 1.4, gain: 0.012, attack: 0.2, filter: 'highpass', freq: 6000, dest: this.out(0.4) });
+  }
+
+  /** Out of time: the moon comes up ("ぽろろん", a harp running down five notes). */
+  playMoonUp(): void {
+    [1047, 880, 784, 659, 523].forEach((f, i) => {
+      this.ping(f, i * 0.16, 0.8, 'triangle', 0.07, f, 0.004, this.out(0.4));
+      this.ping(f * 2, i * 0.16, 0.3, 'sine', 0.015, f * 2, 0.004, this.out(0.4));
+    });
+  }
+
+  /** The whistle in the dark: the glowing motes flash, "ちりりん" (very quiet). */
+  playGlimmer(): void {
+    [2637, 3136, 2794].forEach((f, i) => this.bell(f, i * 0.07, 0.025, 0.5));
   }
 
   /** v1.10: a dive: "ぷくっ" (a round bubble going up), then a soft "ざぶん" and a few small bubbles. */

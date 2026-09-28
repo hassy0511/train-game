@@ -515,7 +515,7 @@ interface MissionStep {
 
 type CutsceneStep = /* v1.6 */
   | { cutRail: { railId; from; to; style?: 'fly' | 'fall'; props?: string } }   // fall = 切った線路と、tag が props の小物（線路の上に置いた物は from〜to の中だけ）が 下へ落ちる
-  | { camera: 'fixed'; at: Vec3; lookAt: Vec3 }                               // 動かないカメラ（寸劇の終わりで元に戻る）
+  | { camera: 'fixed'; at: Vec3; lookAt: Vec3; reach?: number }              // 動かないカメラ（寸劇の終わりで元に戻る。reach は §15）
   | { fx: 'sneeze' };                                                          // 火山の くしゃみ（字幕「はっくしょーん！」、2.5 秒。けむりの わっかは props の volcano から）
 
 type LineKey = /* v1.6 */
@@ -913,3 +913,79 @@ type LineKey = /* v1.10 (4-1) */
 
 ### まだ ない もの
 - 要る ステージが まだ ない とき（4-1 の `unlock.requires: ["3-3"]`）: 島は かぎの まま。`?stage=4-1` で 直接 ひらくと、ない ステージの かわりに それより 前の ステージが 教える 能力を 持って はじまる（いまは 2-3 まで。前の ステージの `unlocks` に `dive` が 入れば それも）
+
+## 15. v1.10 の追加（3-2「たきのかわ」・3-3「ほしのうみ」、2026-09-27）
+`schemaVersion` は 1 のまま。追加は すべて 省略可。設計は `docs/PHASE8_CHAPTER3_4.md` 第 4 部・第 5 部（§0.2 の 読みかえで。実装メモ 第 4 部 §18・第 5 部 §19）。実例は `src/stages/3-2.json`・`3-3.json`（`scripts/layout-3-2.mjs`・`layout-3-3.mjs` が 作る。JSON を 手で 直さない）。全ステージ共通の 数は `src/train/params.ts` の `WATERFALL`・`LEAP`・`FESTIVAL`。
+
+### もぐる（どちらも つかう）
+- **水の 上の 区間が そのまま 水の 中へ つづく 所**（3-2 の たきつぼ・もりの いけ、3-3 の さんばしの 先・ていぼうの 先）: 水の 上で もぐると、もぐった まま 水の 中へ 入る（ドームは 水の 中の あいだ ずっと）。もぐらずに 入り口に 来ると「ぽよん」（入り口の 60 m 手前へ）。**いま 押せば 入り口まで もぐった まま 行ける ときに 丸が 光る**（わっかと 同じ 決まり）。わっかは 3-3 の M2 だけ
+- 3-2 の いかだ・はすの はっぱ 3 まい、3-3 の おまつりの いかだ 2 そうは `floaters`（押す たびに もぐって くぐる）
+
+### 水（`environment.water[]` に 足す）
+```ts
+interface WaterDef {
+  // ...
+  wall?: 'bowl' | 'cliff';          // 3-2: cliff = 岩の がけ（よこじま 2 本、上に 草の へり）。既定 bowl
+  flow?: [number, number];          // 3-2: 水の 中の つぶが この 向きに ながれる（m/s、3 まで）。見た目だけ
+  under?: { color?; far?; sparkle?: '#rrggbb' };  // 3-3: 水の 中の つぶが その 色で 光る（加算）
+}
+```
+
+### たき（`gimmicks[]` の `waterfall`、見た目と 音だけ）
+```json
+{ "type": "waterfall", "params": { "from": [-68.6, 1636.4], "to": [51.4, 1636.4], "top": 0, "bottom": -8, "throw": 8.5, "lip": 1.5, "rainbow": true } }
+```
+- 口の 線 `from`〜`to`（[x, z]）から `top` の 高さで、`bottom`（その 水の 水面）へ 落ちる。下で `throw` m 前へ（放物線）。`lip`: 口の 岩の 出っぱり。`rainbow`: にじ
+- 見た目（`src/view/three/river.ts`）: しろい すじが 流れる カーテン 1 まい、下の あわ、しぶき、にじ。描く 回数 4
+- **シャワー**: 車両の 屋根が がけと カーテンの 間（口の 下、落ちる 水面の 上）に ある あいだ `#app[data-shower="1"]`、運転席では 窓に 水の すじ（DOM `.shower-vignette`）、「ざーっ」。ゲームの 状態は かわらない
+- 「さーーっ」: たきから 350 m で 0、40 m で いちばん 大きい
+- 検査: `from`・`to` は 数 2 つ、`top > bottom`、`bottom` が どれかの 水の `y`、口の 線が その 水の ふちから 5 m 以内、`throw` 0〜20、`lip` 0〜5
+
+### どうぶつ・むれの 見た目
+- `dino-small` に `params.look: "duck"`: かもの おやこ（`duck-family`）。決まりは 子きょうりゅうの まま。わたる とき「があ・ぴよぴよ」
+- `cat` に `params.look: "turtle"`: ねむる うみがめ（`sea-turtle-sleep` → 汽笛で `sea-turtle`、右 `fleeLateral` m・上 7 m へ 泳ぐ）。水の 中でも 汽笛は とどく
+- `cat` の params に `say`・`woke`・`danger`・`after`（その 1 ぴきの 一言。書けば ミッションの `catNear`・`catWoke`・`catDanger`・`catDangerAfter` の かわり。`say` は すぐ 出す）
+- `flock` に `params.mode: "leap"` と `surface`（水面の 高さ）: 水面の すぐ 下を 泳ぎ、ときどき 弧を えがいて とびはねる（`LEAP`）
+
+### 線路の 下（`rails[].base` を 区間ごとに）
+```json
+"base": [ { "look": "rock", "toGround": true, "from": 0, "to": 110 }, { "look": "pier", "from": 110, "to": 365 } ]
+```
+- 配列の ときは `from`〜`to` ごとに 見た目を かえる（かさならない）。ひとつだけの 書き方も そのまま
+- `look: "pier"`: 木の さんばし（はば 4.4 m の 板、8 m ごとの 四角い 柱が 地面〔海の そこ〕まで）。線路の メッシュに 入るので 描く 回数は ふえない。水の 上の 区間は うきの 板が かつ
+
+### 空・光（3-3）
+- `environment.lighting: "evening"`: 夕日の 色の 低い 太陽と 青い 地面光（暗く しない）。`day`・`evening`（`night`・`cave` は まだ 形だけ）
+- `environment.stars: { count }`（1〜1000）: 空の 上の 半分に 星（描く 回数 1、水の 中では 空と いっしょに 見えない）
+- `gimmicks[]` の `fog` に `params.glow: true`: その 区間で ライトが 消えて いれば ライトの 丸が 光る
+- `fog` の 区間の 中で 汽笛を 鳴らすと、ひかる つぶが 0.5 秒 ぴかっ（「ちりりん」。見た目だけ）
+- まわりの 音 `sea` の 遠い 火山の ごろごろは、`volcano` の 小物が ある ステージ（2-3）だけ
+
+### カウントダウンの おつきさま（`countdown.icon: "moon"`）
+- パネル: 夜の 空と 海、へって いく 帯に あわせて 顔の ない おつきさまが 水平線から のぼる（のこり 10 秒で 半分）
+- 時間切れの 見た目は 絵で かわる: `volcano` → 火山の くしゃみ（2-3、いままで どおり）、`moon` → 東の 空に おつきさまが ぽわんと のぼる（「ぽろろん」）→ 水色に ふわっと。`clock` → くしゃみ なし
+- テスト用の しるし: `#app[data-timer-icon]`、時間切れの `#app[data-timeup]`（`moon`／`volcano`／`clock`）
+
+### 寸劇の 足し
+```ts
+type CutsceneStep = /* ... */
+  | { press: 'light' | 'whistle' | 'rocket' | 'jump'; say?: string; fx?: 'beacon' }
+  | { door: 'open' | 'close' }
+  | { fx: 'festival' }
+  | { card: { title; button; icon?: 'badge' | 'drawing'; mirror? } }
+  | { camera: 'fixed'; at; lookAt; reach?: number };
+```
+- `camera: "fixed"` の `reach`（1〜4、既定 2.5）: 動かない カメラの あいだ、霧と 見える きょりが ステージの 霧の 何倍まで とどくか。遠くからの 広い 絵（2-3 の おわり など）は 既定の まま、近くの 絵は 1（寸劇の あと、しばらく いつもより 遠くまで 描いて 描く 量が ふえるのを ふせぐ。3-2 の glimpse・ending）
+- `press`: 子どもが その 丸を 押すまで まつ（その 丸だけ 光り、ほかは うすく。`say` を 今と 8 秒ごと）。押すと その 丸の ふつうの 動き（ライトは つく）。`fx: "beacon"` は `lighthouse` の 灯が ともり、光の すじが 回る（「ぴかーん」）。▶▶ で とばすと 押した ことに なる。テスト用の しるし `#app[data-cutscene-press]`、`#app[data-beacon="1"]`
+- `door`: いま 止まって いる 駅の 側の ドアを あける／しめる（見た目だけ。寸劇が おわると しまる）
+- `fx: "festival"`（2.5 秒）: おつきさまが のぼり、`environment.festival.bursts` の 3 か所から 光の 玉が のぼって ひらき、`lantern-jelly` の むれが 3 m 上がり、`festival-raft` の ちょうちんが 明るく なる（「しゃらら〜ん」）。おわると その まま
+- `environment.festival: { bursts: [[x, y, z], ...], moon?: { azimuth, elevation } }`（`fx: "festival"` を 書くなら 要る）
+- `card.icon: "drawing"`: 画用紙に クレヨンの ワンダーごうの え（DOM の SVG。`#card.is-drawing`）
+
+### せりふ・その他
+- `stationNear` に `{station}`（駅の 名前）が 書ける（3-3 の M3 は 駅が 2 つ）
+- 能力 `plow`（ゆきかき、4 章）の 名前を 先に 足した（3-2 の 記録③ と より道 `yukima` が まつ。どこでも まだ もらえない。灰色の 絵は ゆきかきの へら。`needAbility` の 既定「ゆきを どかせたら いけそう…」）
+
+### 読み込み時の 検査
+- 上の 形の 検査（`wall`・`flow`・`sparkle`・`stars`・`festival`・`lighting`・`base` の 配列・`pier`・`waterfall`・`look` の 追加・`mode`・`press`・`door`・`fx`・`card.icon`・`countdown.icon`・カメラの `reach`）
+- `press` の `fx: "beacon"` には `lighthouse` の 小物が、`fx: "festival"` には `environment.festival` が 要る

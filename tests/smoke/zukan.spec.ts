@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * The picture book from the title (docs/PHASE7_FINISH.md §4 item 2), from a prepared save: one row per island,
- * 「みつけた n/24」, the pictures of found records, "?" cards with the grey picture of the ability they still need,
+ * 「みつけた n/30」, the pictures of found records, "?" cards with the grey picture of the ability they still need,
  * and 「とじる」 in sight at the bottom however far down the child has scrolled.
  */
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), 'output');
@@ -73,8 +73,8 @@ test('picture book: rows per island, count, pictures, grey ability pictures, clo
     mapLinks: CHAIN,
   });
   await openZukan(page);
-  await expect(page.locator('#zukan-count')).toHaveText('みつけた 6/24');
-  await expect(page.locator('.zukan-row')).toHaveCount(8);
+  await expect(page.locator('#zukan-count')).toHaveText('みつけた 6/30');
+  await expect(page.locator('.zukan-row')).toHaveCount(10);
   await expect(page.locator('.zukan-row[data-stage="1-1"] .zukan-row-count')).toHaveText('2/3');
   await expect(page.locator('.zukan-card.is-found')).toHaveCount(6);
   // Needs the rocket (not learned): grey rocket picture. The balloon needs the jump, which the child has: plain "?".
@@ -90,6 +90,9 @@ test('picture book: rows per island, count, pictures, grey ability pictures, clo
   await expect(page.locator('.zukan-card[data-record="sea-pearl"] .zukan-later[data-ability="dive"]')).toHaveCount(1);
   await expect(page.locator('.zukan-card[data-record="iron-star"] .zukan-later[data-ability="magnetLight"]')).toHaveCount(1);
   await expect(page.locator('.zukan-card[data-record="iron-star"] .zukan-later svg')).toHaveCount(1);
+  // 3-2's butterbur bud waits for chapter 4's snowplow, 3-3's festival bell for chapter 5's magnet light.
+  await expect(page.locator('.zukan-card[data-record="snow-bud"] .zukan-later[data-ability="plow"] svg')).toHaveCount(1);
+  await expect(page.locator('.zukan-card[data-record="festival-bell"] .zukan-later[data-ability="magnetLight"]')).toHaveCount(1);
   // 4-1's bell on the ice shelf waits for chapter 5's magnet light.
   await expect(page.locator('.zukan-card[data-record="ice-bell"] .zukan-later[data-ability="magnetLight"]')).toHaveCount(1);
   // The book is taller than the screen; 「とじる」 is in sight before any scrolling.
@@ -121,7 +124,7 @@ test('picture book with the rocket: the rocket "?" loses its grey picture, a fou
     mapLinks: [...CHAIN, '2-1>2-2', '2-2>2-3'],
   });
   await openZukan(page);
-  await expect(page.locator('#zukan-count')).toHaveText('みつけた 2/24');
+  await expect(page.locator('#zukan-count')).toHaveText('みつけた 2/30');
   await expect(page.locator('.zukan-card[data-record="treetop"] .zukan-later')).toHaveCount(0);
   await expect(page.locator('.zukan-card[data-record="treetop"] .zukan-mark')).toHaveText('？');
   await expect(page.locator('.zukan-card[data-record="cliff-nest"] .zukan-name')).toHaveText('がけの うえの す');
