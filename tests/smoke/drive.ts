@@ -89,10 +89,10 @@ export async function waitRewound(page: Page, rail: string, below: number): Prom
 }
 
 /**
- * Presses the jump seat the moment it glows with face `mode` ("dive" or "jump"; polled every frame in the page, so a
+ * Presses the jump seat the moment it glows with face `mode` ("dive", "jump" or "plow"; polled every frame in the page, so a
  * short window is not missed). Fails when the front passes `latest` on `rail` without a glow.
  */
-export async function seatOnGlow(page: Page, mode: 'dive' | 'jump', rail: string, latest: number): Promise<void> {
+export async function seatOnGlow(page: Page, mode: 'dive' | 'jump' | 'plow', rail: string, latest: number): Promise<void> {
   const pressed = await page.waitForFunction(
     ([m, r, t]) => {
       const app = document.getElementById('app');
