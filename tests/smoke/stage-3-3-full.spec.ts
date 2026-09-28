@@ -170,10 +170,10 @@ test('stage 3-3 full run: jump and dive, the star trench, the moon, the festival
   await expect(app).toHaveAttribute('data-timer-icon', 'moon');
   await waitDriving(page);
   await setNotch(page, NORMAL);
-  await page.waitForTimeout(600);
-  await page.screenshot({ path: resolve(OUT, '130-hoshi-moon-timer.png') });
+  // The jump right away (its glow can come and go during a slow screenshot); the moon still counts down after it.
   await seatOnGlow(page, 'jump', 'main', 2790);
   await waitFront(page, 'main', 2815);
+  await page.screenshot({ path: resolve(OUT, '130-hoshi-moon-timer.png') });
   for (const at of [2985, 3035]) {
     await seatOnGlow(page, 'dive', 'main', at - 3);
     if (at === 2985) {

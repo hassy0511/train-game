@@ -1,5 +1,5 @@
 import type { Vector3 } from 'three';
-import type { RailEndDef, WaterSpan } from '../stage/types';
+import type { PlowSpan, RailEndDef, WaterSpan } from '../stage/types';
 
 /** Position and orientation of a point on a rail. `right` is `tangent × up` (the train's right-hand side). */
 export interface RailFrame {
@@ -19,6 +19,8 @@ export interface Rail {
   surfaces: WaterSpan[];
   /** v1.10 (set by the loader): stretches under water, sorted by `from`. */
   dives: WaterSpan[];
+  /** v1.10 (4-2, set by the loader): snow walls and the buried stretches behind them, sorted by `from`. */
+  plows: PlowSpan[];
   /** `s` is the distance from the rail start in meters. Outside [0, length] the end tangent is extrapolated. */
   frameAt(s: number): RailFrame;
   inGap(s: number): boolean;

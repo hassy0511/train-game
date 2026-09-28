@@ -1,7 +1,7 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { Emitter } from '../core/events';
 import type { Rail, RailNetwork } from '../rail/types';
-import type { FloaterDef, GapDef, JunctionDef, StartDef, WaterDef, WaterSpan } from '../stage/types';
+import type { FloaterDef, GapDef, JunctionDef, PlowSpan, StartDef, WaterDef, WaterSpan } from '../stage/types';
 import { spanAt } from '../stage/water';
 import {
   ACCELERATION,
@@ -15,6 +15,7 @@ import {
   JUMP,
   JUNCTION_ARROW_DISTANCE,
   PAD_JUMP,
+  PLOW,
   UPDRAFT_ACCELERATION,
   JUNCTION_LOCK_DISTANCE,
   LEVER_NOTCHES,
@@ -66,7 +67,19 @@ export interface TrainEvents extends Record<string, unknown> {
    * the dome (`floater` null). The train bounces back softly; `rewind` is where it should be put back.
    */
   waterBounce: { railId: string; s: number; floater: string | null; rewind: { railId: string; at: number } };
+  /**
+   * v1.10 (4-2): the snowplow's blade went down or up. `instant`: put so by a rewind or a resume (no sound, no motion).
+   */
+  bladeDown: { instant: boolean };
+  bladeUp: { instant: boolean };
+  /** v1.10 (4-2): the train front burst a snow wall with the blade down ("ずぼーん！"); `boosted`: the rocket burnt. */
+  wallBurst: { railId: string; span: PlowSpan; boosted: boolean };
+  /** v1.10 (4-2): "ぽすっ": the train front reached a snow wall without the blade; `rewind` is where to put it back. */
+  snowBump: { railId: string; s: number; span: PlowSpan; rewind: { railId: string; at: number } };
 }
+
+/** v1.10 (4-2): what a press of "ゆきかき" did ("none": no snow ahead to clear, nothing happens). */
+export type PlowResult = 'ok' | 'on' | 'none' | 'locked';
 
 /** v1.10: what a press of "もぐる" did. */
 export type DiveResult = 'ok' | 'bob' | 'diving' | 'cooldown' | 'air' | 'locked';
@@ -210,6 +223,15 @@ export class Train {
   private readonly floatersPassed = new Set<string>();
   private readonly waters: WaterDef[];
   private readonly floaters: FloaterDef[];
+  /** v1.10 (4-2): the snowplow's blade is down. */
+  private blade = false;
+  /** v1.10 (4-2): snow walls burst (span index), and how far each one's buried stretch is cleared (s on its rail). */
+  private readonly plowBurst = new Set<number>();
+  private readonly plowCleared = new Map<number, number>();
+  /** v1.10 (4-2): "ぽすっ" into a snow wall: seconds so far and where the car centre was when the front touched it. */
+  private bumping: { t: number; from: number } | null = null;
+  /** v1.10 (4-2): the train front last frame (on its rail), to see it reach a wall. */
+  private plowFront: { railId: string; s: number } | null = null;
 
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
@@ -328,7 +350,7 @@ export class Train {
    * falling, slipping, in the air or already burning. Works from a standstill.
    */
   startRocket(): boolean {
-    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing) return false;
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping) return false;
     if (this.airborne || this.rocketLeft > 0) return false;
     this.rocketLeft = ROCKET.burn;
     this.settling = false;
@@ -400,7 +422,7 @@ export class Train {
 
   /** Starts a jump. Distance = speed × air time; the lever does nothing until the lead car lands. */
   jump(): JumpResult {
-    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing) return 'locked';
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping) return 'locked';
     if (this.airborne) return 'air';
     if (this.jumpCooldown > 0) return 'cooldown';
     if (this.jumpBlocked) return 'bough';
@@ -443,7 +465,7 @@ export class Train {
    */
   setNotch(notch: number): boolean {
     if (this.ended || this.lockReason !== null || this.emergency || this.airborne || this.falling) return false;
-    if (this.rocketLeft > 0 || this.slipping || this.onSlide || this.bouncing) return false;
+    if (this.rocketLeft > 0 || this.slipping || this.onSlide || this.bouncing || this.bumping) return false;
     const next = Math.min(Math.max(Math.round(notch), 0), SPEED_NOTCHES.length - 1);
     if (next === HARD_BRAKE_NOTCH && this.state.notch !== HARD_BRAKE_NOTCH && this.state.speed > 3) {
       this.events.emit('hardBrake', { speed: this.state.speed });
@@ -482,6 +504,7 @@ export class Train {
     this.ended = false;
     this.refreshPending();
     this.resetDive();
+    this.resetPlow();
     this.computePose();
   }
 
@@ -644,6 +667,16 @@ export class Train {
       const k = Math.max(0, this.bouncing.t - DIVE.bounceStop) / DIVE.bounceSeconds;
       st.speed = 0;
       st.s = this.bouncing.from - DIVE.bounceBack * k * (2 - k);
+    } else if (this.bumping) {
+      // v1.10 (4-2) "ぽすっ": the nose sinks into the snow a little, then the train springs softly back.
+      this.bumping.t = Math.min(this.bumping.t + dt, PLOW.bumpStop + PLOW.bumpSeconds);
+      const t = this.bumping.t;
+      st.speed = 0;
+      if (t < PLOW.bumpStop) st.s = this.bumping.from + PLOW.bumpIn * Math.sin((Math.PI / 2) * (t / PLOW.bumpStop));
+      else {
+        const k = (t - PLOW.bumpStop) / PLOW.bumpSeconds;
+        st.s = this.bumping.from + PLOW.bumpIn - (PLOW.bumpIn + PLOW.bumpBack) * k * (2 - k);
+      }
     } else if (this.slipping) {
       // "ずるずる": back down the slope a few metres, wheels spinning (the runner puts the train back).
       this.slipping.t = Math.min(this.slipping.t + dt, SLOPE.slipSeconds);
@@ -683,7 +716,189 @@ export class Train {
     this.handleEnd(rail);
     this.handleJump(dt, wasAirborne);
     this.handleDive(dt);
+    this.handlePlow();
     this.computePose();
+  }
+
+  // ---- v1.10 (4-2): the snowplow ("ゆきかき") -------------------------------------------------------------------
+
+  /**
+   * "ゆきかき": lowers the blade (counted as down at once). Pressed again while down it does nothing ("on"); with no
+   * snow to clear within PLOW.approach m ahead nothing happens either ("none"). Works standing, with the rocket and
+   * the light; not while the controls are locked or during a fail.
+   */
+  plow(): PlowResult {
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping) return 'locked';
+    if (this.blade) return 'on';
+    if (this.nextPlowWall(PLOW.approach) === null) return 'none';
+    this.blade = true;
+    this.events.emit('bladeDown', { instant: false });
+    return 'ok';
+  }
+
+  /** v1.10 (4-2): the snowplow's blade is down. */
+  get bladeDown(): boolean {
+    return this.blade;
+  }
+
+  /** v1.10 (4-2): "ぽすっ" into a snow wall is going on. */
+  get isBumping(): boolean {
+    return this.bumping !== null;
+  }
+
+  /** v1.10 (4-2): snow wall `index` (gimmicks[]) has been burst. */
+  wallBurst(index: number): boolean {
+    return this.plowBurst.has(index);
+  }
+
+  /** v1.10 (4-2): how far the buried stretch of `span` is cleared (s on its rail; its `from` before the wall bursts). */
+  plowClearedTo(span: PlowSpan): number {
+    return this.plowBurst.has(span.index) ? Math.max(span.from, this.plowCleared.get(span.index) ?? span.from) : span.from;
+  }
+
+  /** Where the snow of `span` starts now (s on its rail), or null when it is all cleared. */
+  private snowFrom(span: PlowSpan): number | null {
+    if (!this.plowBurst.has(span.index)) return span.from;
+    const cleared = this.plowCleared.get(span.index) ?? span.from;
+    return cleared >= span.to - 1e-6 ? null : cleared;
+  }
+
+  /**
+   * v1.10 (4-2): the lead car front is inside a buried stretch with the blade down, clearing it (records needing the
+   * snowplow, the plowing sound, the flying snow).
+   */
+  get plowing(): boolean {
+    if (!this.blade) return false;
+    const f = this.frontS;
+    return this.currentRail.plows.some(
+      (sp) => this.plowBurst.has(sp.index) && f >= sp.from && f <= sp.to && (this.snowFrom(sp) ?? Infinity) <= f + 0.5,
+    );
+  }
+
+  /**
+   * v1.10 (4-2): the nearest snow still to clear (an unburst wall, or the rest of a buried stretch) along the way the
+   * train will go (through the junctions ahead: the side chosen, else the default), within `range` m of the train
+   * front: its distance (0 when the front is in it) and its wall.
+   */
+  nextPlowWall(range: number): { distance: number; span: PlowSpan; railId: string } | null {
+    let best: { distance: number; span: PlowSpan; railId: string } | null = null;
+    let rail = this.currentRail;
+    let front = this.frontS;
+    let entry = -Infinity;
+    let ahead: JunctionDef[] = this.pending;
+    for (let hop = 0; hop < 6 && -front <= range; hop++) {
+      const turn = ahead.find((j) => {
+        const to = j[this.routeSide(j)];
+        return to !== undefined && to !== rail.id;
+      });
+      const until = turn ? turn.at : rail.length;
+      for (const sp of rail.plows) {
+        const snow = this.snowFrom(sp);
+        if (snow === null || sp.to < front || sp.to < entry || snow > until) continue;
+        const d = Math.max(0, snow - front);
+        if (d <= range && (best === null || d < best.distance)) best = { distance: d, span: sp, railId: rail.id };
+      }
+      if (turn) {
+        front -= turn.at;
+        entry = 0;
+        rail = this.network.getRail(turn[this.routeSide(turn)] as string);
+      } else if (rail.end.type === 'merge' && rail.end.railId !== rail.id) {
+        entry = rail.end.at;
+        front = entry + front - rail.length;
+        rail = this.network.getRail(rail.end.railId);
+      } else break;
+      const center = front - TRAIN.length / 2;
+      ahead = this.junctions.filter((j) => j.railId === rail.id && j.at > center).sort((a, b) => a.at - b.at);
+    }
+    return best;
+  }
+
+  /** Per frame: the front reaching a wall (burst or "ぽすっ"), clearing a buried stretch, the blade going up. */
+  private handlePlow(): void {
+    const rail = this.currentRail;
+    const f = this.frontS;
+    const last = this.plowFront;
+    this.plowFront = { railId: rail.id, s: f };
+    if (this.bumping || this.falling) return;
+    const before = last && last.railId === rail.id ? last.s : f;
+    for (const sp of rail.plows) {
+      if (!this.plowBurst.has(sp.index) && before < sp.from && f >= sp.from) {
+        if (this.blade) {
+          this.plowBurst.add(sp.index);
+          this.plowCleared.set(sp.index, sp.from);
+          this.events.emit('wallBurst', { railId: rail.id, span: sp, boosted: this.rocketLeft > 0 });
+        } else {
+          this.snowBump(sp, f);
+          return;
+        }
+      }
+      if (this.blade && this.plowBurst.has(sp.index) && f >= sp.from && f <= sp.to + 1) {
+        this.plowCleared.set(sp.index, Math.max(this.plowCleared.get(sp.index) ?? sp.from, Math.min(f, sp.to)));
+      }
+    }
+    if (this.blade && this.nextPlowWall(PLOW.approach) === null) {
+      this.blade = false;
+      this.events.emit('bladeUp', { instant: false });
+    }
+  }
+
+  /** "ぽすっ": the front stops at the wall, sinks in a little and springs back (the caller puts the train back). */
+  private snowBump(span: PlowSpan, front: number): void {
+    const st = this.state;
+    st.s -= front - span.from;
+    st.speed = 0;
+    this.stopRocket();
+    this.bumping = { t: 0, from: st.s };
+    this.events.emit('snowBump', { railId: st.railId, s: span.from, span, rewind: span.rewind });
+  }
+
+  /**
+   * After a rewind: no "ぽすっ" going on; the burst walls' stretches are cleared to their ends (a fail's fade tidies
+   * the snow left); the blade is down (silently) when the front stands in snow still to clear, up otherwise.
+   */
+  private resetPlow(): void {
+    this.bumping = null;
+    this.plowFront = null;
+    for (const i of this.plowBurst) {
+      const sp = this.spanByIndex(i);
+      if (sp) this.plowCleared.set(i, sp.to);
+    }
+    this.setBladeInstant(this.frontInSnow());
+  }
+
+  /**
+   * v1.10 (4-2), a resume: walls on the way to here (`passed`) are burst and their stretches cleared; a stretch the
+   * train front stands in is burst and cleared up to the front, and the blade is down (silently).
+   */
+  preparePlowResume(passed: (span: PlowSpan) => boolean): void {
+    const f = this.frontS;
+    for (const rail of this.network.rails.values()) {
+      for (const sp of rail.plows) {
+        const here = rail.id === this.state.railId && f >= sp.from && f <= sp.to;
+        if (!here && !passed(sp)) continue;
+        this.plowBurst.add(sp.index);
+        this.plowCleared.set(sp.index, here ? f : sp.to);
+      }
+    }
+    this.plowFront = null;
+    this.setBladeInstant(this.frontInSnow());
+  }
+
+  /** The train front stands in a burst wall's stretch with snow still to clear. */
+  private frontInSnow(): boolean {
+    const f = this.frontS;
+    return this.currentRail.plows.some((sp) => this.plowBurst.has(sp.index) && this.snowFrom(sp) !== null && f >= sp.from && f <= sp.to);
+  }
+
+  private setBladeInstant(down: boolean): void {
+    if (down === this.blade) return;
+    this.blade = down;
+    this.events.emit(down ? 'bladeDown' : 'bladeUp', { instant: true });
+  }
+
+  private spanByIndex(index: number): PlowSpan | null {
+    for (const rail of this.network.rails.values()) for (const sp of rail.plows) if (sp.index === index) return sp;
+    return null;
   }
 
   // ---- v1.10: diving ("もぐる") -----------------------------------------------------------------------------
@@ -747,7 +962,7 @@ export class Train {
    * it came up, in the air, or while the controls are locked.
    */
   dive(): DiveResult {
-    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing) return 'locked';
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping) return 'locked';
     if (this.airborne) return 'air';
     const surface = this.onWaterSurface;
     if (surface && (this.leadInDive || this.domeLatch > 0)) return 'diving';

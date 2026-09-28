@@ -374,6 +374,8 @@ export class Flocks {
 interface PadVisual {
   pad: Object3D;
   sparkle: Points<BufferGeometry, PointsMaterial>;
+  /** v1.10 (4-2): a ski jump shows its folded board while hidden (instead of the sparkle). */
+  folded: Object3D | null;
   left: number;
 }
 
@@ -402,15 +404,25 @@ export class SkyGimmicks {
       const look = (g.params as { look?: string } | undefined)?.look;
       if (g.type === 'jump-pad' && look !== 'whale') {
         const t = resolvePlacement({ onRail: { railId: g.railId, at: g.from, heightFromRail: 0 } }, this.stage.network, null);
-        const pad = (await models.load('jump-pad')).clone(true);
+        // v1.10 (4-2): look "ski": a ski jump, folded up on end until the whistle lays it down ("ばたん！").
+        const ski = look === 'ski';
+        const pad = (await models.load(ski ? 'ski-ramp' : 'jump-pad')).clone(true);
         pad.position.copy(t.position);
         pad.quaternion.copy(t.quaternion);
         pad.visible = false;
         const sparkle = makeSparkle();
         sparkle.position.copy(t.position);
         sparkle.quaternion.copy(t.quaternion);
+        let folded: Object3D | null = null;
+        if (ski) {
+          folded = (await models.load('ski-ramp-folded')).clone(true);
+          folded.position.copy(t.position);
+          folded.quaternion.copy(t.quaternion);
+          this.group.add(folded);
+          sparkle.visible = false;
+        }
         this.group.add(pad, sparkle);
-        this.pads.set(index, { pad, sparkle, left: 0 });
+        this.pads.set(index, { pad, sparkle, folded, left: 0 });
       }
       if (g.type === 'updraft' && g.to !== undefined && look !== 'current') {
         for (let s = g.from + 6; s <= g.to; s += 14) {
@@ -452,6 +464,11 @@ export class SkyGimmicks {
       const shown = p.left > 0;
       // Blink during the last two seconds.
       p.pad.visible = shown && (p.left > 2 || Math.sin(this.time * 18) > -0.2);
+      if (p.folded) {
+        // A ski jump stands folded up whenever it is not laid down.
+        p.folded.visible = !p.pad.visible;
+        continue;
+      }
       p.sparkle.visible = !shown;
       if (!shown) p.sparkle.material.opacity = 0.45 + 0.35 * Math.sin(this.time * 5);
     }
