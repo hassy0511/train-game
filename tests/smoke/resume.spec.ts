@@ -560,3 +560,61 @@ test('resume 3-1 mission 2 at the station on the sea floor: the dome is on alrea
   await page.screenshot({ path: resolve(OUT, '94-resume-3-1-m2.png') });
   expect(errors).toEqual([]);
 });
+
+test('resume 4-2 mission 2 at the buried station: the snowplow down already, no "ずぼーん", up once out of the snow', async ({ page }) => {
+  const errors = watchErrors(page);
+  await seed(page, {
+    cleared: ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', '3-1', '4-1'],
+    abilities: ['whistle', 'jump', 'light', 'rocket', 'dive'],
+    mapLinks: [...ALL_LINKS, '1-1>3-1'],
+    resume: { stage: '4-2', mission: 1 },
+  });
+  await page.goto('/?stage=4-2&go=1&resume=1');
+  await ready(page, '4-2');
+  const app = page.locator('#app');
+  await tapUntil(page, '#card');
+  await expect(page.locator('#card')).toContainText('ゆきかきと ジャンプ');
+  // かまくらえき (main 1010) is in the buried stretch of wall 3: walls 1–3 are burst, the blade is down, silently.
+  await standsAt(page, 'main', 1010);
+  await expect(app).toHaveAttribute('data-plow', 'on');
+  for (const i of [0, 1, 2]) await expect(app).toHaveAttribute(`data-wall-${i}`, 'burst');
+  await expect(app).toHaveAttribute('data-wall-3', 'whole');
+  await expect(page.locator('#jump')).toHaveAttribute('data-mode', 'plow');
+  await expect(page.locator('#cargo')).toHaveAttribute('data-passengers', '2');
+  // The snowplow was learned by the fast-forwarded opening.
+  expect((await saved(page)).abilities).toContain('plow');
+  await page.locator('#card-button').click();
+  await waitDriving(page);
+  expect(await app.getAttribute('data-blade-drops')).toBeNull();
+  await expect(app).toHaveAttribute('data-plow-bursts', '0');
+  await setNotch(page, NORMAL);
+  await expect(app).toHaveAttribute('data-plowing', '1', { timeout: 30_000 });
+  // Past the end of the stretch (main 1080) the blade folds up and the seat is the jump again.
+  await expect(page.locator('#jump')).toHaveAttribute('data-mode', 'jump', { timeout: 60_000 });
+  await expect(app).toHaveAttribute('data-plow', '');
+  await expect(app).toHaveAttribute('data-plow-bumps', '0');
+  await page.screenshot({ path: resolve(OUT, '94-resume-4-2-m2.png') });
+  expect(errors).toEqual([]);
+});
+
+test('resume 4-2 mission 3: every wall on the way to スキーじょうえき is burst, the one ahead still stands', async ({ page }) => {
+  const errors = watchErrors(page);
+  await seed(page, {
+    cleared: ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', '3-1', '4-1'],
+    abilities: ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow'],
+    mapLinks: [...ALL_LINKS, '1-1>3-1'],
+    resume: { stage: '4-2', mission: 2 },
+  });
+  await page.goto('/?stage=4-2&go=1&resume=1');
+  await ready(page, '4-2');
+  const app = page.locator('#app');
+  await tapUntil(page, '#card');
+  await expect(page.locator('#card')).toContainText('かまくら まつり');
+  await standsAt(page, 'main', 2080);
+  // Walls 1–3 and 5–6 on the main line are burst; the side way's (not on the way) and wall 7 still stand.
+  for (const i of [0, 1, 2, 4, 5]) await expect(app).toHaveAttribute(`data-wall-${i}`, 'burst');
+  await expect(app).toHaveAttribute('data-wall-3', 'whole');
+  await expect(app).toHaveAttribute('data-wall-6', 'whole');
+  await expect(app).toHaveAttribute('data-plow', '');
+  expect(errors).toEqual([]);
+});

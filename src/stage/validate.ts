@@ -1,6 +1,7 @@
 import { RUN_SURFACES, type RunSurface } from '../audio/run-sound';
 import { SONGS } from '../audio/songs';
 import { iceZones, thinIceZones } from '../gimmick/ice';
+import { plowSpans } from '../gimmick/plow';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import type { RailNetwork } from '../rail/types';
@@ -11,6 +12,7 @@ import {
   FRAGILE,
   GRASSHOPPER,
   LEVER_NOTCHES,
+  PLOW,
   RECORD,
   REWIND_DISTANCE,
   ROCK_ROLL,
@@ -126,6 +128,10 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
     if (!['jump', 'tilt', 'cheer'].includes(String(st.emote))) fail(`${where}: emote`);
   } else if ('unlock' in st) {
     if (!ABILITIES.includes(String(st.unlock))) fail(`${where}: unknown ability "${String(st.unlock)}"`);
+  } else if ('sky' in st) {
+    // v1.10 (4-2): the sky turns to evening for the rest of the stage.
+    if (st.sky !== 'evening') fail(`${where}: sky must be "evening"`);
+    if (st.seconds !== undefined && !(isNumber(st.seconds) && st.seconds >= 0)) fail(`${where}: "seconds" must be >= 0`);
   } else {
     fail(`${where}: unknown step`);
   }
@@ -155,7 +161,7 @@ export function validateStageFile(raw: unknown): StageFile {
   if (env.bgm !== null && (typeof env.bgm !== 'string' || !(env.bgm in SONGS))) {
     fail(`"environment.bgm" must be null or a song in src/audio/songs.ts (${Object.keys(SONGS).join(', ')})`);
   }
-  if (env.fall !== undefined && !['dark', 'cloud', 'leaf', 'water'].includes(String(env.fall))) fail('"environment.fall" must be dark, cloud, leaf or water');
+  if (env.fall !== undefined && !['dark', 'cloud', 'leaf', 'water', 'snow'].includes(String(env.fall))) fail('"environment.fall" must be dark, cloud, leaf, water or snow');
   if (env.cloudSea !== undefined && (!isObject(env.cloudSea) || !isNumber(env.cloudSea.y))) fail('"environment.cloudSea" needs y');
   if (env.ambience !== undefined && !AMBIENCE_KINDS.includes(env.ambience as AmbienceKind)) {
     fail(`"environment.ambience" must be one of ${AMBIENCE_KINDS.join(', ')}`);
@@ -204,6 +210,7 @@ export function validateStageFile(raw: unknown): StageFile {
         }
         if (g.pit !== undefined && typeof g.pit !== 'boolean') fail(`rail "${r.id}": gap "pit" must be true or false`);
         if (g.bridge !== undefined) fail(`rail "${r.id}": gap "bridge" is set by the loader (write a flower-bridge gimmick instead)`);
+        if (g.line !== undefined && !isString(g.line)) fail(`rail "${r.id}": gap "line" must be text`);
       }
     }
     if (r.look !== undefined && r.look !== 'rail' && r.look !== 'silk') fail(`rail "${r.id}": "look" must be rail or silk`);
@@ -221,7 +228,7 @@ export function validateStageFile(raw: unknown): StageFile {
       const list = Array.isArray(r.base) ? r.base : [r.base];
       if (list.length === 0) fail(`rail "${r.id}": base list is empty`);
       for (const b of list as unknown[]) {
-        if (!isObject(b) || (b.look !== 'rock' && b.look !== 'pier')) fail(`rail "${r.id}": base needs look "rock" or "pier"`);
+        if (!isObject(b) || !['rock', 'pier', 'snow'].includes(String(b.look))) fail(`rail "${r.id}": base needs look "rock", "pier" or "snow"`);
         if (b.depth !== undefined && (!isNumber(b.depth) || b.depth <= 0)) fail(`rail "${r.id}": base depth must be > 0`);
         if (b.toGround !== undefined && typeof b.toGround !== 'boolean') fail(`rail "${r.id}": base toGround must be true or false`);
         if (b.skip !== undefined && (!Array.isArray(b.skip) || !b.skip.every((k) => isObject(k) && isNumber(k.from) && isNumber(k.to) && k.to > k.from))) {
@@ -299,12 +306,15 @@ export function validateStageFile(raw: unknown): StageFile {
     if (!isObject(s) || !isString(s.id) || !isString(s.name)) fail('each station needs "id" and "name"');
     if (!isString(s.railId) || !railIds.has(s.railId) || !isNumber(s.at)) fail(`station "${s.id}": needs known railId and at`);
     if (s.platformSide !== 'left' && s.platformSide !== 'right') fail(`station "${s.id}": platformSide`);
+    if (s.buried !== undefined) fail(`station "${s.id}": "buried" is set by the loader (put the station in a plow-wall's stretch)`);
     stationIds.add(s.id);
   }
 
   requireArray(raw, 'props').forEach((p, i) => {
     if (!isObject(p) || !isString(p.model) || !MODEL_NAME.test(p.model)) fail(`props[${i}]: "model" must match [a-z0-9-]+`);
     if (p.tag !== undefined && !isString(p.tag)) fail(`props[${i}]: "tag" must be text`);
+    if (p.trace !== undefined && typeof p.trace !== 'boolean') fail(`props[${i}]: "trace" must be true or false`);
+    if (p.traceLine !== undefined && (!isString(p.traceLine) || p.trace !== true)) fail(`props[${i}]: "traceLine" is text on a prop with "trace": true`);
     checkPlacement(p, `props[${i}]`, railIds);
   });
 
@@ -463,7 +473,19 @@ export function validateStageFile(raw: unknown): StageFile {
       }
       if (p.speed !== undefined && !(isNumber(p.speed) && p.speed > 0)) fail(`gimmicks[${i}] updraft: params.speed must be > 0`);
     }
-    if (g.type === 'jump-pad' && p.look !== undefined && p.look !== 'pad' && p.look !== 'whale') fail(`gimmicks[${i}] jump-pad: params.look must be pad or whale`);
+    if (g.type === 'jump-pad' && p.look !== undefined && !['pad', 'whale', 'ski'].includes(String(p.look))) fail(`gimmicks[${i}] jump-pad: params.look must be pad, whale or ski`);
+    if (g.type === 'plow-wall') {
+      // v1.10 (4-2): a snow wall and the buried stretch behind it.
+      const where = `gimmicks[${i}] plow-wall`;
+      if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`${where}: needs a known railId and "from"`);
+      if (g.to !== undefined && !(isNumber(g.to) && g.to >= (g.from as number) + PLOW.wallDepth)) fail(`${where}: "to" must be at least ${PLOW.wallDepth} m after "from"`);
+      if (p.look !== undefined && !['snow', 'sand', 'foam'].includes(String(p.look))) fail(`${where}: params.look must be snow, sand or foam`);
+      if (p.line !== undefined && p.line !== null && !isString(p.line)) fail(`${where}: params.line must be text or null`);
+      const rw = p.rewind;
+      if (rw !== undefined && !(isObject(rw) && isString(rw.railId) && railIds.has(rw.railId) && isNumber(rw.at))) fail(`${where}: params.rewind needs a known railId and at`);
+      for (const k of ['height', 'width']) if (p[k] !== undefined && !(isNumber(p[k]) && (p[k] as number) > 0)) fail(`${where}: params.${k} must be > 0`);
+      if (p.sign !== undefined && typeof p.sign !== 'boolean') fail(`${where}: params.sign must be true or false`);
+    }
     if (g.type === 'fog' && p.color !== undefined && !(typeof p.color === 'string' && COLOR.test(p.color))) fail(`gimmicks[${i}] fog: params.color must be #rrggbb`);
     if (g.type === 'fog' && p.glow !== undefined && typeof p.glow !== 'boolean') fail(`gimmicks[${i}] fog: params.glow must be true or false`);
     if (g.type === 'flock') {
@@ -953,4 +975,94 @@ export function validateIceLayout(file: StageFile, network: RailNetwork): void {
     const def = file.rails.find((r) => r.id === p.railId);
     if (!def?.deadEnd) fail(`${where}: rail "${String(p.railId)}" must be a dead end`);
   });
+}
+
+/** Actors that stand or move on the track (and the snowmen of later stages): never near a snow wall. */
+const ON_TRACK_ACTORS = ['cat', 'rock-drop', 'rock-roll', 'nut', 'squirrel', 'grasshopper', 'snowman'];
+
+/**
+ * v1.10 (4-2) checks on the snow walls (docs/PHASE8_CHAPTER3_4.md 第 6 部 §A8). Each wall's zone runs from
+ * PLOW.zoneBefore m before it to PLOW.zoneAfter m past its buried stretch: the jump seat is "ゆきかき" there, so nothing
+ * else to press for lies in it (a gap's take-off, water, thin ice, boughs, bridges; a jump pad not within
+ * PLOW.padBefore m before the wall), no creature stands on the track there (the snowplow is never used on animals), and
+ * no junction is in it. A wall's face is not on a downhill; an uphill in its stretch starts PLOW.slopeGap m or more
+ * past it. A station stopping in or just past a stretch has its stop zone start PLOW.stationGap m or more past the
+ * wall. A side way's wall stands PLOW.sideWayMin m or more along it; a junction that needs the snowplow has a wall
+ * within 400 m of its side way. Before chapter 4 walls stand only on such side ways. A record needing the snowplow lies
+ * within RECORD.distance of a buried stretch. A wall's way back is before it, on no slope, thin ice or water.
+ */
+export function validatePlowLayout(file: StageFile, network: RailNetwork): void {
+  const spans = plowSpans(file.gimmicks);
+  // (A stage without walls yet may already name a snowplow record: its wall comes with it later, as for dive records.)
+  if (spans.length === 0) return;
+  const slopes = slopeZones(file.gimmicks);
+  const thin = thinIceZones(file.gimmicks);
+  const sideOf = (railId: string) => file.junctions.find((j) => j.railId !== railId && (j.left === railId || j.right === railId));
+  for (const sp of spans) {
+    const where = `gimmicks[${sp.index}] plow-wall`;
+    const rail = network.getRail(sp.railId);
+    if (sp.to > rail.length) fail(`${where}: its stretch runs past the end of rail "${sp.railId}"`);
+    const lo = sp.from - PLOW.zoneBefore;
+    const hi = sp.to + PLOW.zoneAfter;
+    const inZone = (a: number, b = a): boolean => b >= lo && a <= hi;
+    for (const o of spans) {
+      if (o !== sp && o.railId === sp.railId && o.from < sp.to && sp.from < o.to) fail(`${where}: its stretch overlaps gimmicks[${o.index}] plow-wall`);
+    }
+    for (const g of rail.gaps) if (inZone(g.from - 60, g.to)) fail(`${where}: a gap (${g.from}–${g.to}) is too near it`);
+    for (const w of [...rail.surfaces, ...rail.dives]) {
+      if (w.to + DIVE.clearAfter >= lo && w.from - DIVE.clearBefore <= hi) fail(`${where}: too near the water at ${w.from.toFixed(0)}–${w.to.toFixed(0)}`);
+    }
+    file.gimmicks.forEach((g, i) => {
+      if (g.railId !== sp.railId || g.from === undefined) return;
+      if (g.type === 'jump-pad' && g.from >= sp.from - PLOW.padBefore && g.from <= hi) fail(`${where}: jump pad gimmicks[${i}] is within ${PLOW.padBefore} m before it`);
+      if (['bough', 'flower-bridge', 'fragile', 'thin-ice'].includes(g.type) && inZone(g.from, g.to ?? g.from)) fail(`${where}: gimmicks[${i}] ${g.type} is too near it`);
+    });
+    for (const a of file.actors) {
+      if (!('onRail' in a) || a.onRail.railId !== sp.railId) continue;
+      if ((ON_TRACK_ACTORS.includes(a.type) || a.type.startsWith('dino')) && inZone(a.onRail.at)) fail(`${where}: actor "${a.id}" is on the track near it (no snowplow near creatures)`);
+    }
+    for (const j of file.junctions) if (j.railId === sp.railId && inZone(j.at)) fail(`${where}: junction "${j.id}" is too near it`);
+    for (const z of slopes) {
+      if (z.railId !== sp.railId) continue;
+      if (z.kind === 'down' && sp.from >= z.from && sp.from <= z.to) fail(`${where}: its face is on a downhill (gimmicks[${z.index}])`);
+      if (z.kind === 'up' && z.from <= sp.to && z.to >= sp.from && z.from < sp.from + PLOW.slopeGap) fail(`${where}: the uphill gimmicks[${z.index}] must start ${PLOW.slopeGap} m or more past the wall`);
+    }
+    for (const st of file.stations) {
+      if (st.railId !== sp.railId || st.at < sp.from || st.at > hi) continue;
+      const zone = st.stop?.zone ?? STOP_RULE.zone;
+      if (st.at - zone < sp.from + PLOW.stationGap) fail(`${where}: station "${st.id}"'s stop zone must start ${PLOW.stationGap} m or more past the wall`);
+    }
+    const j = sideOf(sp.railId);
+    if (j && sp.from < PLOW.sideWayMin) fail(`${where}: on a side way it must stand ${PLOW.sideWayMin} m or more past junction "${j.id}"`);
+    if (file.chapter < 4 && !(j && j.needs === 'plow')) fail(`${where}: before chapter 4 a snow wall stands only on a side way that needs the snowplow`);
+    const back = network.rails.get(sp.rewind.railId);
+    if (!back || sp.rewind.at < 0 || sp.rewind.at > back.length) fail(`${where}: rewind at=${sp.rewind.at} is outside rail "${sp.rewind.railId}"`);
+    if (sp.rewind.railId === sp.railId && sp.rewind.at >= sp.from) fail(`${where}: must rewind to before the wall`);
+    for (const z of slopes) if (z.railId === sp.rewind.railId && sp.rewind.at >= z.from && sp.rewind.at <= z.to) fail(`${where}: rewinds onto gimmicks[${z.index}] slope`);
+    for (const z of thin) if (z.railId === sp.rewind.railId && sp.rewind.at >= z.from && sp.rewind.at <= z.to) fail(`${where}: rewinds onto gimmicks[${z.index}] thin-ice`);
+    if ([...back.surfaces, ...back.dives].some((w) => sp.rewind.at >= w.from && sp.rewind.at <= w.to)) fail(`${where}: must not rewind onto water`);
+  }
+  for (const j of file.junctions) {
+    if (j.needs !== 'plow') continue;
+    const side = j[j.default === 'left' ? 'right' : 'left'] as string;
+    if (!spans.some((sp) => sp.railId === side && sp.from <= 400)) fail(`junction "${j.id}": needs the snowplow, so its side way needs a snow wall within 400 m`);
+  }
+  for (const r of file.records) {
+    if (r.requires !== 'plow') continue;
+    let ok = false;
+    if ('onRail' in r) {
+      const at = r.onRail.at;
+      ok = spans.some((sp) => sp.railId === r.onRail.railId && at >= sp.from - RECORD.distance && at <= sp.to + RECORD.distance);
+    } else {
+      const [x, , z] = r.position;
+      for (const sp of spans) {
+        const rail = network.getRail(sp.railId);
+        for (let s = sp.from; s <= sp.to && !ok; s += 2) {
+          const p = rail.frameAt(s).position;
+          ok = Math.hypot(p.x - x, p.z - z) <= RECORD.distance;
+        }
+      }
+    }
+    if (!ok) fail(`record "${r.id}": a snowplow record must be within ${RECORD.distance} m of a buried stretch`);
+  }
 }

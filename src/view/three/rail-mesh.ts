@@ -87,6 +87,11 @@ const RIDGE_BULGE = 0.35;
 const RIDGE_FOOT_COLOR = new Color('#6F5D4E');
 const RIDGE_TOP_COLOR = new Color('#A8927A');
 const RIDGE_COLOR_HEIGHT = 60;
+/** v1.10 (4-2): a snowy ridge (`base.look` "snow"): pale blue-lilac in the shade at the foot, white at the top. */
+const SNOW_RIDGE_FOOT_COLOR = new Color('#C9D6E6');
+const SNOW_RIDGE_TOP_COLOR = new Color('#F6F9FC');
+const SNOW_RIDGE_COLOR_HEIGHT = 20;
+const SNOW_BASE_COLOR = new Color('#E6EDF5');
 
 /**
  * v1.7: how parts of the track look — slopes (bed colour, arrows) and the rock bed under a rail (`rails[].base`).
@@ -479,8 +484,11 @@ function rockHash(x: number, z: number): number {
   return v - Math.floor(v);
 }
 
-/** v1.7: a ridge's colours, per vertex: dark at the foot, light at the top, each point a little different. */
-function paintedRidge(geometry: BufferGeometry, groundY: number): BufferGeometry {
+/**
+ * v1.7: a ridge's colours, per vertex: dark at the foot, light at the top, each point a little different. v1.10 (4-2):
+ * a snowy one is white at the top and pale blue-lilac in the shade at the foot, with less variation.
+ */
+function paintedRidge(geometry: BufferGeometry, groundY: number, snow = false): BufferGeometry {
   const position = geometry.getAttribute('position');
   const colors = new Float32Array(position.count * 3);
   const c = new Color();
@@ -488,8 +496,13 @@ function paintedRidge(geometry: BufferGeometry, groundY: number): BufferGeometry
     const x = position.getX(i);
     const y = position.getY(i);
     const z = position.getZ(i);
-    c.copy(RIDGE_FOOT_COLOR).lerp(RIDGE_TOP_COLOR, Math.min(1, Math.max(0, (y - groundY) / RIDGE_COLOR_HEIGHT)));
-    c.multiplyScalar(0.9 + 0.18 * rockHash(z, x));
+    if (snow) {
+      c.copy(SNOW_RIDGE_FOOT_COLOR).lerp(SNOW_RIDGE_TOP_COLOR, Math.min(1, Math.max(0, (y - groundY) / SNOW_RIDGE_COLOR_HEIGHT)));
+      c.multiplyScalar(0.97 + 0.04 * rockHash(z, x));
+    } else {
+      c.copy(RIDGE_FOOT_COLOR).lerp(RIDGE_TOP_COLOR, Math.min(1, Math.max(0, (y - groundY) / RIDGE_COLOR_HEIGHT)));
+      c.multiplyScalar(0.9 + 0.18 * rockHash(z, x));
+    }
     colors.set([c.r, c.g, c.b], i * 3);
   }
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
@@ -545,6 +558,7 @@ function buildChunkParts(
   const slideData: GeometryData = { positions: [], indices: [] };
   const chevronData: GeometryData = { positions: [], indices: [] };
   const baseData: GeometryData = { positions: [], indices: [] };
+  const snowBaseData: GeometryData = { positions: [], indices: [] };
   const deckData: GeometryData = { positions: [], indices: [] };
   const floats: BufferGeometry[] = [];
   const onSurface = (s: number): boolean => rail.surfaces.some((sp) => s >= sp.from && s <= sp.to);
@@ -586,11 +600,12 @@ function buildChunkParts(
       addBallastSegment(kind === 'up' ? steepData : kind === 'down' ? slideData : bedTarget, start, end);
     }
     const base = baseAt(bases, mid);
-    if (base && base.look === 'rock' && hasBase(mid, base)) {
+    // A solid bed under the track: rock, or v1.10 (4-2) a snowy ridge (each in its own colours).
+    if (base && (base.look === 'rock' || base.look === 'snow') && hasBase(mid, base)) {
       const before = index === 0 ? -1 : (samples[index - 1] + startS) / 2;
       const after = index + 2 < samples.length ? (endS + samples[index + 2]) / 2 : rail.length + 1;
-      const rockAt = (s: number): boolean => baseAt(bases, s)?.look === 'rock' && hasBase(s);
-      addBaseSegment(baseData, start, end, base, looks?.groundY ?? null, !rockAt(before), !rockAt(after));
+      const sameAt = (s: number): boolean => baseAt(bases, s)?.look === base.look && hasBase(s);
+      addBaseSegment(base.look === 'snow' ? snowBaseData : baseData, start, end, base, looks?.groundY ?? null, !sameAt(before), !sameAt(after));
     }
   }
   if (looks) {
@@ -636,6 +651,11 @@ function buildChunkParts(
     const geometry = makeGeometry(baseData);
     const ridge = bases.some((b) => b.look === 'rock' && b.toGround);
     parts.push(ridge && groundY !== null ? paintedRidge(geometry, groundY) : painted(geometry, ROCK_BASE_COLOR));
+  }
+  if (snowBaseData.indices.length) {
+    const geometry = makeGeometry(snowBaseData);
+    const ridge = bases.some((b) => b.look === 'snow' && b.toGround);
+    parts.push(ridge && groundY !== null ? paintedRidge(geometry, groundY, true) : painted(geometry, SNOW_BASE_COLOR));
   }
   const sleepers: BufferGeometry[] = [];
   for (let s = Math.ceil(from / SLEEPER_STEP) * SLEEPER_STEP; s < Math.min(to, rail.length + 1e-6); s += SLEEPER_STEP) {

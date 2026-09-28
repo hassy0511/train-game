@@ -29,6 +29,8 @@ import { ForestGimmicks } from './forest';
 import { MeadowGimmicks } from './meadow';
 import { VolcanoGimmicks } from './volcano-gimmicks';
 import { IceGimmicks } from './ice';
+import { PlowGimmicks } from './plow';
+import { VillageGimmicks } from './village';
 import { iceZones, thinIceZones } from '../../gimmick/ice';
 import { slopeZones } from '../../gimmick/slope';
 import type { RailBaseDef, ResolvedProp } from '../../stage/types';
@@ -112,6 +114,9 @@ export class ThreeSceneView implements SceneView {
   private volcano: VolcanoGimmicks | null = null;
   /** v1.10 (4-1): ice sheets, thin ice, snow, snowbirds and ice mirrors (null on a stage without them). */
   private ice: IceGimmicks | null = null;
+  /** v1.10 (4-2): the snowplow, snow walls and buried stretches; the village's evening, lanterns and swirl marks. */
+  private plow: PlowGimmicks | null = null;
+  private village: VillageGimmicks | null = null;
   /** v1.7: slope beds and rock bases, kept for rebuilding the track after a cut. */
   private trackLooks: TrackLooks | undefined;
   /** v1.7: props with a tag, each in its own group (a cut can drop them). */
@@ -248,6 +253,12 @@ export class ThreeSceneView implements SceneView {
       this.scene.add(this.ice.group);
       if (stage.file.environment.surface === 'snow') IceGimmicks.brightenSnow(this.scene);
     }
+    // The snowplow rides on the train from the stage it is learned in on (its walls only where there are some).
+    this.plow = new PlowGimmicks(stage, this.train);
+    this.scene.add(this.plow.group);
+    if (stage.file.props.some((p) => p.model === 'lantern' || p.trace) || stage.file.cutscenes && Object.values(stage.file.cutscenes).some((c) => c.some((st) => 'sky' in st))) {
+      this.village = new VillageGimmicks(this.scene, this.sky);
+    }
     // Tagged props stay separate so a cutscene can drop them (the old bridge's girders).
     for (const prop of stage.props) {
       if (!prop.tag) continue;
@@ -283,6 +294,7 @@ export class ThreeSceneView implements SceneView {
       this.volcano.init(this.models),
       this.sea?.init(this.models),
       this.ice?.init(this.models),
+      this.plow.init(this.models),
     ]);
     // The train, cars and partner only ever move as a whole (door bands, the light beam and the jump unit are
     // objects of their own), so each draws baked, in one call.
@@ -367,6 +379,8 @@ export class ThreeSceneView implements SceneView {
     this.harbour?.onEvent(event);
     // v1.10 (3-3): at the festival the jellyfish lanterns float up.
     if (event.type === 'festival') this.flocks?.lift('lantern-jelly', 3, event.instant ? 0 : 2.5);
+    this.plow?.onEvent(event);
+    this.village?.onEvent(event);
     if (event.type === 'ability' && event.id === 'rocket') void this.volcano?.addRocketUnit(this.models);
     if (event.type === 'rocket') this.fovTarget = event.state === 'burn' && !this.calm ? ROCKET_FOV : 0;
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
@@ -608,6 +622,11 @@ export class ThreeSceneView implements SceneView {
       this.ice.trainSpeed = pose.speed;
       this.ice.update(dt, this.camera);
     }
+    if (this.plow) {
+      this.plow.trainSpeed = pose.speed;
+      this.plow.update(dt);
+    }
+    this.village?.update(dt);
     this.updateFalling(dt);
     // A little wider view while the rocket burns (not a shake).
     const fov = this.fovBoost + (this.fovTarget - this.fovBoost) * Math.min(1, dt * 4);

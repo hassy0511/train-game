@@ -681,6 +681,54 @@ export class AudioEngine {
   }
 
   /**
+   * 4-2: the snowplow bursts a snow wall: "ずぼーん！" (a soft pink-noise burst falling from bright to low, a round low
+   * "ぼふ") and a sparkle of four bells going up. With the rocket burning it is bigger and longer ("ずばばーん！").
+   */
+  playWallBurst(boosted = false): void {
+    const o = this.out(0.2, 1.4);
+    const k = boosted ? 1.5 : 1;
+    this.hiss({ color: 'pink', seconds: 0.45 * (boosted ? 1.35 : 1), gain: 0.12 * k, attack: 0.01, filter: 'lowpass', freq: 1400, endFreq: 400, q: 0.7, dest: o });
+    this.ping(90, 0, 0.3, 'sine', 0.16, 60, 0.005, o);
+    [1047, 1319, 1568, 2093].forEach((f, i) => this.bell(f, 0.12 + i * 0.05, 0.03, 0.5));
+  }
+
+  /** 4-2: the snowplow's blade folds up again: a light "ぽん". */
+  playBladeUp(): void {
+    this.ping(500, 0, 0.16, 'sine', 0.1, 800, 0.004, this.out(0.1));
+  }
+
+  /**
+   * 4-2: snow flying off the snowplow while it clears a buried stretch: one short "ざざっ" (played again and again it
+   * makes the "ざざざー").
+   */
+  playPlowSpray(speed: number): void {
+    const o = this.out(0.05, 1);
+    const v = Math.min(1, Math.max(0.25, speed / 10));
+    this.hiss({ color: 'pink', seconds: 0.4, gain: 0.2 * v + 0.04, attack: 0.08, filter: 'bandpass', freq: 600 + 60 * speed, q: 0.9, dest: o });
+    this.hiss({ color: 'brown', delay: 0.15, seconds: 0.12, gain: 0.08 * v, filter: 'lowpass', freq: 500, dest: o });
+  }
+
+  /** 4-2: the wiper clearing the snowy window: "きゅっ きゅっ" (two funny little squeaks). */
+  playWiper(): void {
+    const o = this.out(0.05, 1.2);
+    [0.35, 0.8].forEach((d) => this.ping(1200, d, 0.12, 'triangle', 0.05, 900, 0.006, o));
+  }
+
+  /** 4-2: the ski jump folds down when whistled for: "ばたん！" (a wooden board landing softly in snow). */
+  playPadFlop(): void {
+    const o = this.out(0.15, 1.3);
+    this.knock(420, 0, 0.12, o);
+    this.thump(120, 0.03, 0.12, 0.25, o);
+    this.hiss({ color: 'pink', delay: 0.04, seconds: 0.3, gain: 0.05, filter: 'lowpass', freq: 900, endFreq: 300, dest: o });
+  }
+
+  /** 4-2: the lanterns come on one after another at dusk: "ぽっ ぽっ ぽっ …" (soft, high). */
+  playLanterns(): void {
+    const o = this.out(0.3, 0.9);
+    for (let i = 0; i < 12; i++) this.ping(700 + (i % 4) * 90, i * 0.12, 0.08, 'sine', 0.035, 760 + (i % 4) * 90, 0.004, o);
+  }
+
+  /**
    * 4-3: the snow wave coming down behind: a soft, big "もこもこ" that swells and settles (a round, fluttering
    * rumble with little soft thumps in it — no roar, nothing scary).
    */
