@@ -1,6 +1,7 @@
 import {
   clearProgress,
   loadProgress,
+  PASSCODE_LETTERS,
   passcodeToProgress,
   progressToPasscode,
   saveProgress,
@@ -15,13 +16,21 @@ export interface ParentsOptions {
   onProgressChanged(): void;
 }
 
-const PASSCODE_ERRORS: Record<PasscodeError, string> = {
-  empty: 'あいことばを いれてください。',
-  letters: 'つかえない もじが あります。（えいすうじ 12もじ）',
-  version: 'あいことばが ちがうようです。1もじめを たしかめてください。',
-  length: 'もじの かずが ちがいます。（12もじ）',
-  check: 'あいことばが ちがうようです。もういちど たしかめてください。',
-};
+/** What is wrong with a typed あいことば; `letters` is how many that code's version has (a wrong length). */
+function passcodeError(error: PasscodeError, letters = PASSCODE_LETTERS): string {
+  switch (error) {
+    case 'empty':
+      return 'あいことばを いれてください。';
+    case 'letters':
+      return `つかえない もじが あります。（えいすうじ ${PASSCODE_LETTERS}もじ）`;
+    case 'version':
+      return 'あいことばが ちがうようです。1もじめを たしかめてください。';
+    case 'length':
+      return `もじの かずが ちがいます。（${letters}もじ）`;
+    case 'check':
+      return 'あいことばが ちがうようです。もういちど たしかめてください。';
+  }
+}
 
 /** Opened as a home-screen app (Safari's "ホーム画面に追加"): its storage is not dropped after a while. */
 function homeScreenApp(): boolean {
@@ -83,10 +92,11 @@ export function showParents(root: HTMLElement, options: ParentsOptions): void {
     else if (!homeScreenApp()) state.textContent = 'いまは ふつうの保存です（ホーム画面への追加がおすすめです）。';
   });
 
-  // あいことば: the progress as 12 letters, and back.
+  // あいことば: the progress as 16 letters, and back (the older 12-letter ones are still read).
   const pass = section(
     'あいことば（記録の書きうつし）',
-    '記録を 12文字の「あいことば」にできます。書きうつしておけば、記録が消えたときや、別の端末でも、入れると元にもどせます。通信はしません。',
+    `記録を ${PASSCODE_LETTERS}文字の「あいことば」にできます。書きうつしておけば、記録が消えたときや、別の端末でも、入れると元にもどせます。通信はしません。`,
+    '前に書きうつした 12文字の あいことばも、そのまま使えます。',
   );
   const show = document.createElement('button');
   show.type = 'button';
@@ -111,8 +121,8 @@ export function showParents(root: HTMLElement, options: ParentsOptions): void {
   input.autocomplete = 'off';
   input.spellcheck = false;
   input.setAttribute('autocapitalize', 'characters');
-  input.placeholder = 'XXXX-XXXX-XXXX';
-  input.maxLength = 24;
+  input.placeholder = Array.from({ length: PASSCODE_LETTERS / 4 }, () => 'XXXX').join('-');
+  input.maxLength = 32;
   const load = document.createElement('button');
   load.type = 'button';
   load.id = 'parents-passcode-load';
@@ -124,7 +134,7 @@ export function showParents(root: HTMLElement, options: ParentsOptions): void {
   load.addEventListener('click', () => {
     const read = passcodeToProgress(input.value);
     if (!read.ok) {
-      message.textContent = PASSCODE_ERRORS[read.error];
+      message.textContent = passcodeError(read.error, read.letters);
       message.classList.add('is-error');
       return;
     }
