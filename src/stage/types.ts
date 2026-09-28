@@ -280,6 +280,8 @@ export type PropDef = Placement & {
    */
   trace?: boolean;
   traceLine?: string;
+  /** v1.10 (4-3): its mark glows once junction `reveal` is seen through with the light (the false exit's swirl). */
+  reveal?: string;
 };
 
 export type ReactsTo = 'whistle' | 'light' | 'none';
@@ -329,10 +331,36 @@ export interface CountdownDef {
   music?: string;
 }
 
+/**
+ * v1.10 (4-3): the snow wave chasing the train over one step's drive (PHASE8 第 8 部 §4.1). It comes out behind the
+ * train when the front passes `from` on `railId`, and is beaten when the front passes `until` (it runs into the snow
+ * fence at `fence` and settles). Its speed: `pace` m/s, or a `paces` stretch's own (where the wave is). Caught, the
+ * train goes back to the nearest `retry` place (on `railId`) behind. `music` plays while it chases. The other numbers
+ * default to SNOW_WAVE.
+ */
+export interface ChaseDef {
+  railId: string;
+  from: number;
+  until: { railId: string; at: number };
+  fence: number;
+  pace?: number;
+  paces?: { from: number; to: number; speed: number }[];
+  retry: number[];
+  music?: string;
+  start?: number;
+  restart?: number;
+  far?: number;
+  bandMax?: number;
+  assist?: number;
+  minPace?: number;
+}
+
 export interface MissionStep {
   stationId: string;
   /** v1.7: a countdown while driving to this station. */
   countdown?: CountdownDef;
+  /** v1.10 (4-3): the snow wave while driving to this station. */
+  chase?: ChaseDef;
   /** Passengers boarding here. */
   board?: number;
   /** Passengers alighting here. */
@@ -483,7 +511,17 @@ export type MissionLines = Partial<
     | 'plowLong'
     | 'plowUp'
     | 'plowBump'
-    | 'plowBumpAfter',
+    | 'plowBumpAfter'
+    // v1.10 (4-3 ゆきの なみ・トンネル)
+    | 'chaseStart'
+    | 'chaseNear'
+    | 'chaseRocket'
+    | 'chaseFar'
+    | 'chaseCaught'
+    | 'chaseCaughtAfter'
+    | 'chaseTired'
+    | 'chaseSafe'
+    | 'tunnelNear',
     string
   >
 >;
@@ -786,6 +824,8 @@ export interface ResolvedProp {
   /** v1.10 (4-2): see PropDef.trace. */
   trace?: boolean;
   traceLine?: string;
+  /** v1.10 (4-3): see PropDef.reveal. */
+  reveal?: string;
 }
 
 /** A record with its placement resolved. */

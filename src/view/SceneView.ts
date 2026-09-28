@@ -36,6 +36,11 @@ export interface SceneView {
   setSubmerged(on: boolean): void;
   /** v1.10: the camera is under a water surface (the view turned blue). */
   isCameraUnderwater(): boolean;
+  /**
+   * v1.10 (4-3): the snow wave behind the train, every frame: where its front is on `railId`, how fast it runs and
+   * its state (null: none out).
+   */
+  setSnowWave(wave: { railId: string; s: number; speed: number; state: string } | null): void;
   resize(width: number, height: number, devicePixelRatio: number): void;
   getStats(): { drawCalls: number; triangles: number } | null;
   /** For dev-only helpers (spline visualizer). May return null. */

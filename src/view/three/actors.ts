@@ -54,6 +54,10 @@ const TURTLE_MODELS = { sleep: 'sea-turtle-sleep', awake: 'sea-turtle' };
 function isTurtle(actor: ResolvedActor): boolean {
   return actor.type === 'cat' && (actor.params as { look?: string }).look === 'turtle';
 }
+/** v1.10 (4-3): a "cat" with params.look "snowman" is a snowman on the rail (the whistle makes it roll aside). */
+function isSnowman(actor: ResolvedActor): boolean {
+  return actor.type === 'cat' && (actor.params as { look?: string }).look === 'snowman';
+}
 /** v1.10 (3-2): a "dino-small" with params.look "duck" is a mother duck and her ducklings crossing. */
 function isDuck(actor: ResolvedActor): boolean {
   return actor.type === 'dino-small' && (actor.params as { look?: string }).look === 'duck';
@@ -76,6 +80,8 @@ interface ActorMove {
   elapsed: number;
   seconds: number;
   bob: boolean;
+  /** v1.10 (4-3): it tumbles over and over on the way ("ころころ"), standing up again at the end. */
+  roll: boolean;
 }
 
 interface PassengerMove {
@@ -171,6 +177,8 @@ export class ActorLayer {
   private readonly lookModels = new Map<string, { sleep: string; awake: string }>();
   private readonly necks = new Map<string, { neck: Object3D; down: boolean; t: number }>();
   private readonly records = new Map<string, ResolvedRecord>();
+  /** v1.10 (4-3): figures that roll as they move (a snowman rolling aside), turning about their own side axis. */
+  private readonly rollers = new Set<string>();
   /** v1.10 (4-1): ids of the figures cutscenes brought on (an ice mirror may show them). */
   private readonly spawned = new Set<string>();
 
@@ -205,6 +213,10 @@ export class ActorLayer {
       if (isSeal(actor)) this.lookModels.set(actor.id, SEAL_MODELS);
       if (isTurtle(actor)) this.lookModels.set(actor.id, TURTLE_MODELS);
       if (isDuck(actor)) this.lookModels.set(actor.id, { sleep: 'duck-family', awake: 'duck-family' });
+      if (isSnowman(actor)) {
+        this.lookModels.set(actor.id, { sleep: 'snowman', awake: 'snowman' });
+        this.rollers.add(actor.id);
+      }
     }
     // Nuts and squirrels are drawn by the forest gimmicks, grasshoppers by the meadow ones and rocks by the volcano
     // ones (they move on their own).
@@ -319,7 +331,7 @@ export class ActorLayer {
   private async addCrossingGates(actors: ResolvedActor[]): Promise<void> {
     // A seabird basks on an open line (a sea cliff), not at a level crossing: no gate for it.
     const placements = actors
-      .filter((actor) => actor.type === 'cat' && !isSeabird(actor) && !isSeal(actor) && !isTurtle(actor))
+      .filter((actor) => actor.type === 'cat' && !isSeabird(actor) && !isSeal(actor) && !isTurtle(actor) && !isSnowman(actor))
       .map((actor) => ({
         model: 'crossing-gate',
         position: actor.position.clone().add(new Vector3(-3, 0, 0).applyQuaternion(actor.quaternion)),
@@ -503,7 +515,8 @@ export class ActorLayer {
       to: to.clone(),
       elapsed: 0,
       seconds,
-      bob: this.objectModels.get(id) === 'amanojaku',
+      bob: this.objectModels.get(id) === 'amanojaku' || this.objectModels.get(id) === 'amanojaku-blush',
+      roll: this.rollers.has(id) || (this.objectModels.get(id) ?? '').startsWith('snowman') || this.objectModels.get(id) === 'snow-wave',
     });
   }
 
@@ -708,6 +721,11 @@ export class ActorLayer {
       const t = move.elapsed / move.seconds;
       move.object.position.lerpVectors(move.from, move.to, t);
       if (move.bob) move.object.position.y += Math.abs(Math.sin(t * Math.PI * 6)) * 0.24;
+      if (move.roll) {
+        // A little hop and a wobble each turn, upright again when it gets there ("ぽすん").
+        move.object.position.y += Math.abs(Math.sin(t * Math.PI * 4)) * 0.35 * (1 - t);
+        move.object.rotation.z = Math.sin(t * Math.PI * 8) * 0.35 * (1 - t);
+      }
       if (t >= 1) this.moving.splice(index, 1);
     }
 

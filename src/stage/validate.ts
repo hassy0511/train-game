@@ -4,6 +4,7 @@ import { iceZones, thinIceZones } from '../gimmick/ice';
 import { plowSpans } from '../gimmick/plow';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
+import { tunnelZones } from '../gimmick/tunnel';
 import type { RailNetwork } from '../rail/types';
 import {
   DIVE,
@@ -331,10 +332,12 @@ export function validateStageFile(raw: unknown): StageFile {
     }
     if (a.type === 'grasshopper' && a.reactsTo === 'light') fail(`actor "${a.id}": a grasshopper hops on by itself ("none") or when whistled for ("whistle")`);
     const ap = (a.params ?? {}) as Record<string, unknown>;
-    if (a.type === 'cat' && ap.look !== undefined && !['cat', 'seabird', 'seal', 'turtle'].includes(String(ap.look))) fail(`actor "${a.id}": look must be cat, seabird, seal or turtle`);
+    if (a.type === 'cat' && ap.look !== undefined && !['cat', 'seabird', 'seal', 'turtle', 'snowman'].includes(String(ap.look))) fail(`actor "${a.id}": look must be cat, seabird, seal, turtle or snowman`);
     if (a.type === 'cat') for (const k of ['say', 'woke', 'danger', 'after']) if (ap[k] !== undefined && !isString(ap[k])) fail(`actor "${a.id}": "${k}" must be text`);
     if (a.type === 'dino-small' && ap.look !== undefined && ap.look !== 'dino' && ap.look !== 'duck') fail(`actor "${a.id}": look must be dino or duck`);
-    if (a.type === 'rock-roll' && ap.look !== undefined && ap.look !== 'rock' && ap.look !== 'snowbird') fail(`actor "${a.id}": look must be rock or snowbird`);
+    if (a.type === 'rock-roll' && ap.look !== undefined && !['rock', 'snowbird', 'snowman-upside'].includes(String(ap.look))) fail(`actor "${a.id}": look must be rock, snowbird or snowman-upside`);
+    // v1.10 (4-3): a snowman sliding down onto the rail, or snow falling off the pines.
+    if (a.type === 'rock-drop' && ap.look !== undefined && !['rock', 'snowman', 'snow-pile'].includes(String(ap.look))) fail(`actor "${a.id}": look must be rock, snowman or snow-pile`);
     if (a.type === 'rock-roll' || a.type === 'rock-drop') {
       const rw = ap.rewind;
       if (rw !== undefined && !isNumber(rw) && !(isObject(rw) && isString(rw.railId) && railIds.has(rw.railId) && isNumber(rw.at))) {
@@ -392,6 +395,8 @@ export function validateStageFile(raw: unknown): StageFile {
         if (st[k] !== undefined && (!isNumber(st[k]) || (st[k] as number) < 0)) fail(`mission "${m.id}": "${k}" must be >= 0`);
       }
       if (st.parcel !== undefined && st.parcel !== 'load' && st.parcel !== 'unload') fail(`mission "${m.id}": "parcel"`);
+      if (st.chase !== undefined) checkChase(st.chase, `mission "${m.id}" chase`, railIds);
+      if (st.countdown !== undefined && st.chase !== undefined) fail(`mission "${m.id}": a step has a countdown or a chase, not both`);
       if (st.countdown !== undefined) {
         const c = st.countdown;
         const where = `mission "${m.id}" countdown`;
@@ -421,7 +426,7 @@ export function validateStageFile(raw: unknown): StageFile {
 
   requireArray(raw, 'gimmicks').forEach((g, i) => {
     if (!isObject(g) || !isString(g.type)) fail(`gimmicks[${i}]: "type" is required`);
-    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound', 'ice', 'thin-ice'];
+    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound', 'ice', 'thin-ice', 'tunnel'];
     if (zoned.includes(g.type)) {
       if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`gimmicks[${i}] ${g.type}: needs a known railId and "from"`);
       if (g.type !== 'jump-pad' && (!isNumber(g.to) || (g.to as number) <= (g.from as number))) fail(`gimmicks[${i}] ${g.type}: needs "to" after "from"`);
@@ -486,6 +491,7 @@ export function validateStageFile(raw: unknown): StageFile {
       for (const k of ['height', 'width']) if (p[k] !== undefined && !(isNumber(p[k]) && (p[k] as number) > 0)) fail(`${where}: params.${k} must be > 0`);
       if (p.sign !== undefined && typeof p.sign !== 'boolean') fail(`${where}: params.sign must be true or false`);
     }
+    if (g.type === 'tunnel') checkTunnel(g as Record<string, unknown>, p, `gimmicks[${i}] tunnel`);
     if (g.type === 'fog' && p.color !== undefined && !(typeof p.color === 'string' && COLOR.test(p.color))) fail(`gimmicks[${i}] fog: params.color must be #rrggbb`);
     if (g.type === 'fog' && p.glow !== undefined && typeof p.glow !== 'boolean') fail(`gimmicks[${i}] fog: params.glow must be true or false`);
     if (g.type === 'flock') {
@@ -520,7 +526,56 @@ export function validateStageFile(raw: unknown): StageFile {
 
   checkMeadow(raw as unknown as StageFile);
 
+  // v1.10 (4-3): a prop's mark revealed by a junction's light.
+  for (const pr of raw.props as Record<string, unknown>[]) {
+    if (pr.reveal === undefined) continue;
+    if (!isString(pr.reveal) || !(raw.junctions as Record<string, unknown>[]).some((j) => j.id === pr.reveal && j.signReversed === true)) {
+      fail(`prop "${String(pr.model)}": "reveal" must name a junction with a reversed sign`);
+    }
+  }
+
   return raw as unknown as StageFile;
+}
+
+/** v1.10 (4-3): the snow wave of a mission step (PHASE8 第 8 部 §4.7). */
+function checkChase(c: unknown, where: string, railIds: Set<string>): void {
+  if (!isObject(c) || !isString(c.railId) || !railIds.has(c.railId) || !isNumber(c.from)) fail(`${where}: needs a known railId and "from"`);
+  const u = c.until;
+  if (!isObject(u) || !isString(u.railId) || u.railId !== c.railId || !isNumber(u.at)) fail(`${where}: "until" must be { railId, at } on its own rail`);
+  if (!isNumber(c.fence)) fail(`${where}: "fence" must be a number`);
+  const from = c.from as number;
+  const fence = c.fence as number;
+  const until = (u as { at: number }).at;
+  if (!(from < fence && fence < until)) fail(`${where}: needs from < fence < until`);
+  if (until - fence < 40) fail(`${where}: "until" must be 40 m or more past the fence (the last car goes through it)`);
+  if (!Array.isArray(c.retry) || c.retry.length === 0 || !c.retry.every(isNumber)) fail(`${where}: "retry" must be a list of places`);
+  const retry = c.retry as number[];
+  for (let i = 1; i < retry.length; i++) if (retry[i] <= retry[i - 1]) fail(`${where}: "retry" must go up`);
+  if (retry[0] < from - 30) fail(`${where}: "retry" must start at from − 30 or later`);
+  if (c.paces !== undefined) {
+    if (!Array.isArray(c.paces)) fail(`${where}: "paces" must be a list`);
+    for (const z of c.paces as unknown[]) {
+      if (!isObject(z) || !isNumber(z.from) || !isNumber(z.to) || z.to <= z.from || !isNumber(z.speed) || z.speed <= 0) fail(`${where}: each pace needs from < to and a speed > 0`);
+    }
+  }
+  for (const k of ['pace', 'start', 'restart', 'far', 'bandMax', 'assist', 'minPace']) {
+    if (c[k] !== undefined && !(isNumber(c[k]) && (c[k] as number) >= 0)) fail(`${where}: "${k}" must be a number >= 0`);
+  }
+  if (c.music !== undefined && (typeof c.music !== 'string' || !(c.music in SONGS))) fail(`${where}: "music" must be a song in src/audio/songs.ts`);
+}
+
+/** v1.10 (4-3): a tunnel's params (PHASE8 第 8 部 §4.2). */
+function checkTunnel(g: Record<string, unknown>, p: Record<string, unknown>, where: string): void {
+  for (const k of ['near', 'far', 'lightFar', 'lightGlow']) if (p[k] !== undefined && !(isNumber(p[k]) && (p[k] as number) > 0)) fail(`${where}: "${k}" must be above 0`);
+  if (p.dim !== undefined && !(isNumber(p.dim) && p.dim > 0 && p.dim <= 1)) fail(`${where}: "dim" must be above 0, at most 1`);
+  if (p.fogColor !== undefined && !(typeof p.fogColor === 'string' && COLOR.test(p.fogColor))) fail(`${where}: "fogColor" must be #rrggbb`);
+  if (p.portal !== undefined && typeof p.portal !== 'boolean') fail(`${where}: "portal" must be true or false`);
+  const h = p.hall;
+  if (h !== undefined && h !== 'all') {
+    if (!isObject(h) || !isNumber(h.from) || !isNumber(h.to) || h.from >= h.to) fail(`${where}: "hall" must be "all" or { from, to }`);
+    const hall = h as { from: number; to: number };
+    if (hall.from < (g.from as number) || hall.to > (g.to as number)) fail(`${where}: its hall must be inside it`);
+  }
 }
 
 const COLOR = /^#[0-9a-fA-F]{6}$/;
@@ -1064,5 +1119,38 @@ export function validatePlowLayout(file: StageFile, network: RailNetwork): void 
       }
     }
     if (!ok) fail(`record "${r.id}": a snowplow record must be within ${RECORD.distance} m of a buried stretch`);
+  }
+}
+
+/**
+ * v1.10 (4-3) checks that need the rails (PHASE8 第 8 部 §4.7): a snow wave's places are on its rail, its retry places
+ * are not on a slope, and the station after it leaves 60 m to settle before its stop zone; a tunnel lies on its rail
+ * with no stop line inside it.
+ */
+export function validateSnowLayout(file: StageFile, network: RailNetwork): void {
+  const slopes = slopeZones(file.gimmicks);
+  for (const m of file.missions) {
+    for (const st of m.steps) {
+      const c = st.chase;
+      if (!c) continue;
+      const where = `mission "${m.id}" chase`;
+      const rail = network.getRail(c.railId);
+      if (c.until.at > rail.length || c.from < 0) fail(`${where}: its places must be on rail "${c.railId}"`);
+      for (const r of c.retry) {
+        if (r < 0 || r > rail.length) fail(`${where}: retry ${r} is off rail "${c.railId}"`);
+        for (const z of slopes) if (z.railId === c.railId && r >= z.from && r <= z.to) fail(`${where}: retry ${r} is on gimmicks[${z.index}] slope`);
+      }
+      const station = file.stations.find((x) => x.id === st.stationId);
+      if (station && station.railId === c.railId) {
+        const zone = station.stop?.zone ?? STOP_RULE.zone;
+        if (station.at - zone - c.until.at < 60) fail(`${where}: "until" must be 60 m or more before station "${station.id}"'s stop zone`);
+      }
+    }
+  }
+  for (const z of tunnelZones(file.gimmicks)) {
+    const where = `gimmicks[${z.index}] tunnel`;
+    const rail = network.getRail(z.railId);
+    if (z.to > rail.length) fail(`${where}: runs past the end of rail "${z.railId}"`);
+    for (const st of file.stations) if (st.railId === z.railId && st.at >= z.from && st.at <= z.to) fail(`${where}: station "${st.id}" stops in it`);
   }
 }

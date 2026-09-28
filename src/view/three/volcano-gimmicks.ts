@@ -21,6 +21,7 @@ import type { StageEvent } from '../../core/stage-events';
 import type { StageData } from '../../stage/types';
 import { ROCK_ROLL, ROCK_SPLASH_SECONDS, SLOPE } from '../../train/params';
 import type { ModelLibrary } from './models';
+import { bakeModel } from './bake';
 
 /** Rock sizes (m): the rolling one is big and round, the dropping one small (PHASE6 §1 #8). */
 const ROLL_SIZE = 2.4;
@@ -30,6 +31,8 @@ const DROP_HEIGHT = 14;
 const DROP_SECONDS = 0.55;
 /** After crossing, a rolling rock goes on this far to the side (m) and down into the sea. */
 const SPLASH_SIDE = 12;
+/** v1.10 (4-3): the looks that are snow (the models of the same names), drawn at their own size. */
+const SNOW_LOOKS = ['snowman', 'snowman-upside', 'snow-pile'];
 /** Where the rocket's tubes sit on the lead car (car origin: bottom centre, +Z forward). */
 const ROCKET_UNIT = new Vector3(0, 3.75, -5.0);
 const EXHAUST = new Vector3(0, 4.1, -6.3);
@@ -96,7 +99,15 @@ interface RockVisual {
   railId: string;
   at: number;
   lateral: number;
-  mode: 'wait' | 'wobble' | 'roll' | 'splash' | 'float' | 'hidden' | 'fall' | 'rest';
+  mode: 'wait' | 'wobble' | 'roll' | 'splash' | 'float' | 'hidden' | 'fall' | 'rest' | 'hop' | 'stand';
+  /**
+   * v1.10 (4-3): a snowman or a snow heap (look snowman, snowman-upside, snow-pile): its origin at its bottom, drawn at
+   * its own size; it never splashes into the sea: it hops aside and stands on the snow. `upright` is the ordinary
+   * snowman an upside-down one turns into once it has rolled across; `from` the place a sliding snowman starts at.
+   */
+  look: string | null;
+  body: Object3D;
+  upright: Object3D | null;
   t: number;
   seconds: number;
   from: Vector3;
@@ -173,11 +184,29 @@ export class VolcanoGimmicks {
     for (const actor of actors) {
       const kind = actor.type === 'rock-roll' ? 'roll' : 'drop';
       const object = new Group();
-      const body = pumice.clone(true);
-      const scale = (kind === 'roll' ? ROLL_SIZE : DROP_SIZE) / unit;
-      body.scale.setScalar(scale);
-      // Centre the rock on its own origin so it can roll about it.
-      body.position.set(0, (-size.y * scale) / 2, 0);
+      const lookName = (actor.params as { look?: string }).look;
+      const look = lookName && SNOW_LOOKS.includes(lookName) ? lookName : null;
+      let body: Object3D;
+      let upright: Object3D | null = null;
+      if (look) {
+        // v1.10 (4-3): a snowman / a snow heap, at its own size, its origin at its bottom (it faces the train).
+        const model = await models.load(look);
+        body = (bakeModel(model) ?? model).clone(true);
+        body.rotation.y = Math.PI / 2;
+        if (look === 'snowman-upside') {
+          const plain = await models.load('snowman');
+          upright = (bakeModel(plain) ?? plain).clone(true);
+          upright.rotation.y = Math.PI / 2;
+          upright.visible = false;
+          object.add(upright);
+        }
+      } else {
+        body = pumice.clone(true);
+        const scale = (kind === 'roll' ? ROLL_SIZE : DROP_SIZE) / unit;
+        body.scale.setScalar(scale);
+        // Centre the rock on its own origin so it can roll about it.
+        body.position.set(0, (-size.y * scale) / 2, 0);
+      }
       object.add(body);
       this.group.add(object);
       const lateral = Number((actor.params as { lateral?: number }).lateral ?? ROCK_ROLL.lateral);
@@ -193,6 +222,9 @@ export class VolcanoGimmicks {
         from: new Vector3(),
         to: new Vector3(),
         shadow: null,
+        look,
+        body,
+        upright,
       };
       if (kind === 'drop') {
         const shadow = new Mesh(this.shadowGeometry, this.shadowMaterial);
@@ -456,15 +488,52 @@ export class VolcanoGimmicks {
   private resetRock(rock: RockVisual): void {
     rock.t = 0;
     rock.object.rotation.set(0, 0, 0);
+    this.faceTrack(rock);
+    rock.body.visible = true;
+    if (rock.upright) rock.upright.visible = false;
     if (rock.kind === 'roll') {
       rock.mode = 'wait';
       rock.object.visible = true;
-      rock.object.position.copy(this.beside(rock, -rock.lateral, ROLL_SIZE / 2 + 1));
+      rock.object.position.copy(rock.look ? this.onSnow(rock, -rock.lateral) : this.beside(rock, -rock.lateral, ROLL_SIZE / 2 + 1));
     } else {
       rock.mode = 'hidden';
       rock.object.visible = false;
       if (rock.shadow) rock.shadow.visible = false;
     }
+  }
+
+  /**
+   * v1.10 (4-3): how far below the rail the snow is `lateral` m to the side (the snowy ridge under the track, as
+   * rail-mesh.ts builds a `toGround` base: the ballast 2.2 m wide each side, then down 2 m for every 1 m out, to the
+   * ground); 0 where the rail has no ridge under it.
+   */
+  private flank(rock: RockVisual, lateral: number): number {
+    const def = this.stage.file.rails.find((r) => r.id === rock.railId);
+    const bases = def?.base ? (Array.isArray(def.base) ? def.base : [def.base]) : [];
+    const ridge = bases.some((b) => b.toGround && (b.from === undefined || (rock.at >= b.from && rock.at <= (b.to ?? Infinity))));
+    const ground = this.stage.file.environment.ground?.y;
+    const a = Math.abs(lateral);
+    if (!ridge || ground === undefined || ground === null || a <= 2.2) return 0;
+    const railY = this.frame(rock.railId, rock.at).position.y;
+    return Math.max(ground - railY, -(a - 2.2) * 2 - 0.6);
+  }
+
+  /** v1.10 (4-3): a place on the snow `lateral` m beside the rail at the rock (on the ridge's side, or the rail's level). */
+  private onSnow(rock: RockVisual, lateral: number): Vector3 {
+    return this.beside(rock, lateral, this.flank(rock, lateral));
+  }
+
+  /** v1.10 (4-3): a snowman stands facing along the track (its side to the train's side, its face towards it). */
+  private faceTrack(rock: RockVisual): void {
+    if (!rock.look) return;
+    const f = this.frame(rock.railId, rock.at);
+    const back = f.tangent.clone().setY(0).normalize().negate();
+    rock.object.quaternion.setFromUnitVectors(new Vector3(-1, 0, 0), back);
+  }
+
+  /** v1.10 (4-3): off to the side and standing on the snow (after rolling across, or bumped): "ぽすん". */
+  private hopAside(rock: RockVisual, lateral: number, seconds: number): void {
+    this.moveRock(rock, 'hop', this.onSnow(rock, lateral), seconds);
   }
 
   private moveRock(rock: RockVisual, mode: RockVisual['mode'], to: Vector3, seconds: number): void {
@@ -488,10 +557,11 @@ export class VolcanoGimmicks {
         rock.t = 0;
         break;
       case 'roll':
-        this.moveRock(rock, 'roll', this.beside(rock, rock.lateral, ROLL_SIZE / 2), e.seconds ?? ROCK_ROLL.crossSeconds);
+        this.moveRock(rock, 'roll', rock.look ? this.onSnow(rock, rock.lateral) : this.beside(rock, rock.lateral, ROLL_SIZE / 2), e.seconds ?? ROCK_ROLL.crossSeconds);
         break;
       case 'shadow':
-        if (rock.shadow) {
+        // (A sliding snowman casts no shadow from above.)
+        if (rock.shadow && rock.look !== 'snowman') {
           const f = this.frame(rock.railId, rock.at);
           rock.shadow.position.copy(f.position).addScaledVector(f.up, 0.05);
           rock.shadow.quaternion.setFromUnitVectors(new Vector3(0, 0, 1), f.up);
@@ -501,14 +571,27 @@ export class VolcanoGimmicks {
         break;
       case 'drop': {
         rock.object.visible = true;
+        if (rock.look === 'snowman') {
+          // v1.10 (4-3): a snowman comes sliding along the rail towards the train ("すーっ") and stops.
+          rock.object.position.copy(this.frame(rock.railId, rock.at + 22).position);
+          this.moveRock(rock, 'fall', this.beside(rock, 0, 0), DROP_SECONDS * 2.2);
+          break;
+        }
         rock.object.position.copy(this.beside(rock, 0, DROP_HEIGHT));
-        this.moveRock(rock, 'fall', this.beside(rock, 0, DROP_SIZE / 2), DROP_SECONDS);
+        this.moveRock(rock, 'fall', this.beside(rock, 0, rock.look ? 0 : DROP_SIZE / 2), DROP_SECONDS);
         break;
       }
       case 'bonk': {
-        // "ぽこん": the rock hops off the rail and away (into the sea below), nothing scary.
         rock.object.visible = true;
         if (rock.shadow) rock.shadow.visible = false;
+        if (rock.look) {
+          // v1.10 (4-3): "ぽすっ": the snowman wobbles, rolls aside and stands up on the snow (never into water).
+          rock.object.rotation.set(0, 0, 0);
+          this.faceTrack(rock);
+          this.hopAside(rock, rock.kind === 'roll' ? rock.lateral + 3 : 6, 0.9);
+          break;
+        }
+        // "ぽこん": the rock hops off the rail and away (into the sea below), nothing scary.
         this.moveRock(rock, 'splash', this.beside(rock, rock.kind === 'roll' ? rock.lateral + SPLASH_SIDE : 8, -6), ROCK_SPLASH_SECONDS);
         break;
       }
@@ -524,9 +607,39 @@ export class VolcanoGimmicks {
         break;
       case 'roll':
         rock.object.position.lerpVectors(rock.from, rock.to, k);
+        if (rock.look) {
+          // A snowman tumbles across ("ころころ"), round and round about its own middle, up over the track and down.
+          const over = -Math.min(this.flank(rock, rock.lateral), this.flank(rock, -rock.lateral));
+          rock.object.position.y += over * (1 - (2 * k - 1) ** 2) + Math.abs(Math.sin(k * Math.PI * 5)) * 0.4;
+          rock.body.rotation.z = Math.sin(k * Math.PI * 10) * 0.5;
+          if (k >= 1) {
+            // Across: it lands the right way up ("たった！").
+            rock.body.rotation.z = 0;
+            if (rock.upright) {
+              rock.body.visible = false;
+              rock.upright.visible = true;
+            }
+            this.hopAside(rock, rock.lateral + 3, 0.6);
+          }
+          break;
+        }
         rock.object.rotation.z -= (dt * (2 * rock.lateral)) / rock.seconds / (ROLL_SIZE / 2);
         if (k >= 1) this.moveRock(rock, 'splash', this.beside(rock, rock.lateral + SPLASH_SIDE, -6), ROCK_SPLASH_SECONDS);
         break;
+      case 'hop':
+        rock.object.position.lerpVectors(rock.from, rock.to, k);
+        rock.object.position.y += Math.sin(k * Math.PI) * (1.2 + Math.max(0, rock.from.y - rock.to.y) * 0.3);
+        if (k >= 1) {
+          rock.mode = 'stand';
+          rock.t = 0;
+        }
+        break;
+      case 'stand': {
+        // "ぷるん": a little wobble as it settles, then still.
+        const w = Math.max(0, 1 - rock.t * 1.5);
+        rock.body.scale.set(1 + Math.sin(rock.t * 14) * 0.06 * w, 1 - Math.sin(rock.t * 14) * 0.06 * w, 1);
+        break;
+      }
       case 'splash': {
         rock.object.position.lerpVectors(rock.from, rock.to, k);
         rock.object.position.y += Math.sin(k * Math.PI) * 2.5;
@@ -550,7 +663,7 @@ export class VolcanoGimmicks {
         rock.object.position.y = rock.to.y + Math.sin(rock.t * 2) * 0.2;
         break;
       case 'fall': {
-        rock.object.position.lerpVectors(rock.from, rock.to, k * k);
+        rock.object.position.lerpVectors(rock.from, rock.to, rock.look === 'snowman' ? k * (2 - k) : k * k);
         if (rock.shadow) rock.shadow.scale.setScalar(0.3 + 0.5 * k);
         if (k >= 1) {
           rock.mode = 'rest';
