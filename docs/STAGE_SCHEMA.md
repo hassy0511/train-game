@@ -1045,3 +1045,63 @@ type LineKey = /* v1.10 (4-2) */
 
 ### テスト用の しるし
 `#app` の `data-plow`（`''`／`near` ＝ 丸が ゆきかきで まだ／`on` ＝ 下りて いる）、`data-plowing`（かいて いる 1）、`data-plow-bursts`（ずぼーんの 回数）、`data-plow-bumps`（ぽすっの 回数）、`data-blade-drops`（押して 下ろした 回数）、`data-wall-<gimmicks 番号>`（`whole`／`dented`／`burst`）、`data-sky`（`evening`）、`data-trace`（しるしが 光って いる 1）。`#jump` の `data-mode`（`jump`／`dive`／`plow`）・`data-blade`・`data-plowing`・`data-glow`
+
+## 17. v1.10 の追加（4-3「ゆきやまのトンネル」、2026-09-28）
+`schemaVersion` は 1 の まま、ぜんぶ 省略可。設計は `docs/PHASE8_CHAPTER3_4.md` 第 8 部（本文の「3-3」は 4-3。§0 の 読みかえで。実装メモ §19）。実例は `src/stages/4-3.json`（`scripts/layout-4-3.mjs` が 作る。JSON を 手で 直さない）。全ステージ共通の 数は `src/train/params.ts` の `SNOW_WAVE`・`TUNNEL`。
+
+### ゆきの なみ（ミッションの ステップの `chase`）
+```json
+{ "stationId": "yamagoya", "parcel": "unload",
+  "chase": { "railId": "main", "from": 1900, "until": { "railId": "main", "at": 2780 }, "fence": 2740, "pace": 12,
+             "paces": [ { "from": 2010, "to": 2110, "speed": 17 }, { "from": 2150, "to": 2220, "speed": 7 } ],
+             "retry": [1880, 2000, 2235, 2420, 2600], "music": "hurry" } }
+```
+- その ステップの 運転中、電車の 先頭が `from` を こえると、最後尾（先頭 − 37 m）の `start`（40）m うしろに なみが 出て、線路に そって おいかける（`src/mission/chase.ts` の `SnowWave`。位置と 速さだけ、物理なし）。運転中だけ 数える（一時停止・寸劇・失敗の 演出の 間は 止まる）
+- 速さ: `paces` の うち なみが いる 区間の `speed`、なければ `pace`。`far`（25）m より はなれると 電車の 速さ ＋ 1（`bandMax` 20 m/s まで）で 寄ってくる。つかまる たびに `assist`（3）m/s ずつ おそく（`minPace` 4 まで）、**3 回 つかまると どこでも 4 m/s 以下**（4 回めは かならず にげきれる、§0.8）。速く なるのは 3 m/s² まで、おそく なるのは すぐ
+- **つかまる**: すき間が 0 に なった とき（空中なら 着地まで まつ）。失敗の 理由 `snow`（やわらかい: しずみ 0.3・ゆれ 0）。電車が 止まり、白い 雪の 玉が 画面の 下から ふくらむ（DOM `.chase-puff`）、「もふっ」→ `chaseCaught` → `chaseCaughtAfter`（3 回めは `chaseTired`）→ 白い フェード → つかまった 所より 30 m 以上 うしろの いちばん 近い `retry`（なければ 最初の `retry`）。つぶは 満タン
+- ほかの 失敗（ゆきだるま・われめ・ずるずる・駅）の あとも、なみは 最後尾の `restart`（45）m うしろで まち、電車が 1 m/s を こえたら 0 から 動きだす
+- **セーフ**: 先頭が `until` を こえたら。なみは `fence` で「もふん」と 止まり、1.5 秒で 低い 雪の 山に なる。パネルは 緑の「セーフ！」、`chaseSafe`、曲が もどる
+- ピコの 声（1 回の ためしに 1 回ずつ）: 出た とき `chaseStart`（改行で 複数）、20 m より 近い `chaseNear`、ロケットが なみの ために 光った `chaseRocket`、60 m より はなれた `chaseFar`
+- **ロケットが 光る**: すき間が 15 m より 小さく、のこりの つぶが、`until` までに まだ 前に ある のぼり坂の 数より 多い とき（駅の 近く・すべりざか・点火中は いつもどおり 光らない）
+- **レバー**: すき間が 25 m より 小さく、電車が 15 m/s より おそい とき「はやい」の 目盛りが 光る
+- **パネル**（`#timer`、`data-mode="chase"`）: 数字なし。左に なみの 絵、右に 小さな 電車、なみが 近づくと 帯が 左から 雪で うまる（すき間 60 m で 空）。近いと なみの 絵が もこもこ ゆれる。赤く しない・点滅 しない
+- 運転席では うしろの なみが 見えないので、20 m より 近いと 画面の ふちが うっすら 白く、こな雪が まえへ ふきぬける（`#app[data-chase="near"]`、DOM）。「もこもこ」の 音が 近いほど 間を つめて 鳴る
+- `music`: おいかけの 間の 曲（`songs.ts`）。ステップに 書けば 上書き できる: `start` `restart` `far` `bandMax` `assist` `minPace`
+- 見た目（`src/view/three/snow.ts`）: まるい 白い 玉の なみ（`snow-wave`、顔なし）が 線路の 上を ころがり、上から こな雪が まう
+
+### トンネル（`gimmicks[]` の `tunnel`、区間）
+```json
+{ "type": "tunnel", "railId": "main", "from": 1257, "to": 1700, "params": { "hall": { "from": 1395, "to": 1538 } } }
+{ "type": "tunnel", "railId": "nise", "from": 0, "to": 303.8, "params": { "hall": "all", "portal": false } }
+```
+- `from`〜`to` を 線路に そった アーチの 筒（はば 9 m・高さ 8 m、青白い こおりと 岩、1 本の メッシュ）で おおう。`hall`（区間の 中の `from`〜`to`、または `"all"`）は 筒を 作らない（こおりの ひろま `ice-hall` の 小物が ある 前提）
+- `portal`（既定 true）: 入口と 出口に 石の アーチ `tunnel-portal`、出口の 先に 霧に かくれない 白い 光 `exit-glow`（中から 見える）
+- くらさ: 先頭が 区間に いる あいだ、霧が `near`（2）・`far`（18）m、ライトが ついて いれば `lightFar`（60）m、色 `fogColor`（`#1c2433`）、光が `dim`（0.35）倍に なる（約 0.4 秒で なめらかに）。こな雪は 止まる
+- ライトの 丸は 入口の `lightGlow`（60）m 手前から、ライトが 消えて いれば 光る（トンネルを 出るまで）。そこで `tunnelNear`（既定「トンネルだ！ ライトを つけよう」）を 1 回
+- くらい だけで 失敗は ない。走る 音は `sound` 区間の `tunnel` で（書く）
+
+### ゆきだるまの 見た目（判定は いまの まま）
+- `cat` に `params.look: "snowman"`: 線路の ゆきだるま（`snowman`、ふみきりの 棒なし）。汽笛で ころころ よける。ぶつかりそうで 止まる 失敗は やわらかい
+- `rock-roll` に `params.look: "snowman-upside"`: さかさ ゆきだるまが 左で ぐらぐら → ころころ わたって → 右の 雪の 上に ふつうの ゆきだるまに なって 立つ（海へ 落ちない）
+- `rock-drop` に `params.look: "snowman"`（左の 土手から すべって きて 線路で 止まる）・`"snow-pile"`（木から 雪が 落ちて 山に なる）。ぶつかると「ぽすっ」、ぷるんと ゆれて よこに 立つ
+- ゆきだるま（と `snow-wave`）の 小物を 寸劇で `move` すると、ころころ ゆれて 動く
+
+### 小さな 足し
+- `props[].reveal: "<分かれ道 id>"`: その 分かれ道が ライトで 見やぶられたら（`sign:reveal`）、小物の しるし（`fake-exit` の ぐるぐる）が 光る。巻き戻しで 消える。分かれ道は `signReversed`
+- 失敗の 理由（`fail.reason`）に `snow`（やわらかい）
+- 寸劇で 子どもが 汽笛を 押すまで まつ のは 3-3 の `{ "press": "whistle", "say": "…" }` を 使う（設計の `await` は 足して いない）
+- 寸劇の モデル `amanojaku-blush`（てれた サカサ、ほっぺが ピンク）・`snow-wave-small`・`snowman-big`
+```ts
+type LineKey = /* v1.10 (4-3) */
+  | 'chaseStart' | 'chaseNear' | 'chaseRocket' | 'chaseFar'
+  | 'chaseCaught' | 'chaseCaughtAfter' | 'chaseTired' | 'chaseSafe'
+  | 'tunnelNear';
+```
+
+### 読み込み時の 検査
+- `chase`: `railId` が ある、`until` は 同じ 線路、`from < fence < until`、`until − fence ≥ 40`、`retry` は 1 つ 以上・小さい 順・`from − 30` 以降・線路の 中・坂の 中で ない、`paces` は `from < to`・`speed > 0`、`music` は 曲。`until` から その ステップの 駅の 停止ゾーンまで 60 m 以上。`countdown` と いっしょに 書かない
+- `tunnel`: `hall` は 区間の 中か `"all"`、`dim` は 0〜1、`fogColor` は `#rrggbb`、線路の 中、中に 駅が ない
+- `props[].reveal` は `signReversed` の 分かれ道。`cat.look` に `snowman`、`rock-roll.look` に `snowman-upside`、`rock-drop.look` に `rock`・`snowman`・`snow-pile`
+
+### テスト用の しるし
+`#app` の `data-chase`（`run`／`near`／`caught`／`safe`／空）、`data-chase-gap`（m、整数）、`data-chase-catches`、`data-tunnel`（先頭が トンネルの 中 1）、`#timer[data-mode="chase"]`
