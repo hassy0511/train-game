@@ -208,27 +208,54 @@ test('corner buttons and the rocket seat, lever left and right, iPad and small p
   expect(errors).toEqual([]);
 });
 
-/** Everything there is to have (read from the stage files and the world map): the fullest progress. */
-function fullProgress(): { schema: 1; cleared: string[]; abilities: string[]; records: string[]; mapLinks: string[] } {
+type Saved = { schema: 1; cleared: string[]; abilities: string[]; records: string[]; mapLinks: string[] };
+
+interface WorldData {
+  chapters: { id: number; finale?: { link?: string; ring?: string[] } }[];
+  islands: { id: string; chapter: number }[];
+  links: [string, string, { afterChapter?: number }?][];
+}
+
+/**
+ * Everything there is to have in the stage files (`only`: the stages whose id matches), with the map seen as the
+ * game saves it once the map has shown it all: every rail laid by the clears (a rail out of a chapter once the
+ * chapter is done; a chapter's closing rail once it is done), and "finale:<id>" for a done chapter whose end has
+ * no rail. The fullest progress.
+ */
+function fullProgress(only = /./): Saved {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
   const stages = readdirSync(resolve(root, 'src/stages'))
     .filter((f) => f.endsWith('.json'))
     .map((f) => JSON.parse(readFileSync(resolve(root, 'src/stages', f), 'utf8')) as { id: string; hidden?: boolean; unlocks: string[]; records: { id: string }[] })
-    // あいことば version 1 carries chapters 1 and 2 only (version 2 comes with chapters 3 and 4, PHASE8_CHAPTER3_4 §5).
-    .filter((s) => !s.hidden && /^[12]-/.test(s.id));
-  const world = JSON.parse(readFileSync(resolve(root, 'src/world/world.json'), 'utf8')) as { links: [string, string][] };
+    .filter((s) => !s.hidden && only.test(s.id));
+  const world = JSON.parse(readFileSync(resolve(root, 'src/world/world.json'), 'utf8')) as WorldData;
+  const cleared = stages.map((s) => s.id);
+  const done = (id: number): boolean => {
+    const chapter = world.chapters.find((c) => c.id === id);
+    const ids = [...world.islands.filter((i) => i.chapter === id).map((i) => i.id), ...(chapter?.finale?.ring ?? [])];
+    return ids.length > 0 && ids.every((i) => cleared.includes(i));
+  };
+  const closing = new Map(world.chapters.filter((c) => c.finale?.link).map((c) => [c.finale?.link, c.id]));
   return {
     schema: 1,
-    cleared: stages.map((s) => s.id),
+    cleared,
     abilities: [...new Set(stages.flatMap((s) => s.unlocks))],
     records: stages.flatMap((s) => s.records.map((r) => r.id)),
-    // Rails between stages there are (not yet the rail through the cloud gate to chapter 3's islands: あいことば
-    // version 1 carries chapters 1 and 2 only, and version 2 comes with chapters 3 and 4, PHASE8_CHAPTER3_4 §5).
-    mapLinks: world.links
-      .filter(([from, to]) => stages.some((s) => s.id === from) && stages.some((s) => s.id === to))
-      .map(([from, to]) => `${from}>${to}`),
+    mapLinks: [
+      ...world.links
+        .filter(([from, to, opts]) => cleared.includes(from) && !to.startsWith('teaser:') && (opts?.afterChapter === undefined || done(opts.afterChapter)))
+        .map(([from, to]) => `${from}>${to}`)
+        .filter((key) => !closing.has(key) || done(closing.get(key) ?? 0)),
+      ...world.chapters.filter((c) => c.finale && !c.finale.link && done(c.id)).map((c) => `finale:${c.id}`),
+    ],
   };
 }
+
+/**
+ * A version 1 あいことば (12 letters, chapters 1 and 2, the rails in it) as the game wrote them before version 2:
+ * everything of chapters 1 and 2 with the 6 rails of chapters 1 and 2 seen.
+ */
+const PASSCODE_V1_CHAPTERS_1_2 = '1ZZZ-ZZZZ-7EQR';
 
 const sorted = (p: Record<string, unknown>) =>
   Object.fromEntries(Object.entries(p).map(([k, v]) => [k, Array.isArray(v) ? [...v].sort() : v]));
@@ -280,10 +307,10 @@ test('おうちの かたへ: a long press opens it, erasing asks twice, the あ
   await expect(page.locator('#parents')).toContainText('ホーム画面に追加');
   await expect(page.locator('#parents-build')).toContainText((await app.getAttribute('data-build')) ?? '?');
 
-  // The あいことば: 12 letters in three groups.
+  // The あいことば: version 2, 16 letters in four groups (the first letter is the version).
   await page.locator('#parents-passcode-show').click();
   const code = (await page.locator('#parents-passcode').textContent()) ?? '';
-  expect(code).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+  expect(code).toMatch(/^2[0-9A-Z]{3}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
   await page.screenshot({ path: resolve(OUT, '43-parents.png') });
 
   // A mistyped one is caught and changes nothing.
@@ -349,6 +376,52 @@ test('おうちの かたへ: a long press opens it, erasing asks twice, the あ
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
   const back = await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
   expect(sorted(back)).toEqual(sorted(full));
-  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ★/);
+  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ★\s*3しょう ★/);
+
+  // The rails came back from the clears, all seen: the map opens with nothing growing and no chapter's end, and
+  // saves nothing new.
+  await page.locator('#title-map').click();
+  await expect(page.locator('#map')).toBeVisible();
+  await page.waitForTimeout(2_000);
+  await expect(page.locator('#map')).not.toHaveAttribute('data-finale', /.+/);
+  await expect(page.locator('#map')).not.toHaveAttribute('data-growing', /.+/);
+  await expect(page.locator('#map .is-growing')).toHaveCount(0);
+  await expect(page.locator('#card')).toHaveCount(0);
+  await page.screenshot({ path: resolve(OUT, '45-parents-passcode-map.png') });
+  await page.locator('#map-close').click();
+  await expect(page.locator('#map')).toHaveCount(0);
+  const afterMap = await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
+  expect(sorted(afterMap)).toEqual(sorted(full));
+
+  // A version 1 あいことば (12 letters, written before chapters 3 and 4) is still read: chapters 1 and 2 come back
+  // with its rails. A mistyped one is caught.
+  await page.locator('#title-settings').click();
+  await page.locator('#settings-parents').dispatchEvent('pointerdown');
+  await expect(page.locator('#parents')).toBeVisible({ timeout: 15_000 });
+  await page.locator('#settings-parents').dispatchEvent('pointerup');
+  const v1 = PASSCODE_V1_CHAPTERS_1_2;
+  await page.locator('#parents-passcode-input').fill(v1.slice(0, 10) + flip(v1[10]) + v1.slice(11));
+  await page.locator('#parents-passcode-load').click();
+  await expect(page.locator('#parents-passcode-message')).toHaveClass(/is-error/);
+  await expect(page.locator('.parents-confirm')).toHaveCount(0);
+  // One letter short: the message says how many letters that version has.
+  await page.locator('#parents-passcode-input').fill(v1.slice(0, -1));
+  await page.locator('#parents-passcode-load').click();
+  await expect(page.locator('#parents-passcode-message')).toContainText('12もじ');
+  await page.locator('#parents-passcode-input').fill(v1.toLowerCase());
+  await page.locator('#parents-passcode-load').click();
+  const chapters12 = fullProgress(/^[12]-/);
+  await expect(page.locator('.parents-confirm')).toContainText(`クリア ${chapters12.cleared.length}`);
+  const restoredV1 = page.waitForEvent('load');
+  await page.locator('.parents-confirm-yes').click();
+  await restoredV1;
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  const backV1 = await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
+  // Version 1 carries the rails within chapters 1 and 2 (the rail through the cloud gate grows on the next map).
+  const inChapters12 = (id: string) => chapters12.cleared.includes(id);
+  expect(sorted(backV1)).toEqual(
+    sorted({ ...chapters12, mapLinks: chapters12.mapLinks.filter((key) => key.split('>').every(inChapters12)) }),
+  );
+  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ★\s*3しょう ☆/);
   expect(errors).toEqual([]);
 });
