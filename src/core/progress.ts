@@ -1,4 +1,7 @@
 import type { AbilityId } from '../stage/types';
+import world from '../world/world.json';
+import { seenMapLinks } from '../world/pages';
+import type { WorldFile } from '../world/types';
 
 const KEY = 'train-game.progress.v1';
 const SCHEMA = 1;
@@ -159,17 +162,35 @@ export async function storagePersisted(): Promise<boolean | null> {
 }
 
 /*
- * あいことば (PHASE7_FINISH §4 item 8): the whole progress as 12 letters to copy by hand and type in again later, on
- * this iPad or another one. Nothing leaves the device. Crockford's base 32 (no I, L, O, U; typed in, O reads as 0
- * and I or L as 1; case and dashes do not matter), shown as XXXX-XXXX-XXXX.
+ * あいことば (PHASE7_FINISH §4 item 8, version 2: PHASE8_CHAPTER3_4 第 1 部 §5): the whole progress as a few letters
+ * to copy by hand and type in again later, on this iPad or another one. Nothing leaves the device. Crockford's base
+ * 32 (no I, L, O, U; typed in, O reads as 0 and I or L as 1; case, spaces and dashes do not matter), shown in groups
+ * of 4 (XXXX-XXXX-XXXX-XXXX).
  * The first letter is the version: it fixes the lists below, so a code stays good when later chapters add stages
- * and records (they get a new version with longer lists and, if needed, more letters). Version 1 is 60 bits: the
- * version (5), what is done in the lists below (34: one bit per item) and a check (21 bits of FNV-1a over the
- * version and the items), so a mistyped letter is caught (a wrong code passes 1 time in 2 million).
- * Never reorder or drop an item of a published version.
+ * and records (they get a new version with longer lists and, if needed, more letters). A code is the version (5
+ * bits), what is done in the version's lists (one bit per item) and a check (21 bits of FNV-1a over the version and
+ * the items), so a mistyped letter is caught (a wrong code passes 1 time in 2 million).
+ * - Version 1 (12 letters, 60 bits): chapters 1 and 2, the rails one bit each (6 + 4 + 18 + 6 = 34 items).
+ * - Version 2 (16 letters, 80 bits): chapters 1 to 4 (12 + 6 + 36 = 54 items). No rails: they are rebuilt from the
+ *   clears on reading, all seen, and the ends of the done chapters too (seenMapLinks), so a child who types it in
+ *   is not shown them again.
+ * New codes are always the latest version; every version ever published is still read. Never reorder or drop an
+ * item of a published version.
  */
 const PASSCODE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-const PASSCODE_V1 = {
+
+interface PasscodeVersion {
+  version: number;
+  letters: number;
+  checkBits: number;
+  cleared: readonly string[];
+  abilities: readonly AbilityId[];
+  records: readonly string[];
+  /** The rails, one bit each. Without it none are carried: they are rebuilt from the clears on reading. */
+  mapLinks?: readonly string[];
+}
+
+const PASSCODE_V1: PasscodeVersion = {
   version: 1,
   letters: 12,
   checkBits: 21,
@@ -196,9 +217,54 @@ const PASSCODE_V1 = {
     'bubble-spring',
   ],
   mapLinks: ['1-1>1-2', '1-2>1-3', '1-3>2-1', '2-1>2-2', '2-2>2-3', '2-3>1-1'],
-} as const;
+};
+
+/**
+ * Chapters 3 and 4 after version 1's items, in stage order (3 records a stage). 4-3's are the ones its design gives
+ * (PHASE8_CHAPTER3_4 第 8 部); pause-settings.spec.ts checks that every stage file's clear, ability and records
+ * have a place here, so a stage that ships with other ids fails before this version is published.
+ * `magnetLight` (chapter 5) and `reverse` (chapter 6) wait for the next version, with their chapters' stages.
+ */
+const PASSCODE_V2: PasscodeVersion = {
+  version: 2,
+  letters: 16,
+  checkBits: 21,
+  cleared: [...PASSCODE_V1.cleared, '3-1', '3-2', '3-3', '4-1', '4-2', '4-3'],
+  abilities: [...PASSCODE_V1.abilities, 'dive', 'plow'],
+  records: [
+    ...PASSCODE_V1.records,
+    'rainbow-shell',
+    'sea-pearl',
+    'iron-star',
+    'kingfisher-feather',
+    'river-jade',
+    'snow-bud',
+    'sunset-starfish',
+    'star-sand',
+    'festival-bell',
+    'frost-flower',
+    'glow-shell',
+    'ice-bell',
+    'frozen-fall',
+    'spiral-mitten',
+    'tin-shovel',
+    'snow-hare',
+    'ice-flower',
+    'sleigh-bell',
+  ],
+};
+
+const PASSCODE_VERSIONS: readonly PasscodeVersion[] = [PASSCODE_V1, PASSCODE_V2];
+/** New codes are written in this one. */
+const PASSCODE_LATEST = PASSCODE_V2;
+/** How many letters a new あいことば has (for the parents' page). */
+export const PASSCODE_LETTERS = PASSCODE_LATEST.letters;
 
 const PASSCODE_FIELDS = ['cleared', 'abilities', 'records', 'mapLinks'] as const;
+
+/** The version's items in order, field by field (a field it does not carry adds none). */
+const passcodeItems = (v: PasscodeVersion): { field: (typeof PASSCODE_FIELDS)[number]; id: string }[] =>
+  PASSCODE_FIELDS.flatMap((field) => (v[field] ?? []).map((id) => ({ field, id })));
 
 /** 32-bit FNV-1a over bits packed 8 to a byte (the version first), cut to `bits` bits. */
 function passcodeCheck(version: number, items: number[], bits: number): number {
@@ -219,20 +285,29 @@ function passcodeCheck(version: number, items: number[], bits: number): number {
 const toBits = (value: number, count: number): number[] => Array.from({ length: count }, (_, i) => (value >> (count - 1 - i)) & 1);
 const fromBits = (bits: number[]): number => bits.reduce((value, bit) => value * 2 + bit, 0);
 
-/** The progress as an あいことば ("XXXX-XXXX-XXXX"). Items the current version has no place for are left out. */
-export function progressToPasscode(progress: Progress): string {
-  const v = PASSCODE_V1;
-  const items = PASSCODE_FIELDS.flatMap((field) => v[field].map((id) => ((progress[field] as string[]).includes(id) ? 1 : 0)));
+/** The progress in one version's あいことば. Items the version has no place for are left out. */
+function encodePasscode(progress: Progress, v: PasscodeVersion): string {
+  const items = passcodeItems(v).map(({ field, id }) => ((progress[field] as string[]).includes(id) ? 1 : 0));
   const bits = [...toBits(v.version, 5), ...items, ...toBits(passcodeCheck(v.version, items, v.checkBits), v.checkBits)];
   let code = '';
   for (let i = 0; i < bits.length; i += 5) code += PASSCODE_ALPHABET[fromBits(bits.slice(i, i + 5))];
   return code.match(/.{1,4}/g)?.join('-') ?? code;
 }
 
+/** The progress as an あいことば in the latest version ("XXXX-XXXX-XXXX-XXXX"). */
+export function progressToPasscode(progress: Progress): string {
+  return encodePasscode(progress, PASSCODE_LATEST);
+}
+
 export type PasscodeError = 'empty' | 'letters' | 'version' | 'length' | 'check';
 
-/** Reads an あいことば back into a whole progress, or says what is wrong with it. */
-export function passcodeToProgress(text: string): { ok: true; progress: Progress } | { ok: false; error: PasscodeError } {
+/**
+ * Reads an あいことば of any version back into a whole progress, or says what is wrong with it (for a wrong
+ * length, also how many letters that version has).
+ */
+export function passcodeToProgress(
+  text: string,
+): { ok: true; progress: Progress } | { ok: false; error: PasscodeError; letters?: number } {
   const clean = text
     .normalize('NFKC')
     .toUpperCase()
@@ -242,20 +317,18 @@ export function passcodeToProgress(text: string): { ok: true; progress: Progress
   if (clean.length === 0) return { ok: false, error: 'empty' };
   const values = [...clean].map((c) => PASSCODE_ALPHABET.indexOf(c));
   if (values.some((value) => value < 0)) return { ok: false, error: 'letters' };
-  const v = PASSCODE_V1;
-  if (values[0] !== v.version) return { ok: false, error: 'version' };
-  if (values.length !== v.letters) return { ok: false, error: 'length' };
+  const v = PASSCODE_VERSIONS.find((version) => version.version === values[0]);
+  if (!v) return { ok: false, error: 'version' };
+  if (values.length !== v.letters) return { ok: false, error: 'length', letters: v.letters };
   const bits = values.flatMap((value) => toBits(value, 5));
-  const count = PASSCODE_FIELDS.reduce((sum, field) => sum + v[field].length, 0);
-  const items = bits.slice(5, 5 + count);
-  const check = fromBits(bits.slice(5 + count, 5 + count + v.checkBits));
+  const list = passcodeItems(v);
+  const items = bits.slice(5, 5 + list.length);
+  const check = fromBits(bits.slice(5 + list.length, 5 + list.length + v.checkBits));
   if (check !== passcodeCheck(v.version, items, v.checkBits)) return { ok: false, error: 'check' };
   const progress = empty();
-  let at = 0;
-  for (const field of PASSCODE_FIELDS) {
-    for (const id of v[field]) {
-      if (items[at++]) (progress[field] as string[]).push(id);
-    }
-  }
+  list.forEach(({ field, id }, i) => {
+    if (items[i]) (progress[field] as string[]).push(id);
+  });
+  if (!v.mapLinks) progress.mapLinks = seenMapLinks(world as unknown as WorldFile, progress.cleared);
   return { ok: true, progress };
 }
