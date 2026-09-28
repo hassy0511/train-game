@@ -61,10 +61,10 @@ import { loadSettings, saveSettings, VOLUME_GAIN, type Settings } from './core/s
 import { showSettings } from './ui/settings';
 import { showParents } from './ui/parents';
 import { createPause } from './ui/pause';
-import { linkKey, showMap, type MapChoice, type MapFinale, type MapIsland, type MapTeaser } from './ui/map';
+import { showMap, type MapChoice, type MapFinale, type MapIsland, type MapTeaser } from './ui/map';
 import world from './world/world.json';
-import type { WorldChapter, WorldFile } from './world/types';
-import { crossPages, knownPages, linkOptions, openingPage, type PageFacts } from './world/pages';
+import type { WorldFile } from './world/types';
+import { chapterDone, crossPages, knownPages, laidLinks, linkOptions, openingPage, type PageFacts } from './world/pages';
 
 const app = document.getElementById('app') as HTMLElement;
 const viewEl = document.getElementById('view') as HTMLElement;
@@ -151,9 +151,7 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
     return !!chapter && chapterDone(file, chapter, progress.cleared);
   };
   // A rail is laid once its `from` is cleared, and a rail out of a chapter (`afterChapter`) once that chapter is done.
-  const laid = file.links
-    .filter(([from, to, opts]) => !to.startsWith('teaser:') && progress.cleared.includes(from) && (opts?.afterChapter === undefined || done(opts.afterChapter)))
-    .map(([from, to]) => linkKey(from, to));
+  const laid = laidLinks(file, progress.cleared);
   // A chapter's closing rail waits for the whole chapter (a stage opened on its own with ?stage= does not
   // finish it): until then it is drawn but neither new nor saved, so its finale still plays the first time
   // the chapter is really done.
@@ -229,13 +227,6 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
 
 /** A chapter's end card: its button comes after this long (the map ignored taps until then; the child may still be tapping). */
 const FINALE_CARD_GUARD_SECONDS = 0.9;
-
-/** A chapter is done when all its islands are cleared, and every island of its ring (the ring's rails exist). */
-function chapterDone(file: WorldFile, chapter: WorldChapter, cleared: string[]): boolean {
-  const ids = file.islands.filter((i) => i.chapter === chapter.id).map((i) => i.id);
-  ids.push(...(chapter.finale?.ring ?? []));
-  return ids.length > 0 && ids.every((id) => cleared.includes(id));
-}
 
 /**
  * Chapters with islands, and whether every one of their islands is cleared (the title's stars). A chapter whose
