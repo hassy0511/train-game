@@ -12,12 +12,24 @@ const SLOW = 2;
 const NORMAL = 3;
 const FAST = 4;
 
+/**
+ * Taps the lines along until `selector` shows. The bubble is tapped on only when, at that very moment, it is not the
+ * line waited for (checked and tapped in one step in the page): a line that came up between a look and a tap on a
+ * slow runner would otherwise be tapped away unseen.
+ */
 async function tapUntil(page: Page, selector: string, timeoutMs = 90_000): Promise<void> {
+  const want = /^#bubble:has-text\("(.+)"\)$/.exec(selector)?.[1] ?? null;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await page.locator(selector).isVisible()) return;
-    if (await page.locator('#bubble').isVisible()) await page.locator('#bubble').dispatchEvent('pointerdown');
-    if (await page.locator('#caption').isVisible()) await page.locator('#caption').dispatchEvent('click');
+    await page.evaluate((text) => {
+      const bubble = document.getElementById('bubble');
+      if (bubble?.checkVisibility() && !(text && bubble.textContent?.includes(text))) {
+        bubble.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, composed: true }));
+      }
+      const caption = document.getElementById('caption');
+      if (caption?.checkVisibility()) caption.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }));
+    }, want);
     await page.waitForTimeout(150);
   }
   throw new Error(`timed out waiting for ${selector}`);
