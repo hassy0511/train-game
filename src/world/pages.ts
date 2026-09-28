@@ -1,4 +1,4 @@
-import type { WorldFile, WorldLinkOptions } from './types';
+import type { WorldChapter, WorldFile, WorldLinkOptions } from './types';
 
 /*
  * The map's pages (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3): which page each island, "?" island and rail is on, which
@@ -32,6 +32,42 @@ export function crossPages(world: WorldFile, key: string): { from: number; to: n
   const from = nodePage(world, a);
   const to = nodePage(world, b);
   return from !== undefined && to !== undefined && from !== to ? { from, to } : null;
+}
+
+/** A chapter is done when all its islands are cleared, and every island of its ring (the ring's rails exist). */
+export function chapterDone(world: WorldFile, chapter: WorldChapter, cleared: string[]): boolean {
+  const ids = world.islands.filter((i) => i.chapter === chapter.id).map((i) => i.id);
+  ids.push(...(chapter.finale?.ring ?? []));
+  return ids.length > 0 && ids.every((id) => cleared.includes(id));
+}
+
+/**
+ * The rails laid for these clears ("from>to"): a rail once its `from` is cleared, and a rail out of a chapter
+ * (`afterChapter`) once that chapter is done. Never the dotted line to a "?" island.
+ */
+export function laidLinks(world: WorldFile, cleared: string[]): string[] {
+  const done = (id: number): boolean => {
+    const chapter = world.chapters.find((c) => c.id === id);
+    return !!chapter && chapterDone(world, chapter, cleared);
+  };
+  return world.links
+    .filter(([from, to, opts]) => !to.startsWith('teaser:') && cleared.includes(from) && (opts?.afterChapter === undefined || done(opts.afterChapter)))
+    .map(([from, to]) => `${from}>${to}`);
+}
+
+/**
+ * The save's mapLinks of a child who has seen everything these clears open (あいことば version 2 carries no rails
+ * and rebuilds them from the clears, docs/PHASE8_CHAPTER3_4.md 第 1 部 §5): every laid rail, and "finale:<id>" for
+ * a done chapter whose end has no rail. A chapter's closing rail is left out while the chapter is not done (the
+ * map draws it but does not save it then), so its finale still plays when the chapter is really done.
+ */
+export function seenMapLinks(world: WorldFile, cleared: string[]): string[] {
+  const done = world.chapters.filter((c) => chapterDone(world, c, cleared));
+  const waiting = new Set(world.chapters.filter((c) => c.finale?.link && !done.includes(c)).map((c) => c.finale?.link));
+  return [
+    ...laidLinks(world, cleared).filter((key) => !waiting.has(key)),
+    ...done.filter((c) => c.finale && !c.finale.link).map((c) => `finale:${c.id}`),
+  ];
 }
 
 /** The heading beside "ちず" on a page. */

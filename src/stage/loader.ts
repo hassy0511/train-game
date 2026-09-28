@@ -6,7 +6,7 @@ import { assignPlowSpans, plowSpans } from '../gimmick/plow';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import type { Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
-import { validateIceLayout, validatePlowLayout, validateStageFile, validateStageLayout, validateWaterLayout } from './validate';
+import { validateIceLayout, validatePlowLayout, validateSnowLayout, validateStageFile, validateStageLayout, validateWaterLayout } from './validate';
 import { computeWaterSpans, diveForkSide } from './water';
 
 // One chunk per stage file; stages load lazily.
@@ -65,6 +65,7 @@ export async function loadStage(id: string): Promise<StageData> {
   // v1.10 (4-2): snow walls and their buried stretches on the rails (and the stations buried under snow).
   assignPlowSpans(file, network);
   validatePlowLayout(file, network);
+  validateSnowLayout(file, network);
   const groundY = file.environment.ground?.y ?? null;
 
   const props: ResolvedProp[] = [...file.props, ...autoSigns(file)].map((p) => {
@@ -78,6 +79,7 @@ export async function loadStage(id: string): Promise<StageData> {
       tag: p.tag,
       onRail: 'onRail' in p ? { railId: p.onRail.railId, at: p.onRail.at } : undefined,
       ...(p.trace ? { trace: true, traceLine: p.traceLine } : {}),
+      ...(p.reveal ? { reveal: p.reveal } : {}),
     };
   });
 

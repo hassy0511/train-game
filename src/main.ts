@@ -17,6 +17,7 @@ import {
   LIGHT,
   PLOW,
   RECORD,
+  SNOW_WAVE,
   RESOLUTION_MIN_FPS,
   RESOLUTION_SLOW_SECONDS,
   RESOLUTION_STEPS,
@@ -54,6 +55,7 @@ import { JumpSeat } from './gimmick/seat-face';
 import { IceSystem, iceZones, thinIceZones } from './gimmick/ice';
 import { ThinIceSystem } from './gimmick/thin-ice';
 import { MirrorSystem } from './gimmick/mirror';
+import { TunnelSystem } from './gimmick/tunnel';
 import { fallsLoudness, underFalls, waterfalls } from './gimmick/waterfall';
 import { Vector3 } from 'three';
 import { showZukan } from './ui/zukan';
@@ -61,10 +63,10 @@ import { loadSettings, saveSettings, VOLUME_GAIN, type Settings } from './core/s
 import { showSettings } from './ui/settings';
 import { showParents } from './ui/parents';
 import { createPause } from './ui/pause';
-import { linkKey, showMap, type MapChoice, type MapFinale, type MapIsland, type MapTeaser } from './ui/map';
+import { showMap, type MapChoice, type MapFinale, type MapIsland, type MapTeaser } from './ui/map';
 import world from './world/world.json';
-import type { WorldChapter, WorldFile } from './world/types';
-import { crossPages, knownPages, linkOptions, openingPage, type PageFacts } from './world/pages';
+import type { WorldFile } from './world/types';
+import { chapterDone, crossPages, knownPages, laidLinks, linkOptions, openingPage, type PageFacts } from './world/pages';
 
 const app = document.getElementById('app') as HTMLElement;
 const viewEl = document.getElementById('view') as HTMLElement;
@@ -151,9 +153,7 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
     return !!chapter && chapterDone(file, chapter, progress.cleared);
   };
   // A rail is laid once its `from` is cleared, and a rail out of a chapter (`afterChapter`) once that chapter is done.
-  const laid = file.links
-    .filter(([from, to, opts]) => !to.startsWith('teaser:') && progress.cleared.includes(from) && (opts?.afterChapter === undefined || done(opts.afterChapter)))
-    .map(([from, to]) => linkKey(from, to));
+  const laid = laidLinks(file, progress.cleared);
   // A chapter's closing rail waits for the whole chapter (a stage opened on its own with ?stage= does not
   // finish it): until then it is drawn but neither new nor saved, so its finale still plays the first time
   // the chapter is really done.
@@ -229,13 +229,6 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
 
 /** A chapter's end card: its button comes after this long (the map ignored taps until then; the child may still be tapping). */
 const FINALE_CARD_GUARD_SECONDS = 0.9;
-
-/** A chapter is done when all its islands are cleared, and every island of its ring (the ring's rails exist). */
-function chapterDone(file: WorldFile, chapter: WorldChapter, cleared: string[]): boolean {
-  const ids = file.islands.filter((i) => i.chapter === chapter.id).map((i) => i.id);
-  ids.push(...(chapter.finale?.ring ?? []));
-  return ids.length > 0 && ids.every((id) => cleared.includes(id));
-}
 
 /**
  * Chapters with islands, and whether every one of their islands is cleared (the title's stars). A chapter whose
@@ -325,8 +318,11 @@ async function boot(): Promise<void> {
   // it lights the rocket button) and ice mirrors.
   const ice = new IceSystem(stage.file.gimmicks, stage.file.stations, train);
   const thinIce = new ThinIceSystem(stage.file.gimmicks, train, rocket);
-  rocket.extraGlow = () => thinIce.glow;
+  // v1.10 (4-3): the rocket also glows when the snow wave is close (the runner knows the wave).
+  rocket.extraGlow = () => thinIce.glow || (runner?.chaseRocketGlow ?? false);
   const mirrors = new MirrorSystem(stage.file.gimmicks, train);
+  // v1.10 (4-3): tunnels (dark inside; the light button glows for them).
+  const tunnels = new TunnelSystem(stage.file.gimmicks, train);
   const hasIce = iceZones(stage.file.gimmicks).length > 0 || thinIceZones(stage.file.gimmicks).length > 0;
   const whistle = new Whistle();
   const audio = new AudioEngine();
@@ -703,6 +699,7 @@ async function boot(): Promise<void> {
       dive.reset();
       seat.reset();
       snowSplat.classList.remove('is-on');
+      chasePuff.classList.remove('is-on');
       // v1.10 (4-1): the ice is whole again, and its lines come again.
       ice.reset();
       thinIce.reset();
@@ -742,6 +739,22 @@ async function boot(): Promise<void> {
     events.post({ type: 'shower', on });
   };
   let showers = 0;
+  // v1.10 (4-3): the snow wave close behind: powder blowing past the screen edge (CSS shows it by #app[data-chase]),
+  // and caught, soft snow swelling up from the bottom ("もふっ").
+  const chaseVignette = document.createElement('div');
+  chaseVignette.className = 'chase-vignette';
+  chaseVignette.innerHTML = Array.from({ length: 10 }, (_, i) => `<i style="left:${(i * 9.7 + 4) % 100}%;--dx:${((i % 5) - 2) * 40};animation-delay:${((i * 0.29) % 1.4).toFixed(2)}s"></i>`).join('');
+  uiEl.prepend(chaseVignette);
+  const chasePuff = document.createElement('div');
+  chasePuff.className = 'chase-puff';
+  chasePuff.innerHTML = '<i></i><i></i><i></i><i></i><i></i>';
+  uiEl.prepend(chasePuff);
+  let chaseSoundIn = 0;
+  if (tunnels.zones.length > 0) app.dataset.tunnel = '0';
+  tunnels.events.on('inside', (z) => {
+    app.dataset.tunnel = z ? '1' : '0';
+    events.post({ type: 'tunnel', index: z ? z.index : null });
+  });
   // In the cab under water: the dome's rim round the screen edge (CSS shows it by #app[data-underwater]).
   const diveVignette = document.createElement('div');
   diveVignette.className = 'dive-vignette';
@@ -922,6 +935,7 @@ async function boot(): Promise<void> {
     } else plowSprayIn = 0;
     thinIce.update(dt);
     mirrors.update();
+    tunnels.update();
     if (ice.sparkle !== iceSparkle) {
       iceSparkle = ice.sparkle;
       events.post({ type: 'ice', sparkle: iceSparkle });
@@ -982,7 +996,8 @@ async function boot(): Promise<void> {
       const hint = runner.phase === 'driving' ? runner.leverHintSpeed : null;
       // The notch the partner names (ゆっくり): judged on the plain notch speeds, so the light does not change it.
       const silk = hint === null ? null : (fastestNotchUnder(hint, 1) ?? fastestNotchUnder(hint, train.speedScale));
-      ui.lever.setHint(runner.phase === 'driving' && iceNotch !== null ? iceNotch : silk);
+      // v1.10 (4-3): the snow wave close behind a slow train: "はやい" glows.
+      ui.lever.setHint(runner.chaseLeverHint ? FAST_NOTCH : runner.phase === 'driving' && iceNotch !== null ? iceNotch : silk);
     } else if (hasIce) ui.lever.setHint(iceNotch);
 
     const pose = train.getPose();
@@ -1005,7 +1020,24 @@ async function boot(): Promise<void> {
       mark: rocket.icon || (why === 'slide' || why === 'station' ? why : ''),
     });
     const timer = runner?.timer ?? null;
-    countdownPanel.set(timer);
+    // v1.10 (4-3): the snow wave's meter in the same place (there is never a countdown with it).
+    const chasePanel = runner?.chasePanel ?? null;
+    countdownPanel.set(timer, chasePanel);
+    const wave = runner?.snowWave ?? null;
+    view.setSnowWave(wave && { railId: wave.railId, s: wave.s, speed: wave.speed, state: wave.state });
+    if (wave && (wave.state === 'run' || wave.state === 'wait')) {
+      app.dataset.chase = wave.gap < SNOW_WAVE.near ? 'near' : 'run';
+      app.dataset.chaseGap = String(Math.round(wave.gap));
+      // "もこもこ" again and again while it is not far off (louder the closer: it plays over itself when near).
+      chaseSoundIn -= dt;
+      if (chaseSoundIn <= 0 && wave.gap < SNOW_WAVE.farLine) {
+        chaseSoundIn = wave.gap < SNOW_WAVE.near ? SNOW_WAVE.soundEvery * 0.6 : SNOW_WAVE.soundEvery;
+        audio.playSnowWave();
+      }
+    } else if (wave) {
+      app.dataset.chase = wave.state === 'caught' ? 'caught' : wave.state === 'safe' ? 'safe' : '';
+    } else if (app.dataset.chase !== undefined) app.dataset.chase = '';
+    if (wave) app.dataset.chaseCatches = String(wave.catches);
     // Every frame, so the budget check sees the heaviest one (one render per frame; cheap to read).
     const stats = view.getStats();
     if (stats) {
@@ -1164,6 +1196,10 @@ async function boot(): Promise<void> {
   const lookOf = (a: { params?: Record<string, unknown> }): unknown => a.params?.look;
   const seals = new Set(stage.file.actors.filter((a) => a.type === 'cat' && lookOf(a) === 'seal').map((a) => a.id));
   const snowbirds = new Set(stage.file.actors.filter((a) => a.type === 'rock-roll' && lookOf(a) === 'snowbird').map((a) => a.id));
+  /** v1.10 (4-3): snowmen and snow heaps ("rock-roll" / "rock-drop" looks snowman, snowman-upside, snow-pile). */
+  const snowRocks = new Set(
+    stage.file.actors.filter((a) => (a.type === 'rock-roll' || a.type === 'rock-drop') && String(lookOf(a) ?? '').startsWith('snow')).map((a) => a.id),
+  );
   /** v1.10 (3-2, 3-3): the duck family ("dino-small" look "duck") and sea turtles ("cat" look "turtle"). */
   const ducks = new Set(stage.file.actors.filter((a) => a.type === 'dino-small' && lookOf(a) === 'duck').map((a) => a.id));
   const turtles = new Set(stage.file.actors.filter((a) => a.type === 'cat' && lookOf(a) === 'turtle').map((a) => a.id));
@@ -1260,7 +1296,7 @@ async function boot(): Promise<void> {
       fx.dip = Math.max(fx.dip, dip * shakeScale());
       fx.shake = Math.max(fx.shake, shake * shakeScale());
       // A bumped rock has its own rounder "ぽよん" (played with its bonk), and so does the water (v1.10).
-      if (lastFailReason !== 'rock' && lastFailReason !== 'dive' && lastFailReason !== 'crack' && lastFailReason !== 'plow') audio.playBoing();
+      if (lastFailReason !== 'rock' && lastFailReason !== 'dive' && lastFailReason !== 'crack' && lastFailReason !== 'plow' && lastFailReason !== 'snow') audio.playBoing();
     },
     resetLever: () => ui.lever.setNotch(STOP_NOTCH),
     gauge: (state) => gauge.set(state),
@@ -1322,6 +1358,17 @@ async function boot(): Promise<void> {
       app.dataset.timeup = e.icon;
       if (e.icon === 'moon') audio.playMoonUp();
     }
+    // v1.10 (4-3): the snow wave comes out ("もこもこ"), catches the train ("もふっ"), runs into the fence ("もふん").
+    if (e.type === 'chase') {
+      if (e.state === 'run' && app.dataset.chase !== 'caught') chaseSoundIn = Math.min(chaseSoundIn, 0.1);
+      if (e.state === 'caught') {
+        audio.playSnowCatch();
+        chasePuff.classList.remove('is-on');
+        void chasePuff.offsetWidth;
+        chasePuff.classList.add('is-on');
+      }
+      if (e.state === 'safe') audio.playSnowCatch();
+    }
     if (e.type === 'countdown') {
       const was = hurrying;
       hurrying = e.state === 'run' || e.state === 'low';
@@ -1342,6 +1389,12 @@ async function boot(): Promise<void> {
       // v1.10 (4-1): little birds in a row: "ぴよぴよ" as they line up and set off, wings flapping when surprised.
       if (e.state === 'wobble' || e.state === 'roll') audio.playSnowbirds();
       if (e.state === 'bonk') audio.playFlap();
+    } else if (e.type === 'rock' && snowRocks.has(e.id)) {
+      // v1.10 (4-3): snowmen roll "ころころ" and land "ぽすん"; bumping one is a soft "ぽすっ" (never a splash).
+      if (e.state === 'wobble') audio.playRockWobble();
+      if (e.state === 'roll') audio.playRockRoll(e.seconds ?? ROCK_ROLL.crossSeconds);
+      if (e.state === 'drop') audio.playPadFlop();
+      if (e.state === 'bonk') audio.playPlowBump();
     } else if (e.type === 'rock') {
       if (e.state === 'wobble') audio.playRockWobble();
       if (e.state === 'roll') {
@@ -1382,7 +1435,7 @@ async function boot(): Promise<void> {
     if (runner?.skipCutscene()) skippedAt = performance.now();
   });
 
-  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, dive, ice, thinIce, mirrors, plow, seat });
+  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, dive, ice, thinIce, mirrors, plow, seat, tunnel: tunnels });
   runner.knowAbilities(abilities);
   runner.setLight(lightOn);
   if (resumeFrom > 0) {
@@ -1417,6 +1470,8 @@ boot().catch((err: unknown) => {
 
 /** v1.10 (4-1): the "ゆっくり" notch (the ice station's first glow). */
 const ICE_SLOW_NOTCH = 2;
+/** v1.10 (4-3): the "はやい" notch (the snow wave close behind). */
+const FAST_NOTCH = 4;
 
 /** The fastest notch whose speed (scaled by the light) is at most `limit` m/s: the lever's glowing hint. */
 function fastestNotchUnder(limit: number, scale: number): number | null {

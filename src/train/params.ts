@@ -392,3 +392,63 @@ export const LEAP = { height: 1.2, seconds: 0.8, every: 5 } as const;
  * sea; the jellyfish lanterns rise `jellyRise` m; the moon comes up in `moonRise` s.
  */
 export const FESTIVAL = { seconds: 2.5, bursts: 3, jellyRise: 3, moonRise: 0.8 } as const;
+
+/**
+ * v1.10 (4-3): the snow wave (a mission step's `chase`, PHASE8 第 8 部 §4.1). It comes out `start` m behind the train's
+ * last car (`trainLength` m behind the front) once the front passes the chase's `from`, and runs at `pace` m/s (or a
+ * `paces` stretch's speed) along the train's way. Further back than `far` m it closes in at the train's speed +
+ * `bandLead` (up to `bandMax` m/s), so a fast child still sees it. Each catch slows it `assist` m/s (never below
+ * `minPace`); after `giveUpAfter` catches it runs at most `tiredPace` m/s (the fourth try always gets away). It
+ * speeds up by `accel` m/s² (slowing at once). Caught (the gap closed on the ground), the train goes back to the
+ * nearest `retry` place at least `retryBehind` m behind; after any fail the wave waits `restart` m behind the last car
+ * and starts again (from 0) once the train moves faster than `moveToStart` m/s. Closer than `near` m: "もこもこが
+ * くる！" and the white at the screen edge; closer than `rocketGlow` m the rocket glows (when a flame is left over for
+ * the uphills still ahead); closer than `leverHintGap` m below `fastSpeed` m/s the "はやい" notch glows; further than
+ * `farLine` m: "はなれた！". Past `until` it runs into the fence and settles into a low heap in `settleSeconds` s. The
+ * panel shows the gap over `meter` m.
+ */
+export const SNOW_WAVE = {
+  start: 40,
+  restart: 45,
+  pace: 12,
+  far: 25,
+  bandMax: 20,
+  bandLead: 1,
+  accel: 3,
+  near: 20,
+  farLine: 60,
+  rocketGlow: 15,
+  leverHintGap: 25,
+  fastSpeed: 15,
+  assist: 3,
+  minPace: 4,
+  giveUpAfter: 3,
+  tiredPace: 4,
+  retryBehind: 30,
+  trainLength: 37,
+  moveToStart: 1,
+  settleSeconds: 1.5,
+  meter: 60,
+  /** The "もこもこ" sound comes again every this many seconds while the wave is within `farLine` m. */
+  soundEvery: 2.2,
+} as const;
+
+/**
+ * v1.10 (4-3): tunnels (gimmicks "tunnel"): an arched tube `width` × `height` m round the track, a ring every `ring` m
+ * of `segments` pieces; inside, the fog and the light ease to the tunnel's in about `fade` s. Defaults of its
+ * params: `near`, `far` (the light on: `lightFar`) m, `fogColor`, the light `dim`s to this share, the light button
+ * glows from `lightGlow` m before it (light off) until it is left.
+ */
+export const TUNNEL = {
+  width: 9,
+  height: 8,
+  ring: 4,
+  segments: 12,
+  fade: 0.4,
+  near: 2,
+  far: 18,
+  lightFar: 60,
+  fogColor: '#1c2433',
+  dim: 0.35,
+  lightGlow: 60,
+} as const;

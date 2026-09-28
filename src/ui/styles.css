@@ -2311,7 +2311,7 @@ body {
 }
 
 .parents-input {
-  width: 260px;
+  width: min(340px, 100%);
   padding: 10px 14px;
   border: 2px solid #c8cfd8;
   border-radius: 10px;
@@ -3312,5 +3312,147 @@ body {
   }
   100% {
     opacity: 0;
+  }
+}
+
+/*
+ * v1.10 (4-3) the snow wave's meter (#timer in mode "chase"): the round white wave on the left, the snow filling the
+ * band from it towards the little train at the right as it closes in. It wobbles when close; never red or blinking.
+ */
+.timer[data-mode='chase'] .timer-fill {
+  background: linear-gradient(#ffffff, #dce8f4);
+  box-shadow: inset 0 0 0 1px #c9dbea;
+}
+
+.timer[data-mode='chase'] .timer-bar {
+  position: relative;
+  overflow: visible;
+}
+
+.chase-train-at {
+  display: none;
+  position: absolute;
+  right: -10px;
+  top: -6px;
+  width: 30px;
+  height: 18px;
+}
+
+.chase-train-at svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.timer[data-mode='chase'] .chase-train-at {
+  display: block;
+}
+
+.timer[data-mode='chase'] .timer-num:empty {
+  min-width: 8px;
+}
+
+.timer[data-mode='chase'][data-state='near'] .timer-art {
+  animation: wave-wobble 0.45s ease-in-out infinite alternate;
+  transform-origin: 50% 100%;
+}
+
+.timer[data-mode='chase'][data-state='safe'] .chase-train-at {
+  display: none;
+}
+
+@keyframes wave-wobble {
+  from {
+    transform: scale(1, 0.94) rotate(-3deg);
+  }
+  to {
+    transform: scale(1.06, 1.04) rotate(3deg);
+  }
+}
+
+/*
+ * v1.10 (4-3): the snow wave close behind (#app[data-chase="near"]): soft powder blows forward past the lower edge and
+ * the rim of the screen mists a little white. A gentle haze, never a dark or red warning.
+ */
+.chase-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  background: radial-gradient(ellipse at 50% 55%, rgba(255, 255, 255, 0) 55%, rgba(244, 248, 252, 0.75) 100%);
+  overflow: hidden;
+}
+
+#app[data-chase='near'] .chase-vignette {
+  opacity: 1;
+}
+
+.chase-vignette i {
+  position: absolute;
+  bottom: -20px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  opacity: 0.85;
+  animation: powder-blow 1.4s linear infinite;
+}
+
+@keyframes powder-blow {
+  from {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: translate(calc(var(--dx, 0) * 1px), -38vh) scale(0.4);
+    opacity: 0;
+  }
+}
+
+/*
+ * v1.10 (4-3): caught by the snow wave ("もふっ"): round soft snow swells up from the bottom and wraps the view, then
+ * the fall's white fade takes over. Soft, round, bright; gone with the rewind.
+ */
+.chase-puff {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+  overflow: hidden;
+}
+
+.chase-puff.is-on {
+  display: block;
+}
+
+.chase-puff i {
+  position: absolute;
+  bottom: -40vh;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #f4f8fc 65%, #dce7f2 100%);
+  box-shadow: 0 -6px 22px rgba(150, 170, 200, 0.25);
+  animation: puff-rise 0.8s ease-out forwards;
+}
+
+.chase-puff i:nth-child(1) { left: -10%; width: 60vw; height: 60vw; }
+.chase-puff i:nth-child(2) { left: 30%; width: 64vw; height: 64vw; animation-delay: 0.08s; }
+.chase-puff i:nth-child(3) { left: 62%; width: 56vw; height: 56vw; animation-delay: 0.04s; }
+.chase-puff i:nth-child(4) { left: 12%; width: 50vw; height: 50vw; animation-delay: 0.16s; }
+.chase-puff i:nth-child(5) { left: 48%; width: 52vw; height: 52vw; animation-delay: 0.2s; }
+
+@keyframes puff-rise {
+  from {
+    transform: translateY(0) scale(0.6);
+  }
+  to {
+    transform: translateY(-70vh) scale(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chase-vignette i,
+  .timer[data-mode='chase'][data-state='near'] .timer-art {
+    animation: none;
   }
 }

@@ -373,7 +373,10 @@ test('stage 4-1 full run: ice, thin ice and the rocket, the ice hole, the mirror
   await setNotch(page, FAST);
   const three = await rocketOnGlow(page, 'main', 2490);
   expect(three.cracked).toBe(false);
-  expect(three.presses).toBe(1);
+  // One press gets across at the iPad's frame rate; at ~10 fps (CI) the run can fall a little short of the
+  // prediction, the button glows once more and a second press gets across. Never more, and never a crack.
+  expect(three.presses).toBeGreaterThanOrEqual(1);
+  expect(three.presses).toBeLessThanOrEqual(2);
   // The first mirror junction, without the light: the false way, a train coming the other way in the mirror.
   await setNotch(page, NORMAL);
   await waitFront(page, 'main', 2560);

@@ -15,6 +15,8 @@ import type { ThinIceSystem } from '../gimmick/thin-ice';
 import type { MirrorSystem } from '../gimmick/mirror';
 import type { SlopeSystem, SlopeZone } from '../gimmick/slope';
 import { Countdown, type CountdownView } from './countdown';
+import { SnowWave, type SnowWaveView } from './chase';
+import type { TunnelSystem } from '../gimmick/tunnel';
 import { FlowerBridges, type BridgeOutcome } from '../gimmick/flower-bridge';
 import { FragileBridges } from '../gimmick/fragile';
 import { addToProgress, advanceResume, loadProgress, type Resume } from '../core/progress';
@@ -49,6 +51,7 @@ import {
   REFUSE_COOLDOWN,
   REWIND_DISTANCE,
   SLOPE,
+  SNOW_WAVE,
 } from '../train/params';
 import type { JunctionSide, Train } from '../train/train';
 import { StopMonitor, type GaugeState, type StopGrade } from './station-stop';
@@ -108,6 +111,8 @@ export interface MissionSystems {
   /** v1.10 (4-2): the snow walls and the jump seat's "ゆきかき" face (made by the caller). */
   plow?: PlowSystem;
   seat?: JumpSeat;
+  /** v1.10 (4-3): tunnels (the light button glows for them; "トンネルだ！"). */
+  tunnel?: TunnelSystem;
 }
 
 export type MissionPhase = 'idle' | 'driving' | 'stopped' | 'doors' | 'cutscene' | 'failing' | 'clear';
@@ -187,7 +192,16 @@ type DefaultLine =
   | 'mirrorFake'
   | 'plowNear'
   | 'plowBump'
-  | 'plowBumpAfter';
+  | 'plowBumpAfter'
+  | 'chaseStart'
+  | 'chaseNear'
+  | 'chaseRocket'
+  | 'chaseFar'
+  | 'chaseCaught'
+  | 'chaseCaughtAfter'
+  | 'chaseTired'
+  | 'chaseSafe'
+  | 'tunnelNear';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -273,6 +287,16 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   plowNear: 'ゆきの かべ！ ゆきかきを おして！',
   plowBump: 'ぽすっ！ ゆきに ささった〜',
   plowBumpAfter: 'ひかったら ゆきかきを おしてね',
+  // v1.10 (4-3 ゆきの なみ・トンネル)
+  chaseStart: 'ゆきの なみだ！ はやい で にげよう！',
+  chaseNear: 'もこもこが くる！ はやい！',
+  chaseRocket: 'もこもこが きた！ ロケット！',
+  chaseFar: 'はなれた！ すごい！',
+  chaseCaught: 'もふっ！ ゆきまみれ〜',
+  chaseCaughtAfter: 'もういっかい！ はやい で にげよう',
+  chaseTired: 'もこもこ、つかれてきた みたい',
+  chaseSafe: 'セーフ！',
+  tunnelNear: 'トンネルだ！ ライトを つけよう',
 };
 
 /**
@@ -367,6 +391,10 @@ export class MissionRunner {
   private countdown: Countdown | null = null;
   /** Seconds the "セーフ！" panel still shows. */
   private safeLeft = 0;
+  /** v1.10 (4-3): the snow wave of the step being driven, if it has one, and whether its rocket line was said this try. */
+  private chase: SnowWave | null = null;
+  private chaseRocketSaid = false;
+  private readonly tunnel: TunnelSystem | null;
   /** Where the train last stopped for a step (a countdown's time-up goes back there). */
   private lastStop: { railId: string; at: number } | null = null;
   /** v1.10 (3-3): the station the train last stood at (a cutscene's doors open on its side). */
@@ -461,6 +489,12 @@ export class MissionRunner {
     this.slopes = systems?.slopes ?? null;
     this.dive = systems?.dive ?? null;
     this.plow = systems?.plow ?? null;
+    this.tunnel = systems?.tunnel ?? null;
+    // v1.10 (4-3): "トンネルだ！ ライトを つけよう" (only useful now: said at once), unless the light is on already.
+    this.tunnel?.events.on('near', () => {
+      if (this.phase !== 'driving' || this.lightOn) return;
+      this.ports.sayNow(this.lines.tunnelNear ?? DEFAULT_LINES.tunnelNear);
+    });
     this.whales = stage.actors.filter((a) => a.type === 'whale' && a.onRail).map((a) => new Whale(a, train));
     this.ice = systems?.ice ?? null;
     this.thinIce = systems?.thinIce ?? null;
@@ -668,6 +702,8 @@ export class MissionRunner {
     // v1.10 (3-3): a dark stretch that asks for the light (fog params.glow).
     const fog = zoneAt(this.stage.file.gimmicks, 'fog', this.train.state.railId, this.train.frontS);
     if (fog && (fog.params as { glow?: boolean } | undefined)?.glow === true) return true;
+    // v1.10 (4-3): a tunnel close ahead, or the train in one.
+    if (this.tunnel?.lightHint(false)) return true;
     for (const id of this.wrongTurns) {
       const j = this.stage.file.junctions.find((x) => x.id === id);
       if (!j || this.revealed.has(j.id)) continue;
@@ -770,6 +806,39 @@ export class MissionRunner {
       this.phase === 'driving' &&
       (this.nuts.some((n) => n.jumpHint) || this.squirrels.some((s) => s.jumpHint) || this.droppingRocks.some((r) => r.jumpHint))
     );
+  }
+
+  /** v1.10 (4-3): the snow wave now (null: none out; still shown for a moment after "セーフ！"). */
+  get snowWave(): SnowWaveView | null {
+    const c = this.chase;
+    if (!c || c.state === 'armed') return null;
+    return c.view;
+  }
+
+  /** v1.10 (4-3): the snow wave panel (null = hidden): while it chases, and "セーフ！" for a moment after. */
+  get chasePanel(): SnowWaveView | null {
+    const c = this.chase;
+    if (!c || c.state === 'armed' || (c.state === 'safe' && this.safeLeft <= 0)) return null;
+    return c.view;
+  }
+
+  /** v1.10 (4-3): the "はやい" notch glows (the snow wave is close and the train slower than that). */
+  get chaseLeverHint(): boolean {
+    return this.phase === 'driving' && (this.chase?.leverHint ?? false);
+  }
+
+  /**
+   * v1.10 (4-3): the snow wave is close enough for the rocket, and a flame is left over for the uphills still ahead
+   * before the wave's end (the rocket system adds its own "not here" rules).
+   */
+  get chaseRocketGlow(): boolean {
+    const c = this.chase;
+    if (this.phase !== 'driving' || !c || !c.rocketNear || !this.rocket) return false;
+    const front = this.train.frontS;
+    const uphills = (this.slopes?.zones ?? []).filter(
+      (z) => z.kind === 'up' && z.railId === c.def.railId && z.to > front && z.from < c.def.until.at,
+    ).length;
+    return this.rocket.pips > uphills;
   }
 
   /** v1.7: the countdown panel (null = hidden). */
@@ -1045,6 +1114,7 @@ export class MissionRunner {
     if (this.phase !== 'driving') return;
     this.clock += dt;
     if (this.updateCountdown(dt)) return;
+    if (this.updateChase(dt)) return;
     if (this.stop) this.ports.gauge(this.stop.gauge);
     if (!this.movingSaid && this.train.state.speed > 0) {
       this.movingSaid = true;
@@ -1108,7 +1178,9 @@ export class MissionRunner {
         this.ports.autoCamera('side');
         cat.flee();
         this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'flee', position: this.catFleePosition(cat), seconds: 0.6 });
-        this.finishDrive({ kind: 'fail', reason: 'cat', text: own.danger, after: own.after, rewind: { railId: cat.railId, at: cat.at - REWIND_DISTANCE } });
+        // v1.10 (4-3): a snowman on the rail is soft (it only wobbles).
+        const soft = (cat.actor.params as { look?: string }).look === 'snowman';
+        this.finishDrive({ kind: 'fail', reason: 'cat', soft, text: own.danger, after: own.after, rewind: { railId: cat.railId, at: cat.at - REWIND_DISTANCE } });
         return;
       }
     }
@@ -1193,6 +1265,43 @@ export class MissionRunner {
       this.train.emergencyStop();
       this.finishDrive({ kind: 'fail', reason: 'timeUp', rewind: c.origin });
       return true;
+    }
+    return false;
+  }
+
+  /**
+   * v1.10 (4-3): the snow wave of this step. Returns true when it caught the train (the drive ended): the train stops,
+   * the soft snow wraps it ("もふっ"), and it goes back to a retry place behind.
+   */
+  private updateChase(dt: number): boolean {
+    const c = this.chase;
+    if (!c) return false;
+    const o = c.update(dt);
+    if (o === 'start') {
+      this.events.post({ type: 'chase', state: 'run' });
+      if (c.def.music) this.ports.music(c.def.music);
+      for (const line of (this.lines.chaseStart ?? DEFAULT_LINES.chaseStart).split('\n')) this.ports.sayAsync(line);
+    } else if (o === 'near') {
+      this.ports.sayNow(this.lines.chaseNear ?? DEFAULT_LINES.chaseNear);
+    } else if (o === 'far') {
+      this.ports.sayAsync(this.lines.chaseFar ?? DEFAULT_LINES.chaseFar);
+    } else if (o === 'safe') {
+      this.safeLeft = COUNTDOWN.safeShow;
+      this.events.post({ type: 'chase', state: 'safe' });
+      this.events.post({ type: 'partner:emote', kind: 'cheer' });
+      this.ports.sayNow(this.lines.chaseSafe ?? DEFAULT_LINES.chaseSafe);
+      if (c.def.music) this.ports.music(null);
+    } else if (o === 'caught') {
+      this.events.post({ type: 'chase', state: 'caught' });
+      this.train.emergencyStop();
+      this.ports.autoCamera('chase');
+      this.finishDrive({ kind: 'fail', reason: 'snow', rewind: c.retryPlace() });
+      return true;
+    }
+    // "もこもこが きた！ ロケット！" once a try, when the rocket glows for the wave.
+    if (!this.chaseRocketSaid && this.chaseRocketGlow && this.rocket?.glow) {
+      this.chaseRocketSaid = true;
+      this.ports.sayNow(this.lines.chaseRocket ?? DEFAULT_LINES.chaseRocket);
     }
     return false;
   }
@@ -1765,6 +1874,11 @@ export class MissionRunner {
       this.train.state.railId === station.railId &&
       Math.abs(this.train.offsetTo(station.at)) <= new StopMonitor(this.train, station).rule.ok;
     if (step.countdown && !alreadyHere) await this.startCountdown(step, station);
+    // v1.10 (4-3): the snow wave comes out once the train front passes its `from`.
+    if (step.chase && !alreadyHere) {
+      this.chase = new SnowWave(step.chase, this.train);
+      this.chaseRocketSaid = false;
+    }
     // Drive until a graded stop; fails rewind and retry the same step.
     while (!alreadyHere) {
       this.events.post({ type: 'goal', stationId: station.id });
@@ -1781,6 +1895,7 @@ export class MissionRunner {
       await this.fail(outcome, station);
     }
     this.endCountdown();
+    this.endChase();
     this.lastStop = { railId: station.railId, at: station.at };
     this.lastStationId = station.id;
     if ((step.board ?? 0) > 0 || (step.alight ?? 0) > 0 || step.parcel) await this.doors(step, station);
@@ -1796,6 +1911,17 @@ export class MissionRunner {
     this.safeLeft = 0;
     this.events.post({ type: 'countdown', state: 'run' });
     if (def.music) this.ports.music(def.music);
+  }
+
+  /** v1.10 (4-3): the step is done: the wave is put away (a beaten one keeps settling at the fence in the view). */
+  private endChase(): void {
+    const c = this.chase;
+    if (!c) return;
+    if (c.state !== 'safe') {
+      this.events.post({ type: 'chase', state: 'off' });
+      if (c.def.music && c.state !== 'armed') this.ports.music(null);
+      this.chase = null;
+    }
   }
 
   /** v1.7: the step is done: put the panel away (and the song back if it never got beaten). */
@@ -1855,7 +1981,7 @@ export class MissionRunner {
       this.events.post({ type: 'timeUp', icon });
       if (icon === 'volcano') this.events.post({ type: 'sneeze' });
     }
-    const scary = reason === 'cat' || reason === 'dino';
+    const scary = (reason === 'cat' && !outcome.soft) || reason === 'dino';
     // v1.8: back from a record's side track is no failure: no dip, no shake.
     const calm = reason === 'spur';
     // The silk, a rock, a slip, the sneeze, "ぽよん" off the water and a dead end are soft: a small dip, no shake.
@@ -1871,6 +1997,8 @@ export class MissionRunner {
       reason === 'deadEnd' ||
       reason === 'crack' ||
       reason === 'plow' ||
+      reason === 'snow' ||
+      outcome.soft === true ||
       iceStation;
     if (!calm) this.ports.cameraFx(scary ? 1 : soft ? 0.3 : 0.5, soft ? 0 : 1);
     const key: DefaultLine = outcome.line ?? (iceStation ? 'iceOvershoot' : undefined) ?? FAIL_LINES[reason] ?? (reason as DefaultLine);
@@ -1882,6 +2010,12 @@ export class MissionRunner {
     if (reason === 'dive') await this.ports.say(this.lines.diveBoingAfter ?? DEFAULT_LINES.diveBoingAfter, 'partner');
     if (reason === 'floater') await this.ports.say(this.lines.floatHitAfter ?? DEFAULT_LINES.floatHitAfter, 'partner');
     if (reason === 'plow') await this.ports.say(this.lines.plowBumpAfter ?? DEFAULT_LINES.plowBumpAfter, 'partner');
+    if (reason === 'snow') {
+      // v1.10 (4-3): the catch that tires the wave out says so ("もこもこ、つかれてきた みたい").
+      const tired = (this.chase?.catches ?? 0) + 1 >= SNOW_WAVE.giveUpAfter;
+      const after: DefaultLine = tired ? 'chaseTired' : 'chaseCaughtAfter';
+      await this.ports.say(this.lines[after] ?? DEFAULT_LINES[after], 'partner');
+    }
     if (iceStation) await this.ports.say(this.lines.iceOvershootAfter ?? DEFAULT_LINES.iceOvershootAfter, 'partner');
     if (reason === 'crack') {
       const after: DefaultLine = outcome.line === 'crackEmpty' ? 'crackEmptyAfter' : 'crackAfter';
@@ -1914,6 +2048,13 @@ export class MissionRunner {
       else c.restoreAt(target);
       this.events.post({ type: 'countdown', state: 'run' });
     }
+    // v1.10 (4-3): the snow wave waits behind the train put back (slower after a catch).
+    if (this.chase?.active) {
+      this.chase.afterRewind(reason === 'snow');
+      this.chaseRocketSaid = false;
+      this.events.post({ type: 'chase', state: 'run' });
+    }
+    this.tunnel?.reset();
     for (const cat of this.cats) cat.reset();
     for (const cat of this.cats) this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'sleep', position: cat.actor.position });
     this.resetActors(target);
@@ -2070,6 +2211,7 @@ const FAIL_LINES: Partial<Record<FailReason, DefaultLine>> = {
   floater: 'floatHit',
   crack: 'crackFall',
   plow: 'plowBump',
+  snow: 'chaseCaught',
 };
 const BRIDGE_LINES: Record<NonNullable<BridgeOutcome>['kind'], DefaultLine> = {
   near: 'butterflyNear',
@@ -2090,5 +2232,7 @@ interface FailOutcome {
   text?: string;
   /** Where to put the train front back; default: REWIND_DISTANCE before the station. */
   rewind?: { railId: string; at: number };
+  /** v1.10 (4-3): a soft fail whatever its reason (a snowman on the rail): a small dip, no shake. */
+  soft?: boolean;
 }
 type DriveOutcome = { kind: 'stopped'; grade: StopGrade } | FailOutcome;
