@@ -31,6 +31,7 @@ import { VolcanoGimmicks } from './volcano-gimmicks';
 import { IceGimmicks } from './ice';
 import { PlowGimmicks } from './plow';
 import { VillageGimmicks } from './village';
+import { frameWave, SnowGimmicks } from './snow';
 import { iceZones, thinIceZones } from '../../gimmick/ice';
 import { slopeZones } from '../../gimmick/slope';
 import type { RailBaseDef, ResolvedProp } from '../../stage/types';
@@ -117,6 +118,8 @@ export class ThreeSceneView implements SceneView {
   /** v1.10 (4-2): the snowplow, snow walls and buried stretches; the village's evening, lanterns and swirl marks. */
   private plow: PlowGimmicks | null = null;
   private village: VillageGimmicks | null = null;
+  /** v1.10 (4-3): tunnels, the snow wave and the false exit (null on a stage without them). */
+  private snow: SnowGimmicks | null = null;
   /** v1.7: slope beds and rock bases, kept for rebuilding the track after a cut. */
   private trackLooks: TrackLooks | undefined;
   /** v1.7: props with a tag, each in its own group (a cut can drop them). */
@@ -259,6 +262,10 @@ export class ThreeSceneView implements SceneView {
     if (stage.file.props.some((p) => p.model === 'lantern' || p.trace) || stage.file.cutscenes && Object.values(stage.file.cutscenes).some((c) => c.some((st) => 'sky' in st))) {
       this.village = new VillageGimmicks(this.scene, this.sky);
     }
+    if (SnowGimmicks.wanted(stage)) {
+      this.snow = new SnowGimmicks(stage, this.scene);
+      this.scene.add(this.snow.group);
+    }
     // Tagged props stay separate so a cutscene can drop them (the old bridge's girders).
     for (const prop of stage.props) {
       if (!prop.tag) continue;
@@ -296,6 +303,8 @@ export class ThreeSceneView implements SceneView {
       this.ice?.init(this.models),
       this.plow.init(this.models),
     ]);
+    // After the lights and the fog are all in (it dims them in a tunnel).
+    await this.snow?.init(this.models);
     // The train, cars and partner only ever move as a whole (door bands, the light beam and the jump unit are
     // objects of their own), so each draws baked, in one call.
     const trainInstance = (bakeModel(trainModel) ?? trainModel).clone(true);
@@ -381,6 +390,7 @@ export class ThreeSceneView implements SceneView {
     if (event.type === 'festival') this.flocks?.lift('lantern-jelly', 3, event.instant ? 0 : 2.5);
     this.plow?.onEvent(event);
     this.village?.onEvent(event);
+    this.snow?.onEvent(event);
     if (event.type === 'ability' && event.id === 'rocket') void this.volcano?.addRocketUnit(this.models);
     if (event.type === 'rocket') this.fovTarget = event.state === 'burn' && !this.calm ? ROCKET_FOV : 0;
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
@@ -589,6 +599,9 @@ export class ThreeSceneView implements SceneView {
       // water the view from above follows it from behind instead.
       const mode = this.cameraMode === 'top' && this.water?.isSubmerged ? 'chase' : this.cameraMode;
       cameraTarget(mode, pose, this.camTarget);
+      // v1.10 (4-3): the snow wave behind the train comes into the side and back cameras' picture.
+      const wave = this.snow?.waveFocus;
+      if (wave && (mode === 'side' || mode === 'chase')) frameWave(mode, pose, wave, this.camTarget);
     }
     // The cab view and the title's orbit are exact every frame (no easing toward them).
     const cab = this.cameraMode === 'cab' && !this.fixedCamera && !this.orbit;
@@ -636,6 +649,8 @@ export class ThreeSceneView implements SceneView {
       this.camera.updateProjectionMatrix();
     }
     this.sky3?.update(dt, pose.railId, pose.s + TRAIN.length / 2, this.scene.fog as Fog | null, this.fogReach());
+    // v1.10 (4-3): a tunnel's dark over the fog stretches' fog.
+    this.snow?.update(dt);
     this.easeFarBack();
     if (this.sky3 && this.sky) {
       const uniforms = (this.sky.material as ShaderMaterial).uniforms;
@@ -654,6 +669,10 @@ export class ThreeSceneView implements SceneView {
   /** v1.10 (4-1): the ice mirror reflecting now (its gimmicks[] index), or −1 (test hook). */
   get mirrorIndex(): number {
     return this.ice?.activeIndex ?? -1;
+  }
+
+  setSnowWave(wave: { railId: string; s: number; speed: number; state: string } | null): void {
+    this.snow?.setWave(wave);
   }
 
   setSubmerged(on: boolean): void {

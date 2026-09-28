@@ -1292,7 +1292,118 @@
       "id": "4-3",
       "chapter": 4,
       "x": 74,
-      "y": 72
+      "y": 72,
+      "diorama": {
+        "base": "island-b",
+        "rail": {
+          "radius": 11
+        },
+        "camera": {
+          "yaw": 25,
+          "pitch": 28
+        },
+        "items": [
+          {
+            "model": "snow-island",
+            "at": [
+              0,
+              0
+            ],
+            "rotY": 0,
+            "scale": 0.33,
+            "lift": 0.06
+          },
+          {
+            "model": "snow-mountain",
+            "at": [
+              -5,
+              -9
+            ],
+            "rotY": 0,
+            "scale": 0.045
+          },
+          {
+            "model": "tunnel-portal",
+            "at": [
+              -9,
+              -4
+            ],
+            "rotY": 60,
+            "scale": 0.5
+          },
+          {
+            "model": "lodge",
+            "at": [
+              -13,
+              7
+            ],
+            "rotY": 40,
+            "scale": 0.42
+          },
+          {
+            "model": "snowman",
+            "at": [
+              -4,
+              5
+            ],
+            "rotY": 20,
+            "scale": 1.6
+          },
+          {
+            "model": "snowman-upside",
+            "at": [
+              3,
+              -3
+            ],
+            "rotY": -30,
+            "scale": 1.4
+          },
+          {
+            "model": "snow-wave-small",
+            "at": [
+              4,
+              10
+            ],
+            "rotY": -60,
+            "scale": 0.35
+          },
+          {
+            "model": "snow-pine",
+            "at": [
+              15,
+              -8
+            ],
+            "rotY": 0,
+            "scale": 0.9
+          },
+          {
+            "model": "snow-pine",
+            "at": [
+              16,
+              7
+            ],
+            "rotY": 40,
+            "scale": 0.7
+          },
+          {
+            "model": "snow-pine",
+            "at": [
+              -16,
+              -4
+            ],
+            "rotY": 0,
+            "scale": 0.8
+          },
+          {
+            "model": "train-proto",
+            "at": [
+              11,
+              2
+            ],
+            "rotY": 0
+          }
+        ]
+      }
     }
   ],
   "links": [

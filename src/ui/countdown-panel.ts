@@ -1,9 +1,27 @@
 import type { CountdownView } from '../mission/countdown';
+import type { SnowWaveView } from '../mission/chase';
 
 export interface CountdownPanel {
-  /** Shows the countdown, or hides the panel (null). */
-  set(view: CountdownView | null): void;
+  /**
+   * Shows the countdown, or v1.10 (4-3) the snow wave's meter (`chase`, when there is no countdown), or hides the
+   * panel (both null).
+   */
+  set(view: CountdownView | null, chase?: SnowWaveView | null): void;
 }
+
+/** v1.10 (4-3): the snow wave (round white balls rolling, no face) on the meter's left. */
+const WAVE = `<svg class="timer-art" viewBox="0 0 40 32" aria-hidden="true">
+  <circle cx="11" cy="22" r="9" fill="#ffffff" stroke="#c9dbea" stroke-width="1.5"/>
+  <circle cx="24" cy="21" r="10" fill="#f6f9fc" stroke="#c9dbea" stroke-width="1.5"/>
+  <circle cx="17" cy="12" r="7" fill="#ffffff" stroke="#c9dbea" stroke-width="1.5"/>
+  <circle cx="33" cy="25" r="6" fill="#ffffff" stroke="#c9dbea" stroke-width="1.5"/>
+</svg>`;
+
+/** v1.10 (4-3): the little train at the right end of the snow wave's meter (no face). */
+const TRAIN = `<svg class="chase-train" viewBox="0 0 30 18" aria-hidden="true">
+  <rect x="2" y="3" width="24" height="11" rx="3" fill="#e94f37"/><rect x="18" y="5" width="6" height="5" rx="1" fill="#cfefff"/>
+  <circle cx="8" cy="15" r="2.5" fill="#2b3a4a"/><circle cx="20" cy="15" r="2.5" fill="#2b3a4a"/>
+</svg>`;
 
 /** A round, friendly volcano (it fidgets when time is short). */
 const VOLCANO = `<svg class="timer-art" viewBox="0 0 40 32" aria-hidden="true">
@@ -46,8 +64,39 @@ export function createCountdownPanel(root: HTMLElement): CountdownPanel {
   const num = el.querySelector('.timer-num') as HTMLElement;
   let last = '';
   let lastIcon = '';
+  const bar = el.querySelector('.timer-bar') as HTMLElement;
+  const train = document.createElement('span');
+  train.className = 'chase-train-at';
+  train.innerHTML = TRAIN;
+  bar.appendChild(train);
+  /**
+   * The snow wave's meter: its picture, then the band to the little train at the right; the snow fills the band from
+   * the left as the wave closes in (SNOW_WAVE.meter m away or more: empty; caught: full). It wobbles when close. Never red,
+   * never blinking; "セーフ！" in green once the train is past the fence.
+   */
+  const setChase = (chase: SnowWaveView): void => {
+    const safe = chase.state === 'safe';
+    const key = `chase|${chase.state}|${chase.fraction.toFixed(2)}`;
+    if (key === last) return;
+    last = key;
+    el.hidden = false;
+    el.dataset.mode = 'chase';
+    el.dataset.state = safe ? 'safe' : chase.gap < 20 ? 'near' : 'run';
+    if (lastIcon !== 'wave') {
+      lastIcon = 'wave';
+      icon.innerHTML = WAVE;
+      el.dataset.icon = 'wave';
+    }
+    fill.style.transform = `scaleX(${safe ? 1 : 1 - chase.fraction})`;
+    num.textContent = safe ? 'セーフ！' : '';
+  };
   return {
-    set(view): void {
+    set(view, chase): void {
+      if (!view && chase) {
+        setChase(chase);
+        return;
+      }
+      if (view) el.dataset.mode = 'countdown';
       const key = view ? `${view.state}|${view.seconds}|${view.fraction.toFixed(3)}|${view.icon}` : '';
       if (key === last) return;
       last = key;

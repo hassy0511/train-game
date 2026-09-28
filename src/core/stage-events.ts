@@ -45,7 +45,9 @@ export type StageEvent =
         // v1.10 (4-1): through thin ice, "ぽちゃん" (soft: the train bobs back up)
         | 'crack'
         // v1.10 (4-2): "ぽすっ" into a snow wall without the snowplow (soft: a snowy window, the wiper)
-        | 'plow';
+        | 'plow'
+        // v1.10 (4-3): caught by the snow wave, "もふっ" (soft: wrapped in soft snow)
+        | 'snow';
     }
   /**
    * Back to a station after a failure (or a resume). `boarded`: passengers who already got on this run, per station
@@ -163,6 +165,13 @@ export type StageEvent =
   | { type: 'sky'; sky: 'evening'; seconds: number }
   /** v1.10 (4-2): the light shows (or no longer shows) the swirl marks on the props with `trace`. */
   | { type: 'trace'; on: boolean }
+  /**
+   * v1.10 (4-3): the snow wave: out behind the train ("run"), caught it ("caught"), ran into the fence ("safe"), or
+   * put away ("off"). Where it is each frame comes to the view on its own (SceneView.setSnowWave).
+   */
+  | { type: 'chase'; state: 'run' | 'caught' | 'safe' | 'off' }
+  /** v1.10 (4-3): the train front went into a tunnel (`index` in gimmicks[]) or came out (null). */
+  | { type: 'tunnel'; index: number | null }
   /** v1.7: a countdown started ("run"), got low, was beaten ("safe"), ran out ("up") or was put away ("off"). */
   | { type: 'countdown'; state: 'run' | 'low' | 'safe' | 'up' | 'off' };
 

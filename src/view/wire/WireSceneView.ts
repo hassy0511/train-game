@@ -291,6 +291,8 @@ export class WireSceneView implements SceneView {
 
   setSubmerged(): void {}
 
+  setSnowWave(): void {}
+
   isCameraUnderwater(): boolean {
     return false;
   }
