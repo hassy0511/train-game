@@ -361,6 +361,11 @@ const face = (at, lateral, toAt, toLateral) => {
   return round((Math.atan2(b.x - a.x, b.z - a.z) - main.at(at).h) / RAD, 0);
 };
 /** §5.4 the great tree 50 m past the buffer (straight on), and §12's ending camera: the design's, moved with the end. */
+/** A world point `lateral` m right of main at `at`, `up` m over the rail. */
+const pt = (at, lateral, up) => {
+  const p = main.point(at, lateral, up);
+  return [round(p.x, 1), round(p.y, 1), round(p.z, 1)];
+};
 const GREAT_TREE = (() => {
   const e = main.at(main.length);
   return { x: round(e.x + Math.sin(e.h) * 50, 1), z: round(e.z + Math.cos(e.h) * 50, 1) };
@@ -381,11 +386,12 @@ const CUTSCENES = {
     { say: 'ほたるの ひろばまで いこう！', emote: 'cheer' },
   ],
   lantern: [
-    // From behind the train at the stump station: a lantern walking alone between the trees ahead on the left.
-    { camera: 'chase' },
-    { spawn: 'sakasa', model: 'amanojaku-lantern', onRail: on(2040, -16, GROUND_Y), rotationY: face(2040, -16, 2090, -30) },
+    // From just over the front of the train at the stump station (behind the scene): a lantern walking alone between
+    // the trees ahead on the left. Nearer than §12's 2040/16 m → 2090/30 m, so the little figure reads from the cab.
+    { camera: 'fixed', at: pt(2002, -2, 4.5), lookAt: pt(2042, -20, 1), reach: 1.5 },
+    { spawn: 'sakasa', model: 'amanojaku-lantern', onRail: on(2025, -11, GROUND_Y), rotationY: face(2025, -11, 2060, -27) },
     { say: 'あれ？ あかりが あるいてる…', emote: 'tilt' },
-    { move: 'sakasa', onRail: on(2090, -30, GROUND_Y), seconds: 4, nowait: true },
+    { move: 'sakasa', onRail: on(2060, -27, GROUND_Y), seconds: 4, nowait: true },
     { say: 'サカサだ！ ひとりで どこへ？' },
     { say: 'あの ちょうちん、まだ もってる！' },
     { remove: 'sakasa' },

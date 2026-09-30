@@ -3461,6 +3461,16 @@ main 2600・右 10・上 9 → はなれ 13.45 m → 光る 所 2520–2586.6、
 - モデル確認: `https://hassy0511.github.io/train-game/models.html?model=fawn` ／ 並べて くらべる `https://hassy0511.github.io/train-game/models.html?compare=hedgehog-walk,hedgehog-ball`
 - 音の 確認: `https://hassy0511.github.io/train-game/sounds.html`
 
+## 22. 実装メモ（PR3、2026-09-30。表と ちがう ところ）
+- 地面の 高さは −0.6（ほかの 平らな 森と 同じ。線路の 道床が 見え、まるきばしの 小川と いけが 線路より 少し 低く なる）。表の 0 から かえた。
+- 月は 方位 350°・高さ 18°（表の 20°・32° だと 北へ 向かう 所と 入りの カメラで 画面の 外）。
+- こじかは 線路を よこぎる 向き（`rotationY` −90、0-1 と 同じ）。
+- 寸劇 `lantern` は 運転席の 上の 動かない カメラから（chase では 小さくて 見えなかった）。サカサは main 2025・左 11 m → 2060・左 27 m（表の 2040・16 → 2090・30 より 近く）。
+- 寸劇 `ending` の ほたるの むれは main 3210・左 6 m・高さ +22 から サカサ（3190・左 14）へ。サカサは ちょうちんの きえた `amanojaku-lantern-off`。カメラは 表の 点を 本線の おわりの ずれ（坂で 約 3.8 m）だけ うごかした。おおきな きも 車止めの 50 m 先に 置いた。
+- `great-tree` は てっぺんの ほたるの 光の 板を もつ（`fog: false`、加算）。`amanojaku-lantern(-off)` は 作った `amanojaku` に 棒と ちょうちんを つけて コードで 組む（`models.ts`）。
+- 地図の 島の 絵は `diorama.lighting: "night"`（青い 月あかり 70%）。
+- 夜の ライトの すじは、カメラの 目より 高い ところを 描かない（運転席から ランプの 近くが 空に 三角に 見えた ため。§4.1）。
+
 ---
 
 # 第 5 部 5-2 おもちゃのまち

@@ -1020,15 +1020,15 @@
       { "say": "ほたるの ひろばまで いこう！", "emote": "cheer" }
     ],
     "lantern": [
-      { "camera": "chase" },
+      { "camera": "fixed", "at": [-672.2, 4.5, 1753.2], "lookAt": [-654.2, 1, 1793.2], "reach": 1.5 },
       {
         "spawn": "sakasa",
         "model": "amanojaku-lantern",
-        "onRail": { "railId": "main", "at": 2040, "lateral": -16, "heightFromRail": -0.6 },
-        "rotationY": 16
+        "onRail": { "railId": "main", "at": 2025, "lateral": -11, "heightFromRail": -0.6 },
+        "rotationY": 25
       },
       { "say": "あれ？ あかりが あるいてる…", "emote": "tilt" },
-      { "move": "sakasa", "onRail": { "railId": "main", "at": 2090, "lateral": -30, "heightFromRail": -0.6 }, "seconds": 4, "nowait": true },
+      { "move": "sakasa", "onRail": { "railId": "main", "at": 2060, "lateral": -27, "heightFromRail": -0.6 }, "seconds": 4, "nowait": true },
       { "say": "サカサだ！ ひとりで どこへ？" },
       { "say": "あの ちょうちん、まだ もってる！" },
       { "remove": "sakasa" },
