@@ -240,22 +240,15 @@ export class LeadRunner {
       }
       case 'learn': {
         // She stops where she is and hops, looking back; the train is braked to a stop (the caller's speed cap).
-        aim = Math.max(0, Math.min(trainV, p.follow * (p.dash - gap) + trainV));
-        if (standing && this.t > 0.2) {
+        aim = this.waitingForCutscene ? 0 : Math.max(0, Math.min(trainV, p.follow * (p.dash - gap) + trainV));
+        if (standing && this.t > 0.2 && !this.waitingForCutscene) {
+          // The caller plays the cutscene and calls learned(); it stays "learn" until then.
           out.push({ kind: 'learn' });
-          // The caller plays the cutscene and calls learned(); until then nothing moves.
-          this.setPhase('backup');
-          this.standT = 0;
-          this.remindT = 0;
           this.waitingForCutscene = true;
         }
         break;
       }
       case 'backup': {
-        if (this.waitingForCutscene) {
-          aim = 0;
-          break;
-        }
         this.remindT += dt;
         if (this.remindT >= p.remindEvery) {
           this.remindT = 0;
@@ -377,9 +370,10 @@ export class LeadRunner {
   /** The learn cutscene is over: she waits for the train to back up (the helpers' clocks start now). */
   learned(): void {
     this.waitingForCutscene = false;
-    if (this.phase !== 'backup') return;
-    this.t = 0;
+    if (this.phase !== 'learn') return;
+    this.setPhase('backup');
     this.remindT = 0;
+    this.standT = 0;
   }
 
   /** The step's station opened (the caller tells it). */

@@ -90,6 +90,7 @@ test('0-6 おいかけっこ backing up (dev fake): she turns round and follows,
   await tapUntil(page, '#card', 60_000);
   await expect(page.locator('#card')).toContainText('うしろむき うんてんを');
   await page.locator('#card-button').click();
+  await tapUntil(page, '#app[data-inline-cutscene=""]', 30_000);
   await waitLead(page, 'backup', 30_000);
   // "うしろ" and the lever up: she turns round ("くるっ") and follows ("ついて きた！"), then stops before the train.
   await fake(page, true);

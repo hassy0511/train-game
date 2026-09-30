@@ -580,7 +580,7 @@ export class AudioEngine {
   /** She flinches, shy ("ぴゃっ"): a quick soft rise. */
   playFlinch(): void {
     const o = this.out(0.1, 1.3);
-    this.ping(700, 0, 0.08, 'sine', 0.05, 1400, 0.004, o);
+    this.ping(700, 0, 0.1, 'sine', 0.1, 1400, 0.004, o);
   }
 
   /** She is aboard, "ぽろろん": five bells up the pentatonic scale (never a two-note door chime). */
