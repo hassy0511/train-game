@@ -457,7 +457,7 @@ function haloMaterial(): MeshBasicMaterial {
       );
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vHaloN;\nvarying vec3 vHaloV;')
-      .replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.rgb *= 0.28 * pow(max(0.0, dot(normalize(vHaloN), normalize(vHaloV))), 2.5);');
+      .replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.rgb *= 0.18 * pow(max(0.0, dot(normalize(vHaloN), normalize(vHaloV))), 2.5);');
   };
   m.customProgramCacheKey = () => 'great-tree-halo';
   treeHalo = m;
