@@ -50,6 +50,24 @@ export const PLACEHOLDER_SIZES: Record<string, [number, number, number]> = {
   tanuki: [0.6, 0.8, 0.6],
   'fake-lantern': [0.5, 2.6, 0.5],
   'firefly-grass': [1.4, 0.7, 1.0],
+  // The rest of 5-1's set (PR3).
+  'night-tree-a': [6, 14, 6],
+  'night-tree-b': [8, 18, 8],
+  'night-bush': [3, 1.6, 3],
+  'glow-mushroom': [1.2, 0.9, 1.2],
+  'moon-meadow': [60, 0.1, 100],
+  'great-tree': [40, 70, 40],
+  'plaza-deck': [20, 1, 40],
+  'big-stump': [10, 3, 10],
+  'log-bridge-end': [6, 1.5, 4.4],
+  thicket: [8, 4, 2],
+  'birdhouse-upside': [0.6, 0.8, 0.6],
+  'bell-branch': [6, 1, 1],
+  moonstone: [0.5, 0.3, 0.4],
+  'lantern-bell': [0.4, 0.7, 0.4],
+  'firefly-wait': [2, 1.5, 0.6],
+  'firefly-swarm': [6, 6, 6],
+  'firefly-swarm-big': [12, 12, 12],
 };
 
 export function placeholderSize(model: string): [number, number, number] {

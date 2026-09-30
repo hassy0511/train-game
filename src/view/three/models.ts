@@ -6,7 +6,7 @@ import { buildHarbourPlaceholder } from './harbour-placeholders';
 import { buildIcePlaceholder } from './ice-placeholders';
 import { buildVillagePlaceholder } from './village-placeholders';
 import { buildMeadowPlaceholder } from './meadow-placeholders';
-import { buildNightPlaceholder } from './night-placeholders';
+import { addHandLantern, buildNightPlaceholder } from './night-placeholders';
 import { buildRecordPlaceholder } from './record-placeholders';
 import { buildRiverPlaceholder } from './river-placeholders';
 import { buildSeaPlaceholder } from './sea-placeholders';
@@ -51,6 +51,13 @@ export class ModelLibrary {
       const blush = this.load('amanojaku').then(addBlush);
       this.cache.set(name, blush);
       return blush;
+    }
+
+    // v1.11 (5-1): Sakasa with 4-2's paper lantern (lit, or out), made from the built amanojaku (ticket 0018).
+    if ((name === 'amanojaku-lantern' || name === 'amanojaku-lantern-off') && !this.available.has(name)) {
+      const held = this.load('amanojaku').then((m) => addHandLantern(m, name === 'amanojaku-lantern'));
+      this.cache.set(name, held);
+      return held;
     }
 
     // Models that are not built yet (pending Blender tickets) get a flat box of the right size,

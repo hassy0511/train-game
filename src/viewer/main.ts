@@ -37,10 +37,10 @@ import { buildVolcanoPlaceholder } from '../view/three/volcano-placeholders';
 const GROUPS: [string, RegExp][] = [
   ['のりもの', /^(train-|car-|rocket-unit)/],
   ['しらべもの', /^(dino-egg|footprint)/],
-  ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird|squirrel|grasshopper|butterfly|spider|seabird|seal|snowbird|frog|duck|sea-turtle|lantern-jelly|snowman|snow-hare|bunny|fawn|hedgehog|tanuki)/],
+  ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird|squirrel|grasshopper|butterfly|spider|seabird|seal|snowbird|frog|duck|sea-turtle|lantern-jelly|snowman|snow-hare|bunny|fawn|hedgehog|tanuki|firefly-swarm|firefly-wait)/],
   ['えき・せんろ', /^(platform|station|stop|buffer|crossing|direction|jump|updraft|sky-buoy|sign-|old-bridge)/],
   ['たてもの', /^(house|shop|tower|hq|observatory|lighthouse|harbour-house|lodge)/],
-  ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud|canopy|branch|bough|leaf|grass|clover|meadow|water|dandelion|volcano|mesa|pumice|sandbar|reef|sand-island|palm|kelp|coral|spring-vent|snow|ice-|tunnel|reed|lily|water-weed|islet|rapids|river-|sea-arch|falls|stepping|kawa-rock|cape-rock|trench|glow-coral|firefly-grass)/],
+  ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud|canopy|branch|bough|leaf|grass|clover|meadow|water|dandelion|volcano|mesa|pumice|sandbar|reef|sand-island|palm|kelp|coral|spring-vent|snow|ice-|tunnel|reed|lily|water-weed|islet|rapids|river-|sea-arch|falls|stepping|kawa-rock|cape-rock|trench|glow-coral|firefly-grass|night-|glow-mushroom|moon-meadow|great-tree|big-stump|log-bridge|thicket|bell-branch)/],
   ['うみ', /^(whale|fish|current-ring|awa-)/],
   ['こもの', /.*/],
 ];
@@ -96,7 +96,7 @@ const drawn = (name: string): Group | null =>
   buildNightPlaceholder(name) ??
   buildRecordPlaceholder(name);
 /** Stand-ins made from a built model (4-3's blushing Sakasa: the built one with pink cheeks), as the game makes them. */
-const COMPOSED = new Set(['amanojaku-blush']);
+const COMPOSED = new Set(['amanojaku-blush', 'amanojaku-lantern', 'amanojaku-lantern-off']);
 const library = new ModelLibrary();
 const pending = manifest._pending.models.filter((n) => !built.has(n) && (COMPOSED.has(n) || drawn(n) !== null));
 const load = async (name: string): Promise<Group> =>

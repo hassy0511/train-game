@@ -1,19 +1,30 @@
 import {
+  AdditiveBlending,
   BoxGeometry,
   BufferGeometry,
+  CanvasTexture,
+  CircleGeometry,
   Color,
   ConeGeometry,
   CylinderGeometry,
   Float32BufferAttribute,
+  DoubleSide,
   Group,
+  IcosahedronGeometry,
   Mesh,
+  MeshBasicMaterial,
   MeshLambertMaterial,
+  PlaneGeometry,
+  Points,
+  PointsMaterial,
   Quaternion,
+  RingGeometry,
   SphereGeometry,
   TorusGeometry,
   Vector3,
 } from 'three';
-import { clamp01, eyes, hash, kitMaterial, merge, mix, part, solid } from './placeholder-kit';
+import { clamp01, eyes, glowMaterial, hash, kitMaterial, merge, mix, part, solid } from './placeholder-kit';
+import { traceGlowMaterial } from './village-placeholders';
 
 /**
  * Stand-ins drawn in code for the night forest pieces the PR2c mechanisms use (ticket 0018 「よるの もり」,
@@ -349,6 +360,276 @@ function fireflyGrass(): Group {
   return solid('firefly-grass', parts);
 }
 
+// ---- the rest of the night forest (5-1, PR3) ----
+
+const LEAF_DARK = '#2c5a55';
+const LEAF_LIGHT = '#3f7a6a';
+const TRUNK = '#5a4636';
+const TRUNK_DARK = '#46362a';
+const MUSHROOM = '#7fd6ff';
+const STEM = '#eef2f4';
+const MEADOW = '#5f8f86';
+const FLOWER = '#f4f6ff';
+const DECK = '#9a6b45';
+const DECK_DARK = '#7a5234';
+const RING = '#c29a6b';
+const WARM = '#ffd27a';
+const IRON = '#6e7784';
+const GOLD = '#e8b93a';
+const MOONSTONE = '#fff1a8';
+const FIREFLY = '#d8ff7a';
+
+/** Leaves lighter on the moon's side (+X, up) and darker below. */
+const leafy = (top: number) => (p: Vector3): Color => mix(LEAF_DARK, LEAF_LIGHT, clamp01(0.35 + (p.y / top) * 0.5 + p.x * 0.03));
+
+/** A night tree `h` m tall: a trunk and `n` round clumps of leaves (low: every clump 20 triangles). */
+function nightTree(name: string, h: number, w: number, n: number): () => Group {
+  return () => {
+    const parts: BufferGeometry[] = [];
+    parts.push(part(new CylinderGeometry(w * 0.05, w * 0.08, h * 0.45, 5, 1, true), TRUNK, { at: [0, h * 0.225, 0] }));
+    const paint = leafy(h);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + 0.4;
+      const r = i === 0 ? 0 : w * 0.22;
+      const y = h * (i === 0 ? 0.72 : 0.5 + 0.12 * (i % 2));
+      const size = w * (i === 0 ? 0.42 : 0.34);
+      parts.push(part(new IcosahedronGeometry(1, 0), paint, { at: [Math.cos(a) * r, y, Math.sin(a) * r], scale: [size, size * 1.1, size], rot: [0, i, 0] }));
+    }
+    return solid(name, parts);
+  };
+}
+
+/** "night-bush", 3 × 1.6 × 3 m: a round bush (the little tanukis live in them). */
+function nightBush(): Group {
+  const parts: BufferGeometry[] = [];
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    parts.push(part(new IcosahedronGeometry(1, 0), leafy(1.6), { at: [Math.cos(a) * 0.5, 0.7, Math.sin(a) * 0.5], scale: [0.95, 0.8, 0.95] }));
+  }
+  return solid('night-bush', parts);
+}
+
+/** "glow-mushroom", 1.2 × 0.9 × 1.2 m: two mushrooms with glowing blue caps (their light is their own colour). */
+function glowMushroom(): Group {
+  const parts: BufferGeometry[] = [];
+  for (const [x, z, s] of [
+    [0, 0, 1],
+    [0.35, 0.25, 0.6],
+  ] as const) {
+    parts.push(part(new CylinderGeometry(0.06 * s, 0.08 * s, 0.5 * s, 5), STEM, { at: [x, 0.25 * s, z] }));
+    parts.push(part(new SphereGeometry(0.32 * s, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), MUSHROOM, { at: [x, 0.48 * s, z] }));
+  }
+  return solid('glow-mushroom', parts, glowMaterial());
+}
+
+/** "moon-meadow", 60 × 0.1 × 100 m: the moonlit meadow's pale blue-green grass, with little white flowers. */
+function moonMeadow(): Group {
+  const parts: BufferGeometry[] = [];
+  const grass = new PlaneGeometry(60, 100, 1, 1);
+  grass.rotateX(-Math.PI / 2);
+  parts.push(part(grass, MEADOW, { at: [0, 0.06, 0] }));
+  for (let i = 0; i < 40; i++) {
+    const f = new PlaneGeometry(0.5, 0.5);
+    f.rotateX(-Math.PI / 2);
+    parts.push(part(f, FLOWER, { at: [(hash(i, 1, 3) - 0.5) * 56, 0.08, (hash(i, 2, 3) - 0.5) * 96], rot: [0, hash(i, 3, 3) * 3, 0] }));
+  }
+  return solid('moon-meadow', parts, kitMaterial(), false);
+}
+
+let treeHalo: MeshBasicMaterial | null = null;
+/** The soft firefly light round the great tree's crown: seen from far off, through the fog. */
+function haloMaterial(): MeshBasicMaterial {
+  if (treeHalo) return treeHalo;
+  let map: CanvasTexture | null = null;
+  if (typeof document !== 'undefined') {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    if (g) {
+      const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(216,255,122,0.9)');
+      grad.addColorStop(0.5, 'rgba(216,255,122,0.25)');
+      grad.addColorStop(1, 'rgba(216,255,122,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 64, 64);
+      map = new CanvasTexture(c);
+    }
+  }
+  treeHalo = new MeshBasicMaterial({ color: '#ffffff', map, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false, side: DoubleSide, opacity: 0.55 });
+  return treeHalo;
+}
+
+/**
+ * "great-tree", 40 × 70 × 40 m: the great tree at the fireflies' square: a thick trunk (Ø14) on six roots, five big
+ * clumps of leaves, six warm lanterns hanging from it; one hollow only (never two eyes and a mouth); a soft firefly
+ * light round its crown that the fog does not hide (the landmark seen from far off).
+ */
+function greatTree(): Group {
+  const parts: BufferGeometry[] = [];
+  const bark = (p: Vector3): Color => mix(TRUNK_DARK, TRUNK, clamp01(0.4 + hash(Math.round(p.x), Math.round(p.y), 1) * 0.4));
+  parts.push(part(new CylinderGeometry(4.5, 7, 40, 10, 3), bark, { at: [0, 20, 0] }));
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    parts.push(part(new ConeGeometry(2.2, 12, 5), bark, { at: [Math.cos(a) * 7, 2, Math.sin(a) * 7], rot: [Math.sin(a) * 1.2, 0, -Math.cos(a) * 1.2] }));
+  }
+  const paint = leafy(70);
+  const clumps: [number, number, number, number][] = [
+    [0, 55, 0, 16],
+    [-12, 43, 4, 13],
+    [12, 44, -3, 13],
+    [2, 42, 13, 12],
+    [-2, 45, -13, 12],
+  ];
+  for (const [x, y, z, r] of clumps) parts.push(part(new IcosahedronGeometry(1, 1), paint, { at: [x, y, z], scale: [r, r * 0.85, r] }));
+  // The one hollow, low on the trunk, facing the square (+Z).
+  parts.push(part(new CircleGeometry(1.4, 10), '#2a1f18', { at: [1.5, 9, 6.05], scale: [1, 1.3, 1] }));
+  const g = solid('great-tree', parts, kitMaterial(), false);
+  const lamps: BufferGeometry[] = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.3;
+    const x = Math.cos(a) * 15;
+    const z = Math.sin(a) * 15;
+    lamps.push(part(new CylinderGeometry(0.03, 0.03, 2, 3), TRUNK_DARK, { at: [x, 33, z] }));
+    lamps.push(part(new SphereGeometry(0.7, 8, 6), WARM, { at: [x, 31.5, z], scale: [1, 1.25, 1] }));
+  }
+  const lampMesh = new Mesh(merge(lamps), glowMaterial());
+  lampMesh.name = 'great-tree-lanterns';
+  g.add(lampMesh);
+  const halo = new Mesh(new PlaneGeometry(70, 50), haloMaterial());
+  halo.name = 'great-tree-halo';
+  halo.position.set(0, 50, 0);
+  const halo2 = halo.clone();
+  halo2.rotation.y = Math.PI / 2;
+  g.add(halo, halo2);
+  return g;
+}
+
+/** "plaza-deck", 20 × 1 × 40 m: the wooden deck of the fireflies' square. */
+function plazaDeck(): Group {
+  const parts: BufferGeometry[] = [];
+  for (let i = 0; i < 10; i++) parts.push(part(new BoxGeometry(1.9, 0.3, 40), i % 2 ? DECK : DECK_DARK, { at: [-9 + i * 2, 0.55, 0] }));
+  for (const x of [-9, 9]) for (const z of [-18, 0, 18]) parts.push(part(new BoxGeometry(0.5, 0.6, 0.5), DECK_DARK, { at: [x, 0.3, z] }));
+  return solid('plaza-deck', parts);
+}
+
+/** "big-stump", 10 × 3 × 10 m: the big tree stump by the stump station, rings on its top. */
+function bigStump(): Group {
+  const parts: BufferGeometry[] = [];
+  parts.push(part(new CylinderGeometry(4.6, 5, 3, 14, 1, true), TRUNK, { at: [0, 1.5, 0] }));
+  for (let i = 0; i < 4; i++) parts.push(part(new RingGeometry(i * 1.15, (i + 1) * 1.15, 14), i % 2 ? RING : '#a8835a', { at: [0, 3, 0], rot: [-Math.PI / 2, 0, 0] }));
+  return solid('big-stump', parts);
+}
+
+/** "log-bridge-end", 6 × 1.5 × 4.4 m: the broken end of the log bridge (+Z along the track), five logs, splintered. */
+function logBridgeEnd(): Group {
+  const parts: BufferGeometry[] = [];
+  for (let i = 0; i < 5; i++) {
+    const len = 3.6 + hash(i, 2, 5) * 0.8;
+    parts.push(part(new CylinderGeometry(0.28, 0.3, len, 6), TRUNK, { at: [-2.4 + i * 1.2, 1.1, -len / 2 + 2.2], rot: [Math.PI / 2, 0, 0] }));
+    parts.push(part(new ConeGeometry(0.28, 0.5, 5), '#8a6a4a', { at: [-2.4 + i * 1.2, 1.1, 2.4], rot: [Math.PI / 2, 0, 0] }));
+  }
+  for (const x of [-2.7, 2.7]) parts.push(part(new CylinderGeometry(0.2, 0.25, 1.3, 5), TRUNK_DARK, { at: [x, 0.65, -1.6] }));
+  return solid('log-bridge-end', parts);
+}
+
+/** "thicket", 8 × 4 × 2 m: the soft wall of leaves at a dark dead end (no thorns); the train comes from −Z. */
+function thicket(): Group {
+  const parts: BufferGeometry[] = [];
+  for (let i = 0; i < 5; i++) parts.push(part(new IcosahedronGeometry(1, 0), leafy(4), { at: [-3.2 + i * 1.6, 1.6 + (i % 2) * 0.6, 0], scale: [1.4, 1.8, 1] }));
+  return solid('thicket', parts);
+}
+
+/** "birdhouse-upside", 0.6 × 0.8 × 0.6 m: Sakasa's upside-down birdhouse (the roof below), a pink swirl the light finds. */
+function birdhouseUpside(): Group {
+  const parts: BufferGeometry[] = [];
+  parts.push(part(new BoxGeometry(0.44, 0.5, 0.44), '#b88a5a', { at: [0, 0.5, 0] }));
+  parts.push(part(new ConeGeometry(0.4, 0.28, 4), '#7a4e33', { at: [0, 0.14, 0], rot: [Math.PI, Math.PI / 4, 0] }));
+  parts.push(part(new CircleGeometry(0.07, 8), '#2a1f18', { at: [0, 0.6, 0.225] }));
+  const g = solid('birdhouse-upside', parts);
+  const swirl: BufferGeometry[] = [];
+  for (let i = 0; i < 10; i++) {
+    const t = i / 10;
+    const a = t * Math.PI * 4;
+    swirl.push(part(new BoxGeometry(0.035, 0.035, 0.012), '#ff7fbf', { at: [Math.cos(a) * 0.12 * t, 0.42 + Math.sin(a) * 0.12 * t, 0.226] }));
+  }
+  const mark = new Mesh(merge(swirl), traceGlowMaterial());
+  mark.name = 'birdhouse-swirl';
+  g.add(mark);
+  return g;
+}
+
+/** "bell-branch", 6 × 1 × 1 m: the thick branch record ③ hangs from, with its hook. */
+function bellBranch(): Group {
+  const parts: BufferGeometry[] = [];
+  parts.push(part(new CylinderGeometry(0.28, 0.4, 6, 6), TRUNK, { at: [0, 0.5, 0], rot: [0, 0, Math.PI / 2] }));
+  parts.push(part(new TorusGeometry(0.12, 0.03, 4, 8, Math.PI), IRON, { at: [-1, 0.15, 0] }));
+  return solid('bell-branch', parts, kitMaterial(), false);
+}
+
+/** "moonstone", 0.5 × 0.3 × 0.4 m: record ②, a round pale-yellow stone that keeps the moonlight (glowing softly). */
+function moonstone(): Group {
+  return solid('moonstone', [part(new IcosahedronGeometry(1, 1), MOONSTONE, { at: [0, 0.15, 0], scale: [0.25, 0.15, 0.2] })], glowMaterial());
+}
+
+/** "lantern-bell", 0.4 × 0.7 × 0.4 m: record ③, a little iron lantern with a gold bell under it (iron: the magnet's). */
+function lanternBell(): Group {
+  const parts: BufferGeometry[] = [];
+  parts.push(part(new TorusGeometry(0.06, 0.015, 4, 8), IRON, { at: [0, 0.66, 0] }));
+  parts.push(part(new ConeGeometry(0.18, 0.12, 6), IRON, { at: [0, 0.56, 0] }));
+  parts.push(part(new CylinderGeometry(0.13, 0.13, 0.24, 6, 1, true), '#ffe7a8', { at: [0, 0.38, 0] }));
+  parts.push(part(new CylinderGeometry(0.15, 0.15, 0.03, 6), IRON, { at: [0, 0.25, 0] }));
+  parts.push(part(new SphereGeometry(0.09, 8, 6), GOLD, { at: [0, 0.14, 0] }));
+  return solid('lantern-bell', parts);
+}
+
+/** "firefly-wait", 2 × 1.5 × 0.6 m: six fireflies waiting in front of a dead end's thicket, glowing warm. */
+function fireflyWait(): Group {
+  const parts: BufferGeometry[] = [];
+  for (let i = 0; i < 6; i++) parts.push(part(new SphereGeometry(0.09, 5, 4), FIREFLY, { at: [(hash(i, 1, 6) - 0.5) * 2, 0.4 + hash(i, 2, 6) * 1.1, (hash(i, 3, 6) - 0.5) * 0.6] }));
+  return solid('firefly-wait', parts, glowMaterial(), false);
+}
+
+/** "firefly-swarm" / "-big" (cutscenes): a cloud of firefly points, `r` m round (additive; no fog: a light in the dark). */
+function fireflySwarm(name: string, r: number, n: number): () => Group {
+  return () => {
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const u = hash(i, 1, n) * 2 - 1;
+      const a = hash(i, 2, n) * Math.PI * 2;
+      const d = Math.cbrt(hash(i, 3, n)) * r;
+      const q = Math.sqrt(1 - u * u);
+      pos.set([Math.cos(a) * q * d, r + u * d * 0.7, Math.sin(a) * q * d], i * 3);
+    }
+    const geo = new BufferGeometry();
+    geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+    const pts = new Points(geo, new PointsMaterial({ color: FIREFLY, size: 0.35, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false }));
+    pts.name = name;
+    const g = new Group();
+    g.add(pts);
+    return g;
+  };
+}
+
+/**
+ * Sakasa carrying 4-2's paper lantern (for 5-1's cutscenes): the built amanojaku with a short stick in its hand and a
+ * round warm lantern hanging from it (`lit` false: out, the ending under the great tree).
+ */
+export function addHandLantern(model: Group, lit: boolean): Group {
+  const out = model.clone(true);
+  out.name = lit ? 'amanojaku-lantern' : 'amanojaku-lantern-off';
+  const stick = new Mesh(new CylinderGeometry(0.012, 0.012, 0.45, 4), new MeshLambertMaterial({ color: TRUNK }));
+  stick.position.set(0.3, 0.82, 0.12);
+  stick.rotation.x = Math.PI / 3;
+  const paper = new Mesh(
+    new SphereGeometry(0.1, 10, 8),
+    new MeshLambertMaterial({ color: lit ? '#ffd07a' : '#c9a06a', emissive: new Color('#ffb04a'), emissiveIntensity: lit ? 1 : 0 }),
+  );
+  paper.scale.set(1, 1.25, 1);
+  paper.position.set(0.3, 0.8, 0.36);
+  out.add(stick, paper);
+  return out;
+}
+
 const BUILDERS: Record<string, () => Group> = {
   'sign-hush': signHush,
   'sign-whistle-reversed': signWhistleReversed,
@@ -364,6 +645,23 @@ const BUILDERS: Record<string, () => Group> = {
   'tanuki-4': tanukiGroup(4),
   'fake-lantern': fakeLantern,
   'firefly-grass': fireflyGrass,
+  'night-tree-a': nightTree('night-tree-a', 14, 6, 3),
+  'night-tree-b': nightTree('night-tree-b', 18, 8, 4),
+  'night-bush': nightBush,
+  'glow-mushroom': glowMushroom,
+  'moon-meadow': moonMeadow,
+  'great-tree': greatTree,
+  'plaza-deck': plazaDeck,
+  'big-stump': bigStump,
+  'log-bridge-end': logBridgeEnd,
+  thicket,
+  'birdhouse-upside': birdhouseUpside,
+  'bell-branch': bellBranch,
+  moonstone,
+  'lantern-bell': lanternBell,
+  'firefly-wait': fireflyWait,
+  'firefly-swarm': fireflySwarm('firefly-swarm', 3, 60),
+  'firefly-swarm-big': fireflySwarm('firefly-swarm-big', 6, 160),
 };
 
 /** The names drawn here (the model viewer lists the ones in assets/models.json's _pending). */
