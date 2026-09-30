@@ -3997,3 +3997,72 @@ body {
     animation-duration: 0.01s;
   }
 }
+
+/*
+ * v1.11 (PR8b): the stand-in "まえ／うしろ" switch beside the lever (PR8a replaces it with its own, PHASE9 第 3 部 A3):
+ * a dashed pink frame saying "じゅんび ちゅう". It glows as a hint (data-glow) like the round buttons.
+ */
+.reverse-switch.is-stub {
+  position: absolute;
+  left: calc(var(--safe-left) + 196px);
+  bottom: calc(var(--safe-bottom) + 18px);
+  width: 64px;
+  height: 112px;
+  border-radius: 20px;
+  border: 3px dashed #e75ba0;
+  background: rgba(255, 255, 255, 0.72);
+  color: #7a3a5e;
+  font: 700 13px/1.1 system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  touch-action: none;
+}
+
+.reverse-switch.is-stub[hidden] {
+  display: none;
+}
+
+.reverse-switch.is-stub .reverse-switch-knob {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #f2b632;
+  box-shadow: inset 0 0 0 3px #fff;
+}
+
+.reverse-switch.is-stub .reverse-switch-note {
+  position: absolute;
+  top: -34px;
+  font-size: 11px;
+  color: #e75ba0;
+  text-align: center;
+}
+
+.reverse-switch.is-stub[data-glow='1'] {
+  animation: reverse-stub-glow 1.2s ease-in-out infinite;
+}
+
+@keyframes reverse-stub-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(231, 91, 160, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 18px 6px rgba(231, 91, 160, 0.75);
+  }
+}
+
+#app.is-left-handed .reverse-switch.is-stub {
+  left: auto;
+  right: calc(var(--safe-right) + 196px);
+}
+
+@media (max-height: 500px) {
+  .reverse-switch.is-stub {
+    width: 56px;
+    height: 96px;
+  }
+}

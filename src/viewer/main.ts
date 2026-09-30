@@ -102,9 +102,9 @@ const drawn = (name: string): Group | null =>
   buildRecordPlaceholder(name);
 /**
  * Stand-ins made from a built model (4-3's blushing Sakasa: the built one with pink cheeks; 5-3's waving and shy mirror
- * Sakasa, posed), as the game makes them.
+ * Sakasa, posed; v1.11 (6-1) Sakasa sitting), as the game makes them.
  */
-const COMPOSED = new Set(['amanojaku-blush', 'amanojaku-lantern', 'amanojaku-lantern-off', 'amanojaku-wave', 'amanojaku-shy']);
+const COMPOSED = new Set(['amanojaku-blush', 'amanojaku-lantern', 'amanojaku-lantern-off', 'amanojaku-wave', 'amanojaku-shy', 'amanojaku-sit']);
 const library = new ModelLibrary();
 const pending = manifest._pending.models.filter((n) => !built.has(n) && (COMPOSED.has(n) || drawn(n) !== null));
 const load = async (name: string): Promise<Group> =>

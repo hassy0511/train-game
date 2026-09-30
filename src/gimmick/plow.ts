@@ -20,7 +20,8 @@ export function plowSpans(gimmicks: GimmickDef[]): PlowSpan[] {
       rw && typeof rw.railId === 'string' && typeof rw.at === 'number'
         ? { railId: rw.railId, at: rw.at }
         : { railId: g.railId, at: Math.max(0, g.from - PLOW.rewindBefore) };
-    const look = p.look === 'sand' || p.look === 'foam' ? p.look : 'snow';
+    // v1.11 (6-1) "hanging": snow hanging from an upside-down roof arch (drawn as snow until ticket 0021's arch).
+    const look = p.look === 'sand' || p.look === 'foam' || p.look === 'hanging' ? p.look : 'snow';
     out.push({
       index,
       railId: g.railId,

@@ -4,7 +4,9 @@ import { AudioEngine } from './audio/audio';
 import { GAME_TITLE, GAME_TITLE_LINES, PARTNER_NAME } from './config';
 import { StageEventBus } from './core/stage-events';
 import { addToProgress, loadProgress, setResume, type Resume } from './core/progress';
-import { ABILITY_NAMES, abilityInUse, MissionRunner, type MissionPorts } from './mission/runner';
+import { ABILITY_CARD_TITLES, ABILITY_NAMES, abilityInUse, MissionRunner, type MissionPorts } from './mission/runner';
+import type { ReverseReader } from './mission/lead';
+import { createReverseSwitchStub } from './ui/reverse-switch-stub';
 import { PhysicsWorld } from './physics/world';
 import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/loader';
 import type { AbilityId, EnvironmentDef, GimmickDef, Vec3 } from './stage/types';
@@ -18,6 +20,7 @@ import {
   MAGNET,
   MIRROR_WORLD,
   PLOW,
+  LEAD,
   RECORD,
   WINDUP,
   SNOW_WAVE,
@@ -362,12 +365,27 @@ async function boot(): Promise<void> {
     stage.file.gimmicks.some((g) => g.type === 'hush' || g.type === 'whistle-reversed') ||
     stage.file.junctions.some((j) => j.fireflies) ||
     stage.file.actors.some((a) => a.type === 'lure' || (a.params as { glare?: boolean } | undefined)?.glare === true);
+  // v1.11 (6-1): a stage with "おいかけっこ", "ドアを あけて まつ" or the friends riding along (their test hooks).
+  const hasLeadHooks =
+    stage.file.missions.some((m) => m.steps.some((st) => st.lead || st.welcome)) ||
+    Object.values(stage.file.cutscenes ?? {}).some((steps) => steps.some((st) => 'crew' in st || 'depart' in st));
   const whistle = new Whistle();
   const audio = new AudioEngine();
+  if (hasLeadHooks) {
+    app.dataset.crew = '';
+    app.dataset.depart = '';
+  }
   // The island's quiet sound around the train (from the first tap on; under the title too). v1.10 (3-3): the sea's
   // faraway volcano only where there is a volcano.
   audio.setAmbience(stage.file.environment.ambience ?? null, stage.file.props.some((p) => p.model === 'volcano'));
   const events = new StageEventBus();
+  /**
+   * v1.11 (PR8b): うしろむき is PR8a's. Until it is in, the train never reverses; a dev build can fake it for the lead
+   * (6-1 M2: backing up makes Sakasa follow) with `window.__debugReverse(true | false)` (never in production). PR8a
+   * replaces this with `{ isReversing: () => train.reversing }`.
+   */
+  let fakeReversing = false;
+  const reverseReader: ReverseReader = { isReversing: () => fakeReversing };
 
   const view = createSceneView(params);
   await view.init(viewEl, stage, stage.network);
@@ -483,6 +501,11 @@ async function boot(): Promise<void> {
   let lightOn = false;
   // v1.11 (PR5): the light button's step (off → light → magnet → off; off ⇄ light before the magnet light).
   const lightSwitch = new LightSwitch(() => abilities.has('magnetLight'), () => simTime);
+  // v1.11 (PR8b): PR8a replaces this stand-in with its "まえ／うしろ" switch (src/ui/reverse-switch.ts).
+  const reverseSwitch = createReverseSwitchStub(uiEl, () => {
+    audio.unlock();
+    void bubbles.say('うしろむきは もうすぐ できるよ');
+  });
   const lightButton = createLightButton(actionButtons, () => {
     audio.unlock();
     // v1.10 (3-3): a cutscene asking for another button: the light waits. Asked for, it comes on (never off).
@@ -543,6 +566,8 @@ async function boot(): Promise<void> {
       rocketButton.show();
       app.dataset.hasRocket = '1';
     }
+    // v1.11 (PR8b): the "まえ／うしろ" switch beside the lever (a stand-in until PR8a's own switch is in).
+    if (ability === 'reverse') reverseSwitch.show();
     events.post({ type: 'ability', id: ability });
   };
   for (const ability of abilities) showAbility(ability);
@@ -1101,6 +1126,15 @@ async function boot(): Promise<void> {
   const debug = import.meta.env.DEV
     ? (await import('./debug')).installDebug({ train, whistle, audio, view, network: stage.network, uiRoot: uiEl })
     : null;
+  if (import.meta.env.DEV) {
+    // PR8b (dev only): fake "うしろ" until PR8a's switch is in (the lead's backing up; tests/smoke/lead.spec.ts).
+    Object.assign(window, {
+      __debugReverse: (on: boolean): void => {
+        fakeReversing = on;
+        app.dataset.fakeReverse = on ? '1' : '0';
+      },
+    });
+  }
 
   // The title shows the stage behind it, the camera circling the train at its start (PHASE7_FINISH §4 item 6).
   const titleShown = hasMissions && !params.has('go');
@@ -1479,6 +1513,22 @@ async function boot(): Promise<void> {
           }
         } else bandStepIn = 0;
       }
+      // v1.11 (6-1): おいかけっこ and ドアを あけて まつ (PHASE9_CHAPTER5_6 第 7 部 §4.10). Counts only go up.
+      view.setLead?.(runner.leadPose);
+      reverseSwitch.setGlow(runner.switchGlow);
+      if (hasLeadHooks) {
+        app.dataset.lead = runner.leadPhase;
+        app.dataset.leadCalls = String(runner.leadCalls);
+        app.dataset.leadAuto = String(runner.leadAutoCalls);
+        app.dataset.leadGap = String(runner.leadGap);
+        app.dataset.leadBack = String(runner.leadBack);
+        app.dataset.stationClosed = runner.closedStation;
+        app.dataset.inlineCutscene = runner.inlineCutscene;
+        app.dataset.welcome = runner.welcomeState;
+        app.dataset.welcomeFlinches = String(runner.welcomeFlinches);
+        app.dataset.welcomeGiggles = String(runner.welcomeGiggles);
+        app.dataset.musicGain = String(Math.round(audio.musicGain * 100) / 100);
+      }
       // The hush mark (a moon and ZZZ): a hint only; both buttons work as always (PHASE9_0 §6).
       lightButton.setMark(runner.lightMark ? 'hush' : null);
       ui.whistle.setMark(runner.whistleMark ? 'hush' : null);
@@ -1579,6 +1629,7 @@ async function boot(): Promise<void> {
   const fawns = new Set(stage.file.actors.filter((a) => a.type === 'dino-small' && lookOf(a) === 'fawn').map((a) => a.id));
   const hedgehogs = new Set(stage.file.actors.filter((a) => a.type === 'cat' && lookOf(a) === 'hedgehog').map((a) => a.id));
   let lastFailReason: string | null = null;
+  let welcomeSteps = 0;
   // v1.11 (5-2): windings so far (toys, the band, spinning forks, cutscene figures; only goes up), the town wound.
   let windups = 0;
   app.dataset.windups = '0';
@@ -1610,10 +1661,12 @@ async function boot(): Promise<void> {
       return true;
     },
     hush: () => bubbles.clear(),
-    sayNow: (text) => {
+    sayNow: (text, icon) => {
       bubbles.clear();
-      void bubbles.say(text);
+      void bubbles.say(text, 'partner', undefined, icon);
     },
+    musicGain: (gain, seconds) => audio.setMusicGain(gain, seconds),
+    depart: (to, seconds) => train.depart(to, seconds),
     card: (title, button, icon, mirror, notes) => {
       // v1.11 (5-3): the notes shown in a mirror ring "しゃらーん" as the words come out in it.
       if (mirror === 'reflect') audio.playLetterReflect();
@@ -1736,7 +1789,7 @@ async function boot(): Promise<void> {
     unlock: async (ability) => {
       showAbility(ability);
       audio.playCard();
-      await showCard(uiEl, `${ABILITY_NAMES[ability] ?? ability}を\nおぼえた！`, 'やったね！', 'badge');
+      await showCard(uiEl, ABILITY_CARD_TITLES[ability] ?? `${ABILITY_NAMES[ability] ?? ability}を\nおぼえた！`, 'やったね！', 'badge');
     },
     revealJunction: (side) => ui.junction.reveal(side),
     // v1.11 (5-3): a shut mirror gate close ahead lights it too (a hint: it opens on the whistle).
@@ -1884,6 +1937,27 @@ async function boot(): Promise<void> {
       }
     }
     if (e.type === 'parade:fanfare') audio.playBandFanfare();
+    // v1.11 (6-1): おいかけっこ ("ぴょこん", "しゅたたた〜", "くるっ"; the partner's own call blows the whistle too) and
+    // ドアを あけて まつ ("とこ とこ", "ぴゃっ", "ぽろろん"), the friends riding along, the train rolling off.
+    if (e.type === 'lead:start') audio.playLeadPop();
+    if (e.type === 'lead:call') {
+      if (e.auto) {
+        audio.playWhistle();
+        events.post({ type: 'whistle' });
+      }
+      void waitSeconds(LEAD.iconLead).then(() => audio.playLeadDash());
+    }
+    if (e.type === 'lead:follow' || e.type === 'lead:met') audio.playLeadTurn();
+    if (e.type === 'lead:hop') audio.playFlinch();
+    if (e.type === 'welcome:step') {
+      welcomeSteps += 1;
+      audio.playWelcomeStep(welcomeSteps % 2 === 0);
+    }
+    if (e.type === 'welcome:flinch' || e.type === 'welcome:shy') audio.playFlinch();
+    if (e.type === 'welcome:giggle') audio.playWelcomeStep(true);
+    if (e.type === 'welcome:board') audio.playBoardHarp();
+    if (e.type === 'crew') app.dataset.crew = e.ids.join(',');
+    if (e.type === 'depart') app.dataset.depart = e.state;
     if (e.type === 'spin' && e.state === 'turn') audio.playSpinTurn();
     if (e.type === 'spin' && e.state === 'good') audio.playSpinGood();
     if (e.type === 'actor:spawn') figureModels.set(e.id, e.model);
@@ -1909,7 +1983,20 @@ async function boot(): Promise<void> {
     if (runner?.skipCutscene()) skippedAt = performance.now();
   });
 
-  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, dive, ice, thinIce, mirrors, plow, plowHint, tunnel: tunnels, magnet, iron: ironProps });
+  runner = new MissionRunner(stage, train, whistle, events, ports, {
+    rocket,
+    slopes,
+    dive,
+    ice,
+    thinIce,
+    mirrors,
+    plow,
+    plowHint,
+    tunnel: tunnels,
+    magnet,
+    iron: ironProps,
+    reverse: reverseReader,
+  });
   runner.knowAbilities(abilities);
   runner.setLight(lightOn);
   if (resumeFrom > 0) {

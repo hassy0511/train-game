@@ -105,7 +105,8 @@ export class RiverGimmicks {
     const foamBase = new Float32Array(FOAM * 3);
     for (let i = 0; i < FOAM; i++) {
       const t = hash(i) * fall.length;
-      const p = fall.a.clone().addScaledVector(fall.along, t).addScaledVector(fall.out, fall.throw + (hash(i + 900) - 0.3) * 4).setY(fall.bottom + 0.2);
+      // v1.11 (6-1): an upward fall's foam is at its top, where the water "lands".
+      const p = fall.a.clone().addScaledVector(fall.along, t).addScaledVector(fall.out, fall.throw + (hash(i + 900) - 0.3) * 4).setY(fall.up ? fall.top : fall.bottom + 0.2);
       foamBase.set([p.x, p.y, p.z], i * 3);
     }
     const foam = points(foamBase, '#ffffff', 0.9, 0.9);
@@ -114,7 +115,7 @@ export class RiverGimmicks {
     const sprayBase = new Float32Array(SPRAY * 3);
     for (let i = 0; i < SPRAY; i++) {
       const t = hash(i + 50) * fall.length;
-      const p = fall.a.clone().addScaledVector(fall.along, t).addScaledVector(fall.out, fall.throw + hash(i + 400) * 10).setY(fall.bottom + hash(i + 700) * 5);
+      const p = fall.a.clone().addScaledVector(fall.along, t).addScaledVector(fall.out, fall.throw + hash(i + 400) * 10).setY(fall.up ? fall.top + hash(i + 700) * 5 : fall.bottom + hash(i + 700) * 5);
       sprayBase.set([p.x, p.y, p.z], i * 3);
     }
     const spray = points(sprayBase, '#eaf6ff', 2.4, 0.35);
@@ -137,7 +138,8 @@ export class RiverGimmicks {
   update(dt: number): void {
     this.time += dt;
     for (const f of this.falls) {
-      if (f.texture) f.texture.offset.y = (this.time * STREAK_SPEED) % 1;
+      // v1.11 (6-1): an upward fall's streaks run up.
+      if (f.texture) f.texture.offset.y = ((f.fall.up ? -1 : 1) * this.time * STREAK_SPEED) % 1;
       jiggle(f.foam, f.foamBase, this.time, 0.6, 1.6);
       jiggle(f.spray, f.sprayBase, this.time * 0.4, 2.5, 1.2);
     }

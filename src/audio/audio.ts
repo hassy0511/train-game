@@ -10,6 +10,8 @@ export class AudioEngine {
   /** The song asked for, started as soon as the context exists (iPad needs a tap first). */
   private song: string | null = null;
   private musicLevel = 1;
+  /** v1.11 (6-1): the music's loudness times this (0..1; welcome.musicGain while waiting at the door). */
+  private musicGainNow = 1;
   private musicPaused = false;
   private ctx: BaseAudioContext | null = null;
   /** The context that plays (the one made on the first tap); an offline one only renders. */
@@ -97,7 +99,7 @@ export class AudioEngine {
     if (!withMusic) return;
     this.setAmbience(this.ambienceKind);
     this.music = new MusicPlayer(ctx, master);
-    this.music.setVolume(this.musicLevel);
+    this.music.setVolume(this.musicLevel * this.musicGainNow);
     this.music.setPaused(this.musicPaused);
     if (this.song) this.music.play(this.song);
   }
@@ -140,7 +142,21 @@ export class AudioEngine {
   /** Music volume, 0..1 (0 = off). */
   setMusicVolume(gain: number): void {
     this.musicLevel = gain;
-    this.music?.setVolume(gain);
+    this.music?.setVolume(gain * this.musicGainNow);
+  }
+
+  /**
+   * v1.11 (6-1): the music's loudness times `gain` (0..1) over about `seconds` s (the settings' volume stays): 30% while
+   * the doors stand open for Sakasa (welcome.musicGain), back to 1 once she is aboard.
+   */
+  setMusicGain(gain: number, seconds = 0.8): void {
+    this.musicGainNow = Math.max(0, Math.min(1, gain));
+    this.music?.setVolume(this.musicLevel * this.musicGainNow, seconds / 3);
+  }
+
+  /** v1.11 (6-1): the music's loudness factor now (a test hook, #app[data-music-gain]). */
+  get musicGain(): number {
+    return this.musicGainNow;
   }
 
   /** Holds the music (the pause menu). */
@@ -531,6 +547,60 @@ export class AudioEngine {
   }
 
   // ---- v1.11 (PR5) じしゃくライト (PHASE9_CHAPTER5_6 第 2 部 M13): soft and round; no zap, buzz, beam or creak ----------
+
+  // ---- v1.11 (6-1) さかさまの しろ (PHASE9_CHAPTER5_6 第 7 部 §10): light and playful; no door chime, no low bells -------
+
+  /** Sakasa pops out of the bushes: "ぴょこん" (a rising woodblock and a little bell). */
+  playLeadPop(): void {
+    const o = this.out(0.15, 1.3);
+    this.ping(800, 0, 0.06, 'triangle', 0.1, 1100, 0.002, o);
+    this.bell(1568, 0.03, 0.02 * 2.2, 0.35);
+  }
+
+  /** Her dash, "しゅたたた〜": eight quick woodblock steps and a rising whistle of wind. */
+  playLeadDash(): void {
+    const o = this.out(0.08, 1.3);
+    for (let i = 0; i < 8; i++) this.knock(900, i * 0.05, 0.045, o);
+    this.ping(600, 0, 0.4, 'sine', 0.03, 1200, 0.02, o);
+  }
+
+  /** She turns round, "くるっ": a woodblock slide up and a small bell. */
+  playLeadTurn(): void {
+    const o = this.out(0.12, 1.2);
+    this.ping(700, 0, 0.06, 'triangle', 0.08, 1000, 0.002, o);
+    this.bell(1319, 0.04, 0.015 * 2.2, 0.3);
+  }
+
+  /** Her footsteps at the door, "とこ": one soft wooden step (`high`: the other foot). */
+  playWelcomeStep(high = false, delay = 0): void {
+    const o = this.out(0.03, 1);
+    this.knock(high ? 600 : 500, delay, 0.05, o);
+  }
+
+  /** She flinches, shy ("ぴゃっ"): a quick soft rise. */
+  playFlinch(): void {
+    const o = this.out(0.1, 1.3);
+    this.ping(700, 0, 0.08, 'sine', 0.05, 1400, 0.004, o);
+  }
+
+  /** She is aboard, "ぽろろん": five bells up the pentatonic scale (never a two-note door chime). */
+  playBoardHarp(): void {
+    [587, 659, 784, 880, 1175].forEach((f, i) => this.bell(f, i * 0.07, 0.02 * 2.2, 0.7));
+  }
+
+  /** The upside-down clock, "こち こち": two wooden ticks that start soft and stop short. */
+  playClockBack(): void {
+    const o = this.out(0.08, 1.1);
+    this.ping(1200, 0, 0.05, 'triangle', 0.06, 1200, 0.04, o);
+    this.ping(900, 0.5, 0.05, 'triangle', 0.06, 900, 0.04, o);
+  }
+
+  /** The drawbridge comes down, "からから… かたん": the iron gate's rattle and a wooden knock. */
+  playDrawbridgeDown(): void {
+    const o = this.out(0.15, 1.2);
+    for (let i = 0; i < 6; i++) this.knock(1100, i * 0.07, 0.07, o);
+    this.knock(300, 0.55, 0.16, o);
+  }
 
   /** The light turns to the magnet step: two rising notes, "ぴろん" (lower than the spinning fork's "ぴこん"). */
   playMagnetOn(): void {

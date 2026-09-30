@@ -48,6 +48,11 @@ export interface CutscenePorts {
   learn(ability: AbilityId): void;
   /** The cutscene is being skipped: put away the line and the caption showing now. */
   interrupt(): void;
+  /**
+   * v1.11 (6-1): the train rolls by itself to `to` on its rail (Train.depart); resolves once it stands there. A skip
+   * cuts the wait short (the train still stops at its place).
+   */
+  depart(to: number, seconds: number): Promise<void>;
 }
 
 /**
@@ -168,6 +173,14 @@ export async function runCutscene(
       const seconds = step.seconds ?? ENVIRONMENT_SECONDS;
       events.post({ type: 'environment', env: step.environment, seconds });
       if (seconds > 0) await race(ports.wait(seconds));
+    } else if ('crew' in step) {
+      // v1.11 (6-1): friends ride along from now on (Sakasa behind the driver's seat).
+      events.post({ type: 'crew', ids: step.crew });
+    } else if ('depart' in step) {
+      // v1.11 (6-1): "ワンダーごう、しゅっぱつ！": the train rolls off by itself.
+      events.post({ type: 'depart', state: 'rolling' });
+      await race(ports.depart(step.depart.to, step.depart.seconds));
+      events.post({ type: 'depart', state: 'done' });
     }
   }
   // Skipped during the last step: nothing left to fast-forward, but the line or caption showing goes away.
@@ -231,6 +244,9 @@ export function fastForwardCutscene(
       events.post({ type: 'sky', sky: step.sky, seconds: 0 });
     } else if ('environment' in step) {
       events.post({ type: 'environment', env: step.environment, seconds: 0 });
+    } else if ('crew' in step) {
+      // v1.11 (6-1): the friends riding along stay (a "depart" is left out: the train does not roll off).
+      events.post({ type: 'crew', ids: step.crew });
     }
   }
   for (const spawn of spawned.values()) events.post(spawn);

@@ -4,6 +4,7 @@ import {
   BufferGeometry,
   CanvasTexture,
   Color,
+  ConeGeometry,
   CylinderGeometry,
   DoubleSide,
   Euler,
@@ -168,6 +169,19 @@ function floaterParts(look: FloaterLook, length: number): BufferGeometry[] {
       add(new BoxGeometry(6, 0.8, length), '#eef9ff', at(0, 0.1, 0));
       add(new BoxGeometry(2.2, 0.5, length * 0.6), '#d4efff', at(1.2, 0.6, 0.2));
       break;
+    case 'umbrella': {
+      // v1.11 (6-1): an upside-down umbrella as a boat: its cover (sky blue and white panels) open like a bowl on the
+      // water, the handle standing up out of it, a leaf inside (ticket 0021 builds "umbrella-boat").
+      const r = length / 2;
+      for (let i = 0; i < 8; i++) {
+        const cover = new ConeGeometry(r, 1.2, 8, 1, true, (i * Math.PI) / 4, Math.PI / 4);
+        add(cover, i % 2 ? '#ffffff' : '#8fd3ff', at(0, 0.5, 0, Math.PI, 0, 0));
+      }
+      add(new CylinderGeometry(0.06, 0.06, 2.4, 6), '#c07a4a', at(0, 1.0, 0));
+      add(new TorusGeometry(0.25, 0.06, 6, 10, Math.PI), '#c07a4a', at(0.25, 2.2, 0, 0, 0, 0));
+      add(new SphereGeometry(0.5, 8, 4), '#7cc47a', at(0.8, 0.9, -0.4));
+      break;
+    }
   }
   return out;
 }
