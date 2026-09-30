@@ -346,7 +346,7 @@ test('0-1: the fawn gazes at the light (a soft fail), the tanukis come and dance
   expect(dancesAfterFail).toBeGreaterThanOrEqual(1);
 
   // Again: whistled and stopped at once, then the whistle pressed four more times while they dance: the groups come
-  // once each (the extra whistles only make the dance a little longer), they go home within 9 s, "ばいばい！", no fail.
+  // once each (the extra whistles only make the dance a little longer), they are all home within 12 s of game time, "ばいばい！", no fail.
   await setNotch(page, NORMAL);
   await pressAt(page, 'whistle', REVERSED.from + 10);
   await page.waitForFunction(() => document.getElementById('app')?.dataset.lure === 'come' || document.getElementById('app')?.dataset.lure === 'dance', undefined, { timeout: 10_000 });
@@ -359,8 +359,10 @@ test('0-1: the fawn gazes at the light (a soft fail), the tanukis come and dance
     await page.locator('#whistle').dispatchEvent('pointerdown');
   }
   await expect(app).toHaveAttribute('data-lure', '', { timeout: 15_000 });
-  // On the game clock (the frame rate of the CI does not matter).
-  expect(Number(await app.getAttribute('data-time')) - cameAt).toBeLessThan(9.5);
+  // On the game clock (the frame rate of the CI does not matter): a group hops on (LURE.hop), dances at most
+  // LURE.danceMax in all however often the whistle goes, and hops back (LURE.hop); the second group may come up to a
+  // reaction time (LURE.reaction) after the first. So all are home within 0.8 + 8 + 0.8 + 2 = 11.6 s, never "forever".
+  expect(Number(await app.getAttribute('data-time')) - cameAt).toBeLessThan(12);
   const dances = Number(await app.getAttribute('data-lure-dances'));
   expect(dances - dancesAfterFail).toBe(2);
   await expect(app).toHaveAttribute('data-fails', '2');
