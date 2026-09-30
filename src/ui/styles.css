@@ -138,16 +138,45 @@ body {
 }
 
 /* ---- round action buttons (right thumb) ---- */
-/* PHASE9_0 §2: up to six always-usable buttons in a "flower" round the whistle (the whistle 1.2× in the middle, the
-   others on a ring one small gap from its edge: jump lower-left, dive left, snowplow upper-left, light up, rocket
-   upper-right; nothing lower-right, where the thumb rests). A button not learned yet leaves its place empty, so no
-   button ever moves. --x/--y put a button's centre on the ring (unit circle, y down); the block's box is the ring's
-   extent: left R + b/2, right 0.891R + b/2, up 0.978R + b/2, down 0.777R + b/2. */
+/* PHASE9_0 §2: up to six always-usable buttons tucked into the corner (layout "F"): the whistle (1.1×) in the corner;
+   jump, rocket and light touch it (lower-left, left-up, up), dive and snowplow nest in the gaps behind them (6 px
+   gaps, honeycomb). A button not learned yet leaves its place empty, so no button ever moves. --r/--bt place each
+   button from the block's right/bottom edge (worked out in docs/PHASE9_0_FREE_ABILITIES.md §2 for 88 px and 72 px
+   buttons). */
 #ui {
-  --b: 96px;
-  --ring: calc(var(--b) * 1.1 + 11px);
-  --cluster-w: calc(var(--ring) * 1.891 + var(--b));
-  --cluster-h: calc(var(--ring) * 1.755 + var(--b));
+  --b: 88px;
+  --cluster-w: 271px;
+  --cluster-h: 268px;
+}
+
+#whistle {
+  --r: 20px;
+  --bt: 13px;
+}
+
+#jump {
+  --r: 121px;
+  --bt: 0px;
+}
+
+#dive {
+  --r: 183px;
+  --bt: 70px;
+}
+
+#rocket {
+  --r: 91px;
+  --bt: 89px;
+}
+
+#plow {
+  --r: 66px;
+  --bt: 180px;
+}
+
+#light {
+  --r: 0px;
+  --bt: 113px;
 }
 
 .action-buttons {
@@ -160,41 +189,13 @@ body {
 
 .action-buttons > .round-button {
   position: absolute;
-  left: calc(var(--ring) + var(--x) * var(--ring));
-  top: calc(var(--ring) * 0.978 + var(--y) * var(--ring));
+  right: var(--r);
+  bottom: var(--bt);
 }
 
 #whistle {
-  --x: 0;
-  --y: 0;
-  width: calc(var(--b) * 1.2);
-  height: calc(var(--b) * 1.2);
-  margin: calc(var(--b) * -0.1) 0 0 calc(var(--b) * -0.1);
-}
-
-#jump {
-  --x: -0.629;
-  --y: 0.777;
-}
-
-#dive {
-  --x: -1;
-  --y: 0;
-}
-
-#plow {
-  --x: -0.629;
-  --y: -0.777;
-}
-
-#light {
-  --x: 0.208;
-  --y: -0.978;
-}
-
-#rocket {
-  --x: 0.891;
-  --y: -0.454;
+  width: calc(var(--b) * 1.1);
+  height: calc(var(--b) * 1.1);
 }
 
 /* The door button is temporary; it sits to the left of the block. */
@@ -2423,18 +2424,15 @@ body {
   right: 74px;
 }
 
-/* The flower mirrored: the whistle's centre is 0.891R + b/2 from the block's left edge. */
 #app.is-left-handed .action-buttons {
   right: auto;
   left: calc(var(--safe-left) + 22px);
 }
 
+/* Mirrored: the same distances from the block's left edge. */
 #app.is-left-handed .action-buttons > .round-button {
-  left: calc(var(--ring) * 0.891 - var(--x) * var(--ring));
-}
-
-#app.is-left-handed #whistle {
-  margin: calc(var(--b) * -0.1) 0 0 calc(var(--b) * -0.1);
+  right: auto;
+  left: var(--r);
 }
 
 #app.is-left-handed #door.round-button {
@@ -2774,10 +2772,41 @@ body {
     height: 72px;
   }
 
-  /* A short phone: slightly smaller thumb buttons, so the camera tiles under the corner stay clear of them. */
+  /* A short phone: smaller thumb buttons, so the camera tiles under the corner stay clear of them. */
   #ui {
-    --b: 80px;
-    --ring: calc(var(--b) * 1.1 + 10px);
+    --b: 72px;
+    --cluster-w: 224px;
+    --cluster-h: 221px;
+  }
+
+  #whistle {
+    --r: 16px;
+    --bt: 11px;
+  }
+
+  #jump {
+    --r: 100px;
+    --bt: 0px;
+  }
+
+  #dive {
+    --r: 152px;
+    --bt: 58px;
+  }
+
+  #rocket {
+    --r: 76px;
+    --bt: 74px;
+  }
+
+  #plow {
+    --r: 55px;
+    --bt: 149px;
+  }
+
+  #light {
+    --r: 0px;
+    --bt: 93px;
   }
 
   .round-button .face {
@@ -2796,13 +2825,6 @@ body {
   .camera-tile svg {
     width: 34px;
     height: 34px;
-  }
-}
-
-/* The smallest phone (568×320): smaller still, so the flower's top stays under the camera button. */
-@media (max-height: 340px) {
-  #ui {
-    --b: 68px;
   }
 }
 
