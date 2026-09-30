@@ -4004,7 +4004,7 @@ body {
  */
 .reverse-switch.is-stub {
   position: absolute;
-  left: calc(var(--safe-left) + 196px);
+  left: calc(var(--safe-left) + 224px);
   bottom: calc(var(--safe-bottom) + 18px);
   width: 64px;
   height: 112px;
@@ -4057,7 +4057,7 @@ body {
 
 #app.is-left-handed .reverse-switch.is-stub {
   left: auto;
-  right: calc(var(--safe-right) + 196px);
+  right: calc(var(--safe-right) + 224px);
 }
 
 @media (max-height: 500px) {
