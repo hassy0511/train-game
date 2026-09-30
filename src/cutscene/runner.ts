@@ -23,11 +23,19 @@ export interface CutscenePorts {
   /** v1.10: a big bubble pops ("ぱちん") at cutscene figure `id` (or in front of the camera). Resolves when it is over. */
   pop(id?: string): Promise<void>;
   /**
+   * v1.11 (PR5) `ability` "magnet": the light comes on and its button glows green; the press turns it to the magnet step
+   * and the figure `target` flies to the train (resolves once it has arrived; the runner then takes it off).
    * v1.10 (3-3): wait for the child to press `ability`'s button (it alone glows; `say` is said now and again every
    * DOOR_REMIND_SECONDS). The press does what the button does; `fx` "beacon" then lights the lighthouse. v1.11 (5-2)
    * `fx` "windup": the runner winds the press step's `target` itself (a "windup" event) once the press is in.
    */
-  press(ability: 'light' | 'whistle' | 'rocket' | 'jump', say: string | undefined, fx: 'beacon' | 'windup' | undefined, cancel?: Promise<void>): Promise<void>;
+  press(
+    ability: 'light' | 'whistle' | 'rocket' | 'jump' | 'magnet',
+    say: string | undefined,
+    fx: 'beacon' | 'windup' | undefined,
+    cancel?: Promise<void>,
+    target?: string,
+  ): Promise<void>;
   /** v1.10 (3-3): the doors on the platform side open or close again (looks only; closed again after the cutscene). */
   door(open: boolean): void;
   /** v1.10 (3-3): the festival ("しゃらら〜ん"). Resolves when it is over. */
@@ -89,7 +97,11 @@ export async function runCutscene(
     }
     const step = steps[i];
     // A press step may carry a line of its own ("say"): look at it first.
-    if ('press' in step) {
+    if ('press' in step && step.press === 'magnet') {
+      // v1.11 (PR5): the magnet light's first go: the target flies to the train, then it is gone (at once when skipped).
+      await race(ports.press('magnet', step.say, undefined, skip?.promise, step.target));
+      events.post({ type: 'actor:remove', id: step.target });
+    } else if ('press' in step) {
       // "▶▶" while waiting: the press counts as done (the port puts the button back and lights the lamp at once).
       await race(ports.press(step.press, step.say, step.fx, skip?.promise));
       // v1.11 (5-2): the press winds its target the right way round (at once when skipped).
@@ -187,6 +199,10 @@ export function fastForwardCutscene(
       events.post({ type: 'rail:cut', railId, from, to, style, props, instant: true });
     } else if ('unlock' in step) {
       ports.learn(step.unlock);
+    } else if ('press' in step && step.press === 'magnet') {
+      // v1.11 (PR5): skipped, the magnet's first go leaves the target gone (it flew to the train).
+      spawned.delete(step.target);
+      events.post({ type: 'actor:remove', id: step.target });
     } else if ('press' in step) {
       // v1.10 (3-3): skipped, the press counts as done: the lighthouse is lit.
       if (step.fx === 'beacon') events.post({ type: 'beacon', instant: true });

@@ -75,6 +75,14 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
   - 雪の トンネル（`SnowGimmicks`）と 村の 夕方（`VillageGimmicks`）は、霧の 色・2 つの 光の 強さと 色・空を `EnvironmentState` から その とき 読む（`baseFogColor`・`lights`・`lightLevels`・`sky`・`fogObject`。PR2c から。読み込みの ときの 値を おぼえない）。夕方が かわる とちゅうで `apply` したら、あたらしい 見た目が 勝つ（`VillageGimmicks.onLook`）
 - テスト: `tests/smoke/environment-state.spec.ts`（開発サーバーで `__debugView` を つかう。0-0 で ちがう 環境〈夜・月・ほたるの つぶ も〉と もとの 環境を 3 回 行き来 して、シーンの 物の 数・霧・遠い 面が もとに もどり、`renderer.info.memory` が ふえつづけない こと。本番ビルドに `__debugView` が ない ことも みる）。ゲームの 中の 昼 ⇄ 夜 は `tests/smoke/night.spec.ts`（0-1）
 
+### ねらいの 速さの おさえ（`Train.speedCaps`、2026-09-30 PHASE9 PR5）
+- レバーの めざす 速さを かえる 所を 1 つに した（PHASE9_CHAPTER5_6 第 2 部 M6）。`Train` が `speedCaps`（id ごとに `{ scale?, max?, holdAt? }`）を もち、`leverTarget()` が ぜんぶ かけあわせる: `scale` は かけ算、`max`（m/s）と `holdAt`（`{ railId, s }` の 手前で 止まる ブレーキの 曲線）は いちばん きびしい もの。ほかの しくみは `setSpeedCap(id, cap | null)` で 足す・けす だけ。レバーの 目もりは うごかさない
+- いまの id: `light`（ライトと じしゃくの 段: 0.7。まえの `main.ts` の `speedScale` を おきかえた）・`magnet`（ひっぱって いる あいだ 0.5。この あいだ `light` は はずす ＝ あわせて 0.5）。あとで `reverse`（最大 5 m/s）・`parade`・`mirror-gate`（`holdAt`）・`depart`・`lead-learn`
+- `train.speedScale` は 読む だけ（`scale` の 積。うすい こおり・花の はしが 読む）
+- ロケット・すべりざか は いまと 同じく おさえを 見ない。レバーの「光る 目もり」は いまと 同じく ふつうの 速さで きめる
+- ついでに `Train.setBlocks(() => TrainBlock[])`（`kind: 'magnet' | 'mirror'`）: 先頭が まだ ひらいて いない 面（じしゃくの すきま・とびら。5-3 の かがみの もん）に つくと「ぽよん」（空中でも。弧は そこで おわる）。できごと `magnetBounce`
+- じしゃくライトの しくみの 置き場: `src/gimmick/light-switch.ts`（`LightSwitch`、ライトの ボタンの 3 段）・`magnet.ts`（`MagnetSystem`）・`iron-props.ts`（`IronProps`）・`magnet-layout.ts`（読み込みで まとと 小物の 場所を きめる）、見た目は `src/view/three/magnet.ts`・`iron-props.ts`・`magnet-placeholders.ts`
+
 ---
 
 ## 3. データ形式

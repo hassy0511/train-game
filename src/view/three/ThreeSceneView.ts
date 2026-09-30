@@ -33,6 +33,8 @@ import { PlowGimmicks } from './plow';
 import { VillageGimmicks } from './village';
 import { NightGimmicks } from './night';
 import { ToyGimmicks } from './toy';
+import { MagnetGimmicks } from './magnet';
+import { IronPropsView } from './iron-props';
 import { frameWave, SnowGimmicks } from './snow';
 import { iceZones, thinIceZones } from '../../gimmick/ice';
 import { slopeZones } from '../../gimmick/slope';
@@ -124,6 +126,9 @@ export class ThreeSceneView implements SceneView {
   private night: NightGimmicks | null = null;
   /** v1.11 (5-2): the toy band, the spinning forks' flags, the wound decorations, the slide, the ball pit's balls. */
   private toy: ToyGimmicks | null = null;
+  /** v1.11 (PR5): the magnet light's targets, rings and flights, and the iron odds and ends (null without them). */
+  private magnet: MagnetGimmicks | null = null;
+  private iron: IronPropsView | null = null;
   /** v1.7: slope beds and rock bases, kept for rebuilding the track after a cut. */
   private trackLooks: TrackLooks | undefined;
   /** v1.7: props with a tag, each in its own group (a cut can drop them). */
@@ -178,7 +183,7 @@ export class ThreeSceneView implements SceneView {
         ? [{ railId: g.railId, from: g.from, to: g.to }]
         : [],
     );
-    this.boughSkips = [...boughSkips, ...MeadowGimmicks.trackSkips(stage)];
+    this.boughSkips = [...boughSkips, ...MeadowGimmicks.trackSkips(stage), ...MagnetGimmicks.trackSkips(stage)];
     this.railLooks = Object.fromEntries(stage.file.rails.flatMap((r) => (r.look && r.look !== 'rail' ? [[r.id, r.look]] : [])));
     const bases = new Map<string, RailBaseDef[]>();
     for (const r of stage.file.rails) if (r.base) bases.set(r.id, Array.isArray(r.base) ? r.base : [r.base]);
@@ -274,6 +279,18 @@ export class ThreeSceneView implements SceneView {
       this.toy = new ToyGimmicks(stage, this.train);
       this.scene.add(this.toy.group);
     }
+    // v1.11 (PR5): the magnet light's targets (a gap's piece is built like the track round it) and the odds and ends.
+    if (MagnetGimmicks.wanted(stage)) {
+      this.magnet = new MagnetGimmicks(stage, this.train, this.actors, this.lightBeam, (railId, from, to) => {
+        const rail = network.rails.get(railId);
+        return rail ? buildTrack(rail, from, to, this.railLooks[railId] ?? 'rail', this.trackLooks) : null;
+      });
+      this.scene.add(this.magnet.group);
+    }
+    if (IronPropsView.wanted(stage)) {
+      this.iron = new IronPropsView(stage, this.train);
+      this.scene.add(this.iron.group);
+    }
     // Tagged props stay separate so a cutscene can drop them (the old bridge's girders).
     for (const prop of stage.props) {
       if (!prop.tag) continue;
@@ -308,6 +325,8 @@ export class ThreeSceneView implements SceneView {
     this.lookChanged();
     // After the lights and the fog are all in (it dims them in a tunnel).
     await this.snow?.init(this.models);
+    // v1.11 (PR5): after the actors (a record's own figure is what the magnet fetches).
+    await this.magnet?.init(this.models);
     // The train, cars and partner only ever move as a whole (door bands, the light beam and the jump unit are
     // objects of their own), so each draws baked, in one call.
     const trainInstance = (bakeModel(trainModel) ?? trainModel).clone(true);
@@ -381,6 +400,10 @@ export class ThreeSceneView implements SceneView {
     if (event.type === 'door') this.setDoor(event.open, event.stationId);
     if (event.type === 'dome') this.water?.setDome(event.on, event.instant);
     if (event.type === 'light') this.lightBeam.visible = event.on;
+    // v1.11 (PR5): the magnet step keeps a thin green beam (MagnetGimmicks tints it).
+    if (event.type === 'light:mode') this.lightBeam.visible = event.mode !== 'off';
+    this.magnet?.onEvent(event);
+    this.iron?.onEvent(event);
     this.sky3?.onStageEvent(event);
     this.forest?.onEvent(event);
     this.meadow?.onEvent(event);
@@ -687,6 +710,12 @@ export class ThreeSceneView implements SceneView {
     this.village?.update(dt);
     this.night?.update(dt);
     this.toy?.update(dt);
+    if (this.magnet) {
+      this.magnet.trainSpeed = pose.speed;
+      this.magnet.cabView = cab;
+      this.magnet.update(dt);
+    }
+    this.iron?.update(dt);
     this.updateFalling(dt);
     // A little wider view while the rocket burns (not a shake).
     const fov = this.fovBoost + (this.fovTarget - this.fovBoost) * Math.min(1, dt * 4);

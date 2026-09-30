@@ -52,6 +52,11 @@ export interface EnvironmentDef {
   moon?: { azimuth: number; elevation: number; size?: number };
   /** v1.11 (5-1): firefly motes floating round the camera: `count` (0–400) within `radius` m (default 60). */
   fireflies?: { count: number; radius?: number };
+  /**
+   * v1.11 (PR5, the magnet light): the iron odds and ends the loader scatters by the line for the magnet step to tug at
+   * ("びよん" … "からん"): `false` none; `every` (80–400 m, default IRON_PROPS.every) and `looks` (default all three).
+   */
+  ironProps?: false | { every?: number; looks?: IronLook[] };
 }
 
 /** v1.10 (4-1): falling snow: `count` flakes (0–2000) in a box `radius` m round the camera, falling `fall` m/s. */
@@ -264,6 +269,11 @@ export interface JunctionDef {
   fireflies?: FireflyForkDef;
   /** v1.11 (5-2): a spinning fork, "くるくる ポイント" (see SpinDef). No arrows show for it. */
   spin?: SpinDef;
+  /**
+   * v1.11 (PR5, set by the loader, never written): the id of the magnet "turn" target that shows this fork's true way
+   * (a mirror turned round by the magnet). No arrows show for it and the light alone does not see through it.
+   */
+  turn?: string;
 }
 
 /**
@@ -386,6 +396,11 @@ export type PropDef = Placement & {
    * cutscene press with fx "windup" on WINDUP.townKey), then shows the model without "-back" (looks only).
    */
   windup?: boolean;
+  /**
+   * v1.11 (PR5): an iron odd or end the magnet step tugs at: "can" and "bucket" fly to the train and drop off again,
+   * "bell" (a sign's bell) stretches out on its string and springs back (it never comes off).
+   */
+  iron?: IronLook;
 };
 
 export type ReactsTo = 'whistle' | 'light' | 'none';
@@ -622,6 +637,12 @@ export type MissionLines = Partial<
     | 'plowLong'
     | 'plowBump'
     | 'plowBumpAfter'
+    // v1.11 (PR5 じしゃくライト, PHASE9_CHAPTER5_6 第 2 部 M14)
+    | 'magnetNear'
+    | 'magnetGo'
+    | 'magnetBump'
+    | 'magnetBumpAfter'
+    | 'magnetPlay'
     // v1.10 (4-3 ゆきの なみ・トンネル)
     | 'chaseStart'
     | 'chaseNear'
@@ -741,6 +762,11 @@ export type CutsceneStep =
    * `target` (a figure this cutscene brought on, its model ending in "-back"): it turns the right way round.
    */
   | { press: 'light' | 'whistle' | 'rocket' | 'jump'; say?: string; fx?: 'beacon' | 'windup'; target?: string }
+  /**
+   * v1.11 (PR5): the magnet light's first go (5-3's opening): the light comes on and its button glows green; the press
+   * turns it to the magnet step and `target` (a figure this cutscene brought on) flies to the train and is gone.
+   */
+  | { press: 'magnet'; target: string; say?: string }
   /** v1.10 (3-3): the doors on the platform side of the station the train stands at open or close (looks only). */
   | { door: 'open' | 'close' }
   /** Full-screen dark caption that fades after `seconds`. */
@@ -1052,4 +1078,93 @@ export interface StageData {
   actors: ResolvedActor[];
   stations: ResolvedStation[];
   records: ResolvedRecord[];
+  /** v1.11 (PR5): the iron targets the magnet pulls (magnet gimmicks and the records needing the magnet light). */
+  magnets: MagnetTarget[];
+  /** v1.11 (PR5): the iron odds and ends by the line (scattered, and the props with `iron`), by rail then `at`. */
+  ironProps: IronProp[];
+}
+
+// ---- v1.11 (PR5): the magnet light (PHASE9_CHAPTER5_6 第 2 部 M9) ------------------------------------------------
+
+/** What a magnet target is: something to fetch, a gap to close, a gate to open, a mirror to turn round. */
+export type MagnetKind = 'pick' | 'bridge' | 'gate' | 'turn';
+export const MAGNET_KINDS: readonly MagnetKind[] = ['pick', 'bridge', 'gate', 'turn'];
+/** Looks by kind (PHASE9 §0.9 の 4: no "lever"; the "key" and "sign" looks are not made). */
+export type MagnetLook = 'star' | 'bell' | 'rail-piece' | 'drawbridge' | 'toy-blocks' | 'door' | 'crossing' | 'mirror';
+export const MAGNET_LOOKS: Record<MagnetKind, readonly MagnetLook[]> = {
+  pick: ['star', 'bell'],
+  bridge: ['rail-piece', 'drawbridge', 'toy-blocks'],
+  gate: ['door', 'crossing'],
+  turn: ['mirror'],
+};
+
+/** params of a "magnet" gimmick. */
+export interface MagnetParams {
+  /** Unique in the stage (test hooks, resume, cutscene targets). Not starting with "record:". */
+  id: string;
+  kind: MagnetKind;
+  /** pick, turn: where the thing is, from the rail (right +) and above the rail top (m). */
+  lateral?: number;
+  height?: number;
+  look?: MagnetLook;
+  /** Another model than the look's. */
+  model?: string;
+  /** bridge: where the loose piece lies until pulled, from the middle of the gap. */
+  piece?: { lateral: number; height?: number; rotationY?: number };
+  /** Said when the light button starts glowing green for this target (once a try). */
+  line?: string | null;
+  /** Said when it arrived, closed or opened. */
+  done?: string | null;
+  /** turn: said when the train went past its fork without the magnet. */
+  miss?: string | null;
+  /** bridge, gate: where the train is put back after "ぽよん" (default MAGNET.rewindBefore m before, back along the way). */
+  rewind?: { railId: string; at: number };
+  /** turn: the fork (reversed sign) whose true way it shows. */
+  junction?: string;
+  /** turn: the id of the mirror (gimmicks[] "mirror" params.id) it turns round (PR6a draws that mirror). */
+  mirror?: string;
+}
+
+/** v1.11 (set by the loader, never written): one iron target. Records needing magnetLight become kind "pick". */
+export interface MagnetTarget {
+  /** The gimmick's params.id, or "record:<record id>". */
+  id: string;
+  kind: MagnetKind;
+  railId: string;
+  /** Along the rail: the thing (pick, turn), or the gap's start / the gate's face (bridge, gate). */
+  at: number;
+  /** bridge: the gap's end (to); gate: at + 1; pick, turn: at. */
+  end: number;
+  offset: { lateral: number; height: number };
+  /** max(MAGNET.minAhead, √(lateral² + height²)) for pick and turn; 0 for bridge and gate. */
+  minAhead: number;
+  look: MagnetLook | null;
+  /** The model drawn (a record's own; else the look's). */
+  model: string;
+  recordId?: string;
+  /** Its place in gimmicks[] (not for records). */
+  gimmick?: number;
+  line: string | null;
+  done: string | null;
+  miss: string | null;
+  /** bridge, gate: where "ぽよん" puts the train back. */
+  rewind?: { railId: string; at: number };
+  junction?: string;
+  mirror?: string;
+  piece?: { lateral: number; height: number; rotationY: number };
+}
+
+export type IronLook = 'can' | 'bucket' | 'bell';
+export const IRON_LOOKS: readonly IronLook[] = ['can', 'bucket', 'bell'];
+/** v1.11 (set by the loader): an iron odd or end by the line (scattered, or a prop with `iron`). */
+export interface IronProp {
+  index: number;
+  railId: string;
+  at: number;
+  lateral: number;
+  /** Above the ground (m). */
+  height: number;
+  look: IronLook;
+  /** props[] index when it is a stage prop (drawn by the props layer; a bell stretches out from it). */
+  prop?: number;
 }

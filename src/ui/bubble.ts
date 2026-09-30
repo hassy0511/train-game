@@ -6,6 +6,8 @@ export interface Bubbles {
   say(text: string, who?: Speaker, name?: string): Promise<void>;
   /** Drops the line showing and every queued one (their promises resolve right away). */
   clear(): void;
+  /** v1.11 (PR5): nothing is showing and nothing is waiting (a line that may as well not come can be said now). */
+  readonly quiet: boolean;
 }
 
 const SPEAKER_CLASS: Record<Speaker, string> = { partner: 'is-partner', amanojaku: 'is-amanojaku', passenger: 'is-passenger' };
@@ -50,15 +52,24 @@ export function createBubbles(root: HTMLElement, partnerName: string): Bubbles {
       };
     });
 
+  let pending = 0;
   return {
     say(line, who = 'partner', speakerName?: string): Promise<void> {
       const g = generation;
-      queue = queue.then(() => (g === generation ? showOne(line, who, speakerName) : undefined));
+      pending += 1;
+      queue = queue
+        .then(() => (g === generation ? showOne(line, who, speakerName) : undefined))
+        .finally(() => {
+          pending = Math.max(0, pending - 1);
+        });
       return queue;
     },
     clear(): void {
       generation += 1;
       dismiss?.();
+    },
+    get quiet(): boolean {
+      return pending === 0;
     },
   };
 }

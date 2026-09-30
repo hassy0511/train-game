@@ -10,7 +10,8 @@ import { FIREFLY_FORK } from '../train/params';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import type { Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
-import { validateIceLayout, validateNightLayout, validatePlowLayout, validateSnowLayout, validateStageFile, validateStageLayout, validateToyLayout, validateWaterLayout } from './validate';
+import { validateIceLayout, validateMagnetLayout, validateNightLayout, validatePlowLayout, validateSnowLayout, validateStageFile, validateStageLayout, validateToyLayout, validateWaterLayout } from './validate';
+import { ironDrawsProp, ironPropsFor, magnetTargets } from '../gimmick/magnet-layout';
 import { computeWaterSpans, diveForkSide } from './water';
 
 // One chunk per stage file; stages load lazily.
@@ -83,9 +84,18 @@ export function prepareStage(raw: unknown): StageData {
   validateNightLayout(file, network);
   // v1.11 (5-2): walking toys, the band's way, spinning forks and the whistle's windows.
   validateToyLayout(file, network);
+  // v1.11 (PR5): the magnet light's iron targets (a turn's fork shows no arrows), and the iron odds and ends by the line.
+  const magnets = magnetTargets(file, network);
+  validateMagnetLayout(file, network, magnets);
+  for (const t of magnets) {
+    const j = t.kind === 'turn' ? file.junctions.find((x) => x.id === t.junction) : undefined;
+    if (j) j.turn = t.id;
+  }
+  const ironProps = ironPropsFor(file, network, magnets);
   const groundY = file.environment.ground?.y ?? null;
 
-  const props: ResolvedProp[] = [...file.props, ...autoSigns(file)].map((p) => {
+  // v1.11 (PR5): a can, a bucket or a whole sign with `iron` is drawn by the iron layer (it flies or stretches).
+  const props: ResolvedProp[] = [...file.props.filter((p) => !ironDrawsProp(p)), ...autoSigns(file)].map((p) => {
     const t = resolvePlacement(p, network, groundY);
     return {
       model: p.model,
@@ -128,7 +138,7 @@ export function prepareStage(raw: unknown): StageData {
     return { def, position: t.position, quaternion: t.quaternion, onRail: 'onRail' in def ? { ...def.onRail } : undefined };
   });
 
-  return { file, network, props, actors, stations, records };
+  return { file, network, props, actors, stations, records, magnets, ironProps };
 }
 
 /**

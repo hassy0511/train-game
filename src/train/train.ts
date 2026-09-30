@@ -82,6 +82,30 @@ export interface TrainEvents extends Record<string, unknown> {
   wallBurst: { railId: string; span: PlowSpan; boosted: boolean };
   /** v1.10 (4-2): "ぽすっ": the train front reached a snow wall without the blade; `rewind` is where to put it back. */
   snowBump: { railId: string; s: number; span: PlowSpan; rewind: { railId: string; at: number } };
+  /**
+   * v1.11 (PR5): "ぽよん": the train front reached a block (an unopened magnet gap's soap film or iron gate; in the air
+   * too). The train bounces softly back; the caller puts it back.
+   */
+  magnetBounce: { railId: string; s: number; id: string; kind: TrainBlock['kind'] };
+}
+
+/**
+ * v1.11 (PR5, PHASE9_CHAPTER5_6 第 2 部 M6): one cap on the lever's target speed. `scale` multiplies it; `max` (m/s)
+ * and `holdAt` (brake to a stop before `s` on `railId`) cap it. Every cap is applied: scales multiply, the lowest cap
+ * wins.
+ */
+export interface SpeedCap {
+  scale?: number;
+  max?: number;
+  holdAt?: { railId: string; s: number };
+}
+
+/** v1.11 (PR5): a place the train front may not pass yet (an unopened magnet gap or gate; 5-3's mirror gate). */
+export interface TrainBlock {
+  kind: 'magnet' | 'mirror';
+  railId: string;
+  at: number;
+  id: string;
 }
 
 /**
@@ -181,8 +205,11 @@ export class Train {
   private arcs: JumpArc[] = [];
   private jumpCooldown = 0;
   private falling: { t: number } | null = null;
-  /** Multiplies every notch's target speed (the light slows the train down). */
-  speedScale = 1;
+  /** v1.11 (PR5): the caps on the lever's target speed by who set them (the light, the magnet's pull, …). */
+  private readonly speedCaps = new Map<string, SpeedCap>();
+  /** v1.11 (PR5): where the train front may not go yet (asked every frame), and the front last frame. */
+  private blocks: (() => readonly TrainBlock[]) | null = null;
+  private blockFront: { railId: string; s: number } | null = null;
   /** An updraft pushes the train up to this speed (m/s) while the lever is on a running notch; 0 = none. */
   boostSpeed = 0;
   /** A bending bough under the train: how far (m) the rail hangs below rest at `s` on `railId`. */
@@ -527,6 +554,7 @@ export class Train {
     this.refreshPending();
     this.resetDive();
     this.resetPlow();
+    this.blockFront = null;
     this.computePose();
   }
 
@@ -668,6 +696,45 @@ export class Train {
     this.choice = side;
   }
 
+  /**
+   * v1.11 (PR5): sets (or with null removes) the speed cap `id`: "light" (the light's and the magnet's 0.7), "magnet"
+   * (0.5 while pulling), later "reverse", "parade", "mirror-gate", "depart", "lead-learn".
+   */
+  setSpeedCap(id: string, cap: SpeedCap | null): void {
+    if (cap) this.speedCaps.set(id, cap);
+    else this.speedCaps.delete(id);
+  }
+
+  /** The caps' scales multiplied: every notch's target speed is this many times its own (the light: 0.7). */
+  get speedScale(): number {
+    let k = 1;
+    for (const cap of this.speedCaps.values()) if (cap.scale !== undefined) k *= cap.scale;
+    return k;
+  }
+
+  /** v1.11 (PR5): the places the train front may not pass yet (asked every frame; in the air too). */
+  setBlocks(fn: (() => readonly TrainBlock[]) | null): void {
+    this.blocks = fn;
+    this.blockFront = null;
+  }
+
+  /** The lowest `max` / `holdAt` cap now (m/s), or null. */
+  private capLimit(): number | null {
+    let limit: number | null = null;
+    for (const cap of this.speedCaps.values()) {
+      let v: number | null = cap.max ?? null;
+      if (cap.holdAt) {
+        const d = this.routeDistance(cap.holdAt.railId, cap.holdAt.s);
+        if (d !== null && d > -TRAIN.length) {
+          const hold = d <= 0 ? 0 : Math.sqrt(2 * BRAKING * d);
+          v = v === null ? hold : Math.min(v, hold);
+        }
+      }
+      if (v !== null) limit = limit === null ? v : Math.min(limit, v);
+    }
+    return limit;
+  }
+
   /** The speed the lever asks for now (0 while stopping at a buffer or stop point): the running sound's motor. */
   get targetSpeed(): number {
     return this.leverTarget(this.currentRail).target;
@@ -687,6 +754,12 @@ export class Train {
         target = 0;
         brake = Math.max(brake, BRAKING * this.grip);
       }
+    }
+    // v1.11 (PR5): a cap's max or hold (the lowest wins).
+    const limit = this.capLimit();
+    if (limit !== null && limit < target) {
+      target = limit;
+      brake = Math.max(brake, BRAKING);
     }
     // v1.11 (5-2): the band walking ahead holds the speed down (never nearer than its gap).
     const cap = this.leaderCap();
@@ -799,7 +872,32 @@ export class Train {
     this.handleJump(dt, wasAirborne);
     this.handleDive(dt);
     this.handlePlow(dt);
+    this.handleBlocks();
     this.computePose();
+  }
+
+  /**
+   * v1.11 (PR5): the train front reaching a block (an unopened magnet gap's film, an iron gate): "ぽよん" (a quick soft
+   * stop, then bounced back a little; in the air the arc ends there: the block is too tall to jump).
+   */
+  private handleBlocks(): void {
+    const f = this.frontS;
+    const rail = this.currentRail.id;
+    const last = this.blockFront;
+    this.blockFront = { railId: rail, s: f };
+    if (!this.blocks || this.bouncing || this.bumping || this.falling) return;
+    const before = last && last.railId === rail ? last.s : f;
+    for (const b of this.blocks()) {
+      if (b.railId !== rail || !(before < b.at && f >= b.at)) continue;
+      const st = this.state;
+      this.arcs = [];
+      st.s -= f - b.at;
+      st.speed = 0;
+      this.stopRocket();
+      this.bouncing = { t: 0, from: st.s };
+      this.events.emit('magnetBounce', { railId: rail, s: b.at, id: b.id, kind: b.kind });
+      return;
+    }
   }
 
   // ---- v1.10 (4-2): the snowplow ("ゆきかき") -------------------------------------------------------------------

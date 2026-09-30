@@ -530,6 +530,126 @@ export class AudioEngine {
     this.hiss({ delay: 0.22, seconds: 0.1, gain: 0.12, filter: 'bandpass', freq: 2400, q: 1, dest: o });
   }
 
+  // ---- v1.11 (PR5) じしゃくライト (PHASE9_CHAPTER5_6 第 2 部 M13): soft and round; no zap, buzz, beam or creak ----------
+
+  /** The light turns to the magnet step: two rising notes, "ぴろん" (lower than the spinning fork's "ぴこん"). */
+  playMagnetOn(): void {
+    const o = this.out(0.2, 1.2);
+    this.ping(880, 0, 0.09, 'sine', 0.08, 880, 0.004, o);
+    this.ping(1320, 0.07, 0.11, 'sine', 0.08, 1320, 0.004, o);
+  }
+
+  /**
+   * The magnet pulls: a soft sine rising over the flight ("きゅいーん", `seconds` s) with a slow wobble, and little bells
+   * here and there. It is over when the thing arrives.
+   */
+  playMagnetPull(seconds = 1.2): void {
+    const ctx = this.ctx;
+    const o = this.out(0.3, 1.2);
+    if (!ctx || !o) return;
+    const at = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const lfo = ctx.createOscillator();
+    const depth = ctx.createGain();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(320, at);
+    osc.frequency.exponentialRampToValueAtTime(960, at + seconds);
+    lfo.frequency.value = 7;
+    depth.gain.value = 15;
+    lfo.connect(depth);
+    depth.connect(osc.frequency);
+    g.gain.value = 0.0001;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.05, at + 0.08);
+    g.gain.setValueAtTime(0.05, at + Math.max(0.1, seconds - 0.12));
+    g.gain.exponentialRampToValueAtTime(0.0001, at + seconds);
+    osc.connect(g);
+    g.connect(o);
+    osc.start(at);
+    lfo.start(at);
+    osc.stop(at + seconds + 0.05);
+    lfo.stop(at + seconds + 0.05);
+    [1319, 1568, 1976, 2637].forEach((f, i) => {
+      const t = (i + 0.5) * (seconds / 4.5);
+      if (t < seconds) this.bell(f, t, 0.03, 0.4);
+    });
+  }
+
+  /** A fetched thing arrives: a tiny click and a round rising note, "かちっ… ぽん". */
+  playMagnetCatch(): void {
+    const o = this.out(0.2, 1.2);
+    this.ping(1800, 0, 0.04, 'triangle', 0.08, 1800, 0.001, o);
+    this.ping(520, 0.05, 0.12, 'sine', 0.12, 780, 0.006, o);
+  }
+
+  /** The loose rail piece snaps into the gap: a soft low knock, two clicks and three little bells, "がちゃん… かちっ". */
+  playRailSnap(): void {
+    const o = this.out(0.25, 1.2);
+    this.ping(110, 0, 0.15, 'sine', 0.16, 100, 0.004, o);
+    this.hiss({ color: 'brown', seconds: 0.08, gain: 0.08, filter: 'lowpass', freq: 900, q: 0.7, dest: o });
+    this.knock(1500, 0.12, 0.08, o);
+    this.knock(1500, 0.24, 0.08, o);
+    [1047, 1319, 1568].forEach((f, i) => this.bell(f, 0.3 + i * 0.08, 0.05, 0.5));
+  }
+
+  /** The iron gate slides open: six wooden taps and a round wooden knock, "からから… かこん". */
+  playGateOpen(): void {
+    const o = this.out(0.15, 1.2);
+    for (let i = 0; i < 6; i++) this.knock(1100, i * 0.07, 0.07, o);
+    this.knock(400, 0.5, 0.14, o);
+  }
+
+  /** "ぽよん" off the soap film or the round cushion: the fail's boing and a soft wobbling "ぷるん". */
+  playMagnetBounce(): void {
+    this.playBoing();
+    const ctx = this.ctx;
+    const o = this.out(0.1, 1.2);
+    if (!ctx || !o) return;
+    const at = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const lfo = ctx.createOscillator();
+    const depth = ctx.createGain();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(300, at);
+    osc.frequency.exponentialRampToValueAtTime(220, at + 0.25);
+    lfo.frequency.value = 12;
+    depth.gain.value = 12;
+    lfo.connect(depth);
+    depth.connect(osc.frequency);
+    g.gain.value = 0.0001;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.09, at + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.25);
+    osc.connect(g);
+    g.connect(o);
+    osc.start(at);
+    lfo.start(at);
+    osc.stop(at + 0.3);
+    lfo.stop(at + 0.3);
+  }
+
+  /** An iron odd or end jumps to the train: a springy rise, "びよん". */
+  playIronBiyon(): void {
+    const o = this.out(0.1, 1.2);
+    this.ping(420, 0, 0.12, 'sine', 0.1, 900, 0.004, o);
+    this.ping(430, 0.03, 0.1, 'sine', 0.05, 920, 0.004, o);
+  }
+
+  /** It drops off: two little tin taps, "からん". */
+  playIronKaran(): void {
+    const o = this.out(0.15, 1.2);
+    this.ping(2400, 0, 0.05, 'triangle', 0.09, 2400, 0.001, o);
+    this.ping(1800, 0.06, 0.05, 'triangle', 0.08, 1800, 0.001, o);
+  }
+
+  /** A sign's bell on its string: "ちりん". */
+  playSignBell(): void {
+    this.bell(1568, 0, 0.07, 0.5);
+    this.bell(2349, 0.02, 0.05, 0.5);
+  }
+
   /** Stop grade: a bell for ok; for perfect, two rising bells and a little sparkle. */
   playStop(kind: 'perfect' | 'ok'): void {
     this.bell(660, 0, 0.16, 0.6);

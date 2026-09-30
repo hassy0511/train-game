@@ -13,6 +13,7 @@ import { buildSeaPlaceholder } from './sea-placeholders';
 import { buildSkyPlaceholder } from './sky-placeholders';
 import { buildSnowPlaceholder } from './snow-placeholders';
 import { buildToyPlaceholder } from './toy-placeholders';
+import { buildMagnetPlaceholder } from './magnet-placeholders';
 import { buildVolcanoPlaceholder } from './volcano-placeholders';
 
 const PLACEHOLDER_COLORS: Record<string, number> = {
@@ -77,6 +78,7 @@ export class ModelLibrary {
         buildSnowPlaceholder(name) ??
         buildNightPlaceholder(name) ??
         buildToyPlaceholder(name) ??
+        buildMagnetPlaceholder(name) ??
         buildRecordPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(drawn ?? makePlaceholder(name));
