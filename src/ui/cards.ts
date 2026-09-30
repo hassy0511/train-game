@@ -6,7 +6,7 @@ const BADGE = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
   <circle cx="60" cy="60" r="9" fill="#ffd166" stroke="#2b3a4a" stroke-width="3"/>
 </svg>`;
 
-export type CardIcon = 'badge' | 'ring' | 'wave' | 'snow' | 'drawing';
+export type CardIcon = 'badge' | 'ring' | 'wave' | 'snow' | 'drawing' | 'firefly';
 
 /**
  * v1.10 (3-2): a crayon drawing of the Wonder train on drawing paper (the boat's sail): three round cars with windows
@@ -78,6 +78,30 @@ const SNOW = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
       .join('')}
   </g>
   <circle cx="60" cy="60" r="8" fill="#fff"/>
+</svg>`;
+
+/**
+ * v1.11 chapter 5's end: three soft yellow-green lights with little wings over a night blue (PHASE9_CHAPTER5_6 第 1 部
+ * §1.3; fireflies, no face).
+ */
+const FIREFLY = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
+  <circle cx="60" cy="60" r="54" fill="#34407a" stroke="#ffd166" stroke-width="6"/>
+  ${[
+    [42, 48, 1],
+    [78, 40, 0.8],
+    [62, 80, 1.1],
+  ]
+    .map(
+      ([x, y, k]) => `<g transform="translate(${x} ${y}) scale(${k})">
+    <circle r="15" fill="#e8ff9a" opacity="0.28"/>
+    <ellipse cx="-6" cy="-7" rx="6" ry="3.5" fill="#fff" opacity="0.75" transform="rotate(-30 -6 -7)"/>
+    <ellipse cx="6" cy="-7" rx="6" ry="3.5" fill="#fff" opacity="0.75" transform="rotate(30 6 -7)"/>
+    <circle r="7" fill="#d9ff66"/>
+    <circle r="3.5" fill="#fffbe0"/>
+  </g>`,
+    )
+    .join('')}
+  <circle cx="30" cy="84" r="1.8" fill="#fff"/><circle cx="92" cy="72" r="1.6" fill="#fff"/><circle cx="84" cy="94" r="1.4" fill="#fff"/>
 </svg>`;
 
 /** Chapter 2's end: six islands joined by rail into a ring. */
@@ -195,7 +219,7 @@ export function showCard(
     }
     // v1.10 (3-2): a crayon drawing on drawing paper.
     if (icon === 'drawing') el.classList.add('is-drawing');
-    if (icon) el.insertAdjacentHTML('beforeend', { badge: BADGE, ring: RING, wave: WAVE, snow: SNOW, drawing: DRAWING }[icon]);
+    if (icon) el.insertAdjacentHTML('beforeend', { badge: BADGE, ring: RING, wave: WAVE, snow: SNOW, drawing: DRAWING, firefly: FIREFLY }[icon]);
     const h = document.createElement('h1');
     if (options.mirror && !reflect) h.setAttribute('aria-label', 'ぐるぐる もようの てがみ');
     const lines = title.split('\n');

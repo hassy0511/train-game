@@ -1887,6 +1887,142 @@ body {
   }
 }
 
+/* ---- v1.11 chapter 5's end: fireflies (PHASE9_CHAPTER5_6 第 1 部 §4.2) ---- */
+/* Night: the sky a deeper blue-violet over the map, never darker than 70 % bright; a dozen little stars twinkle. */
+.map.is-night .map-sky {
+  opacity: 1;
+  background: linear-gradient(rgba(34, 40, 110, 0.42), rgba(60, 50, 130, 0.26) 70%, rgba(60, 50, 130, 0.14));
+  transition-duration: 0.6s;
+}
+
+.map-stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.map-star {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.7);
+  animation: map-star-twinkle 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes map-star-twinkle {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* A firefly: a soft yellow-green dot that drifts from island to island along the rail (its place is set by map.ts). */
+.map-firefly {
+  position: absolute;
+  z-index: 120;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fffbe0 0 30%, #d9ff66 45%, rgba(217, 255, 102, 0) 72%);
+  pointer-events: none;
+  transition:
+    left 0.45s ease-in-out,
+    top 0.45s ease-in-out;
+  animation: map-firefly-glow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes map-firefly-glow {
+  from {
+    opacity: 0.65;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* The one big light they gather into (a fifth of an island across): it flies to the "?" island (or the castle). */
+.map-bigfly {
+  position: absolute;
+  z-index: 121;
+  width: 5%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fffef0 0 22%, #e9ff8a 40%, rgba(217, 255, 102, 0.45) 60%, rgba(217, 255, 102, 0) 72%);
+  pointer-events: none;
+  transition:
+    left 0.8s ease-in-out,
+    top 0.8s ease-in-out;
+}
+
+/* An island of the path: a warm ring of light (no hop, no bob). */
+.map-island.is-glow img {
+  filter: drop-shadow(0 0 16px rgba(233, 255, 138, 0.95)) drop-shadow(0 0 6px rgba(255, 240, 170, 0.9));
+  transition: filter 0.3s ease-out;
+}
+
+.map-link.is-firefly .glow {
+  stroke: rgba(210, 255, 110, 0.85);
+}
+
+.map-link.is-firefly .glow-core {
+  stroke: #fbffe0;
+}
+
+/* The "?" island the big light lands on glows warmly from then on (6-1's castle wakes there from PR9). */
+.map-island.is-teaser.is-lit img {
+  filter: grayscale(0.2) brightness(1.6) drop-shadow(0 0 14px rgba(255, 230, 140, 0.95));
+}
+
+.map-island.is-teaser.is-lit .map-mystery {
+  color: #f2b53a;
+}
+
+.map-island.is-teaser.is-next {
+  animation: island-bounce 0.9s ease-in-out infinite alternate;
+}
+
+/* v1.11 (§0.4): an island with a record the child can fetch now with a later ability: its badge glows softly. */
+.map-badge.is-takeable {
+  background: #fffbe0;
+  animation: badge-takeable 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes badge-takeable {
+  from {
+    box-shadow:
+      0 2px 0 rgba(31, 42, 68, 0.15),
+      0 0 0 0 rgba(255, 214, 90, 0.4);
+  }
+  to {
+    box-shadow:
+      0 2px 0 rgba(31, 42, 68, 0.15),
+      0 0 12px 4px rgba(255, 214, 90, 0.85);
+  }
+}
+
+/* Calm motion: no dots fly and nothing twinkles; the islands glow in turn and the night comes and goes at once. */
+@media (prefers-reduced-motion: reduce) {
+  .map.is-night .map-sky {
+    transition: none;
+  }
+  .map-star,
+  .map-badge.is-takeable {
+    animation: none;
+  }
+  .map-firefly,
+  .map-bigfly {
+    display: none;
+  }
+}
+
 /* The next chapter's single "?" island: white, floating, joined to the first town by a dotted line. */
 .map-island.is-teaser {
   animation: island-float 2.4s ease-in-out infinite alternate;

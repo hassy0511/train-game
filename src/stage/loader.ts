@@ -9,7 +9,7 @@ import { reversedZones } from '../gimmick/reversed-whistle';
 import { FIREFLY_FORK } from '../train/params';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
-import type { Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
+import type { AbilityId, Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
 import { ironDrawsProp, ironPropsFor, magnetTargets } from '../gimmick/magnet-layout';
 import {
   validateIceLayout,
@@ -49,10 +49,11 @@ export async function loadAllRecords(): Promise<{ stageId: string; stageTitle: s
 /** Title and required stages of a stage, without building it. */
 export async function peekStage(
   id: string,
-): Promise<(Pick<StageFile, 'id' | 'title' | 'unlock' | 'unlocks' | 'records'> & { missionCount: number }) | null> {
+): Promise<(Pick<StageFile, 'id' | 'title' | 'unlock' | 'unlocks' | 'records'> & { missionCount: number; openingUnlocks: AbilityId[] }) | null> {
   const load = stageModules[`../stages/${id}.json`];
   if (!load) return null;
   const file = ((await load()) as { default: StageFile }).default;
+  const opening = (file.opening && file.cutscenes?.[file.opening]) || [];
   return {
     id: file.id,
     title: file.title,
@@ -60,6 +61,8 @@ export async function peekStage(
     unlocks: file.unlocks,
     records: file.records,
     missionCount: file.missions.length,
+    // v1.11: the abilities the stage gives in its opening (so the child has them from its start: the map's badges).
+    openingUnlocks: opening.flatMap((st) => ('unlock' in st ? [st.unlock] : [])),
   };
 }
 

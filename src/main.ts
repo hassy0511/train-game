@@ -138,6 +138,8 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
   const progress = loadProgress();
   const resume = await savedResume();
   const islands: MapIsland[] = [];
+  // v1.11 (PHASE9_CHAPTER5_6 §0.4): the abilities stages before this one give (in world order), for "takeable".
+  const givenBefore = new Set<string>();
   for (const island of file.islands) {
     const stage = await peekStage(island.id);
     if (!stage) {
@@ -145,6 +147,9 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
       continue;
     }
     const missing = stage.records.filter((r) => !progress.records.includes(r.id));
+    // What the child has at this stage's start: the earlier stages' abilities and its own opening's.
+    const atStart = new Set([...givenBefore, ...stage.openingUnlocks]);
+    for (const a of stage.unlocks) givenBefore.add(a);
     islands.push({
       id: island.id,
       title: stage.title,
@@ -153,6 +158,8 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
       recordsFound: stage.records.length - missing.length,
       recordsTotal: stage.records.length,
       needsLater: missing.some((r) => r.requires !== null && !progress.abilities.includes(r.requires)),
+      // A record for an ability this stage does not give at its start, and the child has it now: come back for it.
+      takeable: missing.some((r) => r.requires !== null && !atStart.has(r.requires) && progress.abilities.includes(r.requires)),
       resumeMission: resume?.stage === island.id ? resume.mission : undefined,
     });
   }
@@ -190,10 +197,14 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
       ring: ending.ring,
       path: ending.path,
       light,
+      target: ending.target,
       // The water light ends on the next chapter's first island: it wakes up then, and snow falls on its chapter.
-      wake: light === 'water' && opens ? [opens.id] : undefined,
+      // v1.11: the fireflies' path wakes its last island the same way (when it opens with the end).
+      wake: (light === 'water' || light === 'firefly') && opens ? [opens.id] : undefined,
       snow: light === 'water' ? file.islands.filter((i) => i.chapter === lastChapter).map((i) => i.id) : undefined,
-      onHop: () => (light === 'water' ? audio.playBubblePop() : audio.playRecord()),
+      onHop: () => (light === 'water' ? audio.playBubblePop() : light === 'firefly' ? audio.playFirefly() : audio.playRecord()),
+      // v1.11: the fireflies' big light lands on the "?" island (the castle's windows come with 6-1, PR9).
+      onLand: () => audio.playFirefly(),
       onSnow: () => audio.playSnowShimmer(),
       onShown: async () => {
         if (ending.ring || ending.path) audio.playFanfare();

@@ -355,6 +355,8 @@ test('stage 5-3 full run: the magnet light learned, the mirror world, phantoms, 
   await page.screenshot({ path: resolve(OUT, '5-3-10-gate-bump.png') });
   expect(Number(await app.getAttribute('data-s')) + FRONT).toBeLessThanOrEqual(FLIP2.from - 4 + 0.6);
   await expect(app).toHaveAttribute('data-phase', 'driving');
+  // The partner says what to do (after "ぽよん！"), then the whistle on its glow.
+  await expect.poll(lines, { timeout: 30_000 }).toContain('きてきで あいず しよう！');
   await pressOnGlow(page, 'whistle');
   await expect(app).toHaveAttribute('data-flip-gate', 'open', { timeout: 10_000 });
   await expect(app).toHaveAttribute('data-flip', '1', { timeout: 60_000 });
@@ -460,10 +462,17 @@ test('stage 5-3 full run: the magnet light learned, the mirror world, phantoms, 
   expect(b.tris).toBeLessThanOrEqual(100000);
   await page.locator('#card-button').click();
 
-  // ---- The map: page 3, island 5-3 cleared, two records of three (the third waits for "うしろむき") ----
+  // ---- The map: chapter 5's end (night, the fireflies into one big light on 「6しょう ？」, the card), then island
+  // 5-3 cleared with two records of three (the third waits for "うしろむき") ----
   const map = page.locator('#map');
   await expect(map).toBeVisible({ timeout: 30_000 });
   await expect(map).toHaveAttribute('data-page', '3', { timeout: 20_000 });
+  await expect(map).toHaveAttribute('data-light', 'firefly', { timeout: 20_000 });
+  await expect(map).toHaveAttribute('data-trail', '5-1,5-2,5-3,teaser:6', { timeout: 30_000 });
+  await card(page, '5しょう クリア！');
+  await expect(map).toHaveAttribute('data-finale', 'done', { timeout: 20_000 });
+  await expect(page.locator('.map-island[data-island="teaser:6"]')).toHaveClass(/is-next/);
+  expect((await progress(page)).mapLinks).toContain('finale:5');
   const island = page.locator('.map-island[data-island="5-3"]');
   await expect(island).toHaveClass(/is-cleared/, { timeout: 30_000 });
   await expect(island.locator('.map-badge')).toHaveText('きろく 2/3 ？');
