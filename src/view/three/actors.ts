@@ -534,7 +534,7 @@ export class ActorLayer {
       to: to.clone(),
       elapsed: 0,
       seconds,
-      bob: this.objectModels.get(id) === 'amanojaku' || this.objectModels.get(id) === 'amanojaku-blush' || this.hoppers.has(id),
+      bob: (this.objectModels.get(id) ?? '').startsWith('amanojaku') || this.hoppers.has(id),
       roll: this.rollers.has(id) || (this.objectModels.get(id) ?? '').startsWith('snowman') || this.objectModels.get(id) === 'snow-wave',
     });
   }

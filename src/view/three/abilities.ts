@@ -236,7 +236,8 @@ export function buildLightBeam(): Object3D {
 
 /**
  * v1.11 (5-1): the beam as it is drawn at night: the same cone, but fading out along its length (gone by its far end)
- * and fainter on its upper side, so against a dark sky it never draws a bright wedge above the horizon. Colours by
+ * and wherever it is higher than the camera's eye (what would be seen above the horizon), so against a dark sky it never
+ * draws a wedge. Colours by
  * vertex (additive: dark = nothing). Hidden by day (the day's beam is kept exactly as it was).
  */
 function buildNightBeam(length: number): Mesh {
@@ -248,13 +249,24 @@ function buildNightBeam(length: number): Mesh {
   for (let i = 0; i < pos.count; i++) {
     // Before turning: −y runs from the apex (0) to the far end (−length); +z is the cone's upper side once turned.
     const t = Math.min(1, -pos.getY(i) / length);
-    const upper = pos.getZ(i) > 0 ? Math.max(0.15, 1 - pos.getZ(i) / 3) : 1;
-    const k = (1 - t) ** 2 * upper;
+    const k = (1 - t) ** 2;
     colors.set([base.r * k, base.g * k, base.b * k], i * 3);
   }
   cone.setAttribute('color', new Float32BufferAttribute(colors, 3));
   cone.rotateX(-Math.PI / 2 + 0.08);
-  const beam = new Mesh(cone, new MeshBasicMaterial({ vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, side: DoubleSide }));
+  const material = new MeshBasicMaterial({ vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, side: DoubleSide });
+  // Whatever of it is higher than the eye is seen above the horizon (from the cab: the part near the lamp, which
+  // would fill the sky with a bright triangle): it fades out there, whatever the camera.
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vBeamWorldY;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvBeamWorldY = (modelMatrix * vec4(transformed, 1.0)).y;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vBeamWorldY;')
+      .replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.rgb *= 1.0 - smoothstep(-0.8, 0.0, vBeamWorldY - cameraPosition.y);');
+  };
+  material.customProgramCacheKey = () => 'night-beam';
+  const beam = new Mesh(cone, material);
   beam.name = 'light-beam-night';
   beam.position.set(0, 3.3, 6.3);
   beam.visible = false;
