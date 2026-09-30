@@ -118,7 +118,7 @@ const at = (s, lateral = 0, up = 0, line = main) => {
 
 const GIMMICKS = [
   { type: 'slope', railId: 'main', from: 2360, to: 2430, params: { pull: -6, rewind: { railId: 'main', at: 2300 }, line: 'ねじねじ さか！ ロケット！' } },
-  { type: 'slope', railId: 'main', from: SLIDE.from, to: SLIDE.to, params: { pull: 3, max: 14, look: 'slide', line: 'すべりだい〜！ しゅーっ！' } },
+  { type: 'slope', railId: 'main', from: SLIDE.from, to: SLIDE.to, params: { pull: 3, max: 14, look: 'slide' } },
   { type: 'tunnel', railId: 'main', from: TOYBOX.from, to: TOYBOX.to, params: { look: 'toybox', dim: 0.45, fogColor: '#2a2342' } },
   { type: 'sound', railId: 'main', from: TOYBOX.from, to: TOYBOX.to, params: { surface: 'tunnel' } },
   { type: 'sound', railId: 'main', from: SLIDE.from, to: SLIDE.to, params: { surface: 'soft' } },
@@ -263,6 +263,8 @@ const MISSIONS = [
       rocketReady: 'いまだ！ ロケット！',
       rocketGo: 'ぐいーん！ ねじを のぼれ〜',
       rocketAgain: 'おそく なってきた… もういっかい！',
+      // Said on entering the slide (a down slope's own `line` is not said: its line is noBrake).
+      noBrake: 'すべりだい〜！ しゅーっ！',
       noBrakeLever: 'すべりだいは レバー おやすみ',
       tunnelNear: 'おもちゃばこだ！ ライトを つけよう',
       recordFound: 'みつけた！ ずかんに のせよう',
@@ -333,7 +335,7 @@ const opening = [
 
 const glimpse = [
   // From the edge of the square, behind a block house: Sakasa alone, pushing a little block train to and fro.
-  cam(1792, -5, 4, 1815, -28, 1),
+  cam(1801, -13, 3.5, 1816, -28, 1),
   { spawn: 'sakasa', model: 'amanojaku', onRail: onMain(1815, -28), rotationY: 0 },
   { spawn: 'block-train', model: 'toy-block-train', onRail: onMain(1817, -28) },
   { move: 'sakasa', onRail: onMain(1822, -28), seconds: 3, nowait: true },

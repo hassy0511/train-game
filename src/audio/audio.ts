@@ -487,9 +487,9 @@ export class AudioEngine {
   /** The band's footstep "とん" on the beat (`accent`: every fourth, with a tiny cymbal "ちっ"). */
   playBandStep(accent = false): void {
     const o = this.out(0.05, 1);
-    this.ping(110, 0, 0.08, 'sine', 0.07, 90, 0.004, o);
-    this.hiss({ seconds: 0.03, gain: 0.02, filter: 'bandpass', freq: 900, q: 1, dest: o });
-    if (accent) this.hiss({ delay: 0.01, seconds: 0.06, gain: 0.015, filter: 'highpass', freq: 7000, dest: o });
+    this.ping(110, 0, 0.1, 'sine', 0.2, 90, 0.004, o);
+    this.hiss({ seconds: 0.04, gain: 0.06, filter: 'bandpass', freq: 900, q: 1, dest: o });
+    if (accent) this.hiss({ delay: 0.01, seconds: 0.06, gain: 0.04, filter: 'highpass', freq: 7000, dest: o });
   }
 
   /** A spinning fork turning over: four wooden clicks and a little rise, "かたかた… くるっ". */
@@ -526,8 +526,8 @@ export class AudioEngine {
   /** Sakasa's toy block train: two tiny puffs, "しゅっ しゅっ". */
   playToyPuff(): void {
     const o = this.out(0.05, 1.2);
-    this.hiss({ seconds: 0.08, gain: 0.04, filter: 'bandpass', freq: 3000, q: 1.2, dest: o });
-    this.hiss({ delay: 0.22, seconds: 0.08, gain: 0.04, filter: 'bandpass', freq: 3000, q: 1.2, dest: o });
+    this.hiss({ seconds: 0.1, gain: 0.12, filter: 'bandpass', freq: 2400, q: 1, dest: o });
+    this.hiss({ delay: 0.22, seconds: 0.1, gain: 0.12, filter: 'bandpass', freq: 2400, q: 1, dest: o });
   }
 
   /** Stop grade: a bell for ok; for perfect, two rising bells and a little sparkle. */

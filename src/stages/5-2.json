@@ -563,6 +563,7 @@
         "rocketReady": "いまだ！ ロケット！",
         "rocketGo": "ぐいーん！ ねじを のぼれ〜",
         "rocketAgain": "おそく なってきた… もういっかい！",
+        "noBrake": "すべりだい〜！ しゅーっ！",
         "noBrakeLever": "すべりだいは レバー おやすみ",
         "tunnelNear": "おもちゃばこだ！ ライトを つけよう",
         "recordFound": "みつけた！ ずかんに のせよう",
@@ -585,7 +586,7 @@
       "to": 2430,
       "params": { "pull": -6, "rewind": { "railId": "main", "at": 2300 }, "line": "ねじねじ さか！ ロケット！" }
     },
-    { "type": "slope", "railId": "main", "from": 2498, "to": 2582, "params": { "pull": 3, "max": 14, "look": "slide", "line": "すべりだい〜！ しゅーっ！" } },
+    { "type": "slope", "railId": "main", "from": 2498, "to": 2582, "params": { "pull": 3, "max": 14, "look": "slide" } },
     { "type": "tunnel", "railId": "main", "from": 2640, "to": 2780, "params": { "look": "toybox", "dim": 0.45, "fogColor": "#2a2342" } },
     { "type": "sound", "railId": "main", "from": 2640, "to": 2780, "params": { "surface": "tunnel" } },
     { "type": "sound", "railId": "main", "from": 2498, "to": 2582, "params": { "surface": "soft" } },
@@ -622,7 +623,7 @@
       { "say": "ぎゃくまきを まきなおしに いこう！" }
     ],
     "glimpse": [
-      { "camera": "fixed", "at": [607.1, 5, 1573.9], "lookAt": [639.5, 2, 1576.7], "reach": 1 },
+      { "camera": "fixed", "at": [619, 4.5, 1575.6], "lookAt": [640.2, 2, 1577.5], "reach": 1 },
       { "spawn": "sakasa", "model": "amanojaku", "onRail": { "railId": "main", "at": 1815, "lateral": -28, "heightFromRail": 0 }, "rotationY": 0 },
       { "spawn": "block-train", "model": "toy-block-train", "onRail": { "railId": "main", "at": 1817, "lateral": -28, "heightFromRail": 0 } },
       { "move": "sakasa", "onRail": { "railId": "main", "at": 1822, "lateral": -28, "heightFromRail": 0 }, "seconds": 3, "nowait": true },

@@ -55,4 +55,4 @@
 - `models.html?compare=windup-chick-back,windup-chick` と `?compare=band-trumpet,band-drum` で ならべて 見られる こと
 - `models.html?compare=block-folk-a,windup-car,band-trumpet` で だいさんが「有名な おもちゃに 似て いないか」を 見る こと
 - または Playwright スモークの スクショ（`tests/smoke/stage-5-2-full.spec.ts`・`toy.spec.ts`）で 見える こと
-- 性能: 5-2 の いちばん 重い 1 コマが 200 回・10 万 三角形 以内（`npm run budget 5-2`。いまは 仮の 形で 78 回・6.9 万）
+- 性能: 5-2 の いちばん 重い 1 コマが 200 回・10 万 三角形 以内（`npm run budget 5-2`。いまは 仮の 形で 76 回・6.9 万。通しで 遊んだ いちばん 重い コマは 98 回・7.7 万）
