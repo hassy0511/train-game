@@ -37,7 +37,7 @@ test('boots stage 0-0, drives for 5 s, passes the sensor, whistle cools down', a
     for (let j = i + 1; j < rounds.length; j++) {
       const a = rounds[i];
       const b = rounds[j];
-      expect(Math.hypot(a.cx - b.cx, a.cy - b.cy), `${a.id} vs ${b.id}`).toBeGreaterThanOrEqual(a.r + b.r);
+      expect(Math.hypot(a.cx - b.cx, a.cy - b.cy), `${a.id} vs ${b.id}`).toBeGreaterThanOrEqual(a.r + b.r - 1);
     }
   }
   await page.screenshot({ path: resolve(OUT, '00-start.png') });

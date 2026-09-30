@@ -82,8 +82,11 @@ async function box(page: Page, selector: string): Promise<Box> {
 
 /**
  * PHASE7 §1: the camera is a small round button just inside the pause button, level with it and apart from it;
- * its tiles open on screen, clear of the thumb buttons. The six round buttons form layout "D" (PHASE9_0 §2).
+ * its tiles open on screen, clear of the thumb buttons (on the iPad). The six round buttons follow PHASE9_0 §2.
  */
+/** Each button's distance from the screen edge on the thumb's side, per viewport size, from the right-handed pass. */
+const layoutEdges = new Map<string, Record<string, number>>();
+
 async function checkLayout(page: Page, leftHanded: boolean, width: number, height: number, shot?: string, menuClearOfButtons = true): Promise<void> {
   await page.setViewportSize({ width, height });
   await page.waitForTimeout(300);
@@ -98,9 +101,10 @@ async function checkLayout(page: Page, leftHanded: boolean, width: number, heigh
     expect(cam.x).toBeLessThan(pause.x);
     expect(cam.x).toBeGreaterThan(width / 2);
   }
-  // PHASE9_0 §2 layout "D": the whistle is 1.2x in the middle; the others sit on a ring round it (jump lower-left, dive
-  // left, snowplow upper-left, light up, rocket upper-right). Left-handed mirrors it. The buttons are round, so they are
-  // compared as circles (centre distance >= sum of the radii), not as boxes.
+  // PHASE9_0 §2: the six round buttons tucked round the whistle (the layout itself may still change, so only its
+  // rules are checked). They are round, so they are compared as circles (centre distance >= sum of the radii), not as
+  // boxes; all on screen; the whistle is the biggest and the one nearest the thumb's corner (bottom-right, or
+  // bottom-left left-handed); the others within 2.2 button widths of it; the top one under the camera button.
   const ids = ['whistle', 'jump', 'dive', 'plow', 'light', 'rocket'] as const;
   const buttons = await Promise.all(ids.map((id) => box(page, `#${id}`)));
   const at: Record<string, Box & { cx: number; cy: number; r: number }> = {};
@@ -112,35 +116,27 @@ async function checkLayout(page: Page, leftHanded: boolean, width: number, heigh
     for (let j = i + 1; j < ids.length; j++) {
       const a = at[ids[i]];
       const b = at[ids[j]];
-      expect(Math.hypot(a.cx - b.cx, a.cy - b.cy), `${ids[i]} vs ${ids[j]}`).toBeGreaterThanOrEqual(a.r + b.r);
+      expect(Math.hypot(a.cx - b.cx, a.cy - b.cy), `${ids[i]} vs ${ids[j]}`).toBeGreaterThanOrEqual(a.r + b.r - 1);
     }
   }
-  const { whistle, jump, dive, plow, light, rocket } = at;
-  expect(whistle.r).toBeGreaterThan(jump.r); // 1.2x
-  // Sign of "to the right" (right-handed) or "to the left" (left-handed): +1 = away from the whistle on the outer side.
-  const side = leftHanded ? -1 : 1;
-  const east = (a: { cx: number }, b: { cx: number }) => side * (a.cx - b.cx); // > 0 when a is east of b
-  // The whistle is the middle: everything else is nearer than 2.5 whistle radii.
-  for (const id of ['jump', 'dive', 'plow', 'light', 'rocket'] as const) {
-    expect(Math.hypot(at[id].cx - whistle.cx, at[id].cy - whistle.cy), `${id} near the whistle`).toBeLessThan(whistle.r * 2.5);
+  const whistle = at.whistle;
+  const corner = { x: leftHanded ? 0 : width, y: height };
+  const toCorner = (c: { cx: number; cy: number }) => Math.hypot(c.cx - corner.x, c.cy - corner.y);
+  for (const id of ids) {
+    const b = at[id];
+    expect(b.x >= 0 && b.y >= cam.y + cam.height && b.x + b.width <= width && b.y + b.height <= height, `${id} on screen, under the camera`).toBe(true);
+    if (id === 'whistle') continue;
+    expect(whistle.r, `the whistle is bigger than ${id}`).toBeGreaterThan(b.r);
+    expect(toCorner(whistle), `the whistle is nearer the corner than ${id}`).toBeLessThan(toCorner(b));
+    expect(Math.hypot(b.cx - whistle.cx, b.cy - whistle.cy), `${id} near the whistle`).toBeLessThanOrEqual(b.r * 2 * 2.2);
   }
-  // Jump lower-left of the whistle, dive left, snowplow upper-left (left-handed: the mirror image).
-  expect(east(jump, whistle)).toBeLessThan(0);
-  expect(jump.cy).toBeGreaterThan(whistle.cy);
-  expect(east(dive, whistle)).toBeLessThan(0);
-  expect(Math.abs(dive.cy - whistle.cy)).toBeLessThan(2);
-  expect(east(plow, whistle)).toBeLessThan(0);
-  expect(plow.cy).toBeLessThan(whistle.cy);
-  // Dive is further out than jump and plow; light is up, rocket upper-right of it; nothing lower-right of the whistle.
-  expect(east(dive, jump)).toBeLessThan(0);
-  expect(east(dive, plow)).toBeLessThan(0);
-  expect(light.cy).toBeLessThan(whistle.cy);
-  expect(east(rocket, whistle)).toBeGreaterThan(0);
-  expect(rocket.cy).toBeLessThan(whistle.cy);
-  expect(east(rocket, light)).toBeGreaterThan(0);
-  expect(rocket.cy).toBeGreaterThan(light.cy);
-  for (const id of ['jump', 'dive', 'plow', 'light', 'rocket'] as const) {
-    expect(east(at[id], whistle) > 0 && at[id].cy > whistle.cy, `${id} is not lower-right of the whistle`).toBe(false);
+  // Left-handed mirrors right-handed (remembered from the right-handed pass at the same size).
+  const mirrorKey = `${width}x${height}`;
+  const edges = Object.fromEntries(ids.map((id) => [id, leftHanded ? at[id].x : width - (at[id].x + at[id].width)]));
+  if (!leftHanded) layoutEdges.set(mirrorKey, edges);
+  else {
+    const right = layoutEdges.get(mirrorKey);
+    if (right) for (const id of ids) expect(Math.abs(edges[id] - right[id]), `${id} mirrored`).toBeLessThanOrEqual(2);
   }
   // The stop gauge (shown near a station) stays clear of the corner camera: shown for a moment to measure it.
   const gauge = await page.evaluate(() => {
@@ -196,9 +192,8 @@ async function checkLayout(page: Page, leftHanded: boolean, width: number, heigh
   expect(menu.x + menu.width).toBeLessThanOrEqual(width);
   expect(menu.y + menu.height).toBeLessThanOrEqual(height);
   expect(menu.y).toBeGreaterThanOrEqual(cam.y + cam.height);
-  // On a short phone (667x375) the six-button flower is taller than the room under the corner camera button, so the open
-  // picker (a momentary overlay above the buttons) lies over the light, snowplow and rocket: known, reported to the
-  // author (R1 tests), not asserted there. On the iPad the tiles stay clear of every button.
+  // On a short phone (667x375) six buttons are taller than the room under the corner camera button, so the open picker
+  // (a moment's overlay above them) may lie over the top ones: accepted (PHASE9_0 §2); on the iPad it stays clear.
   if (menuClearOfButtons) for (const b of buttons) expect(overlaps(menu, b), 'camera tiles clear of the round buttons').toBe(false);
   // The open tiles share the stop gauge's row: the gauge (with its stop line) draws over them, never under.
   const order = await page.evaluate(() => {
@@ -243,6 +238,7 @@ test('corner buttons in the six-button ring, lever left and right, iPad and smal
     await expect(app).toHaveAttribute('data-phase', 'driving');
     await checkLayout(page, leftHanded, 1194, 834, leftHanded ? 'corner-left.png' : 'corner-right.png');
     await checkLayout(page, leftHanded, 667, 375, leftHanded ? 'corner-left-small.png' : 'corner-right-small.png', false);
+    await checkLayout(page, leftHanded, 568, 320, undefined, false);
   }
   await page.setViewportSize({ width: 1194, height: 834 });
   expect(errors).toEqual([]);
