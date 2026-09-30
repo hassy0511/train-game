@@ -225,10 +225,15 @@ test('0-0: pressed while moving it stops first; pressed again it cancels; mashin
   const cancelled = await page.evaluate(async () => {
     const b = document.getElementById('reverse-switch') as HTMLElement;
     const d = (document.getElementById('app') as HTMLElement).dataset;
+    // (The switch's marks are written in the game's frame: wait two frames after each press.)
+    const frames = async (n: number): Promise<void> => {
+      for (let i = 0; i < n; i++) await new Promise((r) => requestAnimationFrame(() => r(null)));
+    };
     b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+    await frames(2);
     const first = b.dataset.pending;
-    await new Promise((r) => setTimeout(r, 300));
     b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+    await frames(2);
     return { first, second: b.dataset.pending, direction: d.direction };
   });
   expect(cancelled).toEqual({ first: '1', second: '0', direction: '1' });
@@ -355,10 +360,11 @@ test('0-0: reversing retraces the way it came through a junction (no arrows)', a
   await standStill(page);
   await setDirection(page, 'back');
   const from = (await reverseLog(page)).length;
+  // The log only adds a row when something changes: the tail car's rail before it moves comes from the page.
+  const tails: string[] = [(await app.getAttribute('data-tail-rail')) ?? ''];
   await setNotch(page, NORMAL);
   await waitTail(page, 'main', 540);
   const rows = (await reverseLog(page)).slice(from);
-  const tails: string[] = [];
   for (const r of rows) if (tails[tails.length - 1] !== r.tailRail) tails.push(r.tailRail);
   console.log(`reverse: the tail car went ${tails.join(' → ')}`);
   expect(tails).toEqual(['jishaku', 'main']);

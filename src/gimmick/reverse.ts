@@ -165,7 +165,7 @@ export class ReverseSystem {
     } else {
       // (a): past a back junction with something in its siding, until the front is glowAfter m on.
       for (const j of this.stage.backJunctions) {
-        const tail = t.frontS - REVERSE.tail;
+        const tail = st.s - REVERSE.tail; // the rear end (the lead car centre less 31 m)
         const inside = st.railId === j.railId && tail >= j.at + 1 && tail <= j.at + REVERSE.glowAfter && !t.retracing;
         if (inside && this.worth(j)) {
           glow = true;
