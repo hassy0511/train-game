@@ -730,8 +730,8 @@ export class AudioEngine {
   }
 
   /** Waiting to turn (braking first): one soft "ちっ" (the game plays it every 0.25 s until it stands). */
-  playSwitchPending(): void {
-    this.knock(1400, 0, 0.05, this.out(0, 1.2));
+  playSwitchPending(delay = 0): void {
+    this.knock(1400, delay, 0.07, this.out(0, 1.2));
   }
 
   /** Reversing, stopped gently at a stop point ("おっとっと"): "とととっ" on three falling woodblocks. */
