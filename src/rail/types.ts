@@ -28,7 +28,20 @@ export interface Rail {
   removeGap(from: number, to: number): boolean;
 }
 
+/** A place on a rail: `at` m along rail `railId`. */
+export interface RailPoint {
+  railId: string;
+  at: number;
+}
+
 export interface RailNetwork {
   readonly rails: Map<string, Rail>;
   getRail(id: string): Rail;
+  /**
+   * v1.11 (PHASE9_CHAPTER5_6 第 3 部 A13): the junction point rail `id` starts at (its parent rail and `at`), or null
+   * when it does not start at a junction.
+   */
+  feeder(id: string): RailPoint | null;
+  /** v1.11: the rails whose end merges into rail `id` (`railId` the merging rail, `at` where on `id`), in rails[] order. */
+  mergesInto(id: string): readonly RailPoint[];
 }

@@ -28,6 +28,7 @@ import {
   TRAIN,
 } from './params';
 import type { TrainPose, TrainState } from './types';
+import { Trail } from './consist';
 
 export type JunctionSide = 'left' | 'right';
 
@@ -128,13 +129,12 @@ export type PlowResult = 'ok' | 'on' | 'play' | 'locked';
 export type DiveResult = 'ok' | 'bob' | 'diving' | 'cooldown' | 'air' | 'locked';
 
 /**
- * v1.10: a dive, a jump arc upside down: bogies between `from` and `from + length` on `railId` go down, `depth` m in
- * the middle. `baseY` is the rail top where it started: where the rail itself goes down (into the water), that much
- * of the lowering is the rail's. Held (the train went on under water), from `holdAt` on it stays `holdDepth` deep
- * until the rail is deeper.
+ * v1.10: a dive, a jump arc upside down: bogies between `from` and `from + length` go down, `depth` m in the middle.
+ * `baseY` is the rail top where it started: where the rail itself goes down (into the water), that much of the
+ * lowering is the rail's. Held (the train went on under water), from `holdAt` on it stays `holdDepth` deep until the
+ * rail is deeper. v1.11 (PR7): `from` and `holdAt` are trail distances (Trail), not rail positions.
  */
 interface DiveArc {
-  railId: string;
   from: number;
   length: number;
   depth: number;
@@ -143,7 +143,7 @@ interface DiveArc {
   holdDepth: number;
 }
 
-/** Lowering (m) of a dive arc at bogie position `s` (the rail's own drop not taken off). */
+/** Lowering (m) of a dive arc at bogie trail distance `s` (the rail's own drop not taken off). */
 function diveDepth(arc: DiveArc, s: number): number {
   if (arc.holdAt !== null && s >= arc.holdAt) return arc.holdDepth;
   const u = (s - arc.from) / arc.length;
@@ -168,18 +168,23 @@ export interface SlopeUnder {
 /** "busy" (PHASE9_0 §3): diving, under water or digging in on land (the jump waits). */
 export type JumpResult = 'ok' | 'stopped' | 'cooldown' | 'air' | 'locked' | 'bough' | 'busy';
 
-/** A jump arc in space: bogies between `from` and `from + length` on `railId` are lifted. */
+/**
+ * A jump arc in space: bogies between `from` and `from + length` are lifted. v1.11 (PR7): trail distances (Trail), so
+ * every car rides it where the lead car did, also past a junction or a merge.
+ */
 interface JumpArc {
-  railId: string;
   from: number;
   length: number;
   height: number;
 }
 
+/** v1.11 (PR7): spacing (m) of the lead car's heights kept for Train.carLiftErr. */
+const LIFT_STEP = 0.25;
+
 /** Share of the arc's slope the car body shows while in the air (0 = stays level). */
 const JUMP_PITCH = 0.3;
 
-/** Height (m) of an arc at bogie position `s`; 0 outside it. */
+/** Height (m) of an arc at bogie trail distance `s`; 0 outside it. */
 function arcHeight(arc: JumpArc, s: number): number {
   const u = (s - arc.from) / arc.length;
   if (u <= 0 || u >= 1) return 0;
@@ -295,6 +300,18 @@ export class Train {
   /** v1.11 (5-3): mirror blocks bumped this try: held before them until they are gone. */
   private readonly held = new Set<string>();
 
+  /** v1.11 (PR7): the way the train has come (every car is placed along it). */
+  readonly trail: Trail;
+  /**
+   * v1.11 (PR7): the lead car's height at trail distances it passed (the last 60 m or so), to see the cars behind ride
+   * the same heights there (carLiftErr, the test hook data-car-lift-err).
+   */
+  private readonly liftTrack: { x: number; y: number }[] = [];
+  private liftErr = 0;
+  private readonly liftPos = new Vector3();
+  private readonly liftQuat = new Quaternion();
+  private gap: number = TRAIN.carSpacing;
+
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
   private readonly rear = new Vector3();
@@ -323,9 +340,29 @@ export class Train {
       quaternion: new Quaternion(),
       cars: Array.from({ length: TRAIN.carCount - 1 }, () => ({ position: new Vector3(), quaternion: new Quaternion() })),
     };
+    this.trail = new Trail(network);
+    this.trail.rebuild(this.state.railId, this.state.s);
     this.refreshPending();
     this.resetDive();
     this.computePose();
+  }
+
+  /** v1.11 (PR7): trail distance of `s` on the current rail. */
+  private odo(s: number): number {
+    return this.trail.odo(s);
+  }
+
+  /** v1.11 (PR7): the distance (m) between the lead car's centre and the next car's (the test hook data-car-gap). */
+  get carGap(): number {
+    return this.gap;
+  }
+
+  /**
+   * v1.11 (PR7): how far (m) up or down any car behind is now from where the lead car was at the same trail distance
+   * (the test hook data-car-lift-err; 0 where the lead car's heights are not known, e.g. right after a rewind).
+   */
+  get carLiftErr(): number {
+    return this.liftErr;
   }
 
   get currentRail(): Rail {
@@ -358,8 +395,8 @@ export class Train {
   /** True while the lead bogie is in the air. */
   get airborne(): boolean {
     const arc = this.arcs[this.arcs.length - 1];
-    const b = this.bogieS;
-    return !!arc && arc.railId === this.state.railId && b > arc.from && b < arc.from + arc.length;
+    const b = this.odo(this.bogieS);
+    return !!arc && b > arc.from && b < arc.from + arc.length;
   }
 
   get isFalling(): boolean {
@@ -491,7 +528,7 @@ export class Train {
     if (this.jumpBlocked) return 'bough';
     if (this.state.speed < JUMP.minSpeed) return 'stopped';
     const distance = this.jumpDistance();
-    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length: distance, height: this.jumpBoost?.height ?? JUMP.height });
+    this.arcs.push({ from: this.odo(this.bogieS), length: distance, height: this.jumpBoost?.height ?? JUMP.height });
     this.events.emit('jumped', { distance });
     return 'ok';
   }
@@ -506,7 +543,7 @@ export class Train {
     const gap = this.nextGap(plain + 40);
     const needed = gap ? gap.to + JUMP.landingMargin + PAD_JUMP.extra - this.bogieS : 0;
     const distance = Math.max(plain, needed);
-    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length: distance, height: PAD_JUMP.height });
+    this.arcs.push({ from: this.odo(this.bogieS), length: distance, height: PAD_JUMP.height });
     this.events.emit('jumped', { distance });
     return true;
   }
@@ -517,7 +554,7 @@ export class Train {
    */
   launch(length: number, height: number): boolean {
     if (this.ended || this.emergency || this.falling || this.airborne || this.state.speed < JUMP.minSpeed) return false;
-    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length, height });
+    this.arcs.push({ from: this.odo(this.bogieS), length, height });
     this.events.emit('jumped', { distance: length });
     return true;
   }
@@ -567,6 +604,8 @@ export class Train {
     st.notch = STOP_NOTCH;
     this.emergency = false;
     this.ended = false;
+    this.trail.rebuild(st.railId, st.s);
+    this.liftTrack.length = 0;
     this.refreshPending();
     this.resetDive();
     this.resetPlow();
@@ -1223,9 +1262,8 @@ export class Train {
   }
 
   private get leadInDive(): boolean {
-    const b = this.bogieS;
-    const id = this.state.railId;
-    return this.diveArcs.some((a) => a.railId === id && b > a.from && (a.holdAt !== null || b < a.from + a.length));
+    const b = this.odo(this.bogieS);
+    return this.diveArcs.some((a) => b > a.from && (a.holdAt !== null || b < a.from + a.length));
   }
 
   /**
@@ -1250,8 +1288,7 @@ export class Train {
     }
     const b = this.bogieS;
     this.diveArcs.push({
-      railId: this.state.railId,
-      from: b,
+      from: this.odo(b),
       length,
       depth: DIVE.depth,
       baseY: this.currentRail.frameAt(b).position.y,
@@ -1330,9 +1367,10 @@ export class Train {
   private passesUnder(f: FloaterDef): boolean {
     const half = floaterLength(f) / 2;
     const need = this.floaterNeed(f) - 1e-6;
+    // (`f` is on the current rail: its ends by trail distance.)
     const depthAt = (s: number): number => {
       let d = 0;
-      for (const a of this.diveArcs) if (a.railId === f.railId) d = Math.max(d, diveDepth(a, s));
+      for (const a of this.diveArcs) d = Math.max(d, diveDepth(a, this.odo(s)));
       return d;
     };
     return depthAt(f.at - half) >= need && depthAt(f.at + half) >= need;
@@ -1454,21 +1492,21 @@ export class Train {
     }
     this.wasInDive = nowInDive;
     // Forget dives the last car has left behind; a held one once the rail under the last car is deeper than it.
-    const last = st.s - TRAIN.carSpacing * (TRAIN.carCount - 1) - TRAIN.bogieOffset;
+    const last = this.odo(st.s) - TRAIN.carSpacing * (TRAIN.carCount - 1) - TRAIN.bogieOffset;
     this.diveArcs = this.diveArcs.filter((a) => {
-      if (a.railId !== st.railId) return true;
       if (a.holdAt === null) return a.from + a.length > last;
       if (last <= a.holdAt) return true;
-      const drop = a.baseY - this.frameOnRail(last).position.y;
+      const drop = a.baseY - this.trail.frameAt(last).position.y;
       return drop < a.holdDepth - 0.05 && last < a.holdAt + 150;
     });
     this.updateDome(false);
   }
 
   /** The train goes on under water in the middle of a dive: the dive keeps its depth from here until the rail is deeper. */
-  private holdDives(b: number): void {
+  private holdDives(bogie: number): void {
+    const b = this.odo(bogie);
     for (const a of this.diveArcs) {
-      if (a.railId !== this.state.railId || a.holdAt !== null || b <= a.from) continue;
+      if (a.holdAt !== null || b <= a.from) continue;
       const at = Math.max(b, a.from + a.length / 2);
       a.holdDepth = diveDepth(a, at);
       a.holdAt = at;
@@ -1491,10 +1529,13 @@ export class Train {
     return 0.4 * Math.sin(Math.PI * Math.min(1, this.bouncing.t / (DIVE.bounceStop + DIVE.bounceSeconds)));
   }
 
-  /** Some car's middle is under water. */
+  /** Some car's middle is under water (each on the rail it is on: PR7). */
   private carsUnder(): boolean {
-    const dives = this.currentRail.dives;
-    for (let i = 0; i < TRAIN.carCount; i++) if (spanAt(dives, this.state.s - TRAIN.carSpacing * i)) return true;
+    const head = this.odo(this.state.s);
+    for (let i = 0; i < TRAIN.carCount; i++) {
+      const at = this.trail.at(head - TRAIN.carSpacing * i);
+      if (spanAt(this.network.getRail(at.railId).dives, at.s)) return true;
+    }
     return false;
   }
 
@@ -1531,11 +1572,10 @@ export class Train {
     this.events.emit('dome', { on: under, instant: true });
   }
 
-  /** Lowering (m) of the car at bogie position `s` from the dives, less what the rail itself has gone down since. */
+  /** Lowering (m) of the car at bogie trail distance `s` from the dives, less what the rail itself has gone down since. */
   private diveLower(s: number, railY: number): number {
     let h = 0;
     for (const a of this.diveArcs) {
-      if (a.railId !== this.state.railId) continue;
       const d = diveDepth(a, s);
       if (d > 0) h = Math.max(h, d - Math.max(0, a.baseY - railY));
     }
@@ -1551,13 +1591,13 @@ export class Train {
     }
     if (!airborne && this.jumpCooldown > 0) this.jumpCooldown = Math.max(0, this.jumpCooldown - dt);
     // Forget arcs the last car has left behind.
-    const lastBogie = this.state.s - TRAIN.carSpacing * (TRAIN.carCount - 1) - TRAIN.bogieOffset;
-    this.arcs = this.arcs.filter((a) => a.railId !== this.state.railId || a.from + a.length > lastBogie);
+    const lastBogie = this.odo(this.state.s) - TRAIN.carSpacing * (TRAIN.carCount - 1) - TRAIN.bogieOffset;
+    this.arcs = this.arcs.filter((a) => a.from + a.length > lastBogie);
     if (airborne || this.falling) return;
     const b = this.bogieS;
     const gap = (this.currentRail.gaps as GapDef[]).find((g) => b >= g.from && b <= g.to);
     if (!gap) return;
-    const short = this.arcs.some((a) => a.railId === this.state.railId && a.from + a.length > gap.from - 12);
+    const short = this.arcs.some((a) => a.from + a.length > this.odo(gap.from) - 12);
     this.falling = { t: 0 };
     this.stopRocket();
     this.events.emit('fell', { gap, railId: this.state.railId, short });
@@ -1577,15 +1617,6 @@ export class Train {
     this.slipping = { t: 0, from: st.s };
     this.settling = false;
     this.events.emit('slipped', { railId: st.railId, s: this.frontS });
-  }
-
-  /** Shifts jump arcs when the train's s is re-based (junction or merge). */
-  private shiftArcs(delta: number, railId: string): void {
-    for (const a of [...this.arcs, ...this.diveArcs]) {
-      a.from += delta;
-      a.railId = railId;
-    }
-    for (const a of this.diveArcs) if (a.holdAt !== null) a.holdAt += delta;
   }
 
   getPose(): TrainPose {
@@ -1644,8 +1675,9 @@ export class Train {
       this.locked = false;
       this.choice = null;
       if (targetId !== st.railId) {
+        // (The arcs are kept by trail distance: they need no shifting. PR7.)
+        this.trail.switchRail(j.at, targetId, 0);
         st.s -= j.at;
-        this.shiftArcs(-j.at, targetId);
         st.railId = targetId;
         this.enteredRail(targetId);
         this.refreshPending();
@@ -1659,8 +1691,8 @@ export class Train {
     const st = this.state;
     if (rail.end.type === 'merge') {
       if (st.s >= rail.length) {
+        this.trail.switchRail(rail.length, rail.end.railId, rail.end.at);
         st.s = rail.end.at + (st.s - rail.length);
-        this.shiftArcs(rail.end.at - rail.length, rail.end.railId);
         st.railId = rail.end.railId;
         this.enteredRail(st.railId);
         this.refreshPending();
@@ -1680,15 +1712,10 @@ export class Train {
     }
   }
 
-  /** Frame on the current rail; wraps on loops, extrapolates at the ends otherwise. */
-  private frameOnRail(s: number) {
-    return this.currentRail.frameAt(this.onLoop ? this.wrap(s) : s);
-  }
-
-  /** Lift (m) from jump arcs at position `s`. */
+  /** Lift (m) from jump arcs at trail distance `s`. */
   private arcLift(s: number): number {
     let h = 0;
-    for (const a of this.arcs) if (a.railId === this.state.railId) h = Math.max(h, arcHeight(a, s));
+    for (const a of this.arcs) h = Math.max(h, arcHeight(a, s));
     return h;
   }
 
@@ -1699,20 +1726,27 @@ export class Train {
     return FALL.depth * k * k * (front ? 1.25 : 0.85);
   }
 
-  /** Writes the body transform of a car centered at `s` into `position`/`quaternion`. */
-  private carPose(s: number, position: Vector3, quaternion: Quaternion): void {
-    const front = this.frameOnRail(s + TRAIN.bogieOffset);
-    const rear = this.frameOnRail(s - TRAIN.bogieOffset);
+  /**
+   * Writes the body transform of the car centred `back` m behind the lead car centre (along the trail) into
+   * `position`/`quaternion`. v1.11 (PR7): each bogie on the rail the trail has there; lifts and dips by trail distance.
+   */
+  private carPose(back: number, position: Vector3, quaternion: Quaternion): void {
+    const x = this.odo(this.state.s) - back;
+    const xf = x + TRAIN.bogieOffset;
+    const xr = x - TRAIN.bogieOffset;
+    const atFront = this.trail.at(xf);
+    const atRear = this.trail.at(xr);
+    const front = this.trail.frameAt(xf);
+    const rear = this.trail.frameAt(xr);
     // The car rides the arc at its center and keeps only a hint of the arc's slope, so the cab view
     // stays on the horizon ("ぴょん" like a toy, not a ski jump). Falling tips it forward.
     // v1.10: a dive lowers the car the same way (at its middle, with a hint of the arc's slope).
-    const hc = this.arcLift(s) - this.diveLower(s, (front.position.y + rear.position.y) / 2);
-    const hFront = this.arcLift(s + TRAIN.bogieOffset) - this.diveLower(s + TRAIN.bogieOffset, front.position.y);
-    const hRear = this.arcLift(s - TRAIN.bogieOffset) - this.diveLower(s - TRAIN.bogieOffset, rear.position.y);
+    const hc = this.arcLift(x) - this.diveLower(x, (front.position.y + rear.position.y) / 2);
+    const hFront = this.arcLift(xf) - this.diveLower(xf, front.position.y);
+    const hRear = this.arcLift(xr) - this.diveLower(xr, rear.position.y);
     const sag = this.sagAt;
-    const id = this.state.railId;
-    const sf = sag ? sag(id, s + TRAIN.bogieOffset) : 0;
-    const sr = sag ? sag(id, s - TRAIN.bogieOffset) : 0;
+    const sf = sag ? sag(atFront.railId, atFront.s) : 0;
+    const sr = sag ? sag(atRear.railId, atRear.s) : 0;
     const bob = this.bobT >= 0 ? (this.bobLand ? DIVE.digDepth : DIVE.bobDepth) * Math.sin((Math.PI * this.bobT) / DIVE.bobSeconds) : 0;
     const dip = this.bounceDip();
     const hf = hc + JUMP_PITCH * (hFront - hc) - this.fallDrop(true) - sf - bob - dip;
@@ -1731,11 +1765,49 @@ export class Train {
   private computePose(): void {
     const st = this.state;
     const pose = this.pose;
+    this.trail.moveTo(st.s);
     pose.railId = st.railId;
     pose.s = st.s;
     pose.speed = st.speed;
     pose.direction = st.direction;
-    this.carPose(st.s, pose.position, pose.quaternion);
-    pose.cars.forEach((car, i) => this.carPose(st.s - TRAIN.carSpacing * (i + 1), car.position, car.quaternion));
+    this.carPose(0, pose.position, pose.quaternion);
+    pose.cars.forEach((car, i) => this.carPose(TRAIN.carSpacing * (i + 1), car.position, car.quaternion));
+    this.trackLift();
+  }
+
+  /**
+   * v1.11 (PR7): the test hooks' numbers: the gap between the first two cars, and how far the cars behind are from the
+   * lead car's height at the same trail distance (liftTrack keeps the lead car's heights every 0.25 m it went on).
+   */
+  private trackLift(): void {
+    const pose = this.pose;
+    const head = this.trail.head;
+    const track = this.liftTrack;
+    const lastX = track.length > 0 ? track[track.length - 1].x : -Infinity;
+    if (head < lastX - 1e-6 || head > lastX + 40) track.length = 0;
+    if (track.length === 0) track.push({ x: head, y: pose.position.y });
+    else if (head >= lastX + LIFT_STEP) {
+      // A long frame (a slow device, a fast train): the lead car's heights in between, as it is now, every LIFT_STEP m
+      // (a straight line across an arc's end would be off by more than the check allows).
+      for (let x = lastX + LIFT_STEP; x < head - 1e-6; x += LIFT_STEP) {
+        this.carPose(head - x, this.liftPos, this.liftQuat);
+        track.push({ x, y: this.liftPos.y });
+      }
+      track.push({ x: head, y: pose.position.y });
+    }
+    while (track.length > 2 && track[1].x < head - TRAIN.carSpacing * TRAIN.carCount - 20) track.shift();
+    this.gap = pose.cars.length > 0 ? pose.position.distanceTo(pose.cars[0].position) : TRAIN.carSpacing;
+    let err = 0;
+    pose.cars.forEach((car, i) => {
+      const x = head - TRAIN.carSpacing * (i + 1);
+      if (track.length < 2 || x < track[0].x || x > track[track.length - 1].x) return;
+      let k = track.length - 1;
+      while (k > 0 && track[k - 1].x > x) k--;
+      const a = track[Math.max(0, k - 1)];
+      const b = track[k];
+      const y = b.x - a.x > 1e-9 ? a.y + ((b.y - a.y) * (x - a.x)) / (b.x - a.x) : b.y;
+      err = Math.max(err, Math.abs(car.position.y - y));
+    });
+    this.liftErr = err;
   }
 }

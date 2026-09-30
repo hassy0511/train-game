@@ -1393,6 +1393,10 @@ async function boot(): Promise<void> {
     app.dataset.s = train.state.s.toFixed(1);
     app.dataset.rail = train.state.railId;
     app.dataset.notch = String(train.state.notch);
+    // v1.11 (PR7, 第 3 部 A5.5): the cars along the trail: the first two cars' gap and the cars' height against the lead
+    // car's at the same trail distance.
+    app.dataset.carGap = train.carGap.toFixed(3);
+    app.dataset.carLiftErr = train.carLiftErr.toFixed(3);
     app.dataset.air = train.airborne ? '1' : '0';
     app.dataset.speed = train.state.speed.toFixed(1);
     app.dataset.rocketPips = String(rocket.pips);

@@ -17,6 +17,14 @@ export const TRAIN = {
 } as const;
 
 /**
+ * v1.11 (PR7, PHASE9_CHAPTER5_6 第 3 部 A5): the trail the train has come along (src/train/consist.ts). Each car sits
+ * `TRAIN.carSpacing × i` m behind the lead car centre along it, on the right rail also across a junction or a merge.
+ * `back`: how far behind the lead car centre a fresh trail (the start, a rewind) is traced through the rails (the tail
+ * end, 31 m, plus 2 m). `max`: the longest it gets (older pieces are dropped).
+ */
+export const TRAIL = { back: 33, max: 2000 } as const;
+
+/**
  * Master controller notches, bottom to top. `speed` is the target (m/s); `brake` is the
  * deceleration used while the lever sits on that notch and the train is faster than the target.
  */
