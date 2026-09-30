@@ -107,7 +107,9 @@ export function showTitle(root: HTMLElement, title: string, options: TitleOption
     if (chapters.some((c) => c.done)) {
       row = document.createElement('div');
       row.id = 'title-chapters';
-      row.className = 'title-chapters';
+      // Five or six chapters: a grid, one row on a tablet, three a row on a small phone (PHASE9_CHAPTER5_6 第 1 部 §6).
+      row.className = chapters.length >= 5 ? 'title-chapters is-many' : 'title-chapters';
+      row.style.setProperty('--chapters', String(chapters.length));
       for (const c of chapters) {
         const item = document.createElement('span');
         item.className = `title-chapter${c.done ? ' is-done' : ''}${c.faint && !c.done ? ' is-faint' : ''}`;

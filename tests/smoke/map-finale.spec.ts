@@ -1,7 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { nodePage, seenMapLinks } from '../../src/world/pages';
+import type { WorldFile } from '../../src/world/types';
 
 /**
  * The chapter ends on the map (docs/PHASE7_FINISH.md §3), from a prepared save: the closing rail grows in, the
@@ -11,6 +13,7 @@ import { fileURLToPath } from 'node:url';
  */
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), 'output');
 mkdirSync(OUT, { recursive: true });
+const WORLD = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../src/world/world.json'), 'utf8')) as WorldFile;
 
 const KEY = 'train-game.progress.v1';
 const CHAPTER_1 = ['1-1', '1-2', '1-3'];
@@ -257,17 +260,25 @@ test('title without a finished chapter has no stars', async ({ page }) => {
   await expect(page.locator('#map')).not.toHaveAttribute('data-finale', /.+/);
 });
 
-/** The later chapter's "?" island (now chapter 5's, on page 2) wiggles on every tap and then floats on. */
+/**
+ * The later chapter's "?" island wiggles on every tap and then floats on. It is whichever chapter world.json has one
+ * for: chapter 5's went with page 3 (docs/PHASE9_CHAPTER5_6.md 第 1 部 §3.4), chapter 6's comes with chapter 5's end
+ * (PR6c); in between there is none, and the test waits for it.
+ */
+const TEASING = WORLD.chapters.find((c) => c.teaser);
 test('the "?" island wiggles and floats on, tap after tap', async ({ page }) => {
+  test.skip(!TEASING, 'no chapter has a "?" island in world.json now');
+  const teasing = TEASING!;
   const errors = watchErrors(page);
-  const all = [...CHAPTER_1, ...CHAPTER_2, '3-1', '3-2', '3-3', '4-1', '4-2', '4-3'];
-  const links = [...CHAIN, '2-3>1-1', '1-1>3-1', '3-1>3-2', '3-2>3-3', '3-3>4-1', '4-1>4-2', '4-2>4-3', 'finale:4'];
-  await seed(page, { cleared: all, abilities: ['whistle', 'jump', 'light', 'rocket'], mapLinks: links });
+  // Everything up to the chapter of the island it comes after, all seen.
+  const upTo = WORLD.islands.find((i) => i.id === teasing.teaser?.after)?.chapter ?? 0;
+  const all = WORLD.islands.filter((i) => i.chapter <= upTo).map((i) => i.id);
+  await seed(page, { cleared: all, abilities: ['whistle', 'jump', 'light', 'rocket'], mapLinks: seenMapLinks(WORLD, all) });
   await openTitleMap(page);
-  await expect(page.locator('#map')).toHaveAttribute('data-page', '2');
+  await expect(page.locator('#map')).toHaveAttribute('data-page', String(nodePage(WORLD, `teaser:${teasing.id}`)));
   const teaser = page.locator('.map-island.is-teaser');
   await expect(teaser).toBeVisible();
-  await expect(teaser).toContainText('5しょう');
+  await expect(teaser).toContainText(teasing.teaser?.label ?? '?');
   await tapTeaser(page, teaser);
   await tapTeaser(page, teaser);
   await settled(page.locator('.map-say'));

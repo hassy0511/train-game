@@ -568,6 +568,20 @@ body {
   max-width: 96vw;
 }
 
+/* Five or six chapters: one row on a tablet, three a row (3 + 2 for five) on a phone 700 px wide or less. */
+.title-chapters.is-many {
+  display: grid;
+  /* --chapters (set by title.ts): no empty track, so the row stays centred. */
+  grid-template-columns: repeat(var(--chapters, 6), auto);
+  justify-content: center;
+}
+
+@media (max-width: 700px) {
+  .title-chapters.is-many {
+    grid-template-columns: repeat(3, auto);
+  }
+}
+
 /* A phone on its side: everything smaller so the train still shows between the title and the buttons. */
 @media (max-height: 520px) {
   .title-pico {

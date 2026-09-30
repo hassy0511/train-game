@@ -30,7 +30,7 @@ import {
  * the tunnel's mouth (the snowplow), the dark tunnel (without the light the false exit leads round the ice hall; with it
  * the true exit), the glimpse; M3 the snow wave: caught once on purpose ("もふっ", soft, back to a retry place, the wave
  * slower), then away at "はやい" with the rocket and the jumps, "セーフ！" at the fence; the ending (the child's whistle
- * rolls the big snowman, "なかまだから"), "4しょう おしまい！", and on the map the aurora, "4しょう クリア！" and chapter 5's "?".
+ * rolls the big snowman, "なかまだから"), "4しょう おしまい！", and on the map the aurora, "4しょう クリア！" and the rail through the gate to page 3.
  */
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), 'output');
 mkdirSync(OUT, { recursive: true });
@@ -298,7 +298,8 @@ test('stage 4-3 full run: snowmen, the tunnel and the false exit, the snow wave,
   expect(b.tris).toBeLessThanOrEqual(100000);
   await page.locator('#card-button').click();
 
-  // ---- Chapter 4's end on the map: the aurora, the islands twinkling, the card, then chapter 5's "?" ----
+  // ---- Chapter 4's end on the map: the aurora, the islands twinkling, the card, then the rail through the gate to
+  // page 3 (chapter 5, docs/PHASE9_CHAPTER5_6.md 第 1 部 §3.5) ----
   const map = page.locator('#map');
   await expect(map).toBeVisible();
   await expect(map).toHaveAttribute('data-page', '2', { timeout: 20_000 });
@@ -313,15 +314,17 @@ test('stage 4-3 full run: snowmen, the tunnel and the false exit, the snow wave,
   expect((await progress(page)).mapLinks).not.toContain('finale:4');
   await page.locator('#card-button').click({ timeout: 10_000 });
   expect((await progress(page)).mapLinks).toContain('finale:4');
-  const teaser = page.locator('.map-island.is-teaser');
-  await expect(teaser).toBeVisible({ timeout: 20_000 });
-  await expect(teaser).toContainText('5しょう');
+  await expect(page.locator('[data-link="4-3>5-1"]')).toHaveClass(/is-growing/, { timeout: 20_000 });
   await expect(page.locator('.map-island[data-island="4-3"]')).not.toHaveClass(/is-unknown/);
   await expect(page.locator('.map-island[data-island="4-3"]')).toHaveClass(/is-cleared/);
+  await expect(map).toHaveAttribute('data-page', '3', { timeout: 20_000 });
+  await expect(map).toHaveAttribute('data-finale', 'done', { timeout: 20_000 });
+  await expect(page.locator('.map-island[data-island="5-1"]')).toBeVisible();
   const after = await progress(page);
   expect(after.cleared).toContain('4-3');
+  expect(after.mapLinks).toContain('4-3>5-1');
   await page.waitForTimeout(1500);
-  await page.screenshot({ path: resolve(OUT, '4-3-21-map-teaser.png') });
+  await page.screenshot({ path: resolve(OUT, '4-3-21-map-page3.png') });
   expect(await app.getAttribute('data-frame-errors')).toBeNull();
   console.log('smoke 4-3 full: cleared, chapter 4 ended');
   expect(errors).toEqual([]);
