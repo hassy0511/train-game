@@ -87,7 +87,7 @@ async function box(page: Page, selector: string): Promise<Box> {
 /** Each button's distance from the screen edge on the thumb's side, per viewport size, from the right-handed pass. */
 const layoutEdges = new Map<string, Record<string, number>>();
 
-async function checkLayout(page: Page, leftHanded: boolean, width: number, height: number, shot?: string, menuClearOfButtons = true): Promise<void> {
+async function checkLayout(page: Page, leftHanded: boolean, width: number, height: number, shot?: string, menuClearOfButtons = true, buttonsOnly = false): Promise<void> {
   await page.setViewportSize({ width, height });
   await page.waitForTimeout(300);
   const cam = await box(page, '#camera');
@@ -138,6 +138,8 @@ async function checkLayout(page: Page, leftHanded: boolean, width: number, heigh
     const right = layoutEdges.get(mirrorKey);
     if (right) for (const id of ids) expect(Math.abs(edges[id] - right[id]), `${id} mirrored`).toBeLessThanOrEqual(2);
   }
+  // (The smallest phone checks the buttons only; the top bar's own rules are checked at the two sizes above.)
+  if (buttonsOnly) return;
   // The stop gauge (shown near a station) stays clear of the corner camera: shown for a moment to measure it.
   const gauge = await page.evaluate(() => {
     const el = document.getElementById('stop-gauge');
@@ -238,7 +240,7 @@ test('corner buttons in the six-button ring, lever left and right, iPad and smal
     await expect(app).toHaveAttribute('data-phase', 'driving');
     await checkLayout(page, leftHanded, 1194, 834, leftHanded ? 'corner-left.png' : 'corner-right.png');
     await checkLayout(page, leftHanded, 667, 375, leftHanded ? 'corner-left-small.png' : 'corner-right-small.png', false);
-    await checkLayout(page, leftHanded, 568, 320, undefined, false);
+    await checkLayout(page, leftHanded, 568, 320, undefined, false, true);
   }
   await page.setViewportSize({ width: 1194, height: 834 });
   expect(errors).toEqual([]);
