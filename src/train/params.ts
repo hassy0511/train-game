@@ -504,3 +504,53 @@ export const LURE = {
 export const FIREFLY_FORK = { callFrom: 100, callTo: 15, count: 24, trail: 80, fly: 1.2, fakeGlow: 80, grass: [10, 30], rest: 6 } as const;
 /** v1.11 (5-1): ambient fireflies round the camera (environment.fireflies defaults and the most there may be). */
 export const AMBIENT_FIREFLIES = { count: 160, radius: 60, max: 400 } as const;
+
+/**
+ * v1.11 (5-2, PHASE9_CHAPTER5_6 第 5 部 §4.6): reverse-wound toys (cat looks "windup-*"): the key turns back in
+ * `keySeconds` when whistled; they walk back towards the train from `walkFrom` m (unless their params say otherwise).
+ * The whistle glows for one from its dangerDistance to its wakeDistance; toys within `group` m of one it winds are wound
+ * with it (one whistle for three chicks walking together). `townKey`: the cutscene figure whose winding
+ * (press fx "windup") winds the whole town (the props with `windup`, #app[data-town="wound"]).
+ */
+export const WINDUP = { keySeconds: 0.8, walkFrom: 150, townKey: 'castle-key-back', group: 12 } as const;
+
+/**
+ * v1.11 (5-2): the band ("parade" actor). Unwound, it walks back `backSpeed` m/s from `backFrom` m and stops
+ * `stopAhead` m beyond `gap`; the whistle (glowing within `callRange`..`callMin` m) winds it (`turnSeconds`) and it
+ * marches at `speed`. The train behind never comes nearer than `gap` m: its speed target is held to
+ * √(v² + 2·`approachBrake`·(d − gap)), and while the band marches also to v + `catchUp` + `catchUpPerMetre`·(d − gap)
+ * (so a train starting from behind the band does not run up past 5.6 m/s; the design's test limit). More than
+ * `waitGap` m ahead the band marks time. At `exit` the members leave the rail in `exitSeconds`. The partner points it
+ * out `near` m off, asks again every `callAgain` s while held, says paradeWait after `waitSay` s standing, and
+ * paradeMatch after `matchSeconds` s at the lever's "ゆっくり"; the lever's notch glows within `hintRange` m.
+ */
+export const PARADE = {
+  spacing: 3,
+  backSpeed: 1.0,
+  backFrom: 150,
+  stopAhead: 4,
+  speed: 5,
+  gap: 14,
+  approachBrake: 2.5,
+  catchUp: 0.3,
+  catchUpPerMetre: 0.03,
+  callRange: 90,
+  callMin: 8,
+  waitGap: 40,
+  turnSeconds: 1.2,
+  exitSeconds: 2.4,
+  callAgain: 8,
+  waitSay: 6,
+  matchSeconds: 3,
+  near: 130,
+  hintRange: 40,
+} as const;
+
+/**
+ * v1.11 (5-2): spinning forks (junctions[].spin). Asleep, pointing away from the good side, until the front is
+ * `range` m off; then `stay` s a side, turning over in `turn` s. The whistle glows while it points the good way and
+ * the front is `range`..`minGlow` m off; a press fixes it. The way is decided when the front is `lockAt` m before it
+ * (a car length before the train's own lock); it holds until the front is `holdAfter` m past. After `mercy` passes on
+ * the other side it waits on the good side.
+ */
+export const SPIN = { range: 120, stay: 4, turn: 1, minGlow: 12, lockAt: 5, holdAfter: 40, mercy: 1 } as const;

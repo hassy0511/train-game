@@ -32,6 +32,7 @@ import { IceGimmicks } from './ice';
 import { PlowGimmicks } from './plow';
 import { VillageGimmicks } from './village';
 import { NightGimmicks } from './night';
+import { ToyGimmicks } from './toy';
 import { frameWave, SnowGimmicks } from './snow';
 import { iceZones, thinIceZones } from '../../gimmick/ice';
 import { slopeZones } from '../../gimmick/slope';
@@ -121,6 +122,8 @@ export class ThreeSceneView implements SceneView {
   private snow: SnowGimmicks | null = null;
   /** v1.11 (5-1): sleepers, tanukis, firefly forks, fake lanterns, the cars' windows at night (null without them). */
   private night: NightGimmicks | null = null;
+  /** v1.11 (5-2): the toy band, the spinning forks' flags, the wound decorations, the slide, the ball pit's balls. */
+  private toy: ToyGimmicks | null = null;
   /** v1.7: slope beds and rock bases, kept for rebuilding the track after a cut. */
   private trackLooks: TrackLooks | undefined;
   /** v1.7: props with a tag, each in its own group (a cut can drop them). */
@@ -267,6 +270,10 @@ export class ThreeSceneView implements SceneView {
       this.night = new NightGimmicks(stage, this.actors, this.cars);
       this.scene.add(this.night.group);
     }
+    if (ToyGimmicks.wanted(stage)) {
+      this.toy = new ToyGimmicks(stage, this.train);
+      this.scene.add(this.toy.group);
+    }
     // Tagged props stay separate so a cutscene can drop them (the old bridge's girders).
     for (const prop of stage.props) {
       if (!prop.tag) continue;
@@ -281,7 +288,8 @@ export class ThreeSceneView implements SceneView {
       this.models.load('car-proto'),
       this.models.load('partner'),
       // v1.11 (5-1): sleepers each on their own (they hide by themselves: the night layer).
-      addProps(props, stage.props.filter((p) => !p.tag && !(p.sleeper && this.night)), this.models),
+      // v1.11 (5-2): the reverse-wound decorations too (the toy layer turns them round).
+      addProps(props, stage.props.filter((p) => !p.tag && !(p.sleeper && this.night) && !(p.windup && this.toy)), this.models),
       ...this.taggedProps.map(({ prop, group }) => addProps(group, [prop], this.models)),
       addModelPlacements(bufferStops, rails.bufferStops, this.models),
       this.actors.init(stage.actors, stage.records),
@@ -295,6 +303,7 @@ export class ThreeSceneView implements SceneView {
       this.ice?.init(this.models),
       this.plow.init(this.models),
       this.night?.init(this.models),
+      this.toy?.init(this.models),
     ]);
     this.lookChanged();
     // After the lights and the fog are all in (it dims them in a tunnel).
@@ -386,6 +395,7 @@ export class ThreeSceneView implements SceneView {
     this.village?.onEvent(event);
     this.snow?.onEvent(event);
     this.night?.onEvent(event);
+    this.toy?.onEvent(event);
     if (event.type === 'ability' && event.id === 'rocket') void this.volcano?.addRocketUnit(this.models);
     if (event.type === 'rocket') this.fovTarget = event.state === 'burn' && !this.calm ? ROCKET_FOV : 0;
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
@@ -676,6 +686,7 @@ export class ThreeSceneView implements SceneView {
     }
     this.village?.update(dt);
     this.night?.update(dt);
+    this.toy?.update(dt);
     this.updateFalling(dt);
     // A little wider view while the rocket burns (not a shake).
     const fov = this.fovBoost + (this.fovTarget - this.fovBoost) * Math.min(1, dt * 4);
@@ -706,6 +717,11 @@ export class ThreeSceneView implements SceneView {
   /** v1.10 (4-1): the ice mirror reflecting now (its gimmicks[] index), or −1 (test hook). */
   get mirrorIndex(): number {
     return this.ice?.activeIndex ?? -1;
+  }
+
+  /** v1.11 (5-2): where each spinning fork points now (the flags turn to it). */
+  setSpinLooks(looks: { id: string; side: 'left' | 'right'; turning: boolean; good: boolean }[]): void {
+    this.toy?.setSpinLooks(looks);
   }
 
   setSnowWave(wave: { railId: string; s: number; speed: number; state: string } | null): void {

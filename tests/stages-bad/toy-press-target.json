@@ -1,0 +1,1 @@
+{ "_expect": "must be a figure brought on (spawn) before it", "_base": "0-2", "_edit": [{ "path": "cutscenes.opening.3.target", "value": "nobody" }] }

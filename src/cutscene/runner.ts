@@ -2,6 +2,7 @@ import type { StageEvent, StageEventBus } from '../core/stage-events';
 import type { RailNetwork } from '../rail/types';
 import { resolvePlacement } from '../stage/loader';
 import type { AbilityId, CutsceneStep, Emote, Speaker, Vec3 } from '../stage/types';
+import { WINDUP } from '../train/params';
 import type { CameraMode } from '../view/camera-rig';
 
 /** What the cutscene runner needs from the UI. */
@@ -23,9 +24,10 @@ export interface CutscenePorts {
   pop(id?: string): Promise<void>;
   /**
    * v1.10 (3-3): wait for the child to press `ability`'s button (it alone glows; `say` is said now and again every
-   * DOOR_REMIND_SECONDS). The press does what the button does; `fx` "beacon" then lights the lighthouse.
+   * DOOR_REMIND_SECONDS). The press does what the button does; `fx` "beacon" then lights the lighthouse. v1.11 (5-2)
+   * `fx` "windup": the runner winds the press step's `target` itself (a "windup" event) once the press is in.
    */
-  press(ability: 'light' | 'whistle' | 'rocket' | 'jump', say: string | undefined, fx: 'beacon' | undefined, cancel?: Promise<void>): Promise<void>;
+  press(ability: 'light' | 'whistle' | 'rocket' | 'jump', say: string | undefined, fx: 'beacon' | 'windup' | undefined, cancel?: Promise<void>): Promise<void>;
   /** v1.10 (3-3): the doors on the platform side open or close again (looks only; closed again after the cutscene). */
   door(open: boolean): void;
   /** v1.10 (3-3): the festival ("しゃらら〜ん"). Resolves when it is over. */
@@ -78,10 +80,11 @@ export async function runCutscene(
   skip?: CutsceneSkip,
 ): Promise<void> {
   const race = (p: Promise<void>): Promise<void> => (skip ? Promise.race([p, skip.promise]) : p);
+  const models = spawnModels(steps);
   for (let i = 0; i < steps.length; i++) {
     if (skip?.requested) {
       ports.interrupt();
-      fastForwardCutscene(steps.slice(i), network, groundY, events, ports);
+      fastForwardCutscene(steps.slice(i), network, groundY, events, ports, models);
       return;
     }
     const step = steps[i];
@@ -89,6 +92,8 @@ export async function runCutscene(
     if ('press' in step) {
       // "▶▶" while waiting: the press counts as done (the port puts the button back and lights the lamp at once).
       await race(ports.press(step.press, step.say, step.fx, skip?.promise));
+      // v1.11 (5-2): the press winds its target the right way round (at once when skipped).
+      if (step.fx === 'windup' && step.target) postWindup(events, step.target, models, skip?.requested === true);
     } else if ('door' in step) {
       ports.door(step.door === 'open');
     } else if ('say' in step) {
@@ -156,11 +161,13 @@ export function fastForwardCutscene(
   groundY: number | null,
   events: StageEventBus,
   ports: Pick<CutscenePorts, 'learn'>,
+  models: Map<string, string> = spawnModels(steps),
 ): void {
   // Figures brought on in these steps: posted once, where their last move leaves them. Ones taken off again never
   // show. (A spawn loads its model first; for one posted before a "▶▶", ActorsView holds a move until it is in and
   // drops it when a remove overtakes it.)
   const spawned = new Map<string, Extract<StageEvent, { type: 'actor:spawn' }>>();
+  const windups: string[] = [];
   for (const step of steps) {
     if ('spawn' in step) {
       const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail }, rotationY: step.rotationY }, network, groundY);
@@ -183,6 +190,8 @@ export function fastForwardCutscene(
     } else if ('press' in step) {
       // v1.10 (3-3): skipped, the press counts as done: the lighthouse is lit.
       if (step.fx === 'beacon') events.post({ type: 'beacon', instant: true });
+      // v1.11 (5-2): and the wind-up figure turned the right way round (after it is brought on, below).
+      if (step.fx === 'windup' && step.target) windups.push(step.target);
     } else if ('fx' in step && step.fx === 'festival') {
       events.post({ type: 'festival', instant: true });
     } else if ('sky' in step) {
@@ -192,4 +201,20 @@ export function fastForwardCutscene(
     }
   }
   for (const spawn of spawned.values()) events.post(spawn);
+  for (const target of windups) postWindup(events, target, models, true);
+}
+
+/** The model each figure a cutscene brings on has (its last spawn), by id. */
+function spawnModels(steps: CutsceneStep[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const step of steps) if ('spawn' in step) out.set(step.spawn, step.model);
+  return out;
+}
+
+/**
+ * v1.11 (5-2): cutscene figure `id` is wound the right way round (its model loses "-back"); the town's big key
+ * (WINDUP.townKey) winds the whole town's toys with it.
+ */
+function postWindup(events: StageEventBus, id: string, models: Map<string, string>, instant: boolean): void {
+  events.post({ type: 'windup', id, kind: 'cutscene', instant, town: models.get(id) === WINDUP.townKey });
 }

@@ -6,7 +6,8 @@ import { Emitter } from './events';
 export type StageEvent =
   | { type: 'door'; open: boolean; stationId: string }
   | { type: 'passengers'; stationId: string; board: number; alight: number }
-  | { type: 'actor:state'; id: string; state: string; position?: Vector3; seconds?: number }
+  /** v1.11 (5-2) `delay`: the move to `position` starts after this many seconds (a toy's key turns first). */
+  | { type: 'actor:state'; id: string; state: string; position?: Vector3; seconds?: number; delay?: number }
   | { type: 'actor:spawn'; id: string; model: string; position: Vector3; quaternion: Quaternion }
   | { type: 'actor:move'; id: string; position: Vector3; seconds: number }
   | { type: 'actor:remove'; id: string }
@@ -52,6 +53,8 @@ export type StageEvent =
         | 'glare'
         // v1.11 (5-1): little tanukis dancing on the rail, "ききっ" (soft)
         | 'lure';
+      /** v1.11 (5-2): a soft fail (a small dip, no shake): a wind-up toy, a ball pit, the snow… (a test hook). */
+      soft?: boolean;
     }
   /**
    * Back to a station after a failure (or a resume). `boarded`: passengers who already got on this run, per station
@@ -211,6 +214,23 @@ export type StageEvent =
   | { type: 'fireflies:away'; junctionId: string }
   /** v1.11 (5-1): the light saw through fake fork `junctionId`: Sakasa's pink lanterns go out ("ぽしゅん"). */
   | { type: 'fake:out'; junctionId: string }
+  /**
+   * v1.11 (5-2): something was wound the right way round with the whistle ("きりきり… くるりん！"): a toy on the rail
+   * ("toy", actor `id`), the band ("band"), a spinning fork stopped ("spin", junction `id`), or a cutscene figure
+   * ("cutscene", its model loses "-back"; `town`: the whole town's toys turn round too). `instant`: fast-forwarded.
+   */
+  | { type: 'windup'; id: string; kind: 'toy' | 'band' | 'spin' | 'cutscene'; instant?: boolean; town?: boolean }
+  /**
+   * v1.11 (5-2): the band (parade actor `id`) changed what it does: `state` (idle, back, turn, march, wait, exit, gone),
+   * its tail at `tail` on `railId` now, going `speed` m/s along it (back: negative). The view moves it between events.
+   */
+  | { type: 'parade'; id: string; state: string; railId: string; tail: number; speed: number }
+  /** v1.11 (5-2): the marching band answers a whistle ("ぱっぱかぱーん！"). */
+  | { type: 'parade:fanfare'; id: string }
+  /** v1.11 (5-2): spinning fork `id`: woke, started turning to `side`, points the good way, stopped by the whistle. */
+  | { type: 'spin'; id: string; state: 'wake' | 'turn' | 'good' | 'fixed'; side?: 'left' | 'right' }
+  /** v1.11 (5-2): the train went `side` at spinning fork `id` (`good`: the way on, else round the loop). */
+  | { type: 'spin:taken'; id: string; side: 'left' | 'right'; good: boolean }
   /** v1.7: a countdown started ("run"), got low, was beaten ("safe"), ran out ("up") or was put away ("off"). */
   | { type: 'countdown'; state: 'run' | 'low' | 'safe' | 'up' | 'off' };
 

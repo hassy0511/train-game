@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "id": "0-2",
+  "title": "てすとの おもちゃ",
+  "chapter": 0,
+  "hidden": true,
+  "unlock": { "requires": ["4-3"], "purchase": null },
+  "unlocks": [],
+  "environment": {
+    "sky": { "top": "#9fd8ff", "bottom": "#ffe6f2" },
+    "fog": { "color": "#ffeaf4", "near": 150, "far": 420 },
+    "lighting": "day",
+    "ground": { "y": 0, "size": 2000, "color": "#f6e7c8", "look": "playmat" },
+    "bgm": "omocha",
+    "ambience": "toy",
+    "surface": "wood",
+    "fall": "balls"
+  },
+  "start": { "railId": "main", "at": 45, "direction": 1 },
+  "rails": [
+    {
+      "id": "main",
+      "points": [
+        [0, 1, 0], [0, 1, 10], [0, 1, 20], [0, 1, 30], [0, 1, 40],
+        [0, 1, 50], [0, 1, 60], [0, 1, 70], [0, 1, 80], [0, 1, 90],
+        [0, 1, 100], [0, 1, 110], [0, 1, 120], [0, 1, 130], [0, 1, 140],
+        [0, 1, 150], [0, 1, 160], [0, 1, 170], [0, 1, 180], [0, 1, 190],
+        [0, 1, 200], [0, 1, 210], [0, 1, 220], [0, 1, 230], [0, 1, 240],
+        [0, 1, 250], [0, 1, 260], [0, 1, 270], [0, 1, 280], [0, 1, 290],
+        [0, 1, 300], [0, 1, 310], [0, 1, 320], [0, 1, 330], [0, 1, 340],
+        [0, 1, 350], [0, 1, 360], [0, 1, 370], [0, 1, 380], [0, 1, 390],
+        [0, 1, 400], [0, 1, 410], [0, 1, 420], [0, 1, 430], [0, 1, 440],
+        [0, 1, 450], [0, 1, 460], [0, 1, 470], [0, 1, 480], [0, 1, 490],
+        [0, 1, 500], [0, 1, 510], [0, 1, 520], [0, 1, 530], [0, 1, 540],
+        [0, 1, 550], [0, 1, 560], [0, 1, 570], [0, 1, 580], [0, 1, 590],
+        [0, 1, 600], [0, 1, 610], [0, 1, 620], [0, 1, 630], [0, 1, 640],
+        [0, 1, 650], [0, 1, 660], [0, 1, 670], [0, 1, 680], [0, 1, 690],
+        [0, 1, 700], [0, 1, 710], [0, 1, 720], [0, 1, 730], [0, 1, 740],
+        [0, 1, 750], [0, 1, 760], [0, 1, 770], [0, 1, 780], [0, 1, 790],
+        [0, 1, 800], [0, 1, 810], [0, 1, 820], [0, 1, 830], [0, 1, 840],
+        [0, 1, 850], [0, 1, 860], [0, 1, 870], [0, 1, 880]
+      ],
+      "base": { "look": "blocks", "toGround": true },
+      "end": { "type": "buffer" }
+    },
+    {
+      "id": "t-kuru-wa",
+      "points": [
+        [0, 1, 400], [-0.5, 1, 404.97], [-1.97, 1, 409.74], [-4.37, 1, 414.12], [-7.58, 1, 417.93],
+        [-11.49, 1, 421.04], [-15.94, 1, 423.3], [-20.75, 1, 424.63], [-25.73, 1, 424.99], [-30.68, 1, 424.34],
+        [-35.4, 1, 422.73], [-39.71, 1, 420.21], [-43.43, 1, 416.88], [-46.42, 1, 412.89], [-48.55, 1, 408.37],
+        [-49.75, 1, 403.53], [-50, 1, 398.54], [-50, 1, 388.54], [-50, 1, 378.54], [-50, 1, 368.54],
+        [-50, 1, 358.54], [-50, 1, 348.54], [-50, 1, 343.54], [-49.96, 1, 338.54], [-49.17, 1, 333.61],
+        [-47.42, 1, 328.94], [-44.77, 1, 324.71], [-41.34, 1, 321.08], [-37.26, 1, 318.21], [-32.68, 1, 316.21],
+        [-27.81, 1, 315.16], [-22.81, 1, 315.1], [-17.91, 1, 316.03], [-13.29, 1, 317.92], [-9.14, 1, 320.68],
+        [-5.61, 1, 324.22], [-2.86, 1, 328.39], [-1, 1, 333.01], [0, 1, 340]
+      ],
+      "base": { "look": "blocks", "toGround": true },
+      "end": { "type": "merge", "railId": "main", "at": 340 }
+    }
+  ],
+  "junctions": [
+    {
+      "id": "t-kuru",
+      "railId": "main",
+      "at": 400,
+      "left": "main",
+      "right": "t-kuru-wa",
+      "default": "left",
+      "spin": { "good": "left", "stay": 4, "turn": 1, "range": 120, "line": "くるくる ポイント！ よく みてね" }
+    }
+  ],
+  "stations": [
+    { "id": "hajime", "name": "はじまりのえき", "railId": "main", "at": 45, "platformSide": "left" },
+    { "id": "owari", "name": "おわりのえき", "railId": "main", "at": 800, "platformSide": "left" }
+  ],
+  "props": [
+    { "model": "block-house-a", "onRail": { "railId": "main", "at": 110, "lateral": -16 }, "rotationY": 90 },
+    { "model": "block-house-b", "onRail": { "railId": "main", "at": 200, "lateral": 18 } },
+    { "model": "screw-post", "onRail": { "railId": "main", "at": 60, "lateral": -5 } },
+    { "model": "screw-post", "onRail": { "railId": "main", "at": 810, "lateral": -5 } },
+    { "model": "block-house-c", "onRail": { "railId": "main", "at": 620, "lateral": -20 }, "rotationY": 90 },
+    { "model": "windup-car-back", "onRail": { "railId": "main", "at": 795, "lateral": -9 }, "rotationY": 90, "windup": true },
+    { "model": "windup-chick-back", "onRail": { "railId": "main", "at": 815, "lateral": -8 }, "rotationY": 90, "windup": true }
+  ],
+  "actors": [
+    {
+      "id": "neko",
+      "type": "cat",
+      "reactsTo": "whistle",
+      "onRail": { "railId": "main", "at": 150, "heightFromRail": 0 },
+      "params": { "wakeDistance": 60, "dangerDistance": 8, "fleeLateral": 6, "fleeSeconds": 2 }
+    },
+    {
+      "id": "hiyoko",
+      "type": "cat",
+      "reactsTo": "whistle",
+      "onRail": { "railId": "main", "at": 240, "heightFromRail": 0 },
+      "params": {
+        "look": "windup-chick",
+        "wakeDistance": 70,
+        "dangerDistance": 8,
+        "fleeLateral": 5,
+        "fleeSeconds": 1.5,
+        "walk": { "speed": 0.8, "max": 8 },
+        "glow": true,
+        "say": "ひよこさんが うしろあるき！ きてき！",
+        "woke": "くるりん！ まえむきに なった！",
+        "danger": "わわっ、ひよこさん！",
+        "after": "ひかったら きてきで まきなおそう"
+      }
+    },
+    {
+      "id": "gakutai",
+      "type": "parade",
+      "reactsTo": "whistle",
+      "onRail": { "railId": "main", "at": 570, "heightFromRail": 0 },
+      "params": {
+        "members": ["band-drum", "band-trumpet", "band-flag"],
+        "back": { "from": 120, "speed": 1, "min": 550 },
+        "speed": 5,
+        "gap": 14,
+        "exit": 660,
+        "exitSide": "left"
+      }
+    }
+  ],
+  "records": [],
+  "missions": [
+    {
+      "id": "m1",
+      "type": "pickup",
+      "title": "おもちゃの ためし",
+      "steps": [{ "stationId": "owari", "board": 1, "say": "パレード みたよ！", "reply": "たのしかったね！" }],
+      "lines": {
+        "start": "おもちゃの ためしだよ！\nひかったら きてき！",
+        "moving": "そうそう、その ちょうし！",
+        "catNear": "ねこさんだ！ きてきで おこそう",
+        "catWoke": "ねこさん、ありがとう！",
+        "paradeNear": "がくたいさんが うしろあるき〜！",
+        "stationNear": "おわりの えきだ。ゆっくり！",
+        "complete": "おもちゃの ためし、できたね！"
+      },
+      "hints": [{ "railId": "t-kuru-wa", "at": 20, "text": "あれれ、ぐるっと まわってる…" }, { "railId": "t-kuru-wa", "at": 190, "text": "ポイントが まってて くれるよ！" }]
+    }
+  ],
+  "gimmicks": [{ "type": "camera", "railId": "t-kuru-wa", "from": 10, "to": 207, "params": { "mode": "top" } }],
+  "cutscenes": {
+    "opening": [
+      { "caption": "てすとの おもちゃ", "seconds": 2 },
+      { "spawn": "tut-chick", "model": "windup-chick-back", "onRail": { "railId": "main", "at": 32, "lateral": -4.5, "heightFromRail": 0 } },
+      { "say": "ぜんまいは きてきで まきなおせる！", "emote": "tilt" },
+      { "press": "whistle", "say": "きてきを ならして みて！", "fx": "windup", "target": "tut-chick" },
+      { "say": "やったね！ ひかったら きてき だよ", "emote": "cheer" },
+      { "remove": "tut-chick" }
+    ],
+    "ending": [
+      { "spawn": "big-key", "model": "castle-key-back", "onRail": { "railId": "main", "at": 820, "lateral": -12, "heightFromRail": 4 } },
+      { "say": "おおきな ねじも ぎゃくまき！", "emote": "tilt" },
+      { "press": "whistle", "say": "きてきを ならして！", "fx": "windup", "target": "big-key" },
+      { "say": "ぜんまい、ぜんぶ もとどおり！", "emote": "cheer" }
+    ]
+  },
+  "opening": "opening",
+  "ending": "ending"
+}

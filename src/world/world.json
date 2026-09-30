@@ -1500,6 +1500,104 @@
           }
         ]
       }
+    },
+    {
+      "id": "5-2",
+      "chapter": 5,
+      "x": 47,
+      "y": 82,
+      "diorama": {
+        "base": "island-b",
+        "rail": {
+          "radius": 11
+        },
+        "camera": {
+          "yaw": 25,
+          "pitch": 28
+        },
+        "items": [
+          {
+            "model": "block-house-a",
+            "at": [
+              -12,
+              -6
+            ],
+            "rotY": 20,
+            "scale": 0.5
+          },
+          {
+            "model": "block-house-b",
+            "at": [
+              -4,
+              -13
+            ],
+            "rotY": -10,
+            "scale": 0.5
+          },
+          {
+            "model": "toy-castle",
+            "at": [
+              -13,
+              6
+            ],
+            "rotY": 40,
+            "scale": 0.22
+          },
+          {
+            "model": "screw-post",
+            "at": [
+              15,
+              -8
+            ],
+            "rotY": 0,
+            "scale": 0.9
+          },
+          {
+            "model": "spin-turntable",
+            "at": [
+              14,
+              7
+            ],
+            "rotY": 0,
+            "scale": 0.45
+          },
+          {
+            "model": "band-drum",
+            "at": [
+              -3,
+              6
+            ],
+            "rotY": 90,
+            "scale": 1.3
+          },
+          {
+            "model": "band-trumpet",
+            "at": [
+              -6,
+              6
+            ],
+            "rotY": 90,
+            "scale": 1.3
+          },
+          {
+            "model": "windup-chick",
+            "at": [
+              4,
+              -14
+            ],
+            "rotY": 0,
+            "scale": 1.6
+          },
+          {
+            "model": "train-proto",
+            "at": [
+              11,
+              2
+            ],
+            "rotY": 0
+          }
+        ]
+      }
     }
   ],
   "links": [
@@ -1604,6 +1702,10 @@
           ]
         }
       }
+    ],
+    [
+      "5-1",
+      "5-2"
     ]
   ]
 }

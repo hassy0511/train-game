@@ -1,0 +1,1 @@
+{ "_expect": "walk.speed must be 0.2–2 m/s", "_base": "0-2", "_edit": [{ "path": "actors.1.params.walk.speed", "value": 5 }] }

@@ -186,7 +186,36 @@ export function buildGround(environment: EnvironmentDef): Mesh | null {
   ground.name = 'ground';
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = environment.ground.y;
+  if (environment.ground.look === 'playmat') playmat(ground.material as MeshLambertMaterial);
   return ground;
+}
+
+/** v1.11 (5-2): the play mat's squares (m a side) and their pastel colours, mixed over the ground's colour. */
+const PLAYMAT_SQUARE = 4;
+
+/**
+ * v1.11 (5-2): the ground as a big play mat: pastel squares PLAYMAT_SQUARE m a side in the shader (from the world x, z;
+ * no texture, still one draw call), a soft line between them.
+ */
+function playmat(material: MeshLambertMaterial): void {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vMat;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvMat = (modelMatrix * vec4(transformed, 1.0)).xz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vMat;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        vec2 cell = floor(vMat / ${PLAYMAT_SQUARE.toFixed(1)});
+        float k = mod(cell.x + cell.y * 3.0, 4.0);
+        vec3 pastel = k < 1.0 ? vec3(1.0, 0.86, 0.9) : k < 2.0 ? vec3(0.84, 0.94, 1.0) : k < 3.0 ? vec3(1.0, 0.96, 0.8) : vec3(0.86, 1.0, 0.9);
+        vec2 f = abs(fract(vMat / ${PLAYMAT_SQUARE.toFixed(1)}) - 0.5);
+        float line = smoothstep(0.47, 0.5, max(f.x, f.y));
+        diffuseColor.rgb *= mix(pastel, vec3(0.93), line * 0.6);`,
+      );
+  };
+  material.customProgramCacheKey = () => 'playmat';
 }
 
 /** Sets the ground's colour; a snowy ground gets a little light of its own, so the snow is white rather than grey. */
