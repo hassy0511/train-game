@@ -5,6 +5,10 @@
 // by all stages changed (the game code, models, the test helpers, the build), or when FULL=true (main, or a PR whose
 // title has "[full]").
 //
+// With SHARD=i/n (CI's four parallel jobs, PHASE9 §0.11) it prints only the specs of shard i (1-based) of n: every spec
+// picked above, spread so each shard gets about the same running time (a stage's full run weighs ~10 quick specs). A
+// shard left with nothing prints "none" (the job then skips the run; an empty list would make Playwright run all).
+//
 // Usage: node scripts/select-smoke.mjs [base-ref]   (default origin/main)
 import { execFileSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
@@ -15,7 +19,35 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SPECS = 'tests/smoke';
 const FULL_RUN = /^stage-(\d+-\d+)-full\.spec\.ts$/;
 
-if (process.env.FULL === 'true') process.exit(0);
+const allSpecs = () =>
+  readdirSync(resolve(root, SPECS))
+    .filter((f) => f.endsWith('.spec.ts'))
+    .sort()
+    .map((f) => `${SPECS}/${f}`);
+
+/** Prints `specs` (all of them when null), or only this job's shard of them with SHARD=i/n. */
+function print(specs) {
+  const shard = /^(\d+)\/(\d+)$/.exec(process.env.SHARD ?? '');
+  if (!shard) {
+    if (specs) console.log(specs.join(' '));
+    process.exit(0);
+  }
+  const [index, count] = [Number(shard[1]), Number(shard[2])];
+  const weight = (spec) => (FULL_RUN.test(spec.slice(SPECS.length + 1)) ? 10 : 1);
+  // Longest first, each to the lightest shard so far (ties: the lower shard), so the four jobs end about together.
+  const loads = Array.from({ length: count }, () => ({ total: 0, specs: [] }));
+  for (const spec of [...(specs ?? allSpecs())].sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) {
+    const lightest = loads.reduce((best, l) => (l.total < best.total ? l : best));
+    lightest.total += weight(spec);
+    lightest.specs.push(spec);
+  }
+  const mine = loads[index - 1]?.specs ?? [];
+  console.error(`select-smoke: shard ${index}/${count}: ${mine.length} specs`);
+  console.log(mine.length ? mine.sort().join(' ') : 'none');
+  process.exit(0);
+}
+
+if (process.env.FULL === 'true') print(null);
 
 const base = process.argv[2] ?? 'origin/main';
 let changed;
@@ -25,7 +57,7 @@ try {
     .filter(Boolean);
 } catch {
   // No common base to compare with: be safe and run everything.
-  process.exit(0);
+  print(null);
 }
 
 /** The stage a file belongs to alone (its JSON, layout script, full run, map picture), or null. */
@@ -60,17 +92,13 @@ function shared(file) {
 const hit = changed.find(shared);
 if (hit) {
   console.error(`select-smoke: ${hit} is shared by every stage, running everything`);
-  process.exit(0);
+  print(null);
 }
 
 const stages = new Set(changed.map(stageOf).filter(Boolean));
-const specs = readdirSync(resolve(root, SPECS))
-  .filter((f) => f.endsWith('.spec.ts'))
-  .filter((f) => {
-    const m = FULL_RUN.exec(f);
-    return !m || stages.has(m[1]);
-  })
-  .sort()
-  .map((f) => `${SPECS}/${f}`);
+const specs = allSpecs().filter((spec) => {
+  const m = FULL_RUN.exec(spec.slice(SPECS.length + 1));
+  return !m || stages.has(m[1]);
+});
 console.error(`select-smoke: full runs for ${stages.size ? [...stages].join(', ') : 'no stage'}`);
-console.log(specs.join(' '));
+print(specs);

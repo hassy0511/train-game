@@ -51,8 +51,17 @@ export async function loadStage(id: string): Promise<StageData> {
   const load = stageModules[`../stages/${id}.json`];
   if (!load) throw new Error(`Unknown stage "${id}"`);
   const mod = (await load()) as { default: unknown };
+  return prepareStage(mod.default);
+}
+
+/**
+ * Everything loading a stage does once its JSON is in hand: the checks, the rail network, the resolved props,
+ * actors, stations and records. Pure (no browser, no fetch), so scripts/check-stages.mjs runs it over every stage
+ * file at build time; anything wrong in a stage file throws here.
+ */
+export function prepareStage(raw: unknown): StageData {
   // A copy: gaps opened and closed at run time (rail cuts, flower bridges) must not touch the loaded module.
-  const file = validateStageFile(structuredClone(mod.default));
+  const file = validateStageFile(structuredClone(raw));
   addBridgeGaps(file);
   const network = buildRailNetwork(file);
   checkRanges(file, network);

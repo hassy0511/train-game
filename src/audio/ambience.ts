@@ -27,6 +27,8 @@ export class Ambience {
   private nextIn = 1.5;
   private seed = 0x51f15e;
   private paused = false;
+  /** The castle's big room: a soft echo the little sounds also feed (null on every other island). */
+  private room: { send: GainNode; feedback: GainNode } | null = null;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -42,7 +44,28 @@ export class Ambience {
     this.above = ctx.createGain();
     this.above.connect(this.bus);
     this.into = this.above;
+    if (kind === 'castle') this.room = this.makeRoom();
     this.bed(kind);
+  }
+
+  /** A wide, quiet room: the little sounds come back once or twice, softer and duller each time. */
+  private makeRoom(): { send: GainNode; feedback: GainNode } {
+    const ctx = this.ctx;
+    const send = ctx.createGain();
+    send.gain.value = 0.5;
+    const delay = ctx.createDelay(1);
+    delay.delayTime.value = 0.27;
+    const dull = ctx.createBiquadFilter();
+    dull.type = 'lowpass';
+    dull.frequency.value = 2600;
+    const feedback = ctx.createGain();
+    feedback.gain.value = 0.4;
+    send.connect(delay);
+    delay.connect(dull);
+    dull.connect(feedback);
+    feedback.connect(delay);
+    dull.connect(this.above);
+    return { send, feedback };
   }
 
   /** The sound playing now: the island's, or "underwater" while under water. */
@@ -92,6 +115,7 @@ export class Ambience {
   stop(): void {
     const at = this.ctx.currentTime;
     this.bus.gain.setTargetAtTime(0, at, FADE / 4);
+    this.room?.feedback.gain.setTargetAtTime(0, at, FADE / 4);
     for (const stop of this.stops) stop();
   }
 
@@ -186,6 +210,22 @@ export class Ambience {
         this.layer('pink', 'lowpass', 500, 0.7, 0.05, 0.5, 10);
         this.layer('pink', 'highpass', 5000, 0.7, 0.006, 0.4, 6);
         break;
+      case 'night':
+        // A soft night breeze, slowly rising and falling.
+        this.layer('pink', 'lowpass', 350, 0.7, 0.04, 0.4, 12);
+        break;
+      case 'toy':
+        // The air of a playroom: a faint, mid, papery hush.
+        this.layer('pink', 'bandpass', 1200, 0.6, 0.015, 0.3, 10);
+        break;
+      case 'mirror':
+        // Only a thin shimmer of glass air. No steady tone on purpose: a constant hum would feel eerie.
+        this.layer('white', 'bandpass', 6000, 0.4, 0.014);
+        break;
+      case 'castle':
+        // A big, calm hall: a low-passed breath (the room's echo comes with the little sounds).
+        this.layer('pink', 'lowpass', 600, 0.7, 0.03, 0.3, 14);
+        break;
     }
   }
 
@@ -243,7 +283,180 @@ export class Ambience {
         else if (r < 0.8) this.plop(0.04);
         else this.chirp(3000, 2, 0.03);
         break;
+      case 'night':
+        if (r < 0.6) this.suzumushi(0.02);
+        else if (r < 0.85) this.nightFrog(0.015);
+        else this.grain('pink', 'bandpass', 2000, 1, 0.3, 0.02, 0.1);
+        break;
+      case 'toy':
+        if (r < 0.4) this.windup(0.015);
+        else if (r < 0.7) this.musicBox(0.02);
+        else this.tweet(700, 0, 0.07, 0.03, 600, 'sine', 0.002);
+        break;
+      case 'mirror':
+        if (r < 0.5) {
+          // "きらーん": two glass bells together, ringing out for over a second.
+          this.tweet(1760, 0, 1.2, 0.02, 1760, 'sine', 0.004);
+          this.tweet(2640, 0, 1.0, 0.012, 2640, 'sine', 0.004);
+        } else if (r < 0.8) {
+          this.reverseBell(2093 + 500 * this.random(), 0.012);
+        } else {
+          // "ちりちり": a few tiny, high ticks.
+          const n = 3 + Math.floor(2 * this.random());
+          for (let i = 0; i < n; i++) this.tweet(5200 + 900 * this.random(), i * 0.07, 0.03, 0.01, 5200, 'sine', 0.002);
+        }
+        break;
+      case 'castle':
+        if (r < 0.4) this.flags(0.02);
+        else if (r < 0.7) this.faraway(0.02);
+        else this.rollUp(0.02);
+        break;
     }
+  }
+
+  /** A cricket-like bell insect: a high "りーん" that trembles about 30 times a second. */
+  private suzumushi(gain: number): void {
+    const ctx = this.ctx;
+    const at = ctx.currentTime;
+    const len = 0.5;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 4200;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(gain, at + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    // The tremble: the level swings by a third either way.
+    const trem = ctx.createGain();
+    trem.gain.value = 0.67;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 30;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.33;
+    lfo.connect(depth);
+    depth.connect(trem.gain);
+    osc.connect(trem);
+    trem.connect(g);
+    this.send(g);
+    for (const o of [osc, lfo]) {
+      o.start(at);
+      o.stop(at + len + 0.05);
+    }
+  }
+
+  /** A small frog far away: two tiny square-wave notes, "けろっ" (very quiet; not a croak). */
+  private nightFrog(gain: number): void {
+    this.tweet(600, 0, 0.06, gain, 560, 'square', 0.006);
+    this.tweet(500, 0.09, 0.07, gain * 0.9, 460, 'square', 0.006);
+  }
+
+  /** A wind-up toy: a quick ratchet "じーっ" (a sawtooth buzz softened by a low-pass, chopped about 30 times a second). */
+  private windup(gain: number): void {
+    const ctx = this.ctx;
+    const at = ctx.currentTime;
+    const len = 0.3;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(2000, at);
+    osc.frequency.exponentialRampToValueAtTime(1500, at + len);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 2200;
+    const chop = ctx.createGain();
+    chop.gain.value = 0.6;
+    const lfo = ctx.createOscillator();
+    lfo.type = 'square';
+    lfo.frequency.value = 32;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.4;
+    lfo.connect(depth);
+    depth.connect(chop.gain);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(gain, at + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    osc.connect(lp);
+    lp.connect(chop);
+    chop.connect(g);
+    this.send(g);
+    for (const o of [osc, lfo]) {
+      o.start(at);
+      o.stop(at + len + 0.05);
+    }
+  }
+
+  /** A music box plays three notes of a five-note scale (C D E G A), no tune in particular. */
+  private musicBox(gain: number): void {
+    const scale = [1047, 1175, 1319, 1568, 1760];
+    for (let i = 0; i < 3; i++) {
+      const f = scale[Math.floor(this.random() * scale.length)];
+      this.chime(f, gain, 0.7, i * 0.22);
+    }
+  }
+
+  /** A bell played backwards: it starts small and swells, then ends softly (high notes only, at most 0.4 s). */
+  private reverseBell(freq: number, gain: number): void {
+    const ctx = this.ctx;
+    const at = ctx.currentTime;
+    const swell = 0.35;
+    const end = 0.05;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(gain, at + swell);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + swell + end);
+    osc.connect(g);
+    this.send(g);
+    osc.start(at);
+    osc.stop(at + swell + end + 0.05);
+  }
+
+  /** Little flags fluttering in a hall: three to five soft puffs of air, "ぱたぱた". */
+  private flags(gain: number): void {
+    const n = 3 + Math.floor(3 * this.random());
+    let t = 0;
+    for (let i = 0; i < n; i++) {
+      this.grain('pink', 'bandpass', 1300 + 500 * this.random(), 1.2, 0.05, gain, 0.008, t);
+      t += 0.07 + 0.05 * this.random();
+    }
+  }
+
+  /** A clock far away in the castle: two small bell strokes (never a low bell). */
+  private faraway(gain: number): void {
+    this.chime(660, gain, 1.6);
+    this.chime(990, gain * 0.8, 1.6, 0.7);
+  }
+
+  /** The stairs of the upside-down castle: a bell run rolling up, "ぽろろん". */
+  private rollUp(gain: number): void {
+    [587, 740, 880, 1175, 1480].forEach((f, i) => this.chime(f, gain * (0.8 + 0.06 * i), 0.9, i * 0.11));
+  }
+
+  /** A short puff of noise: `color` through `filter` at `freq`, `seconds` long. */
+  private grain(color: 'white' | 'pink' | 'brown', filter: BiquadFilterType, freq: number, q: number, seconds: number, gain: number, attack: number, delay = 0): void {
+    const ctx = this.ctx;
+    const at = ctx.currentTime + delay;
+    const src = noiseSource(ctx, color, at);
+    const f = ctx.createBiquadFilter();
+    f.type = filter;
+    f.frequency.value = freq;
+    f.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(gain, at + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + seconds);
+    src.connect(f);
+    f.connect(g);
+    this.send(g);
+    src.stop(at + seconds + 0.05);
+  }
+
+  /** Sends a little sound to the island's bed (and into the castle's echo where there is one). */
+  private send(g: AudioNode): void {
+    g.connect(this.into);
+    if (this.room && this.into === this.above) g.connect(this.room.send);
   }
 
   /** A small bird: `count` quick falling "ちゅん"s. */
@@ -389,7 +602,7 @@ export class Ambience {
     g.gain.exponentialRampToValueAtTime(gain, at + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, at + seconds);
     osc.connect(g);
-    g.connect(this.into);
+    this.send(g);
     osc.start(at);
     osc.stop(at + seconds + 0.05);
   }
@@ -407,4 +620,8 @@ const GAPS: Record<AmbienceKind, [number, number]> = {
   river: [2, 6],
   ice: [3, 7],
   snow: [3, 8],
+  night: [2, 5],
+  toy: [2.5, 6],
+  mirror: [3, 7],
+  castle: [3, 7],
 };

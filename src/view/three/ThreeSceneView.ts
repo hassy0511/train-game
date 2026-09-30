@@ -34,10 +34,10 @@ import { VillageGimmicks } from './village';
 import { frameWave, SnowGimmicks } from './snow';
 import { iceZones, thinIceZones } from '../../gimmick/ice';
 import { slopeZones } from '../../gimmick/slope';
-import type { RailBaseDef, ResolvedProp } from '../../stage/types';
+import type { EnvironmentDef, RailBaseDef, ResolvedProp } from '../../stage/types';
 import { ActorLayer } from './actors';
 import { bakeModel } from './bake';
-import { addEnvironment, SKY_RADIUS } from './environment';
+import { CAMERA_FAR, EnvironmentState, FOG_CULL_MARGIN, snowBeds } from './environment-state';
 import { ModelLibrary } from './models';
 import { addModelPlacements, addProps } from './props';
 import { buildDetachedRailPiece, buildRailScene, buildTrack, type TrackLook, type TrackLooks } from './rail-mesh';
@@ -46,8 +46,6 @@ import { SeaGimmicks } from './sea';
 import { RiverGimmicks } from './river';
 import { HarbourGimmicks } from './harbour';
 
-/** The camera draws this far past the stage fog's far end (m). */
-const FOG_CULL_MARGIN = 40;
 /**
  * v1.7: a fixed (cutscene) camera is a wide shot from far out (2-3's ending, from the sea): while it is on, the
  * fog and the draw distance reach this many times further, so the far side of the picture is not lost in the fog.
@@ -76,8 +74,7 @@ interface FallingPiece {
   own: boolean;
 }
 
-/** v1.10 (4-1): track bed colours on snow, ice and thin ice. */
-const SNOW_BED = '#E8EEF4';
+/** v1.10 (4-1): track bed colours on ice and thin ice (snow: environment-state.ts). */
 const ICE_BED = '#BFE3F2';
 const THIN_ICE_BED = '#8CC3E0';
 
@@ -88,12 +85,13 @@ const ROCKET_FOV = 6;
 export class ThreeSceneView implements SceneView {
   private renderer: WebGLRenderer | null = null;
   private readonly scene = new Scene();
-  private readonly camera = new PerspectiveCamera(TRAIN.cabFovDeg, 1, 0.1, 600);
+  private readonly camera = new PerspectiveCamera(TRAIN.cabFovDeg, 1, 0.1, CAMERA_FAR);
   private readonly train = new Group();
   private readonly cars: Group[] = [];
   private readonly models = new ModelLibrary();
   private readonly cameraPosition = new Vector3();
-  private sky: Mesh | null = null;
+  /** The look: sky, fog, far plane, lights, ground, stars, cloud sea, falling snow (PHASE9 B6.1). */
+  private readonly environment = new EnvironmentState(this.scene, this.camera);
   private cameraMode: CameraMode = 'cab';
   private cameraSnap = true;
   private readonly camTarget = makeCameraTarget();
@@ -131,9 +129,6 @@ export class ThreeSceneView implements SceneView {
   private calm = false;
   private boughSkips: { railId: string; from: number; to: number }[] = [];
   private railLooks: Record<string, TrackLook> = {};
-  private baseFog: { near: number; far: number } | null = null;
-  /** The camera's usual draw distance (set from the fog); a fixed camera draws further. */
-  private baseFar = 0;
   private readonly lightBeam = buildLightBeam();
   private jumpDevice: Object3D | null = null;
   private clock = 0;
@@ -167,7 +162,7 @@ export class ThreeSceneView implements SceneView {
     container.appendChild(renderer.domElement);
     this.renderer = renderer;
 
-    this.sky = addEnvironment(this.scene, stage.file.environment);
+    this.environment.apply(stage.file.environment);
 
     this.network = network;
     // Springy boughs (ForestGimmicks) and hanging silk bridges (MeadowGimmicks) draw their own track; the rest
@@ -184,7 +179,7 @@ export class ThreeSceneView implements SceneView {
     const slopes = slopeZones(stage.file.gimmicks);
     // v1.10 (4-1): the bed is white on snow, pale blue on ice and a deeper blue on thin ice.
     const beds = [
-      ...(stage.file.environment.surface === 'snow' ? stage.file.rails.map((r) => ({ railId: r.id, from: 0, to: Infinity, color: SNOW_BED })) : []),
+      ...snowBeds(stage.file.rails, stage.file.environment),
       ...iceZones(stage.file.gimmicks).map((z) => ({ railId: z.railId, from: z.from, to: z.to, color: ICE_BED })),
       ...thinIceZones(stage.file.gimmicks).map((z) => ({ railId: z.railId, from: z.from, to: z.to, color: THIN_ICE_BED })),
     ];
@@ -254,13 +249,12 @@ export class ThreeSceneView implements SceneView {
     if (icy || birds) {
       this.ice = new IceGimmicks(stage, this.train);
       this.scene.add(this.ice.group);
-      if (stage.file.environment.surface === 'snow') IceGimmicks.brightenSnow(this.scene);
     }
     // The snowplow rides on the train from the stage it is learned in on (its walls only where there are some).
     this.plow = new PlowGimmicks(stage, this.train);
     this.scene.add(this.plow.group);
     if (stage.file.props.some((p) => p.model === 'lantern' || p.trace) || stage.file.cutscenes && Object.values(stage.file.cutscenes).some((c) => c.some((st) => 'sky' in st))) {
-      this.village = new VillageGimmicks(this.scene, this.sky);
+      this.village = new VillageGimmicks(this.scene, this.environment.sky);
     }
     if (SnowGimmicks.wanted(stage)) {
       this.snow = new SnowGimmicks(stage, this.scene);
@@ -273,16 +267,6 @@ export class ThreeSceneView implements SceneView {
       group.name = `tag:${prop.tag}`;
       this.scene.add(group);
       this.taggedProps.push({ prop, group });
-    }
-    const fog = stage.file.environment.fog;
-    this.baseFog = fog ? { near: fog.near, far: fog.far } : null;
-    if (fog && this.sky) {
-      // Past the fog nothing shows, so stop drawing there (the track and prop pieces beyond are culled); the sky
-      // dome shrinks to stay inside the camera's reach.
-      this.camera.far = Math.min(this.camera.far, fog.far + FOG_CULL_MARGIN);
-      this.camera.updateProjectionMatrix();
-      this.baseFar = this.camera.far;
-      this.sky.scale.setScalar(Math.min(1, (this.camera.far * 0.95) / SKY_RADIUS));
     }
 
     const [trainModel, carModel, partnerModel] = await Promise.all([
@@ -529,13 +513,30 @@ export class ThreeSceneView implements SceneView {
     if (was !== (fixed !== null)) this.cameraSnap = true;
     // Further out for the wide shot (the fog follows in update()). After it, the far plane comes back in with the
     // easing fog (easeFarBack), never inside it: a far plane cut short of a thin fog shows a hard horizon.
-    if (this.fixedCamera && this.baseFog && this.baseFar > 0) {
-      const far = Math.max(this.baseFar, this.baseFog.far * this.fixedCamera.reach + FOG_CULL_MARGIN);
+    this.widenFar();
+  }
+
+  /** While a fixed camera is on, the far plane reaches as far as its fog does. */
+  private widenFar(): void {
+    const { baseFog, baseFar } = this.environment;
+    if (this.fixedCamera && baseFog && baseFar > 0) {
+      const far = Math.max(baseFar, baseFog.far * this.fixedCamera.reach + FOG_CULL_MARGIN);
       if (far > this.camera.far) {
         this.camera.far = far;
         this.camera.updateProjectionMatrix();
       }
     }
+  }
+
+  /**
+   * PHASE9 B6.1: changes the look (a 6-2 section's, 5-1's day and night), as often as wanted. Only what differs from
+   * the look before is built again.
+   */
+  applyEnvironment(env: EnvironmentDef): void {
+    this.environment.apply(env);
+    // Under water the view had kept the look above the surface to come back to: it takes the new one next frame.
+    this.aboveWater = null;
+    this.widenFar();
   }
 
   setOrbit(orbit: OrbitCamera | null): void {
@@ -546,18 +547,19 @@ export class ThreeSceneView implements SceneView {
 
   /** After a fixed camera: the far plane shrinks back with the fog as it eases in (to the usual reach at the end). */
   private easeFarBack(): void {
-    if (this.fixedCamera || this.baseFar <= 0 || this.camera.far <= this.baseFar) return;
+    const baseFar = this.environment.baseFar;
+    if (this.fixedCamera || baseFar <= 0 || this.camera.far <= baseFar) return;
     const fog = this.scene.fog as Fog | null;
-    let far = Math.max(this.baseFar, (fog?.far ?? 0) + FOG_CULL_MARGIN);
-    if (far - this.baseFar < 1) far = this.baseFar;
-    if (far !== this.baseFar && far >= this.camera.far - 0.5) return;
+    let far = Math.max(baseFar, (fog?.far ?? 0) + FOG_CULL_MARGIN);
+    if (far - baseFar < 1) far = baseFar;
+    if (far !== baseFar && far >= this.camera.far - 0.5) return;
     this.camera.far = far;
     this.camera.updateProjectionMatrix();
   }
 
   /** The stage fog, reaching further while a fixed camera is on. */
   private fogReach(): { near: number; far: number } | null {
-    const fog = this.baseFog;
+    const fog = this.environment.baseFog;
     if (!fog || !this.fixedCamera) return fog;
     const reach = this.fixedCamera.reach;
     return { near: fog.near * reach, far: fog.far * reach };
@@ -629,11 +631,12 @@ export class ThreeSceneView implements SceneView {
     this.volcano?.update(dt);
     this.sea?.update(dt);
     this.river?.update(dt);
+    this.environment.update(dt);
     if (this.ice) {
       this.ice.trainRail = pose.railId;
       this.ice.trainFront = pose.s + TRAIN.length / 2;
       this.ice.trainSpeed = pose.speed;
-      this.ice.update(dt, this.camera);
+      this.ice.update(dt);
     }
     if (this.plow) {
       this.plow.trainSpeed = pose.speed;
@@ -652,14 +655,15 @@ export class ThreeSceneView implements SceneView {
     // v1.10 (4-3): a tunnel's dark over the fog stretches' fog.
     this.snow?.update(dt);
     this.easeFarBack();
-    if (this.sky3 && this.sky) {
-      const uniforms = (this.sky.material as ShaderMaterial).uniforms;
+    const sky = this.environment.sky;
+    if (this.sky3 && sky) {
+      const uniforms = (sky.material as ShaderMaterial).uniforms;
       if (uniforms.mist) uniforms.mist.value = this.sky3.mist;
     }
     this.actors?.update(dt);
     this.updateWater(dt, cab);
     this.cameraPosition.copy(this.camera.position);
-    this.sky?.position.copy(this.cameraPosition);
+    sky?.position.copy(this.cameraPosition);
     this.harbour?.update(dt, this.cameraPosition);
     this.renderer.render(this.scene, this.camera);
     // v1.10 (4-1): what the nearest ice mirror shows, drawn into its window.
@@ -703,7 +707,7 @@ export class ThreeSceneView implements SceneView {
           fogColor: fog ? fog.color.clone() : null,
         };
         if (!fog) this.scene.fog = new Fog(look.color, 1, look.far);
-        if (this.sky) this.sky.visible = false;
+        if (this.environment.sky) this.environment.sky.visible = false;
       }
       const fog = this.scene.fog as Fog;
       // v1.10 (3-1): a fog stretch with its own colour (the deep place) darkens the water to it and pulls the reach
@@ -720,12 +724,13 @@ export class ThreeSceneView implements SceneView {
       this.aboveWater = null;
       if (was.fog && was.fogColor) was.fog.color.copy(was.fogColor);
       this.scene.fog = was.fog;
-      if (was.fog && this.baseFog) {
-        was.fog.near = this.baseFog.near;
-        was.fog.far = this.baseFog.far;
+      const baseFog = this.environment.baseFog;
+      if (was.fog && baseFog) {
+        was.fog.near = baseFog.near;
+        was.fog.far = baseFog.far;
       }
       if (was.background && this.scene.background instanceof Color) this.scene.background.copy(was.background);
-      if (this.sky) this.sky.visible = true;
+      if (this.environment.sky) this.environment.sky.visible = true;
     }
   }
 
@@ -768,7 +773,6 @@ export class ThreeSceneView implements SceneView {
     this.renderer?.dispose();
     this.renderer?.domElement.remove();
     this.renderer = null;
-    this.sky = null;
     this.stage = null;
     this.scene.clear();
   }

@@ -2,7 +2,7 @@ import { AudioEngine } from '../audio/audio';
 import { SOUNDS } from '../audio/catalog';
 import { MusicPlayer } from '../audio/music';
 import { RUN_SOUND, RUN_SURFACES, type RunInput, type RunSurface } from '../audio/run-sound';
-import { SONGS } from '../audio/songs';
+import { SONGS, type Song } from '../audio/songs';
 import { AMBIENCE_KINDS, type AmbienceKind } from '../stage/types';
 import { ACCELERATION, LEVER_NOTCHES } from '../train/params';
 
@@ -118,6 +118,10 @@ const AMBIENCE_LABELS: Record<AmbienceKind, string> = {
   river: 'かわ',
   ice: 'こおりの みずうみ',
   snow: 'ゆきやま',
+  night: 'よるの もり',
+  toy: 'おもちゃの まち',
+  mirror: 'かがみの せかい',
+  castle: 'さかさまの しろ',
 };
 const ambienceButtons: HTMLButtonElement[] = [];
 for (const kind of [...AMBIENCE_KINDS, null]) {
@@ -279,6 +283,24 @@ async function measureSongs(seconds = 8): Promise<Measure[]> {
   return out;
 }
 (window as unknown as { __measureSongs: typeof measureSongs }).__measureSongs = measureSongs;
+
+/**
+ * `Song.loop: false`: a two-second bell song rendered for 7 s, once as it is and once looping. The loudness of
+ * the last three seconds (after the notes have rung out) says whether it stopped or went round again.
+ */
+async function measureSongEnd(): Promise<{ once: number; loops: number }> {
+  const tail = async (loop: boolean): Promise<number> => {
+    const def: Song = { id: 'check', title: 'check', bpm: 120, stepsPerBeat: 2, ...(loop ? {} : { loop: false }), tracks: [{ voice: 'bell', notes: 'C5:2 E5:2 G5:2 C6:2' }] };
+    const ctx = new OfflineAudioContext(1, Math.ceil(RATE * 7), RATE);
+    const player = new MusicPlayer(ctx, ctx.destination);
+    player.setVolume(1);
+    player.scheduleAll('check', 7, def);
+    const data = (await ctx.startRendering()).getChannelData(0);
+    return levels('tail', data.subarray(RATE * 4)).rms;
+  };
+  return { once: await tail(false), loops: await tail(true) };
+}
+(window as unknown as { __measureSongEnd: typeof measureSongEnd }).__measureSongEnd = measureSongEnd;
 
 /** The running sound at `speed` on `surface`, rendered offline: its loudness every 10 ms (for a look at the shape). */
 async function envelope(speed: number, surface: RunSurface, seconds = 4, underwater = false): Promise<number[]> {

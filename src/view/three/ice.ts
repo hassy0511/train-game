@@ -8,7 +8,6 @@ import {
   DoubleSide,
   DynamicDrawUsage,
   EqualStencilFunc,
-  HemisphereLight,
   Float32BufferAttribute,
   Group,
   InstancedMesh,
@@ -46,7 +45,7 @@ import type { StageEvent } from '../../core/stage-events';
 import { thinIceZones, type ThinIceZone } from '../../gimmick/ice';
 import { activeMirror, inFront, MIRROR_PLINTH, mirrorDefs, type MirrorDef } from '../../gimmick/mirror';
 import type { RailNetwork } from '../../rail/types';
-import type { SnowDef, StageData } from '../../stage/types';
+import type { StageData } from '../../stage/types';
 import { areaOutline, holeArea } from '../../stage/water';
 import { MIRROR, ROCK_ROLL, THIN_ICE, TRAIN } from '../../train/params';
 import type { ModelLibrary } from './models';
@@ -55,7 +54,7 @@ import { buildTrack } from './rail-mesh';
 /**
  * The frozen lake of 4-1 in the scene (PHASE8 第 7 部 §8): flat ice sheets, thin ice that breaks into floes behind a
  * rocket-fast train (and under a slow one, "ぽちゃん", the cars bobbing like a toy boat while a seal peeks out),
- * sparkling ice dust from braking wheels, falling snow, rows of snowbirds crossing the track, and ice mirrors.
+ * sparkling ice dust from braking wheels, rows of snowbirds crossing the track, and ice mirrors.
  *
  * A mirror shows the train (and the track, the true-way sign and a cutscene's figures near it) folded over its glass,
  * drawn in a second, small pass limited by the stencil to the glass that is seen (no second full render of the
@@ -78,8 +77,6 @@ const MIRROR_BOTTOM = '#F4F9FD';
 const FLOES = 12;
 /** The ground seen in a mirror. */
 const GHOST_GROUND = '#E4EFF6';
-/** A snowy stage's light from below (the hemisphere light's ground colour). */
-const SNOW_BOUNCE = '#DCE8F2';
 /** Thin ice drawn this far each side of the rail (m). */
 const THIN_HALF_WIDTH = 5;
 const SPARKLES = 48;
@@ -280,9 +277,6 @@ export class IceGimmicks {
   private floes: InstancedMesh | null = null;
   private readonly floeState: { x: number; z: number; y: number; turn: number; size: number; phase: number }[] = [];
   private openWater: Mesh | null = null;
-  private snow: Points | null = null;
-  private snowDef: SnowDef | null = null;
-  private snowSpeed: Float32Array | null = null;
   private sparkles: Points | null = null;
   private readonly sparkleLife = new Float32Array(SPARKLES);
   private readonly sparkleVel: Vector3[] = Array.from({ length: SPARKLES }, () => new Vector3());
@@ -317,7 +311,6 @@ export class IceGimmicks {
     for (const g of file.gimmicks) if (g.type === 'ice-sheet') this.addSheet(g.params ?? {});
     for (const z of thinIceZones(file.gimmicks)) this.addThin(z);
     if (this.thin.length > 0) this.addFloes();
-    if (file.environment.snow && file.environment.snow.count > 0) this.addSnow(file.environment.snow);
     for (const m of mirrorDefs(file.gimmicks)) this.addMirror(m);
     this.addSparkles();
   }
@@ -514,26 +507,6 @@ export class IceGimmicks {
     ring.visible = false;
     this.ring = ring;
     this.group.add(ring);
-  }
-
-  private addSnow(def: SnowDef): void {
-    this.snowDef = def;
-    const radius = def.radius ?? 60;
-    const pos = new Float32Array(def.count * 3);
-    this.snowSpeed = new Float32Array(def.count);
-    for (let i = 0; i < def.count; i++) {
-      pos[i * 3] = (hash(i * 3) - 0.5) * 2 * radius;
-      pos[i * 3 + 1] = hash(i * 3 + 1) * radius;
-      pos[i * 3 + 2] = (hash(i * 3 + 2) - 0.5) * 2 * radius;
-      this.snowSpeed[i] = 0.7 + hash(i * 7) * 0.6;
-    }
-    const g = new BufferGeometry();
-    g.setAttribute('position', new Float32BufferAttribute(pos, 3));
-    (g.getAttribute('position') as Float32BufferAttribute).setUsage(DynamicDrawUsage);
-    this.snow = new Points(g, new PointsMaterial({ color: '#FFFFFF', size: 0.35, map: dotTexture(), transparent: true, opacity: 0.9, depthWrite: false }));
-    this.snow.name = 'snowfall';
-    this.snow.frustumCulled = false;
-    this.group.add(this.snow);
   }
 
   private addSparkles(): void {
@@ -894,10 +867,9 @@ export class IceGimmicks {
     });
   }
 
-  update(dt: number, camera: PerspectiveCamera): void {
+  update(dt: number): void {
     this.time += dt;
     this.updateThin(dt);
-    this.updateSnow(dt, camera);
     this.updateSparkles(dt);
     this.updateBirds(dt);
     this.updateCrack(dt);
@@ -963,36 +935,6 @@ export class IceGimmicks {
       (this.ring.material as MeshBasicMaterial).opacity = 0.9 * (1 - k);
       if (k >= 1) this.ring.visible = false;
     }
-  }
-
-  private updateSnow(dt: number, camera: PerspectiveCamera): void {
-    const snow = this.snow;
-    const def = this.snowDef;
-    if (!snow || !def || !this.snowSpeed) return;
-    const radius = def.radius ?? 60;
-    const fall = def.fall ?? 1.2;
-    const attr = snow.geometry.getAttribute('position') as Float32BufferAttribute;
-    const arr = attr.array as Float32Array;
-    const c = camera.position;
-    for (let i = 0; i < def.count; i++) {
-      let x = arr[i * 3];
-      let y = arr[i * 3 + 1] - fall * this.snowSpeed[i] * dt;
-      let z = arr[i * 3 + 2];
-      x += Math.sin(this.time * 0.7 + i) * 0.3 * dt;
-      // Keep each flake in the box round the camera (wrapping), falling from above it.
-      const wrap = (v: number, centre: number): number => {
-        const d = v - centre;
-        return d > radius ? v - 2 * radius : d < -radius ? v + 2 * radius : v;
-      };
-      x = wrap(x, c.x);
-      z = wrap(z, c.z);
-      if (y < c.y - radius * 0.4) y += radius;
-      if (y > c.y + radius * 0.6) y -= radius;
-      arr[i * 3] = x;
-      arr[i * 3 + 1] = y;
-      arr[i * 3 + 2] = z;
-    }
-    attr.needsUpdate = true;
   }
 
   private updateSparkles(dt: number): void {
@@ -1161,17 +1103,6 @@ export class IceGimmicks {
       this.group.add(star);
     }
     return this.star;
-  }
-
-  /** A snowy stage's ground: a little light of its own, so the snow is white rather than grey. */
-  static brightenSnow(scene: Scene): void {
-    const ground = scene.getObjectByName('ground') as Mesh | undefined;
-    const material = ground?.material as MeshLambertMaterial | undefined;
-    if (material?.isMeshLambertMaterial) material.emissive.copy(material.color).multiplyScalar(0.3);
-    // Light bouncing off snow is white, not the grass green of the other islands (ice walls stay icy blue).
-    scene.traverse((o) => {
-      if ((o as HemisphereLight).isHemisphereLight) (o as HemisphereLight).groundColor.set(SNOW_BOUNCE);
-    });
   }
 
   /** The mirror reflecting now (test hook): its gimmicks[] index, or −1. */

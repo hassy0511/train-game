@@ -311,6 +311,41 @@ export class AudioEngine {
     this.hiss({ seconds: 0.9, gain: 0.012, attack: 0.15, filter: 'highpass', freq: 6500, dest: this.out(0.4) });
   }
 
+  /**
+   * The map at night (chapter 5's end): a firefly glows on an island, a soft round "ぽわん" that swells in and
+   * floats up a little. A quiet octave over it keeps it heard on a small speaker.
+   */
+  playFirefly(): void {
+    const wet = this.out(0.35, 1.2);
+    this.ping(520, 0, 0.35, 'sine', 0.16, 780, 0.05, wet);
+    this.ping(1040, 0, 0.25, 'sine', 0.03, 1560, 0.05, wet);
+  }
+
+  /** The windows of the castle light up on the map: three tiny bells in a row, "ちりりん". */
+  playWindows(): void {
+    [2100, 2640, 3150].forEach((f, i) => this.bell(f, i * 0.08, 0.05, 0.7));
+  }
+
+  /** The world's rainbow rails reach across (the ending): a bright rising slide with a little bell on top, "きらーん". */
+  playBridge(): void {
+    const wet = this.out(0.35);
+    this.ping(880, 0, 0.6, 'sine', 0.12, 1760, 0.02, wet);
+    this.ping(1760, 0.3, 0.3, 'sine', 0.03, 3520, 0.02, wet);
+    this.bell(2637, 0.45, 0.05, 0.9);
+  }
+
+  /**
+   * The golden light passes an island in the ending: one bell of a five-note scale (C D E G A). `i` counts up
+   * from 0 at the start of each map page, so the notes climb and start low again on the next page (past the fifth
+   * it goes up an octave, at most two). `delay` (seconds) is for playing a run of them at once.
+   */
+  playWorldStep(i: number, delay = 0): void {
+    const scale = [523, 587, 659, 784, 880];
+    const n = Math.max(0, Math.floor(i));
+    const octave = Math.min(2, Math.floor(n / scale.length));
+    this.bell(scale[n % scale.length] * 2 ** octave, delay, 0.16, 0.25);
+  }
+
   /** A two-tone steam-whistle-like chord with a breath of air, a soft attack and a short tail in the room. */
   playWhistle(): void {
     const ctx = this.ctx;
