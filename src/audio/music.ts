@@ -68,6 +68,9 @@ export class MusicPlayer {
   private nextTime = 0;
   private timer: number | null = null;
   private paused = false;
+  /** A song with `loop: false` has been scheduled to its last step (nothing more will play). */
+  private finished = false;
+  private once = false;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -87,12 +90,15 @@ export class MusicPlayer {
   }
 
   play(id: string): void {
-    if (this.songId === id) return;
+    // Asking again for the song already playing does nothing; a song that has played out (`loop: false`) starts over.
+    if (this.songId === id && !this.finished) return;
     const def = SONGS[id];
     if (!def) throw new Error(`unknown song "${id}"`);
     this.stop();
     this.song = compileSong(def);
     this.songId = id;
+    this.once = def.loop === false;
+    this.finished = false;
     this.stepSeconds = 60 / def.bpm / def.stepsPerBeat;
     this.nextStep = 0;
     this.nextTime = this.ctx.currentTime + 0.1;
@@ -105,6 +111,7 @@ export class MusicPlayer {
     this.timer = null;
     this.song = null;
     this.songId = null;
+    this.finished = false;
   }
 
   /** Holds the tune (the pause menu); it picks up where it was. */
@@ -122,6 +129,13 @@ export class MusicPlayer {
       return;
     }
     while (this.nextTime < this.ctx.currentTime + LOOKAHEAD) {
+      if (this.once && this.nextStep >= song.steps) {
+        // A song that plays once: the last step is scheduled, so stop the clock; the notes ring out by themselves.
+        this.finished = true;
+        if (this.timer !== null) window.clearInterval(this.timer);
+        this.timer = null;
+        return;
+      }
       this.playStep(song, this.nextStep % song.steps, this.nextTime, this.stepSeconds);
       this.nextStep += 1;
       this.nextTime += this.stepSeconds;
@@ -136,12 +150,15 @@ export class MusicPlayer {
     }
   }
 
-  /** Schedules a whole song from time 0 for `seconds` (offline rendering: tools/music-render.html). */
-  scheduleAll(id: string, seconds: number): void {
-    const def = SONGS[id];
+  /**
+   * Schedules a whole song from time 0 for `seconds` (offline rendering: tools/music-render.html). A song with
+   * `loop: false` is scheduled once, then silence. `def` is for a song that is not in SONGS (the sounds page's checks).
+   */
+  scheduleAll(id: string, seconds: number, def: Song = SONGS[id]): void {
     const song = compileSong(def);
     const stepSeconds = 60 / def.bpm / def.stepsPerBeat;
-    for (let n = 0; n * stepSeconds < seconds; n++) this.playStep(song, n % song.steps, 0.05 + n * stepSeconds, stepSeconds);
+    const last = def.loop === false ? song.steps : Infinity;
+    for (let n = 0; n * stepSeconds < seconds && n < last; n++) this.playStep(song, n % song.steps, 0.05 + n * stepSeconds, stepSeconds);
   }
 
   private envelope(at: number, attack: number, peak: number, hold: number, release: number): GainNode {

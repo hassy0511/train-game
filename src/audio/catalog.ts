@@ -81,4 +81,8 @@ export const SOUNDS: SoundEntry[] = [
   { group: 'おしらせ', id: 'fanfare', label: 'クリア', play: (a) => a.playFanfare() },
   { group: 'ちず', id: 'bubble-pop', label: 'みずの ひかり（ぽこん）', play: (a) => a.playBubblePop() },
   { group: 'ちず', id: 'snow-shimmer', label: 'こなゆき（しゃらん）', play: (a) => a.playSnowShimmer() },
+  { group: 'ちず', id: 'firefly', label: 'ほたるが ひかる（ぽわん）', play: (a) => a.playFirefly() },
+  { group: 'ちず', id: 'windows', label: 'しろの まどに あかり（ちりりん）', play: (a) => a.playWindows() },
+  { group: 'ちず', id: 'bridge', label: 'にじの レール（きらーん）', play: (a) => a.playBridge() },
+  { group: 'ちず', id: 'world-step', label: 'ひかりが しまを とおる（ぽろん ぽろん…）', play: (a) => [0, 1, 2, 3, 4].forEach((i) => a.playWorldStep(i, i * 0.3)) },
 ];

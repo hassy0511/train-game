@@ -132,10 +132,39 @@ export interface BubbleForkDef {
 
 /**
  * v1.9: the sound around an island. v1.10 adds underwater (it also comes on by itself while the train is under
- * water), river, ice and snow.
+ * water), river, ice and snow. v1.11 (chapters 5 and 6) adds night (5-1), toy (5-2), mirror (5-3) and castle (6-1).
  */
-export type AmbienceKind = 'town' | 'valley' | 'sky' | 'forest' | 'meadow' | 'sea' | 'underwater' | 'river' | 'ice' | 'snow';
-export const AMBIENCE_KINDS: readonly AmbienceKind[] = ['town', 'valley', 'sky', 'forest', 'meadow', 'sea', 'underwater', 'river', 'ice', 'snow'];
+export type AmbienceKind =
+  | 'town'
+  | 'valley'
+  | 'sky'
+  | 'forest'
+  | 'meadow'
+  | 'sea'
+  | 'underwater'
+  | 'river'
+  | 'ice'
+  | 'snow'
+  | 'night'
+  | 'toy'
+  | 'mirror'
+  | 'castle';
+export const AMBIENCE_KINDS: readonly AmbienceKind[] = [
+  'town',
+  'valley',
+  'sky',
+  'forest',
+  'meadow',
+  'sea',
+  'underwater',
+  'river',
+  'ice',
+  'snow',
+  'night',
+  'toy',
+  'mirror',
+  'castle',
+];
 
 export type RailEndDef =
   | { type: 'buffer' }

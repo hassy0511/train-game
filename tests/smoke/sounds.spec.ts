@@ -65,6 +65,11 @@ test('sounds page: every effect plays, is heard and does not clip; the running s
     'festival',
     'moon-up',
     'glimmer',
+    // v1.11 (chapters 5 and 6): the map's new sounds.
+    'firefly',
+    'windows',
+    'bridge',
+    'world-step',
   ]) {
     await page.locator(`button[data-sound="${id}"]`).click();
   }
@@ -118,6 +123,10 @@ test('sounds page: every effect plays, is heard and does not clip; the running s
     'ambience-river',
     'ambience-ice',
     'ambience-snow',
+    'ambience-night',
+    'ambience-toy',
+    'ambience-mirror',
+    'ambience-castle',
     'ambience-sea-underwater',
   ]);
   for (const m of around) expect(m.rms, `${m.id} too loud`).toBeLessThan(rms('run-rail') * 0.6);
@@ -126,10 +135,12 @@ test('sounds page: every effect plays, is heard and does not clip; the running s
   expect(amb['ambience-sea-underwater'].rms).toBeLessThan(amb['ambience-sea'].rms * 0.85);
   await page.locator('button[data-ambience="forest"]').click();
   await expect(page.locator('button[data-ambience="forest"]')).toHaveAttribute('aria-pressed', 'true');
-  for (const kind of ['underwater', 'river', 'ice', 'snow']) {
+  for (const kind of ['underwater', 'river', 'ice', 'snow', 'night', 'toy', 'mirror', 'castle']) {
     await page.locator(`button[data-ambience="${kind}"]`).click();
     await expect(page.locator(`button[data-ambience="${kind}"]`)).toHaveAttribute('aria-pressed', 'true');
   }
+  // v1.11: every new effect has a button.
+  for (const id of ['firefly', 'windows', 'bridge', 'world-step']) await expect(page.locator(`button[data-sound="${id}"]`)).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 
@@ -161,4 +172,12 @@ test('sounds page: every song has a button, plays, and rendered offline is heard
     expect(m.rms, `${m.id} is silent`).toBeGreaterThan(0.005);
   }
   expect(errors).toEqual([]);
+});
+
+test('sounds page: a song with loop false plays once and stops; without it the song goes round again', async ({ page }) => {
+  await page.goto('/sounds.html');
+  const ends = await page.evaluate(() => (window as unknown as { __measureSongEnd: () => Promise<{ once: number; loops: number }> }).__measureSongEnd());
+  console.log(`song end: once ${ends.once.toFixed(5)}, loops ${ends.loops.toFixed(5)}`);
+  expect(ends.loops).toBeGreaterThan(0.005);
+  expect(ends.once).toBeLessThan(0.0005);
 });

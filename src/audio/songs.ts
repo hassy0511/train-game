@@ -1,7 +1,7 @@
 /**
  * Background music, written for this game (original; not based on any existing tune or station melody).
  * Notes: "C5:2" = pitch and length in steps, "-:2" = rest, "k"/"s"/"h" = kick, snare, hi-hat. "|" marks bars
- * for reading only. Every track of a song must add up to the same number of steps; the song loops.
+ * for reading only. Every track of a song must add up to the same number of steps; the song loops (unless `loop` is false).
  */
 export type Voice = 'lead' | 'bass' | 'bell' | 'wood' | 'pad' | 'drums';
 
@@ -11,6 +11,8 @@ export interface Song {
   bpm: number;
   /** Steps per beat (2 = eighth notes; 3 = eighths in 6/8 with the dotted quarter as the beat). */
   stepsPerBeat: number;
+  /** `false`: the song plays once and stops at its end (the world ending). Left out, the song repeats. */
+  loop?: boolean;
   tracks: { voice: Voice; gain?: number; notes: string }[];
 }
 
