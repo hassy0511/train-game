@@ -1498,6 +1498,7 @@ async function boot(): Promise<void> {
       // Test hooks (v1.11): the last fail's reason, and how many fails so far (only goes up).
       fails += 1;
       app.dataset.failReason = e.reason;
+      app.dataset.failSoft = e.soft ? '1' : '0';
       app.dataset.fails = String(fails);
     }
     // v1.11 (5-1): the fake firefly forks the light has seen through this try (a test hook).

@@ -108,6 +108,16 @@ export class CatActor {
   }
 
   /**
+   * v1.11 (5-2): a wind-up toy next to one the whistle wound (a group within WINDUP.group m) is wound with it: one whistle
+   * for the three chicks walking together. True if it was still wound backwards.
+   */
+  windWithGroup(): boolean {
+    if (this.state !== 'sleep' || !this.windup) return false;
+    this.state = 'awake';
+    return true;
+  }
+
+  /**
    * v1.11 (5-1): an animal with params.glow true (the hedgehog) lights the whistle while the whistle would move it: not
    * moved yet, from `wakeDistance` to `dangerDistance` m before it (PHASE9_CHAPTER5_6 §0.9 の 8). Other cats never glow.
    * v1.11 (5-2): the wind-up toys too.

@@ -509,10 +509,11 @@ export const AMBIENT_FIREFLIES = { count: 160, radius: 60, max: 400 } as const;
 /**
  * v1.11 (5-2, PHASE9_CHAPTER5_6 第 5 部 §4.6): reverse-wound toys (cat looks "windup-*"): the key turns back in
  * `keySeconds` when whistled; they walk back towards the train from `walkFrom` m (unless their params say otherwise).
- * The whistle glows for one from its dangerDistance to its wakeDistance. `townKey`: the cutscene figure whose winding
+ * The whistle glows for one from its dangerDistance to its wakeDistance; toys within `group` m of one it winds are wound
+ * with it (one whistle for three chicks walking together). `townKey`: the cutscene figure whose winding
  * (press fx "windup") winds the whole town (the props with `windup`, #app[data-town="wound"]).
  */
-export const WINDUP = { keySeconds: 0.8, walkFrom: 150, townKey: 'castle-key-back' } as const;
+export const WINDUP = { keySeconds: 0.8, walkFrom: 150, townKey: 'castle-key-back', group: 12 } as const;
 
 /**
  * v1.11 (5-2): the band ("parade" actor). Unwound, it walks back `backSpeed` m/s from `backFrom` m and stops

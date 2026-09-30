@@ -53,6 +53,8 @@ export type StageEvent =
         | 'glare'
         // v1.11 (5-1): little tanukis dancing on the rail, "ききっ" (soft)
         | 'lure';
+      /** v1.11 (5-2): a soft fail (a small dip, no shake): a wind-up toy, a ball pit, the snow… (a test hook). */
+      soft?: boolean;
     }
   /**
    * Back to a station after a failure (or a resume). `boarded`: passengers who already got on this run, per station

@@ -2393,8 +2393,14 @@ export class MissionRunner {
       this.events.post({ type: 'pad', index: pad.index, visible: true, seconds: pad.seconds });
       if (fresh) this.ports.sayAsync(this.lines.padAppear ?? DEFAULT_LINES.padAppear);
     }
+    const woken = this.cats.filter((c) => c.onWhistle());
+    // v1.11 (5-2): wind-up toys walking together are wound together (one whistle for the three chicks).
+    for (const c of this.cats) {
+      if (woken.includes(c) || !woken.some((w) => w.windup && w.railId === c.railId && Math.abs(w.at - c.at) <= WINDUP.group)) continue;
+      if (c.windWithGroup()) woken.push(c);
+    }
     for (const cat of this.cats) {
-      if (cat.onWhistle()) {
+      if (woken.includes(cat)) {
         // v1.11 (5-2): a wind-up toy's key turns back first ("きりきり… くるりん！"), then it hops aside.
         const delay = cat.windup ? WINDUP.keySeconds : undefined;
         this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'awake', position: this.catFleePosition(cat), seconds: cat.params.fleeSeconds, delay });
@@ -2569,14 +2575,6 @@ export class MissionRunner {
     const reason = outcome.reason;
     // The train is stopped and the lever is locked until the rewind: say why now, not after older lines.
     this.ports.hush();
-    this.events.post({ type: 'fail', reason });
-    // v1.7: out of time, the volcano sneezes ("はっくしょーん！") and the steam wraps the train. v1.10 (3-3): how it looks
-    // follows the countdown's picture (the moon comes up over the sea).
-    if (reason === 'timeUp') {
-      const icon = this.countdown?.def.icon ?? 'volcano';
-      this.events.post({ type: 'timeUp', icon });
-      if (icon === 'volcano') this.events.post({ type: 'sneeze' });
-    }
     const scary = (reason === 'cat' && !outcome.soft) || reason === 'dino';
     // v1.8: back from a record's side track is no failure: no dip, no shake.
     const calm = reason === 'spur';
@@ -2598,6 +2596,14 @@ export class MissionRunner {
       reason === 'lure' ||
       outcome.soft === true ||
       iceStation;
+    this.events.post({ type: 'fail', reason, soft });
+    // v1.7: out of time, the volcano sneezes ("はっくしょーん！") and the steam wraps the train. v1.10 (3-3): how it looks
+    // follows the countdown's picture (the moon comes up over the sea).
+    if (reason === 'timeUp') {
+      const icon = this.countdown?.def.icon ?? 'volcano';
+      this.events.post({ type: 'timeUp', icon });
+      if (icon === 'volcano') this.events.post({ type: 'sneeze' });
+    }
     if (!calm) this.ports.cameraFx(scary ? 1 : soft ? 0.3 : 0.5, soft ? 0 : 1);
     const key: DefaultLine = outcome.line ?? (iceStation ? 'iceOvershoot' : undefined) ?? FAIL_LINES[reason] ?? (reason as DefaultLine);
     for (const line of (outcome.text ?? this.lines[key] ?? DEFAULT_LINES[key]).split('\n')) await this.ports.say(line, 'partner');
