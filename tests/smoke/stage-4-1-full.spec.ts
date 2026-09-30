@@ -181,13 +181,13 @@ async function diveOnGlow(page: Page, rail: string, at: number): Promise<number>
   await page.waitForFunction(
     ([r, t]) => {
       const app = document.getElementById('app');
-      const seat = document.getElementById('jump');
+      const button = document.getElementById('dive');
       const g = (window as unknown as { __dive: { last: number } }).__dive;
-      if (!app || !seat) return false;
+      if (!app || !button) return false;
       const now = Number(app.dataset.time);
-      if (seat.dataset.mode === 'dive' && seat.dataset.glow === '1' && now - g.last > 0.5) {
+      if (button.dataset.glow === '1' && now - g.last > 0.5) {
         g.last = now;
-        seat.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+        button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
       }
       return app.dataset.rail === r && Number(app.dataset.s) >= Number(t);
     },
@@ -251,8 +251,8 @@ test('stage 4-1 full run: ice, thin ice and the rocket, the ice hole, the mirror
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
   await page.locator('#title-start').click();
   await expect(app).toHaveAttribute('data-music', 'koori');
-  // Four round buttons at most, the jump seat among them.
-  await expect(page.locator('.round-button:visible')).toHaveCount(4);
+  // Five round buttons (whistle, jump, light, rocket, dive), each with its own face.
+  await expect(page.locator('.round-button:visible')).toHaveCount(5);
 
   // ---- M1 つるつる こおり ----
   await card(page, 'つるつる こおり', 120_000);
@@ -347,9 +347,9 @@ test('stage 4-1 full run: ice, thin ice and the rocket, the ice hole, the mirror
   await expect(page.locator('#junction')).toBeVisible({ timeout: 120_000 });
   await page.locator('#junction .arrow[data-side="left"]').dispatchEvent('pointerdown');
   await waitFront(page, 'ana', 5);
-  await expect(page.locator('#jump')).toHaveAttribute('data-mode', 'dive', { timeout: 30_000 });
+  await expect(app).toHaveAttribute('data-dive', 'near', { timeout: 30_000 });
   await page.screenshot({ path: resolve(OUT, '4-1-08-ice-hole.png') });
-  // The shell (ana 160) makes the seat glow from DIVE.recordGlow (30 m) before it: keep pressing on the glow until the
+  // The shell (ana 160) makes the もぐる button glow from DIVE.recordGlow (30 m) before it: keep pressing on the glow until the
   // front is 10 m short of it (stopping at 140 left a window of about 2 m, missed on a slow frame).
   const dives = await diveOnGlow(page, 'ana', 150);
   console.log(`4-1: dived ${dives} time(s) in the ice hole`);

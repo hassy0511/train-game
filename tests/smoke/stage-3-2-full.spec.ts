@@ -2,11 +2,11 @@ import { expect, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { budget, card, doors, FAST, NORMAL, progress, recordLines, seatOnGlow, pressOnGlow, setNotch, stopAt, tapUntil, waitDriving, waitFront, waitRewound } from './drive';
+import { budget, card, doors, FAST, NORMAL, progress, recordLines, pressOnGlowBefore, pressOnGlow, setNotch, stopAt, tapUntil, waitDriving, waitFront, waitRewound } from './drive';
 
 /**
  * Stage 3-2 "たきのかわ" from start to the map (docs/PHASE8_CHAPTER3_4.md 第 4 部 §15, read with §0.2): M1 bumps the raft
- * on purpose ("ぽよん"), dives under it, falls into the rapids on purpose, jumps them (the seat is the jump again),
+ * on purpose ("ぽよん"), dives under it, falls into the rapids on purpose, jumps them,
  * dives under the three lily pads one press each, finds the kingfisher's feather; M2 dives into the plunge pool,
  * slips on the underwater slope on purpose, climbs it with the rocket, gets the shower behind the falls, the glimpse;
  * M3 stops the ducks on purpose, takes the jade's side track and dives for it, goes the wrong way in the dark pond
@@ -42,19 +42,23 @@ test('stage 3-2 full run: dives, the rapids, the falls, the ducks, the pond, the
 
   await page.goto('/?stage=3-2');
   const app = page.locator('#app');
-  const seat = page.locator('#jump');
+  const diveButton = page.locator('#dive');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
   await page.locator('#title-start').click();
   await expect(app).toHaveAttribute('data-music', 'kawa');
 
   // ---- M1 ぴょこぴょこ もぐれ ----
   await card(page, 'ぴょこぴょこ もぐれ');
-  await expect(seat).toHaveAttribute('data-mode', 'jump');
-  expect(await page.locator('.round-button:visible').count()).toBeLessThanOrEqual(4);
+  // Five round buttons (whistle, jump, light, rocket, dive), each with its own face; the dive is not glowing yet.
+  await expect(diveButton).toBeVisible();
+  await expect(diveButton).toHaveAttribute('data-glow', '0');
+  await expect(page.locator('.round-button:visible')).toHaveCount(5);
   await waitDriving(page);
   await setNotch(page, NORMAL);
-  await expect(seat).toHaveAttribute('data-mode', 'dive', { timeout: 150_000 });
-  await page.screenshot({ path: resolve(OUT, '100-kawa-dive-seat.png') });
+  // Water within 80 m ahead: the もぐる button lights up (hint); the jump stays the jump.
+  await expect(app).toHaveAttribute('data-dive', 'near', { timeout: 150_000 });
+  await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('もぐるが ひかった！');
+  await page.screenshot({ path: resolve(OUT, '100-kawa-dive-button.png') });
   // The raft: on purpose not pressed — "ぽよん", back before it.
   await expect(app).toHaveAttribute('data-dive-bounces', '1', { timeout: 240_000 });
   await expect(app).toHaveAttribute('data-submerged', '0');
@@ -62,7 +66,7 @@ test('stage 3-2 full run: dives, the rapids, the falls, the ducks, the pond, the
   await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('ぽよん！ ぶつかっちゃった〜');
   await waitDriving(page);
   await setNotch(page, NORMAL);
-  await seatOnGlow(page, 'dive', 'kawa', 302);
+  await pressOnGlowBefore(page, 'dive', 'kawa', 302);
   await expect(app).toHaveAttribute('data-diving', '1', { timeout: 5_000 });
   await page.waitForTimeout(300);
   await page.screenshot({ path: resolve(OUT, '101-under-the-raft.png') });
@@ -70,14 +74,15 @@ test('stage 3-2 full run: dives, the rapids, the falls, the ducks, the pond, the
   await expect(app).toHaveAttribute('data-dive-bounces', '1');
   console.log('3-2: bumped the raft once, then dived under it');
 
-  // Off the water the seat is the jump again. The rapids: on purpose not jumped — "ぽちゃん", back to 390.
-  await expect(seat).toHaveAttribute('data-mode', 'jump', { timeout: 90_000 });
+  // Off the water the hint is over ("ぷかっ！ つぎは ジャンプ！"). The rapids: on purpose not jumped — "ぽちゃん", back to 390.
+  await expect(app).toHaveAttribute('data-dive', '', { timeout: 90_000 });
   await expect(app).toHaveAttribute('data-phase', 'failing', { timeout: 150_000 });
   await waitRewound(page, 'kawa', 396);
   await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('ぽちゃん！ ジャンプで とびこえよう');
+  expect(await saidSoFar()).toContain('ぷかっ！ つぎは ジャンプ！');
   await waitDriving(page);
   await setNotch(page, NORMAL);
-  await seatOnGlow(page, 'jump', 'kawa', 470);
+  await pressOnGlowBefore(page, 'jump', 'kawa', 470);
   await expect(app).toHaveAttribute('data-air', '1', { timeout: 5_000 });
   await page.waitForTimeout(300);
   await page.screenshot({ path: resolve(OUT, '102-rapids-jump.png') });
@@ -88,7 +93,7 @@ test('stage 3-2 full run: dives, the rapids, the falls, the ducks, the pond, the
   // The three lily pads: one press each (§0.2: diving many times).
   const dives = Number(await app.getAttribute('data-dives'));
   for (const at of [767, 883, 999]) {
-    await seatOnGlow(page, 'dive', 'kawa', at - 3);
+    await pressOnGlowBefore(page, 'dive', 'kawa', at - 3);
     if (at === 883) {
       await page.waitForTimeout(400);
       await page.screenshot({ path: resolve(OUT, '103-lily-pads.png') });
@@ -110,7 +115,7 @@ test('stage 3-2 full run: dives, the rapids, the falls, the ducks, the pond, the
   await waitFront(page, 'kawa', 1300);
   await page.screenshot({ path: resolve(OUT, '104-falls-ahead.png') });
   // Into the plunge pool from the floating stretch: press when it glows.
-  await seatOnGlow(page, 'dive', 'kawa', 1472);
+  await pressOnGlowBefore(page, 'dive', 'kawa', 1472);
   await expect(app).toHaveAttribute('data-submerged', '1', { timeout: 90_000 });
   await expect(app).toHaveAttribute('data-camera', 'chase');
   await page.screenshot({ path: resolve(OUT, '105-plunge-pool.png') });
@@ -157,7 +162,7 @@ test('stage 3-2 full run: dives, the rapids, the falls, the ducks, the pond, the
   await expect(page.locator('#junction')).toBeVisible({ timeout: 150_000 });
   await page.locator('.arrow[data-side="right"]').dispatchEvent('pointerdown');
   await expect(app).toHaveAttribute('data-rail', 'fuchi', { timeout: 150_000 });
-  await seatOnGlow(page, 'dive', 'fuchi', 110);
+  await pressOnGlowBefore(page, 'dive', 'fuchi', 110);
   await expect.poll(async () => (await progress(page)).records ?? [], { timeout: 30_000 }).toContain('river-jade');
   await page.screenshot({ path: resolve(OUT, '110-jade.png') });
   await expect(app).toHaveAttribute('data-phase', 'failing', { timeout: 240_000 });
@@ -167,14 +172,14 @@ test('stage 3-2 full run: dives, the rapids, the falls, the ducks, the pond, the
   console.log('3-2: the ducks once, the jade on the side track');
 
   // The forest pond, the light off: the reversed sign sends the train into the weeds (a soft stop, back before it).
-  await seatOnGlow(page, 'dive', 'kawa', 2472);
+  await pressOnGlowBefore(page, 'dive', 'kawa', 2472);
   await expect(app).toHaveAttribute('data-submerged', '1', { timeout: 90_000 });
   await expect(app).toHaveAttribute('data-rail', 'dead-1', { timeout: 150_000 });
   await expect(app).toHaveAttribute('data-phase', 'failing', { timeout: 150_000 });
   await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('みずくさで いきどまり！ ライト！');
   await waitDriving(page);
   await setNotch(page, NORMAL);
-  await seatOnGlow(page, 'dive', 'kawa', 2472);
+  await pressOnGlowBefore(page, 'dive', 'kawa', 2472);
   await page.locator('#light').dispatchEvent('pointerdown');
   await expect(app).toHaveAttribute('data-submerged', '1', { timeout: 90_000 });
   await waitFront(page, 'kawa', 2462);

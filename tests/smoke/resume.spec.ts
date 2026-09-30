@@ -544,7 +544,7 @@ test('resume 3-1 mission 2 at the station on the sea floor: the dome is on alrea
   const app = page.locator('#app');
   await tapUntil(page, '#card');
   await expect(page.locator('#card')).toContainText('くじらの ながれ');
-  // さんごえき (umi 1000) is under water: the train stands there in its dome, the seat is "もぐる", no dive was made.
+  // さんごえき (umi 1000) is under water: the train stands there in its dome (the もぐる button shows it), no dive was made.
   await standsAt(page, 'umi', 1000);
   await expect(app).toHaveAttribute('data-dive', 'on');
   await expect(app).toHaveAttribute('data-submerged', '1');
@@ -556,7 +556,7 @@ test('resume 3-1 mission 2 at the station on the sea floor: the dome is on alrea
   await waitGame(page, 3);
   await expect(app).toHaveAttribute('data-dive-bounces', '0');
   await expect(app).toHaveAttribute('data-underwater', '1');
-  await expect(page.locator('#jump')).toHaveAttribute('data-mode', 'dive');
+  await expect(page.locator('#dive')).toHaveAttribute('data-diving', '1');
   await page.screenshot({ path: resolve(OUT, '94-resume-3-1-m2.png') });
   expect(errors).toEqual([]);
 });
@@ -579,7 +579,7 @@ test('resume 4-2 mission 2 at the buried station: the snowplow down already, no 
   await expect(app).toHaveAttribute('data-plow', 'on');
   for (const i of [0, 1, 2]) await expect(app).toHaveAttribute(`data-wall-${i}`, 'burst');
   await expect(app).toHaveAttribute('data-wall-3', 'whole');
-  await expect(page.locator('#jump')).toHaveAttribute('data-mode', 'plow');
+  await expect(page.locator('#plow')).toHaveAttribute('data-blade', '1');
   await expect(page.locator('#cargo')).toHaveAttribute('data-passengers', '2');
   // The snowplow was learned by the fast-forwarded opening.
   expect((await saved(page)).abilities).toContain('plow');
@@ -589,8 +589,8 @@ test('resume 4-2 mission 2 at the buried station: the snowplow down already, no 
   await expect(app).toHaveAttribute('data-plow-bursts', '0');
   await setNotch(page, NORMAL);
   await expect(app).toHaveAttribute('data-plowing', '1', { timeout: 30_000 });
-  // Past the end of the stretch (main 1080) the blade folds up and the seat is the jump again.
-  await expect(page.locator('#jump')).toHaveAttribute('data-mode', 'jump', { timeout: 60_000 });
+  // Past the end of the stretch (main 1080) the blade folds up (the snowplow button goes back up).
+  await expect(page.locator('#plow')).toHaveAttribute('data-blade', '0', { timeout: 60_000 });
   await expect(app).toHaveAttribute('data-plow', '');
   await expect(app).toHaveAttribute('data-plow-bumps', '0');
   await page.screenshot({ path: resolve(OUT, '94-resume-4-2-m2.png') });

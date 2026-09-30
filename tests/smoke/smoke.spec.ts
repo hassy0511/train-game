@@ -24,19 +24,20 @@ test('boots stage 0-0, drives for 5 s, passes the sensor, whistle cools down', a
   const app = page.locator('#app');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
   await expect(page.locator('#hud-speed')).toHaveText('とまる');
-  // The test course has every ability: four round buttons at most, none on top of another (PHASE7 §1).
+  // The test course has every ability: six round buttons (PHASE9_0 §2), none on top of another. The buttons are round,
+  // so the boxes of neighbours may overlap at the corners: compare the circles (centre distance >= sum of the radii).
   const rounds = await page.locator('.round-button:visible').evaluateAll((els) =>
     els.map((el) => {
       const r = el.getBoundingClientRect();
-      return { id: el.id, x: r.x, y: r.y, w: r.width, h: r.height };
+      return { id: el.id, cx: r.x + r.width / 2, cy: r.y + r.height / 2, r: Math.min(r.width, r.height) / 2 };
     }),
   );
-  expect(rounds.map((r) => r.id).sort()).toEqual(['jump', 'light', 'rocket', 'whistle']);
+  expect(rounds.map((r) => r.id).sort()).toEqual(['dive', 'jump', 'light', 'plow', 'rocket', 'whistle']);
   for (let i = 0; i < rounds.length; i++) {
     for (let j = i + 1; j < rounds.length; j++) {
       const a = rounds[i];
       const b = rounds[j];
-      expect(a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h).toBe(false);
+      expect(Math.hypot(a.cx - b.cx, a.cy - b.cy), `${a.id} vs ${b.id}`).toBeGreaterThanOrEqual(a.r + b.r);
     }
   }
   await page.screenshot({ path: resolve(OUT, '00-start.png') });
@@ -132,7 +133,7 @@ test('2-3 on the test course: the rocket, an uphill, a slide and a quiet zone', 
   const app = page.locator('#app');
   const rocket = page.locator('#rocket');
 
-  // The layout with the lever on the left, then on the right (PHASE7 §1): four round buttons, the camera in the corner.
+  // The layout with the lever on the left, then on the right (PHASE7 §1, PHASE9_0 §2): six round buttons, the camera in the corner.
   for (const leftHanded of [true, false]) {
     await page.goto('/?stage=0-0');
     // Loaded before the reload: leaving mid-load cuts model downloads short, and the page logs "Failed to fetch".

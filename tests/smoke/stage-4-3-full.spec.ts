@@ -12,7 +12,7 @@ import {
   pressOnGlow,
   progress,
   recordLines,
-  seatOnGlow,
+  pressOnGlowBefore,
   setNotch,
   SLOW,
   STOP,
@@ -47,7 +47,7 @@ async function camera(page: Page, mode: 'cab' | 'chase' | 'side' | 'top'): Promi
 
 /**
  * Drives on its own in the page until the front reaches `at` on `rail`: presses the rocket each time it glows and the
- * jump seat each time it glows as the jump (every frame, so a short window on a slow machine is not missed). Returns
+ * jump button each time it glows (every frame, so a short window on a slow machine is not missed). Returns
  * how many times each was pressed.
  */
 async function autoPress(page: Page, rail: string, at: number): Promise<{ rocket: number; jump: number }> {
@@ -62,15 +62,15 @@ async function autoPress(page: Page, rail: string, at: number): Promise<{ rocket
       const now = Number(app.dataset.time);
       if (app.dataset.phase === 'driving' && now - a.last > 0.4) {
         const rocket = document.getElementById('rocket');
-        const seat = document.getElementById('jump');
+        const jump = document.getElementById('jump');
         if (rocket?.dataset.glow === '1' && app.dataset.burn !== '1') {
           a.rocket += 1;
           a.last = now;
           rocket.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
-        } else if (seat?.dataset.glow === '1' && seat.dataset.mode === 'jump' && app.dataset.air !== '1') {
+        } else if (jump?.dataset.glow === '1' && app.dataset.air !== '1') {
           a.jump += 1;
           a.last = now;
-          seat.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+          jump.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
         }
       }
       return app.dataset.rail === r && Number(app.dataset.s) >= Number(t);
@@ -113,7 +113,6 @@ test('stage 4-3 full run: snowmen, the tunnel and the false exit, the snow wave,
 
   await page.goto('/?stage=4-3');
   const app = page.locator('#app');
-  const seat = page.locator('#jump');
   const light = page.locator('#light');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
   await page.screenshot({ path: resolve(OUT, '4-3-01-fumoto.png') });
@@ -127,7 +126,8 @@ test('stage 4-3 full run: snowmen, the tunnel and the false exit, the snow wave,
   // ---- M1 ころがる ゆきだるま ----
   await card(page, 'ころがる ゆきだるま', 120_000);
   await waitDriving(page);
-  await expect(page.locator('.round-button:visible')).toHaveCount(4);
+  // All six round buttons (whistle, jump, light, rocket, dive, snowplow).
+  await expect(page.locator('.round-button:visible')).toHaveCount(6);
   await setNotch(page, NORMAL);
   // The snowman on the rail: the whistle, and it rolls aside.
   await waitFront(page, 'main', 196);
@@ -149,7 +149,7 @@ test('stage 4-3 full run: snowmen, the tunnel and the false exit, the snow wave,
   await page.waitForTimeout(3500);
   await setNotch(page, NORMAL);
   // Snow off the pine onto the rail: jump.
-  await seatOnGlow(page, 'jump', 'main', 684);
+  await pressOnGlowBefore(page, 'jump', 'main', 684);
   await waitFront(page, 'main', 700);
   await expect(app).toHaveAttribute('data-phase', 'driving');
   // The second rolling one (wait), then the snowman sliding down onto the rail (jump).
@@ -157,7 +157,7 @@ test('stage 4-3 full run: snowmen, the tunnel and the false exit, the snow wave,
   await expect(app).toHaveAttribute('data-rocks', /snow-c:roll/, { timeout: 90_000 });
   await page.waitForTimeout(4800);
   await setNotch(page, NORMAL);
-  await seatOnGlow(page, 'jump', 'main', 834);
+  await pressOnGlowBefore(page, 'jump', 'main', 834);
   await waitFront(page, 'main', 850);
   await expect(app).toHaveAttribute('data-phase', 'driving');
   await stopAt(page, 'main', 980);
@@ -171,7 +171,7 @@ test('stage 4-3 full run: snowmen, the tunnel and the false exit, the snow wave,
   await expect(page.locator('#junction')).toBeVisible({ timeout: 60_000 });
   await page.locator('#junction .arrow[data-side="right"]').dispatchEvent('pointerdown');
   await waitFront(page, 'ike', 5);
-  await seatOnGlow(page, 'dive', 'ike', 100);
+  await pressOnGlowBefore(page, 'dive', 'ike', 100);
   await expect.poll(async () => (await progress(page)).records ?? [], { timeout: 60_000 }).toContain('ice-flower');
   await page.screenshot({ path: resolve(OUT, '4-3-05-pond-dive.png') });
   // Its buffer: back onto the main line (not a fail).
@@ -179,8 +179,8 @@ test('stage 4-3 full run: snowmen, the tunnel and the false exit, the snow wave,
   await waitDriving(page);
   expect(await saidSoFar()).toContain('やったね！ もとの みちに もどるよ');
   await setNotch(page, NORMAL);
-  // The snow wall in the tunnel's mouth: the seat turns into ゆきかき; pressed, "ずぼーん！".
-  await seatOnGlow(page, 'plow', 'main', 1226);
+  // The snow wall in the tunnel's mouth: the snowplow button glows; pressed, "ずぼーん！".
+  await pressOnGlowBefore(page, 'plow', 'main', 1226);
   await expect(app).toHaveAttribute('data-plow-bursts', '1', { timeout: 60_000 });
   expect(await saidSoFar()).toContain('トンネルが ゆきで ふさがってる！');
   await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('トンネルだ！ ライトを つけよう');

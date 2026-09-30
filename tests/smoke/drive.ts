@@ -89,30 +89,31 @@ export async function waitRewound(page: Page, rail: string, below: number): Prom
 }
 
 /**
- * Presses the jump seat the moment it glows with face `mode` ("dive", "jump" or "plow"; polled every frame in the page, so a
- * short window is not missed). Fails when the front passes `latest` on `rail` without a glow.
+ * Presses the round button `id` the moment it glows and the game is driving (polled every frame in the page, so a short
+ * window is not missed; checking and pressing happen in the same callback). Fails when the front passes `latest` on
+ * `rail` without a glow. Since PHASE9_0 the jump, dive and snowplow are separate buttons (no seat that changes face).
  */
-export async function seatOnGlow(page: Page, mode: 'dive' | 'jump' | 'plow', rail: string, latest: number): Promise<void> {
+export async function pressOnGlowBefore(page: Page, id: 'jump' | 'dive' | 'plow' | 'whistle' | 'rocket' | 'light', rail: string, latest: number): Promise<void> {
   const pressed = await page.waitForFunction(
-    ([m, r, t]) => {
+    ([bid, r, t]) => {
       const app = document.getElementById('app');
-      const seat = document.getElementById('jump');
-      if (!app || !seat) return false;
+      const button = document.getElementById(bid);
+      if (!app || !button) return false;
       if (app.dataset.rail === r && Number(app.dataset.s) >= Number(t)) return 'late';
-      if (seat.dataset.mode === m && seat.dataset.glow === '1' && app.dataset.phase === 'driving') {
-        seat.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      if (button.dataset.glow === '1' && app.dataset.phase === 'driving') {
+        button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
         return 'pressed';
       }
       return false;
     },
-    [mode, rail, latest - FRONT] as const,
+    [id, rail, latest - FRONT] as const,
     { timeout: 240_000, polling: 'raf' },
   );
   expect(await pressed.jsonValue()).toBe('pressed');
 }
 
 /** Presses `id` (a round button) the moment it glows. */
-export async function pressOnGlow(page: Page, id: 'whistle' | 'rocket' | 'light', timeoutMs = 120_000): Promise<void> {
+export async function pressOnGlow(page: Page, id: 'whistle' | 'rocket' | 'light' | 'jump' | 'dive' | 'plow', timeoutMs = 120_000): Promise<void> {
   const pressed = await page.waitForFunction(
     (bid) => {
       const b = document.getElementById(bid);

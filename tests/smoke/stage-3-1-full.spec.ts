@@ -111,11 +111,11 @@ async function diveOnGlow(page: Page, rail: string, latest: number): Promise<voi
   const pressed = await page.waitForFunction(
     ([r, t]) => {
       const app = document.getElementById('app');
-      const seat = document.getElementById('jump');
-      if (!app || !seat) return false;
+      const button = document.getElementById('dive');
+      if (!app || !button) return false;
       if (app.dataset.rail === r && Number(app.dataset.s) >= Number(t)) return 'late';
-      if (seat.dataset.mode === 'dive' && seat.dataset.glow === '1' && app.dataset.phase === 'driving') {
-        seat.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      if (button.dataset.glow === '1' && app.dataset.phase === 'driving') {
+        button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
         return 'pressed';
       }
       return false;
@@ -171,24 +171,26 @@ test('stage 3-1 full run: diving, the whale, the bubbles, the note', async ({ pa
 
   await page.goto('/?stage=3-1');
   const app = page.locator('#app');
-  const seat = page.locator('#jump');
+  const diveButton = page.locator('#dive');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
   await page.locator('#title-start').click();
   await expect(app).toHaveAttribute('data-music', 'umi');
 
-  // Opening: Pico fits the diving gear. The seat is still the jump (no water within 80 m of the beach station), and
-  // there are still four round buttons at most.
+  // Opening: Pico fits the diving gear: the もぐる button is new (five round buttons: whistle, jump, light, rocket,
+  // dive), not glowing yet (no water within 80 m of the beach station).
   await card(page, 'もぐるを');
-  await expect(seat).toHaveAttribute('data-mode', 'jump');
-  expect(await page.locator('.round-button:visible').count()).toBeLessThanOrEqual(4);
+  await expect(diveButton).toBeVisible();
+  await expect(diveButton).toHaveAttribute('data-glow', '0');
+  await expect(page.locator('.round-button:visible')).toHaveCount(5);
+  await expect.poll(saidSoFar, { timeout: 10_000 }).toContain('もぐるの ボタンが ふえた！');
 
   // ---- M1 もぐって くぐれ ----
   await card(page, 'もぐって くぐれ');
   await waitDriving(page);
   await setNotch(page, NORMAL);
-  // Out over the sea the seat turns into "もぐる".
-  await expect(seat).toHaveAttribute('data-mode', 'dive', { timeout: 60_000 });
-  await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('ジャンプが もぐるに かわった！');
+  // Out over the sea the もぐる button lights up (its hint; the jump stays the jump).
+  await expect(app).toHaveAttribute('data-dive', 'near', { timeout: 60_000 });
+  await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('もぐるが ひかった！');
   await page.screenshot({ path: resolve(OUT, '80-dive-button.png') });
   // The log: press when it glows; the train dives under it (no fail).
   await diveOnGlow(page, 'umi', 250);
