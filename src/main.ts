@@ -44,14 +44,14 @@ import { createToast } from './ui/toast';
 import { CAMERA_LABELS, CAMERA_MODES, createSceneView, type CameraFx, type CameraMode } from './view';
 import { createCameraButton } from './ui/camera-button';
 import { createStopGauge } from './ui/stop-gauge';
-import { createJumpButton, createLightButton, createRocketButton } from './ui/ability-buttons';
+import { createDiveButton, createJumpButton, createLightButton, createPlowButton, createRocketButton } from './ui/ability-buttons';
 import { createCountdownPanel } from './ui/countdown-panel';
 import { createSkipButton, type SkipButton } from './ui/skip-button';
 import { RocketSystem } from './gimmick/rocket';
 import { SlopeSystem } from './gimmick/slope';
 import { DiveSystem } from './gimmick/dive';
 import { PlowSystem } from './gimmick/plow';
-import { JumpSeat } from './gimmick/seat-face';
+import { PlowHint } from './gimmick/plow-hint';
 import { IceSystem, iceZones, thinIceZones } from './gimmick/ice';
 import { ThinIceSystem } from './gimmick/thin-ice';
 import { MirrorSystem } from './gimmick/mirror';
@@ -306,14 +306,14 @@ async function boot(): Promise<void> {
   const rocket = new RocketSystem(stage.file.gimmicks, train, slopes);
   // v1.10: records found so far (the save's; the test course's only for this run), for the dive button's glow.
   const foundRecords = new Set<string>(hasMissions ? loadProgress().records : []);
-  // v1.10: near water the jump seat turns into "もぐる".
+  // v1.10: "もぐる" (its own button since PHASE9_0): where it helps (the hint and the glow).
   const dive = new DiveSystem(train, stage.records, (id) => foundRecords.has(id));
   let diveBounces = 0;
-  // v1.10 (4-2): snow walls (the train bursts them or bumps them), and the jump seat's face: jump, もぐる or ゆきかき.
+  // v1.10 (4-2): snow walls (the train bursts them or bumps them), and where "ゆきかき" helps (its button's glow).
   const plow = new PlowSystem(stage.file.gimmicks, train, (index, state, cleared, instant) =>
     events.post({ type: 'plow:wall', index, state, cleared, instant }),
   );
-  const seat = new JumpSeat(dive, plow, train);
+  const plowHint = new PlowHint(plow, train);
   // v1.10 (4-1): ice (weaker brakes, the glowing notches at an ice station), thin ice (only the rocket gets across,
   // it lights the rocket button) and ice mirrors.
   const ice = new IceSystem(stage.file.gimmicks, stage.file.stations, train);
@@ -419,16 +419,25 @@ async function boot(): Promise<void> {
   const jumpButton = createJumpButton(actionButtons, () => {
     audio.unlock();
     if (pressWanted('jump') !== null) return;
-    // v1.10: the seat is "もぐる" near water, "ゆきかき" near snow (the train's events play their sounds).
-    const press = seat.press();
-    if (press.kind === 'dive' || press.kind === 'plow') return;
-    const result = press.result;
+    const result = train.jump();
     if (result === 'ok') {
       // With a grasshopper on the roof the jump goes "びよーん".
       if (train.jumpBoost) audio.playHopperJump();
       else audio.playJump();
       events.post({ type: 'jump' });
     } else runner?.onJumpRefused(result);
+  });
+  // PHASE9_0: "もぐる" and "ゆきかき" on their own buttons, anywhere (the train's events play their sounds). A cutscene
+  // waiting for another button keeps them quiet.
+  const diveButton = createDiveButton(actionButtons, () => {
+    audio.unlock();
+    if (cutscenePress) return;
+    train.dive();
+  });
+  const plowButton = createPlowButton(actionButtons, () => {
+    audio.unlock();
+    if (cutscenePress) return;
+    train.plow();
   });
   let lightOn = false;
   let lightReadyAt = 0;
@@ -460,14 +469,12 @@ async function boot(): Promise<void> {
     abilities.add(ability);
     if (ability === 'jump') jumpButton.show();
     if (ability === 'dive') {
-      // "もぐる" takes the jump's seat (no new round button).
       dive.enabled = true;
-      jumpButton.show();
+      diveButton.show();
     }
     if (ability === 'plow') {
-      // v1.10 (4-2): "ゆきかき" takes the jump's seat too.
       plow.enabled = true;
-      jumpButton.show();
+      plowButton.show();
     }
     if (ability === 'light') lightButton.show();
     if (ability === 'rocket') {
@@ -583,11 +590,13 @@ async function boot(): Promise<void> {
     audio.playSurface(long);
     events.post({ type: 'dive', state: 'surface', long, railId: train.state.railId, s: train.frontS });
   });
-  train.events.on('bob', () => {
+  train.events.on('bob', ({ land }) => {
     bobs += 1;
     app.dataset.bobs = String(bobs);
-    audio.playBubbles();
-    events.post({ type: 'dive', state: 'bob' });
+    // PHASE9_0 §3: on land a mole's dig ("ずぶっ" … "ぽこっ"), elsewhere bubbles.
+    if (land) audio.playDig();
+    else audio.playBubbles();
+    events.post({ type: 'dive', state: 'bob', land });
   });
   train.events.on('dome', ({ on, instant }) => events.post({ type: 'dome', on, instant }));
   events.post({ type: 'dome', on: train.domeOn, instant: true });
@@ -627,6 +636,14 @@ async function boot(): Promise<void> {
       audio.playPlow();
     }
     events.post({ type: 'plow:blade', down: true, instant });
+  });
+  // PHASE9_0 §3: the snowplow pressed with no snow ahead flings petals ("ずざーっ").
+  let petals = 0;
+  train.events.on('petals', () => {
+    petals += 1;
+    app.dataset.petals = String(petals);
+    audio.playPlowSpray(Math.max(4, Math.abs(train.state.speed)));
+    events.post({ type: 'plow:petals' });
   });
   train.events.on('bladeUp', ({ instant }) => {
     if (!instant) audio.playBladeUp();
@@ -696,8 +713,6 @@ async function boot(): Promise<void> {
   });
   events.on('event', (e) => {
     if (e.type === 'rewind') {
-      dive.reset();
-      seat.reset();
       snowSplat.classList.remove('is-on');
       chasePuff.classList.remove('is-on');
       // v1.10 (4-1): the ice is whole again, and its lines come again.
@@ -917,8 +932,8 @@ async function boot(): Promise<void> {
     ice.update(dt);
 
     train.update(dt);
-    dive.update(dt);
-    seat.update(dt);
+    dive.update();
+    plowHint.update();
     plow.update();
     // v1.10 (4-2): snow flying off the snowplow ("ざざざー") while it clears a buried stretch.
     const spraying = train.plowing && Math.abs(train.state.speed) > 0.3;
@@ -960,14 +975,13 @@ async function boot(): Promise<void> {
     boughs.update(dt);
     whistle.update(dt);
     ui.whistle.setProgress(whistle.progress);
-    jumpButton.setMode(seat.face);
-    jumpButton.setDiving(train.domeOn);
-    jumpButton.setPlowing(train.bladeDown, spraying);
+    diveButton.setDiving(train.domeOn);
+    plowButton.setPlowing(train.bladeDown, spraying);
     const driving = runner === null || runner.phase === 'driving';
-    if (seat.face === 'dive') jumpButton.set(train.diveProgress, dive.glow && driving, false);
+    diveButton.set(train.diveProgress, dive.glow && driving);
     // "ゆきかき" glows until the blade is down, and is never grey (it works standing too).
-    else if (seat.face === 'plow') jumpButton.set(1, seat.glow && driving, false);
-    else jumpButton.set(train.jumpProgress, train.jumpWouldClear || (runner?.jumpHint ?? false), train.state.speed < JUMP.minSpeed);
+    plowButton.set(plowHint.glow && driving);
+    jumpButton.set(train.jumpProgress, train.jumpWouldClear || (runner?.jumpHint ?? false), train.state.speed < JUMP.minSpeed);
     runner?.update(dt);
     if (!runner) findTestCourseRecords();
     // 2-3: the volcano's everyday smoke ring, more often while a countdown runs.
@@ -1080,9 +1094,9 @@ async function boot(): Promise<void> {
     app.dataset.push = train.rocketPushing ? '1' : '0';
     app.dataset.slope = slopes.kind;
     app.dataset.slip = train.isSlipping ? '1' : '0';
-    app.dataset.dive = train.domeOn ? 'on' : dive.face === 'dive' ? 'near' : '';
+    app.dataset.dive = train.domeOn ? 'on' : dive.near ? 'near' : '';
     if (plow.spans.length > 0) {
-      app.dataset.plow = train.bladeDown ? 'on' : seat.face === 'plow' ? 'near' : '';
+      app.dataset.plow = train.bladeDown ? 'on' : plowHint.near ? 'near' : '';
       app.dataset.plowing = train.plowing ? '1' : '0';
       for (const sp of plow.spans) app.setAttribute(`data-wall-${sp.index}`, plow.wallState(sp.index));
     }
@@ -1435,7 +1449,7 @@ async function boot(): Promise<void> {
     if (runner?.skipCutscene()) skippedAt = performance.now();
   });
 
-  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, dive, ice, thinIce, mirrors, plow, seat, tunnel: tunnels });
+  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, dive, ice, thinIce, mirrors, plow, plowHint, tunnel: tunnels });
   runner.knowAbilities(abilities);
   runner.setLight(lightOn);
   if (resumeFrom > 0) {

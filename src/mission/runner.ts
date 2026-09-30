@@ -8,7 +8,7 @@ import { DroppingRock, ROCK_HIT_AFTER, RollingRock } from '../actors/rock';
 import { Whale } from '../actors/whale';
 import type { DiveSystem } from '../gimmick/dive';
 import type { PlowSystem } from '../gimmick/plow';
-import type { JumpSeat } from '../gimmick/seat-face';
+import type { PlowHint } from '../gimmick/plow-hint';
 import type { RocketPress, RocketSystem } from '../gimmick/rocket';
 import type { IceSystem, ThinIceZone } from '../gimmick/ice';
 import type { ThinIceSystem } from '../gimmick/thin-ice';
@@ -102,15 +102,15 @@ export interface MissionPorts extends CutscenePorts {
 export interface MissionSystems {
   rocket: RocketSystem;
   slopes: SlopeSystem;
-  /** v1.10: the jump seat's "もぐる" face and glow (for the partner's "いまだ！ もぐる！"). */
+  /** v1.10: the dive button's hint and glow (for the partner's "いまだ！ もぐる！"). */
   dive?: DiveSystem;
   /** v1.10 (4-1): ice, thin ice and ice mirrors (made by the caller, like the rocket). */
   ice?: IceSystem;
   thinIce?: ThinIceSystem;
   mirrors?: MirrorSystem;
-  /** v1.10 (4-2): the snow walls and the jump seat's "ゆきかき" face (made by the caller). */
+  /** v1.10 (4-2): the snow walls and the snowplow button's hint (made by the caller). */
   plow?: PlowSystem;
-  seat?: JumpSeat;
+  plowHint?: PlowHint;
   /** v1.10 (4-3): tunnels (the light button glows for them; "トンネルだ！"). */
   tunnel?: TunnelSystem;
 }
@@ -283,7 +283,7 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   crackEmptyAfter: 'こんどは ロケットを とっておこう',
   mirrorFlash: 'きらーん！ あれは かがみ だ！',
   mirrorFake: 'わっ！ ワンダーごうが もう 1だい！？',
-  // v1.10 (4-2 ゆきかき). plowGo, plowLong and plowUp have no default: only said when the mission has them.
+  // v1.10 (4-2 ゆきかき). plowGo and plowLong have no default: only said when the mission has them.
   plowNear: 'ゆきの かべ！ ゆきかきを おして！',
   plowBump: 'ぽすっ！ ゆきに ささった〜',
   plowBumpAfter: 'ひかったら ゆきかきを おしてね',
@@ -440,7 +440,6 @@ export class MissionRunner {
   private plowNearSaid = false;
   private plowGoSaid = false;
   private plowLongSaid = false;
-  private plowUpSaid = false;
   /** Metres cleared in a row with the snowplow (for plowLong). */
   private plowRun = 0;
   private plowRunFrom: number | null = null;
@@ -551,12 +550,7 @@ export class MissionRunner {
       this.plowGoSaid = true;
       if (this.lines.plowGo) this.ports.sayAsync(this.lines.plowGo);
     });
-    systems?.seat?.events.on('plowNear', ({ span }) => this.onPlowNear(span.index, span.line));
-    systems?.seat?.events.on('plowUp', () => {
-      if (this.phase !== 'driving' || this.plowUpSaid) return;
-      this.plowUpSaid = true;
-      if (this.lines.plowUp) this.ports.sayNow(this.lines.plowUp);
-    });
+    systems?.plowHint?.events.on('plowNear', ({ span }) => this.onPlowNear(span.index, span.line));
     // v1.10 (3-1): the first dive of a mission ("わあ… うみの なかだ！").
     train.events.on('dived', () => {
       if (this.phase !== 'driving' || this.diveGoSaid) return;
@@ -566,7 +560,7 @@ export class MissionRunner {
   }
 
   /**
-   * v1.10 (4-2): the jump seat turned into "ゆきかき" for wall `index`: its own line (once per try), else the mission's
+   * v1.10 (4-2): the snowplow button started glowing for wall `index`: its own line (once per try), else the mission's
    * plowNear the first time in the mission. Said at once: it is only useful now.
    */
   private onPlowNear(index: number, line: string | null): void {
@@ -630,7 +624,7 @@ export class MissionRunner {
     }
   }
 
-  /** v1.10: the jump seat turned into "もぐる": the partner says so, the first time in a mission. */
+  /** v1.10: water ahead, the dive button's hint started: the partner says so, the first time in a mission. */
   onDiveNear(): void {
     if (this.phase !== 'driving' || this.diveNearSaid) return;
     this.diveNearSaid = true;
@@ -1058,7 +1052,6 @@ export class MissionRunner {
       this.plowNearSaid = false;
       this.plowGoSaid = false;
       this.plowLongSaid = false;
-      this.plowUpSaid = false;
       this.bubbleNearSaid.clear();
       this.bubbleTrueSaid.clear();
       this.iceSaid.clear();

@@ -6,14 +6,22 @@ export interface JumpButton {
   set(progress: number, glow: boolean, idle: boolean): void;
   /** A grasshopper rides on the roof: the ring turns green and the icon becomes a grasshopper (2-2). */
   setHopper(on: boolean): void;
-  /**
-   * v1.10: the seat's face: "jump", "dive" near water (blue, "もぐる"), or "plow" before snow (purple, "ゆきかき"); a
-   * quick turn when it changes.
-   */
-  setMode(mode: 'jump' | 'dive' | 'plow'): void;
-  /** v1.10: diving now (bubbles rise in the face). */
+}
+
+/** PHASE9_0: "もぐる" on its own button (blue). Works anywhere; glows where a dive helps. */
+export interface DiveButton {
+  show(): void;
+  /** `progress` 0..1 for the cooldown ring; `glow` when diving now helps. */
+  set(progress: number, glow: boolean): void;
+  /** Diving now (bubbles rise in the face). */
   setDiving(on: boolean): void;
-  /** v1.10 (4-2): the blade is down (the face shows it) and clearing snow now (snow flies in the face). */
+}
+
+/** PHASE9_0: "ゆきかき" on its own button (purple). Works anywhere; glows before snow to clear. */
+export interface PlowButton {
+  show(): void;
+  set(glow: boolean): void;
+  /** The blade is down (the face shows it) and clearing snow now (snow flies in the face). */
   setPlowing(down: boolean, clearing: boolean): void;
 }
 
@@ -162,26 +170,8 @@ function roundButton(root: HTMLElement, id: string, label: string, icon: string,
 
 /** Jump: fires on pointerdown. Grey while stopped, cooldown ring after landing, glows when now is the moment. */
 export function createJumpButton(root: HTMLElement, onPress: () => void): JumpButton {
-  const button = roundButton(
-    root,
-    'jump',
-    'ジャンプ',
-    JUMP_ICON.replace('class="icon"', 'class="icon icon-jump"') +
-      HOPPER_ICON +
-      DIVE_ICON.replace('class="icon"', 'class="icon icon-dive"') +
-      PLOW_ICON.replace('class="icon"', 'class="icon icon-plow"'),
-    'is-jump',
-  );
+  const button = roundButton(root, 'jump', 'ジャンプ', JUMP_ICON.replace('class="icon"', 'class="icon icon-jump"') + HOPPER_ICON, 'is-jump');
   button.dataset.hopper = '0';
-  button.dataset.mode = 'jump';
-  button.dataset.diving = '0';
-  button.dataset.plowing = '0';
-  button.dataset.blade = '0';
-  button.querySelector('.face')?.insertAdjacentHTML(
-    'beforeend',
-    '<span class="dive-bubbles" aria-hidden="true"><i></i><i></i><i></i></span><span class="plow-snow" aria-hidden="true"><i></i><i></i><i></i><i></i></span>',
-  );
-  const label = button.querySelector('.label') as HTMLElement;
   button.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     onPress();
@@ -204,20 +194,57 @@ export function createJumpButton(root: HTMLElement, onPress: () => void): JumpBu
     setHopper(on): void {
       button.dataset.hopper = on ? '1' : '0';
     },
-    setMode(mode): void {
-      if (button.dataset.mode === mode) return;
-      button.dataset.mode = mode;
-      const text = mode === 'dive' ? 'もぐる' : mode === 'plow' ? 'ゆきかき' : 'ジャンプ';
-      label.textContent = text;
-      button.setAttribute('aria-label', text);
-      // The face turns round once as it changes (restart the animation).
-      button.classList.remove('is-turning');
-      void button.offsetWidth;
-      button.classList.add('is-turning');
+  };
+}
+
+/** PHASE9_0: "もぐる". Fires on pointerdown; the cooldown ring after coming up; bubbles in the face while diving. */
+export function createDiveButton(root: HTMLElement, onPress: () => void): DiveButton {
+  const button = roundButton(root, 'dive', 'もぐる', DIVE_ICON, 'is-dive');
+  button.dataset.diving = '0';
+  button.querySelector('.face')?.insertAdjacentHTML('beforeend', '<span class="dive-bubbles" aria-hidden="true"><i></i><i></i><i></i></span>');
+  button.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    onPress();
+  });
+  let last = '';
+  return {
+    show(): void {
+      button.hidden = false;
+    },
+    set(progress, glow): void {
+      const p = Math.round(progress * 100) / 100;
+      const key = `${p}|${glow}`;
+      if (key === last) return;
+      last = key;
+      button.style.setProperty('--cd', String(p));
+      button.dataset.cooldown = p < 1 ? '1' : '0';
+      button.dataset.glow = glow ? '1' : '0';
     },
     setDiving(on): void {
       const v = on ? '1' : '0';
       if (button.dataset.diving !== v) button.dataset.diving = v;
+    },
+  };
+}
+
+/** PHASE9_0: "ゆきかき". Fires on pointerdown; the scoop sits lower while the blade is down; snow flies while clearing. */
+export function createPlowButton(root: HTMLElement, onPress: () => void): PlowButton {
+  const button = roundButton(root, 'plow', 'ゆきかき', PLOW_ICON, 'is-plow');
+  button.dataset.plowing = '0';
+  button.dataset.blade = '0';
+  button.dataset.glow = '0';
+  button.querySelector('.face')?.insertAdjacentHTML('beforeend', '<span class="plow-snow" aria-hidden="true"><i></i><i></i><i></i><i></i></span>');
+  button.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    onPress();
+  });
+  return {
+    show(): void {
+      button.hidden = false;
+    },
+    set(glow): void {
+      const v = glow ? '1' : '0';
+      if (button.dataset.glow !== v) button.dataset.glow = v;
     },
     setPlowing(down, clearing): void {
       const b = down ? '1' : '0';

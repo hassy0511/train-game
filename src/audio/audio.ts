@@ -1041,7 +1041,18 @@ export class AudioEngine {
     [1568, 2093].forEach((f, i) => this.bell(f, i * 0.08, 0.08, 0.5));
   }
 
-  /** v1.10: a press that only bobs the train (stopped, on land, on the sea floor): "ぷくぷく", three small bubbles. */
+  /**
+   * PHASE9_0 §3: "もぐる" on land, a mole's dig: a soft "ずぶっ" (a low thud with loose earth) going in, and a "ぽこっ"
+   * coming out.
+   */
+  playDig(): void {
+    const o = this.out(0.12, 1.4);
+    this.thump(110, 0, 0.14, 0.3, o);
+    this.hiss({ color: 'brown', delay: 0.02, seconds: 0.35, gain: 0.07, filter: 'lowpass', freq: 700, endFreq: 250, dest: o });
+    this.ping(420, 0.78, 0.1, 'sine', 0.09, 760, 0.004, o);
+  }
+
+  /** v1.10: a press that only bobs the train (stopped, on the water, on the sea floor): "ぷくぷく", three small bubbles. */
   playBubbles(): void {
     const o = this.out(0.25, 2);
     [520, 760, 640].forEach((f, i) => this.ping(f, i * 0.09, 0.08, 'sine', 0.07, f * 1.6, 0.003, o));

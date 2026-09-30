@@ -875,8 +875,9 @@ export function validateStageLayout(file: StageFile, network: RailNetwork): void
 
 /**
  * v1.10 checks on the water stretches the loader worked out (Rail.surfaces / Rail.dives) and the loader's dive-fork
- * sides (PHASE8 part 2 §2.13, part 3 §4.9): the jump seat never has to be a jump and "もぐる" at once, floaters float
- * over a surface stretch, a dive fork has exactly one side going under water, dive records can be reached.
+ * sides (PHASE8 part 2 §2.13, part 3 §4.9): floaters float over a surface stretch, a dive fork has exactly one side
+ * going under water, dive records can be reached. (Since PHASE9_0 diving has its own button, so jumping near water is
+ * fine.)
  */
 export function validateWaterLayout(file: StageFile, network: RailNetwork): void {
   const waters = file.environment.water ?? [];
@@ -911,26 +912,6 @@ export function validateWaterLayout(file: StageFile, network: RailNetwork): void
       }
     }
   }
-  // Nothing to jump near the water: no gap, jump pad, bough, silk bridge or flower bridge from DIVE.clearBefore m
-  // before a water stretch to DIVE.clearAfter m after it (on the same rail).
-  const near = (railId: string, from: number, to: number): string | null => {
-    const rail = network.getRail(railId);
-    for (const sp of [...rail.surfaces, ...rail.dives]) {
-      if (from <= sp.to + DIVE.clearAfter && to >= sp.from - DIVE.clearBefore) return `the water at ${sp.from.toFixed(0)}–${sp.to.toFixed(0)}`;
-    }
-    return null;
-  };
-  for (const r of file.rails) {
-    for (const g of r.gaps ?? []) {
-      const w = near(r.id, g.from, g.to);
-      if (w) fail(`rail "${r.id}" gap ${g.from}–${g.to}: too near ${w} (no jumping within ${DIVE.clearBefore} m before to ${DIVE.clearAfter} m after)`);
-    }
-  }
-  file.gimmicks.forEach((g, i) => {
-    if (!['jump-pad', 'bough', 'fragile', 'flower-bridge'].includes(g.type) || g.railId === undefined || g.from === undefined) return;
-    const w = near(g.railId, g.from, g.to ?? g.from);
-    if (w) fail(`gimmicks[${i}] ${g.type}: too near ${w}`);
-  });
   // Floaters float over a surface stretch, 40 m or more apart on one rail, and send the train back to a place on
   // land or on the surface, before themselves.
   const floaters = file.floaters ?? [];
@@ -1036,11 +1017,11 @@ export function validateIceLayout(file: StageFile, network: RailNetwork): void {
 const ON_TRACK_ACTORS = ['cat', 'rock-drop', 'rock-roll', 'nut', 'squirrel', 'grasshopper', 'snowman'];
 
 /**
- * v1.10 (4-2) checks on the snow walls (docs/PHASE8_CHAPTER3_4.md 第 6 部 §A8). Each wall's zone runs from
- * PLOW.zoneBefore m before it to PLOW.zoneAfter m past its buried stretch: the jump seat is "ゆきかき" there, so nothing
- * else to press for lies in it (a gap's take-off, water, thin ice, boughs, bridges; a jump pad not within
- * PLOW.padBefore m before the wall), no creature stands on the track there (the snowplow is never used on animals), and
- * no junction is in it. A wall's face is not on a downhill; an uphill in its stretch starts PLOW.slopeGap m or more
+ * v1.10 (4-2) checks on the snow walls (docs/PHASE8_CHAPTER3_4.md 第 6 部 §A8; PHASE9_0 §3 dropped the jump seat's
+ * checks). Each wall's zone runs from PLOW.zoneBefore m before it to PLOW.zoneAfter m past its buried stretch: no
+ * creature stands on the track there (the snowplow is never used on animals). A jump does not clear a wall, so no gap
+ * lands within PLOW.zoneBefore m before it or lies in its stretch, and no jump pad is within PLOW.padBefore m before it;
+ * thin ice, boughs and bridges keep out of its stretch. A wall's face is not on a downhill; an uphill in its stretch starts PLOW.slopeGap m or more
  * past it. A station stopping in or just past a stretch has its stop zone start PLOW.stationGap m or more past the
  * wall. A side way's wall stands PLOW.sideWayMin m or more along it; a junction that needs the snowplow has a wall
  * within 400 m of its side way. Before chapter 4 walls stand only on such side ways. A record needing the snowplow lies
@@ -1063,20 +1044,16 @@ export function validatePlowLayout(file: StageFile, network: RailNetwork): void 
     for (const o of spans) {
       if (o !== sp && o.railId === sp.railId && o.from < sp.to && sp.from < o.to) fail(`${where}: its stretch overlaps gimmicks[${o.index}] plow-wall`);
     }
-    for (const g of rail.gaps) if (inZone(g.from - 60, g.to)) fail(`${where}: a gap (${g.from}–${g.to}) is too near it`);
-    for (const w of [...rail.surfaces, ...rail.dives]) {
-      if (w.to + DIVE.clearAfter >= lo && w.from - DIVE.clearBefore <= hi) fail(`${where}: too near the water at ${w.from.toFixed(0)}–${w.to.toFixed(0)}`);
-    }
+    for (const g of rail.gaps) if (g.to >= lo && g.from <= sp.to) fail(`${where}: a gap (${g.from}–${g.to}) is too near it (a jump does not clear a wall)`);
     file.gimmicks.forEach((g, i) => {
       if (g.railId !== sp.railId || g.from === undefined) return;
-      if (g.type === 'jump-pad' && g.from >= sp.from - PLOW.padBefore && g.from <= hi) fail(`${where}: jump pad gimmicks[${i}] is within ${PLOW.padBefore} m before it`);
-      if (['bough', 'flower-bridge', 'fragile', 'thin-ice'].includes(g.type) && inZone(g.from, g.to ?? g.from)) fail(`${where}: gimmicks[${i}] ${g.type} is too near it`);
+      if (g.type === 'jump-pad' && g.from >= sp.from - PLOW.padBefore && g.from <= sp.to) fail(`${where}: jump pad gimmicks[${i}] is within ${PLOW.padBefore} m before it`);
+      if (['bough', 'flower-bridge', 'fragile', 'thin-ice'].includes(g.type) && (g.to ?? g.from) >= sp.from && g.from <= sp.to) fail(`${where}: gimmicks[${i}] ${g.type} is in its stretch`);
     });
     for (const a of file.actors) {
       if (!('onRail' in a) || a.onRail.railId !== sp.railId) continue;
       if ((ON_TRACK_ACTORS.includes(a.type) || a.type.startsWith('dino')) && inZone(a.onRail.at)) fail(`${where}: actor "${a.id}" is on the track near it (no snowplow near creatures)`);
     }
-    for (const j of file.junctions) if (j.railId === sp.railId && inZone(j.at)) fail(`${where}: junction "${j.id}" is too near it`);
     for (const z of slopes) {
       if (z.railId !== sp.railId) continue;
       if (z.kind === 'down' && sp.from >= z.from && sp.from <= z.to) fail(`${where}: its face is on a downhill (gimmicks[${z.index}])`);

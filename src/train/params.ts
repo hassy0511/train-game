@@ -230,12 +230,13 @@ export const TITLE_ORBIT = { radius: 30, height: 9, lift: 4.5, swingDeg: 28, sec
 /**
  * v1.10 (chapter 3): diving ("もぐる"). A rail stretch is on the water surface where its top is within `surfaceAbove`
  * m above to `submerge` m below the surface, and under water where it is `submerge` m or more below (inside the
- * water's area). The jump button turns into "もぐる" `approach` m before a surface stretch or a dive fork (along the
- * way the train will go), changing face at most once per `faceHold` s and never in the air.
+ * water's area). "もぐる" has its own button (PHASE9_0); the hint (`near`) starts `approach` m before a surface
+ * stretch or a dive fork (along the way the train will go).
  * On a surface stretch each press dives: a downward arc `depth` m deep and speed × `time` s long (at least
  * `minLength` m; up to `glide` of its length longer to pass under a floater just past its deep part), the bubble dome
  * on; the next press is allowed `cooldown` s after the front comes up ("ぷかっ"). Slower than `minSpeed`, under water
- * or on land a press only bobs the train (`bobDepth` m for `bobSeconds` s, no rule). A dive fork within `forkReach` m
+ * a press only bobs the train (`bobDepth` m for `bobSeconds` s, no rule); on land it digs in like a mole (`digDepth` m,
+ * PHASE9_0 §3), never counted as diving. A dive fork within `forkReach` m
  * of its dive side going under water; under water the dome stays on.
  * Bumping a floater (or reaching water without the dome) is a soft "ぽよん": stopped in `bounceStop` s, bounced back
  * `bounceBack` m over `bounceSeconds` s, and put back `rewindBefore` m before it.
@@ -251,9 +252,10 @@ export const DIVE = {
   glide: 0.25,
   cooldown: 0.6,
   approach: 80,
-  faceHold: 1.0,
   forkReach: 60,
   bobDepth: 0.6,
+  /** PHASE9_0 §3: a press on land digs the train in like a mole, this deep (m), over bobSeconds. */
+  digDepth: 1.2,
   bobSeconds: 0.9,
   bounceStop: 0.15,
   bounceBack: 3,
@@ -262,28 +264,26 @@ export const DIVE = {
   recordGlow: 30,
   /** The glow looks this far ahead for a floater (m). */
   hintDistance: 60,
-  /** Dives and gaps keep apart: no gap, jump pad, bough or silk bridge from `clearBefore` m before a water stretch to `clearAfter` m after it. */
-  clearBefore: 120,
-  clearAfter: 40,
   /** Room (m) over the train's roof a floater needs, on top of its `draft`. */
   headroom: 0.2,
 } as const;
 
 /**
- * v1.10 (chapter 4): the snowplow ("ゆきかき"). The jump seat turns into "ゆきかき" `approach` m before an unburst snow
- * wall or snow still to clear (along the way the train will go) and glows until pressed; a press lowers the blade
- * (counted as down at once; the view takes `dropSeconds`). Down, it bursts walls and clears buried stretches; it rises
- * once no snow is left within `approach` m ahead, and the seat goes back to the jump `faceHold` s later. Without it
- * the wall stops the train ("ぽすっ": `bumpStop` s to stop, `bumpIn` m in, then `bumpBack` m back over
- * `bumpSeconds` s) and it is put back `rewindBefore` m before the wall. A burst wall and its stretch stay cleared for
- * the rest of the stage run (rewinds included). The loader's checks keep `zoneBefore` m before a wall to `zoneAfter`
- * m after its stretch free of other things to press for (gaps, water), jump pads `padBefore` m away, a side way's
- * wall `sideWayMin` m past its junction and a wall `slopeGap` m before an uphill in its stretch. While plowing the
- * snow is thrown aside with a "ざざっ" every `sprayEvery` s.
+ * v1.10 (chapter 4): the snowplow ("ゆきかき", its own button since PHASE9_0). Its button glows from `approach` m before
+ * an unburst snow wall or snow still to clear (along the way the train will go) until pressed; a press lowers the
+ * blade (counted as down at once; the view takes `dropSeconds`). Down, it bursts walls and clears buried stretches; it
+ * rises once no snow is left within `approach` m ahead. Pressed with no snow ahead it is play: down for `playSeconds`,
+ * flinging petals. Without it the wall stops the train ("ぽすっ": `bumpStop` s to stop, `bumpIn` m in, then `bumpBack`
+ * m back over `bumpSeconds` s) and it is put back `rewindBefore` m before the wall; a jump does not clear a wall. A
+ * burst wall and its stretch stay cleared for the rest of the stage run (rewinds included). The loader's checks keep
+ * creatures off the track from `zoneBefore` m before a wall to `zoneAfter` m after its stretch, a gap's landing out of
+ * the `zoneBefore` m before it, jump pads `padBefore` m away, a side way's wall `sideWayMin` m past its junction and a
+ * wall `slopeGap` m before an uphill in its stretch. While plowing the snow is thrown aside with a "ざざっ" every
+ * `sprayEvery` s.
  */
 export const PLOW = {
   approach: 80,
-  faceHold: 1.0,
+  playSeconds: 1.2,
   dropSeconds: 0.25,
   riseSeconds: 0.3,
   bumpStop: 0.15,

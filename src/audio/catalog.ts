@@ -41,6 +41,7 @@ export const SOUNDS: SoundEntry[] = [
   { group: 'みず', id: 'surface-long', label: 'みずから でる（ぷはっ）', play: (a) => a.playSurface(true) },
   { group: 'みず', id: 'water-bounce', label: 'みずに ぽよん', play: (a) => a.playWaterBounce() },
   { group: 'みず', id: 'bubbles', label: 'ぷくぷく', play: (a) => a.playBubbles() },
+  { group: 'みず', id: 'dig', label: 'りくで もぐる（ずぶっ…ぽこっ）', play: (a) => a.playDig() },
   { group: 'みず', id: 'whale-song', label: 'くじらの うた（ぼえ〜）', play: (a) => a.playWhaleSong() },
   { group: 'みず', id: 'spout', label: 'くじらの しおふき', play: (a) => a.playSpout() },
   { group: 'みず', id: 'pop', label: 'あわが はじける（ぱちん）', play: (a) => a.playPop() },
