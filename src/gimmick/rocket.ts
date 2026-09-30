@@ -8,7 +8,7 @@ import type { SlopeSystem, SlopeZone } from './slope';
  * Why a press would not fire the rocket right now ('' = it would). "air", "burn" and "locked" say nothing;
  * the others make the button grey and the partner says why.
  */
-export type RocketWhy = '' | 'locked' | 'air' | 'burn' | 'empty' | 'zone' | 'slide' | 'station';
+export type RocketWhy = '' | 'locked' | 'air' | 'burn' | 'empty' | 'zone' | 'slide' | 'station' | 'reverse';
 
 /** One "rocket" gimmick (2-3): a stretch where the rocket rests, or where it glows. */
 export interface RocketZone {
@@ -112,6 +112,8 @@ export class RocketSystem {
     const t = this.train;
     if (t.inputLock !== null || t.isFalling || t.isSlipping || t.isEnded) return 'locked';
     if (t.airborne) return 'air';
+    // v1.11 (PR8a, 第 3 部 A11): reversing it does not fire ("ぷすっ" and "うしろでは つかえないよ"; not greyed).
+    if (t.reversing || t.turning) return 'reverse';
     if (t.rocketBurning) return 'burn';
     // An empty gauge first (PHASE6 §5.1 order): it will not come back before the station, a quiet place will pass.
     if (this.pips <= 0) return 'empty';

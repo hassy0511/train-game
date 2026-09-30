@@ -418,8 +418,7 @@
     { "model": "mirror-shelf", "onRail": { "railId": "main", "at": 1830, "lateral": 14, "heightFromRail": -0.6 }, "rotationY": -90, "scale": 3.05 },
     { "model": "cloud-a", "onRail": { "railId": "main", "at": 2803, "heightFromRail": -7 } },
     { "model": "cloud-b", "onRail": { "railId": "main", "at": 2792, "lateral": 6, "heightFromRail": -9 } },
-    { "model": "mirror-stand-small", "onRail": { "railId": "main", "at": 3478, "lateral": -6.5, "heightFromRail": 1.1 } },
-    { "model": "mirror-cushion", "onRail": { "railId": "ura", "at": 0 }, "rotationY": 180 }
+    { "model": "mirror-stand-small", "onRail": { "railId": "main", "at": 3478, "lateral": -6.5, "heightFromRail": 1.1 } }
   ],
   "actors": [],
   "records": [

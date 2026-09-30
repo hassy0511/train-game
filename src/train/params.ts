@@ -25,6 +25,51 @@ export const TRAIN = {
 export const TRAIL = { back: 33, max: 2000 } as const;
 
 /**
+ * v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A4, PHASE9_0 §5): "うしろむき". The switch beside the lever turns the train
+ * round when it stands (`turnSeconds`); pressed while moving it first brakes to a stop at `switchBrake` (a second press
+ * cancels). Reversing, any running notch asks for `maxSpeed` (accel `accel`, brake `brake`), and the train retraces its
+ * trail. It stops gently (the last `creepBefore` m at `creepSpeed`) where its rear end reaches a stop point: `gapStop` m
+ * before a gap or a stretch it flew or dived through, `bufferGap` m before a siding's buffer, exactly at the trail's
+ * floor (the last station passed, the stage start, the rewind point, or TRAIL.max m back). A back junction shows arrows
+ * `arrowDistance` m before (locked `lockDistance` m before); the switch glows for `glowAfter` m past one worth it.
+ * `nudgeSeconds`: reversed with the lever at "とまる" this long, the partner says to raise it. `stopLineEvery`: past a
+ * station and standing, "うしろで もどって" again this often. Sidings are `spurMin`–`spurMax` m long; at the mouth the
+ * siding's end and the rail's +s differ by `mouthAngleMax`° at most; the mouth keeps `mouthBefore` m before and
+ * `mouthAfter` m after it clear, `mouthStation` m from a stop line, `mouthPortal` m from a portal. An overshot station
+ * stays to back up to until `overshootGiveUp` m past. The rear window camera is `rearCamOut` m behind the rear end. A
+ * jump reversing is a hop of `hopHeight` m for `hopSeconds` s.
+ */
+export const REVERSE = {
+  maxSpeed: 5,
+  accel: 1.5,
+  brake: 3,
+  switchBrake: 3,
+  turnSeconds: 0.5,
+  creepBefore: 2,
+  creepSpeed: 0.5,
+  gapStop: 1.0,
+  bufferGap: 0.5,
+  arrowDistance: 40,
+  lockDistance: 5,
+  glowAfter: 80,
+  nudgeSeconds: 6,
+  stopLineEvery: 20,
+  spurMin: 46,
+  spurMax: 150,
+  mouthAngleMax: 30,
+  mouthBefore: 40,
+  mouthAfter: 60,
+  mouthStation: 40,
+  mouthPortal: 80,
+  overshootGiveUp: 60,
+  rearCamOut: 0.3,
+  hopHeight: 0.3,
+  hopSeconds: 0.35,
+  /** The rear end of the train, back from the lead car centre (m): half a car and two spacings. */
+  tail: 6 + 12.5 * 2,
+} as const;
+
+/**
  * Master controller notches, bottom to top. `speed` is the target (m/s); `brake` is the
  * deceleration used while the lever sits on that notch and the train is faster than the target.
  */

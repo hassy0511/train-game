@@ -22,6 +22,14 @@ export interface DebugContext {
 export function installDebug(ctx: DebugContext): { update(fps: number): void } {
   // Dev only: lets a browser console (or a probe script) look at the scene.
   Object.assign(window, { __debugView: ctx.view, __debugTrain: ctx.train });
+  // v1.11 (PR8a, 第 3 部 A16): puts the train with its front at `s` on `railId`, standing, turned round to うしろむき
+  // (the probes' rear window frames). Dev only, like the rest of this file.
+  Object.assign(ctx.train, {
+    reverseAt(railId: string, s: number): void {
+      ctx.train.rewindTo(s, railId);
+      if (ctx.train.direction === 1) ctx.train.pressSwitch();
+    },
+  });
   const panel = document.createElement('div');
   panel.className = 'debug-panel';
   ctx.uiRoot.appendChild(panel);
@@ -60,10 +68,12 @@ export function installDebug(ctx: DebugContext): { update(fps: number): void } {
         ctx.train.setNotch(ctx.train.state.notch - 1);
         break;
       case 'ArrowLeft':
-        ctx.train.chooseJunction('left');
+        if (ctx.train.backJunction) ctx.train.chooseBack('left');
+        else ctx.train.chooseJunction('left');
         break;
       case 'ArrowRight':
-        ctx.train.chooseJunction('right');
+        if (ctx.train.backJunction) ctx.train.chooseBack('right');
+        else ctx.train.chooseJunction('right');
         break;
       case ' ':
         ctx.audio.unlock();
@@ -73,7 +83,10 @@ export function installDebug(ctx: DebugContext): { update(fps: number): void } {
       case 'V':
         toggleHelper();
         break;
+      // v1.11 (PR8a): R turns the train round (the まえ／うしろ switch); Shift+R restarts.
       case 'r':
+        ctx.train.pressSwitch();
+        break;
       case 'R':
         location.reload();
         break;
@@ -83,7 +96,7 @@ export function installDebug(ctx: DebugContext): { update(fps: number): void } {
     e.preventDefault();
   });
 
-  console.info('[debug] keys: ↑↓ notch, ←→ junction, Space whistle, V spline helper, R restart');
+  console.info('[debug] keys: ↑↓ notch, ←→ junction, Space whistle, V spline helper, R まえ／うしろ, Shift+R restart');
 
   return {
     update(fps: number): void {

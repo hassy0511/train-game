@@ -9,7 +9,7 @@ import { reversedZones } from '../gimmick/reversed-whistle';
 import { FIREFLY_FORK } from '../train/params';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
-import type { AbilityId, Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
+import { REVERSE_POST, type AbilityId, type JunctionDef, type Placement, type PropDef, type RecordDef, type ResolvedActor, type ResolvedProp, type ResolvedRecord, type ResolvedStation, type StageData, type StageFile, type Vec3 } from './types';
 import { ironDrawsProp, ironPropsFor, magnetTargets } from '../gimmick/magnet-layout';
 import {
   validateIceLayout,
@@ -19,6 +19,7 @@ import {
   validatePlowLayout,
   validateSnowLayout,
   validateStageFile,
+  validateBackJunctions,
   validateStageLayout,
   validateToyLayout,
   validateWaterLayout,
@@ -82,6 +83,10 @@ export function prepareStage(raw: unknown): StageData {
   // A copy: gaps opened and closed at run time (rail cuts, flower bridges) must not touch the loaded module.
   const file = validateStageFile(structuredClone(raw));
   addBridgeGaps(file);
+  // v1.11 (PR8a): back junctions (switchbacks) work only reversing: kept apart, so everything forward (the train's
+  // forks, the checks, the rail network's feeders) sees the forward ones only.
+  const backJunctions = file.junctions.filter((j) => j.back === true);
+  file.junctions = file.junctions.filter((j) => j.back !== true);
   const network = buildRailNetwork(file);
   checkRanges(file, network);
   validateStageLayout(file, network);
@@ -112,7 +117,7 @@ export function prepareStage(raw: unknown): StageData {
   const groundY = file.environment.ground?.y ?? null;
 
   // v1.11 (PR5): a can, a bucket or a whole sign with `iron` is drawn by the iron layer (it flies or stretches).
-  const props: ResolvedProp[] = [...file.props.filter((p) => !ironDrawsProp(p)), ...autoSigns(file)].map((p) => {
+  const props: ResolvedProp[] = [...file.props.filter((p) => !ironDrawsProp(p)), ...autoSigns(file), ...reversePosts(backJunctions, network)].map((p) => {
     const t = resolvePlacement(p, network, groundY);
     return {
       model: p.model,
@@ -146,7 +151,8 @@ export function prepareStage(raw: unknown): StageData {
   });
 
   const stations: ResolvedStation[] = file.stations.map((def) => {
-    const t = resolvePlacement({ onRail: { railId: def.railId, at: def.at, heightFromRail: 0 } }, network, groundY);
+    // v1.11 (PR8a, 第 3 部 B6.3): a reverse platform faces −s (its platform, sign and queue run along +s from `at`).
+    const t = resolvePlacement({ onRail: { railId: def.railId, at: def.at, heightFromRail: 0 }, rotationY: def.reverse ? 180 : 0 }, network, groundY);
     return { def, position: t.position, quaternion: t.quaternion };
   });
 
@@ -155,7 +161,31 @@ export function prepareStage(raw: unknown): StageData {
     return { def, position: t.position, quaternion: t.quaternion, onRail: 'onRail' in def ? { ...def.onRail } : undefined };
   });
 
-  return { file, network, props, actors, stations, records, magnets, ironProps };
+  validateBackJunctions(file, network, backJunctions, records.map((r) => ({ id: r.def.id, requires: r.def.requires, position: r.position })));
+
+  return { file, network, props, actors, stations, records, magnets, ironProps, backJunctions };
+}
+
+/**
+ * v1.11 (PR8a, 第 3 部 A8.3): the pink swirl post by each back junction's point, REVERSE_POST.lateral m out on the side
+ * away from its siding (a hint: "a way to reverse into is here"). Two tagged props in one place: the grey one shows
+ * until うしろむき is learned, then the pink one (the view swaps them).
+ */
+
+function reversePosts(back: JunctionDef[], network: RailNetwork): PropDef[] {
+  const out: PropDef[] = [];
+  for (const j of back) {
+    const sidingId = j.left === j.railId ? j.right : j.left;
+    if (!sidingId || !network.rails.has(sidingId) || !network.rails.has(j.railId)) continue;
+    const mouth = network.getRail(j.railId).frameAt(j.at);
+    const siding = network.getRail(sidingId);
+    const side = siding.frameAt(Math.max(0, siding.length - 20)).position.clone().sub(mouth.position).dot(mouth.right);
+    const lateral = side > 0 ? -REVERSE_POST.lateral : REVERSE_POST.lateral;
+    for (const [model, tag] of [['reverse-post', REVERSE_POST.tag], ['reverse-post-off', REVERSE_POST.tagOff]] as const) {
+      out.push({ model, tag, onRail: { railId: j.railId, at: j.at, lateral, heightFromRail: 0 } });
+    }
+  }
+  return out;
 }
 
 /**

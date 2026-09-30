@@ -1,3 +1,4 @@
+import { Vector3 } from 'three';
 import { RUN_SURFACES, type RunSurface } from '../audio/run-sound';
 import { SONGS } from '../audio/songs';
 import { fireflyForks } from '../gimmick/fireflies';
@@ -25,6 +26,7 @@ import {
   PARADE,
   PLOW,
   RECORD,
+  REVERSE,
   REWIND_DISTANCE,
   ROCK_ROLL,
   ROCKET,
@@ -36,7 +38,7 @@ import {
   WINDUP,
 } from '../train/params';
 import { inArea, openWaterAt } from './water';
-import { AMBIENCE_KINDS, CAT_LOOKS, FLOATER_LOOKS, IRON_LOOKS, MAGNET_KINDS, MAGNET_LOOKS, WATER_LOOKS, type AmbienceKind, type CatLook, type FloaterLook, type IronLook, type MagnetKind, type MagnetLook, type MagnetTarget, type Placement, type StageFile, type WaterDef, type WaterLook } from './types';
+import { AMBIENCE_KINDS, CAT_LOOKS, type JunctionDef, FLOATER_LOOKS, IRON_LOOKS, MAGNET_KINDS, MAGNET_LOOKS, WATER_LOOKS, type AmbienceKind, type CatLook, type FloaterLook, type IronLook, type MagnetKind, type MagnetLook, type MagnetTarget, type Placement, type StageFile, type WaterDef, type WaterLook } from './types';
 import { paradeSetup } from '../actors/parade';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
@@ -295,6 +297,8 @@ export function validateStageFile(raw: unknown): StageFile {
         if (g.phantom === true && g.hint === undefined) fail(`rail "${r.id}": a phantom gap needs a "hint" (the notch that clears it)`);
       }
     }
+    // v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A8.6): the first plan's reverse-only rail is not used.
+    if (r.oneWay !== undefined) fail(`rail "${r.id}": "oneWay" is not used any more (a back siding is an ordinary rail: use junctions[].back)`);
     if (r.look !== undefined && r.look !== 'rail' && r.look !== 'silk') fail(`rail "${r.id}": "look" must be rail or silk`);
     if (r.glass !== undefined) {
       // v1.11 (5-3): glass stretches (looks only).
@@ -357,6 +361,19 @@ export function validateStageFile(raw: unknown): StageFile {
       }
     }
     if (j.default !== 'left' && j.default !== 'right') fail(`junction "${j.id}": "default" must be left or right`);
+    // v1.11 (PR8a, 第 3 部 A8.1): a back junction (a switchback): one side is its own rail, the other a siding.
+    if (j.back !== undefined && typeof j.back !== 'boolean') fail(`junction "${j.id}": "back" must be true or false`);
+    if (j.back === true) {
+      if (j.left === undefined || j.right === undefined) fail(`junction "${j.id}": a back junction needs both left and right (its rail and the siding)`);
+      if ((j.left === j.railId) === (j.right === j.railId)) fail(`junction "${j.id}": one side of a back junction is its own rail "${String(j.railId)}", the other the siding`);
+      if (j[j.default as 'left' | 'right'] !== j.railId) fail(`junction "${j.id}": a back junction's default is its own rail (the side that is not the siding)`);
+      for (const k of ['dive', 'bubbles', 'needs', 'signReversed', 'fireflies', 'spin', 'phantom']) {
+        if (j[k] !== undefined && j[k] !== false) fail(`junction "${j.id}": a back junction has no ${k}`);
+      }
+      const line = j.line;
+      if (line !== undefined && line !== null && !isString(line) && !(isObject(line) && isString(line.text))) fail(`junction "${j.id}": "line" must be text, a line ({ text }) or null`);
+      if (j.glow !== undefined && j.glow !== 'auto' && typeof j.glow !== 'boolean') fail(`junction "${j.id}": "glow" must be "auto", true or false`);
+    } else if (j.line !== undefined || j.glow !== undefined) fail(`junction "${j.id}": "line" and "glow" are for back junctions ("back": true)`);
     if (j[j.default] === undefined) fail(`junction "${j.id}": default side "${j.default}" has no target`);
     if (j.diveSide !== undefined) fail(`junction "${j.id}": "diveSide" is set by the loader (write "dive": true)`);
     if (j.dive !== undefined) {
@@ -448,6 +465,7 @@ export function validateStageFile(raw: unknown): StageFile {
     if (!isString(s.railId) || !railIds.has(s.railId) || !isNumber(s.at)) fail(`station "${s.id}": needs known railId and at`);
     if (s.platformSide !== 'left' && s.platformSide !== 'right') fail(`station "${s.id}": platformSide`);
     if (s.buried !== undefined) fail(`station "${s.id}": "buried" is set by the loader (put the station in a plow-wall's stretch)`);
+    if (s.reverse !== undefined && typeof s.reverse !== 'boolean') fail(`station "${s.id}": "reverse" must be true or false`);
     stationIds.add(s.id);
   }
 
@@ -550,6 +568,10 @@ export function validateStageFile(raw: unknown): StageFile {
     if (r.model !== undefined && (!isString(r.model) || !MODEL_NAME.test(r.model))) fail(`record "${r.id}": "model" must match [a-z0-9-]+`);
     if (r.hint !== undefined && !isString(r.hint)) fail(`record "${r.id}": "hint" must be text`);
     if (r.hush !== undefined && typeof r.hush !== 'boolean') fail(`record "${r.id}": "hush" must be true or false`);
+    // v1.11 (PR8a, 第 3 部 A12.1): lines at the back siding's buffer once it is found.
+    if (r.endLines !== undefined && !(Array.isArray(r.endLines) && r.endLines.length > 0 && r.endLines.every((l) => isObject(l) && isString(l.text) && (l.who === undefined || l.who === 'partner' || l.who === 'amanojaku')))) {
+      fail(`record "${r.id}": "endLines" must be a list of lines ({ text, who? })`);
+    }
     checkPlacement(r, `record "${r.id}"`, railIds);
   }
 
@@ -653,6 +675,8 @@ export function validateStageFile(raw: unknown): StageFile {
   const nightIds = new Set<string>();
   requireArray(raw, 'gimmicks').forEach((g, i) => {
     if (!isObject(g) || !isString(g.type)) fail(`gimmicks[${i}]: "type" is required`);
+    // v1.11 (PR8a, 第 3 部 A8.6): the first plan's reversing point is not made.
+    if (g.type === 'reverse') fail(`gimmicks[${i}]: "reverse" is not used any more (reversing works anywhere; a back siding is junctions[].back)`);
     const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound', 'ice', 'thin-ice', 'tunnel', 'hush', 'whistle-reversed'];
     if (zoned.includes(g.type)) {
       if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`gimmicks[${i}] ${g.type}: needs a known railId and "from"`);
@@ -2038,4 +2062,105 @@ export function validateMirrorWorld(file: StageFile, network: RailNetwork): void
     const rail = network.getRail(q.railId);
     if (q.at < 0 || q.at > rail.length) fail(`gimmicks[${i}] letter-sign: at=${q.at} is outside rail "${q.railId}"`);
   });
+}
+
+/**
+ * v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A8.5): the back junctions (switchbacks) and their sidings. A siding merges
+ * into the junction's rail right at its point, starts nowhere (its start is the buffer), is REVERSE.spurMin–spurMax m
+ * long, meets the rail at no more than REVERSE.mouthAngleMax° and lies on the side the junction says (as seen
+ * reversing). Nothing that asks something of the child lies on it (gaps, water, snow walls, slopes, ice, camera
+ * stretches, pads, updrafts, boughs, bridges, floaters, animals, magnet targets, mirrors, forks, merges; stations only
+ * a reverse platform), and around the mouth on the rail (REVERSE.mouthBefore m before to mouthAfter m after) no fork,
+ * merge, gap, water's edge, snow wall or magnet gap or gate; no stop line within REVERSE.mouthStation m; not on a snow
+ * wave's way. A reverse platform lies at the siding's buffer end and is never a mission's last step. When the stage has
+ * a back junction, every record needing "reverse" lies within RECORD.distance m of a siding point the tail car's centre
+ * reaches (s ≥ bufferGap + 6).
+ */
+export function validateBackJunctions(file: StageFile, network: RailNetwork, back: JunctionDef[], records: { id: string; requires: string | null; position: Vector3 }[]): void {
+  const sidings = new Map<string, JunctionDef>();
+  const ids = new Set<string>();
+  for (const j of [...file.junctions, ...back]) {
+    if (ids.has(j.id)) fail(`junction "${j.id}": the id is used twice`);
+    ids.add(j.id);
+  }
+  for (const j of back) {
+    const where = `junction "${j.id}"`;
+    const main = network.getRail(j.railId);
+    if (j.at < 0 || j.at > main.length) fail(`${where}: at=${j.at} is outside rail "${j.railId}"`);
+    const sidingId = (j.left === j.railId ? j.right : j.left) as string;
+    const def = file.rails.find((r) => r.id === sidingId);
+    if (!def) fail(`${where}: unknown siding "${sidingId}"`);
+    if (sidings.has(sidingId)) fail(`${where}: siding "${sidingId}" already belongs to junction "${sidings.get(sidingId)?.id}"`);
+    sidings.set(sidingId, j);
+    const siding = network.getRail(sidingId);
+    const end = def.end;
+    if (end.type !== 'merge' || end.railId !== j.railId || Math.abs(end.at - j.at) > 0.5) fail(`${where}: siding "${sidingId}" must end merging into "${j.railId}" at ${j.at} (its mouth)`);
+    if (network.feeder(sidingId) !== null) fail(`${where}: siding "${sidingId}" must not start at a junction (its start is the buffer)`);
+    if (network.mergesInto(sidingId).length > 0) fail(`${where}: no rail may merge into siding "${sidingId}"`);
+    if (siding.length < REVERSE.spurMin || siding.length > REVERSE.spurMax) fail(`${where}: siding "${sidingId}" must be ${REVERSE.spurMin}–${REVERSE.spurMax} m long (it is ${siding.length.toFixed(1)} m)`);
+    // The mouth: the siding's last stretch runs along the rail's +s (drawn backwards it would make a V).
+    const mouth = main.frameAt(j.at);
+    const pts = def.points;
+    const last = new Vector3(...pts[pts.length - 1]);
+    const before = new Vector3(...pts[pts.length - 2]);
+    const dir = last.clone().sub(before).normalize();
+    const angle = (Math.acos(Math.max(-1, Math.min(1, dir.dot(mouth.tangent)))) * 180) / Math.PI;
+    if (angle > REVERSE.mouthAngleMax) fail(`${where}: siding "${sidingId}" meets "${j.railId}" at ${angle.toFixed(0)}° (at most ${REVERSE.mouthAngleMax}°: its end runs along the rail's way)`);
+    // The side as seen reversing (facing −s): its right is the rail's left.
+    const sideSign = siding.frameAt(Math.max(0, siding.length - 20)).position.clone().sub(mouth.position).dot(mouth.right);
+    const sidingSide = j.left === sidingId ? 'left' : 'right';
+    const shapeSide = sideSign > 0 ? 'left' : 'right';
+    if (Math.abs(sideSign) < 0.3 || shapeSide !== sidingSide) fail(`${where}: siding "${sidingId}" lies on the ${shapeSide} as seen reversing, not the ${sidingSide}`);
+    // Nothing on the siding that asks something of the child.
+    if (siding.gaps.length > 0) fail(`${where}: siding "${sidingId}" has a gap`);
+    if (siding.surfaces.length > 0 || siding.dives.length > 0) fail(`${where}: siding "${sidingId}" runs on or under water`);
+    const banned = ['plow-wall', 'slope', 'ice', 'thin-ice', 'camera', 'jump-pad', 'updraft', 'bough', 'flower-bridge', 'fragile', 'magnet', 'mirror-flip'];
+    file.gimmicks.forEach((g, i) => {
+      if (g.railId === sidingId && banned.includes(g.type)) fail(`${where}: gimmicks[${i}] ${g.type} is on siding "${sidingId}"`);
+    });
+    for (const f of file.floaters ?? []) if (f.railId === sidingId) fail(`${where}: floater "${f.id}" is on siding "${sidingId}"`);
+    for (const a of file.actors) if ('onRail' in a && a.onRail.railId === sidingId && a.type !== 'trigger') fail(`${where}: actor "${a.id}" is on siding "${sidingId}"`);
+    for (const o of file.junctions) if (o.railId === sidingId) fail(`${where}: junction "${o.id}" is on siding "${sidingId}"`);
+    for (const st of file.stations) if (st.railId === sidingId && !st.reverse) fail(`${where}: station "${st.id}" on siding "${sidingId}" must be a reverse platform ("reverse": true)`);
+    // Around the mouth on the rail.
+    const lo = j.at - REVERSE.mouthBefore;
+    const hi = j.at + REVERSE.mouthAfter;
+    const near = (at: number): boolean => at >= lo && at <= hi;
+    for (const o of file.junctions) if (o.railId === j.railId && near(o.at)) fail(`${where}: junction "${o.id}" is near its mouth (${lo}–${hi})`);
+    for (const o of back) if (o !== j && o.railId === j.railId && near(o.at)) fail(`${where}: junction "${o.id}" is near its mouth (${lo}–${hi})`);
+    for (const r of file.rails) if (r.id !== sidingId && r.end.type === 'merge' && r.end.railId === j.railId && near(r.end.at)) fail(`${where}: rail "${r.id}" merges near its mouth`);
+    for (const g of main.gaps) if (g.to >= lo && g.from <= hi) fail(`${where}: a gap (${g.from}–${g.to}) is near its mouth`);
+    for (const w of [...main.surfaces, ...main.dives]) if (near(w.from) || near(w.to)) fail(`${where}: the water's edge is near its mouth`);
+    file.gimmicks.forEach((g, i) => {
+      if (g.railId !== j.railId || g.from === undefined) return;
+      const kind = (g.params as { kind?: string } | undefined)?.kind;
+      const span = g.type === 'plow-wall' || (g.type === 'magnet' && (kind === 'bridge' || kind === 'gate'));
+      if (span && (g.to ?? g.from) >= lo && g.from <= hi) fail(`${where}: gimmicks[${i}] ${g.type} is near its mouth`);
+    });
+    for (const st of file.stations) if (st.railId === j.railId && Math.abs(st.at - j.at) < REVERSE.mouthStation) fail(`${where}: station "${st.id}"'s stop line must be ${REVERSE.mouthStation} m from its mouth`);
+    for (const m of file.missions) {
+      for (const step of m.steps) {
+        const c = step.chase;
+        if (c && c.railId === j.railId && j.at >= c.from - 40 && j.at <= c.until.at) fail(`${where}: its mouth is on mission "${m.id}"'s snow wave way`);
+      }
+    }
+  }
+  // Reverse platforms: at a siding's buffer end, never a mission's last step.
+  for (const st of file.stations) {
+    if (!st.reverse) continue;
+    if (!sidings.has(st.railId)) fail(`station "${st.id}": a reverse platform lies on a back junction's siding`);
+    if (st.at > 1) fail(`station "${st.id}": a reverse platform's "at" is at most 1 (where the rear end stops, ${REVERSE.bufferGap} m from the buffer)`);
+    for (const m of file.missions) if (m.steps[m.steps.length - 1]?.stationId === st.id) fail(`station "${st.id}": a reverse platform is never a mission's last step (mission "${m.id}")`);
+  }
+  // Records needing うしろむき: where the tail car's centre comes in a siding.
+  if (back.length === 0) return;
+  for (const r of records) {
+    if (r.requires !== 'reverse') continue;
+    let ok = false;
+    for (const id of sidings.keys()) {
+      const rail = network.getRail(id);
+      for (let s = REVERSE.bufferGap + 6; s <= rail.length && !ok; s += 1) if (rail.frameAt(s).position.distanceTo(r.position) <= RECORD.distance) ok = true;
+    }
+    if (!ok) fail(`record "${r.id}": a record needing うしろむき lies within ${RECORD.distance} m of a back siding (where the tail car comes)`);
+  }
 }

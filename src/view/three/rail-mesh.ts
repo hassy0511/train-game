@@ -738,13 +738,16 @@ function buildTrackPiece(
 
 /**
  * Generates the track (in culled pieces) plus buffer-stop placements. `railLooks`: rails not drawn as steel rails
- * (2-2 silk); `looks` (v1.7): slope beds and rock bases.
+ * (2-2 silk); `looks` (v1.7): slope beds and rock bases. v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A8.3): a rail whose
+ * start joins nothing (no junction, no merge there: a back siding, a side way ending in a merge) has a buffer stop at
+ * its start too, facing −s; not the rail the stage starts on (`startRail`: its start is behind the first station).
  */
 export function buildRailScene(
   network: RailNetwork,
   skips: TrackSkip[] = [],
   railLooks: Record<string, TrackLook> = {},
   looks?: TrackLooks,
+  startRail?: string,
 ): RailScene {
   const group = new Group();
   group.name = 'rail-network';
@@ -781,7 +784,23 @@ export function buildRailScene(
         scale: 1,
       });
     }
+    if (startsNowhere(network, rail.id) && rail.id !== startRail) {
+      const frame = rail.frameAt(0);
+      const back = frame.tangent.clone().negate();
+      const rotation = new Matrix4().makeBasis(frame.right.clone(), frame.up, back);
+      bufferStops.push({
+        model: 'buffer-stop-proto',
+        position: frame.position.clone(),
+        quaternion: new Quaternion().setFromRotationMatrix(rotation),
+        scale: 1,
+      });
+    }
   }
   sleeper.dispose();
   return { group, bufferStops };
+}
+
+/** v1.11 (PR8a): rail `id`'s start joins nothing: no junction feeds it, no rail merges into it there. */
+export function startsNowhere(network: RailNetwork, id: string): boolean {
+  return network.feeder(id) === null && !network.mergesInto(id).some((m) => Math.abs(m.at) < 0.5);
 }

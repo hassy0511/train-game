@@ -1,8 +1,13 @@
 import { Quaternion, Vector3 } from 'three';
-import { TRAIN } from '../train/params';
+import { REVERSE, TRAIN } from '../train/params';
 import type { TrainPose } from '../train/types';
 
-export type CameraMode = 'cab' | 'chase' | 'side' | 'top';
+/**
+ * v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A10): `rear` ("うしろの まど", the view out of the last car's back window) and
+ * `chase-rev` (the view from ahead of the lead car, over the train the way it goes) are what `cab` and `chase` turn into
+ * while reversing. They are not on the camera picker (CAMERA_MODES keeps its four).
+ */
+export type CameraMode = 'cab' | 'chase' | 'side' | 'top' | 'rear' | 'chase-rev';
 export const CAMERA_MODES: CameraMode[] = ['cab', 'chase', 'side', 'top'];
 /** Labels for the camera picker tiles. */
 export const CAMERA_LABELS: Record<CameraMode, string> = {
@@ -10,7 +15,17 @@ export const CAMERA_LABELS: Record<CameraMode, string> = {
   chase: 'うしろから',
   side: 'よこから',
   top: 'うえから',
+  rear: 'うしろの まど',
+  'chase-rev': 'まえから',
 };
+
+/** v1.11 (PR8a): the mode a picked camera turns into while reversing (A10). */
+export function reversedCamera(mode: CameraMode): CameraMode {
+  return mode === 'cab' ? 'rear' : mode === 'chase' ? 'chase-rev' : mode;
+}
+
+/** v1.11 (PR8a): the rear window camera's eye height (m) and field of view (degrees). */
+export const REAR_CAMERA = { height: 2.3, fovDeg: 55, near: 0.4 } as const;
 
 /** Desired camera placement in world space for one frame. */
 export interface CameraTarget {
@@ -57,6 +72,24 @@ export function cameraTarget(mode: CameraMode, pose: TrainPose, out: CameraTarge
       out.lookAt.copy(p).addScaledVector(FORWARD, 12.01);
       out.up.copy(FORWARD);
       break;
+    case 'rear': {
+      // Just outside the last car's back wall (its inside is not seen), looking back the way the train goes.
+      const t = pose.tail;
+      FORWARD.set(0, 0, 1).applyQuaternion(t.quaternion);
+      UP.set(0, 1, 0).applyQuaternion(t.quaternion);
+      out.position.copy(t.position).addScaledVector(UP, REAR_CAMERA.height).addScaledVector(FORWARD, -(TRAIN.length / 2 + REVERSE.rearCamOut));
+      out.lookAt.copy(out.position).addScaledVector(FORWARD, -10);
+      out.up.copy(UP);
+      break;
+    }
+    case 'chase-rev': {
+      // "うしろから" the other way round: ahead of the lead car, over the train towards where it goes.
+      const consist = TRAIN.carSpacing * (TRAIN.carCount - 1);
+      out.position.copy(p).addScaledVector(FORWARD, 16).addScaledVector(UP, 9).addScaledVector(LEFT, -4);
+      out.lookAt.copy(p).addScaledVector(FORWARD, -consist / 2 - 6).addScaledVector(UP, 2);
+      out.up.set(0, 1, 0);
+      break;
+    }
   }
 }
 

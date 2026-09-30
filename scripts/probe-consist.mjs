@@ -14,7 +14,10 @@
  *     `main2` over the updraft's gap, 2-2's gap then `to-mizutamari`, 3-1's dive fork `ring-1`, 4-1's first thin ice
  *     with the rocket), and every 0.1 s of game time each trailing car's height is compared with the lead car's height
  *     at the same trail distance (Train.carLiftErr, the test hook data-car-lift-err). Up to 0.05 m.
- * (3) Reversing along the trail comes with うしろむき (PR8a).
+ * (3) Retracing (PR8a, うしろむき): the train drives forward through a junction or a merge, stops, turns round and
+ *     reverses back along its trail to the floor; every frame each car's position is compared with where that car was
+ *     at the same trail distance going forward (up to 0.05 m), and the rails must be the same (0-0 to-jishaku,
+ *     1-3 kaze-michi, 2-2 to-mizutamari, 3-1 the loop uso-1 back into umi).
  * Runs the dev server (the __debugTrain handle only exists in dev builds). Needs Playwright's Chromium
  * (PW_CHROMIUM_PATH to reuse an installed one). Exits 1 when (1) or (2) is out of bounds.
  */
@@ -47,6 +50,14 @@ const RUNS = [
   { stage: '2-2', name: 'gap 340, then to-mizutamari', rail: 'main', at: 300, notch: 3, choose: { 'to-mizutamari': 'left' }, jump: true, until: { rail: 'mizutamari', s: 70 }, seconds: 40 },
   { stage: '3-1', name: 'dive at the dive fork ring-1', rail: 'umi', at: 520, notch: 3, dive: true, until: { rail: 'umi', s: 700 }, seconds: 60 },
   { stage: '4-1', name: 'thin ice 940-980 with the rocket', rail: 'main', at: 880, notch: 3, rocketAt: 905, until: { rail: 'main', s: 1030 }, seconds: 40 },
+];
+
+/** The runs of (3): forward from `at` on `rail` (arrows chosen as `choose`) until `until`, then back to the floor. */
+const RETRACES = [
+  { stage: '0-0', name: 'main → to-jishaku (right) → jishaku, and back', rail: 'main', at: 500, choose: { 'to-jishaku': 'right' }, until: { rail: 'jishaku', s: 150 } },
+  { stage: '1-3', name: 'main2 → kaze-michi (right) → wind, and back', rail: 'main2', at: 40, choose: { 'kaze-michi': 'right' }, until: { rail: 'wind', s: 90 } },
+  { stage: '2-2', name: 'main → to-mizutamari (left) → mizutamari, and back', rail: 'main', at: 360, choose: { 'to-mizutamari': 'left' }, until: { rail: 'mizutamari', s: 80 } },
+  { stage: '3-1', name: 'umi → awa-1 → the loop uso-1 → merge into umi, and back', rail: 'umi', at: 2380, choose: {}, until: { rail: 'umi', s: 2400, after: 'uso-1' } },
 ];
 
 const server = spawn(resolve(root, 'node_modules/.bin/vite'), ['--port', '5196', '--host', '127.0.0.1'], {
@@ -148,6 +159,64 @@ async function runOne(run) {
   return { max, at, samples, events, end: `${train.state.railId} ${train.frontS.toFixed(1)}`, fell: train.isFalling };
 }
 
+/** In the page: one run of (3). */
+async function retraceOne(run) {
+  const train = window.__debugTrain;
+  const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+  train.rewindTo(run.at, run.rail);
+  await frame();
+  train.setNotch(3);
+  const ahead = [];
+  const rails = [];
+  let seenAfter = !run.until.after;
+  let t0 = performance.now();
+  while (performance.now() - t0 < 120000) {
+    await frame();
+    const j = train.announcedJunction;
+    if (j && run.choose[j.id]) train.chooseJunction(run.choose[j.id]);
+    const pose = train.getPose();
+    ahead.push({ x: train.trail.head, cars: [pose.position, ...pose.cars.map((c) => c.position)].map((p) => [p.x, p.y, p.z]), rail: train.state.railId });
+    if (train.state.railId === run.until.after) seenAfter = true;
+    if (seenAfter && train.state.railId === run.until.rail && train.state.s >= run.until.s) break;
+  }
+  train.setNotch(1);
+  while (train.state.speed > 0) await frame();
+  const turned = train.pressSwitch();
+  for (let i = 0; i < 20; i++) await frame();
+  train.setNotch(3);
+  let max = 0;
+  let at = '';
+  let samples = 0;
+  const railsBack = [];
+  t0 = performance.now();
+  while (performance.now() - t0 < 180000) {
+    await frame();
+    const x = train.trail.head;
+    let k = ahead.findIndex((a) => a.x >= x);
+    if (k > 0) {
+      const a = ahead[k - 1];
+      const b = ahead[k];
+      const u = b.x - a.x > 1e-9 ? (x - a.x) / (b.x - a.x) : 0;
+      const pose = train.getPose();
+      [pose.position, ...pose.cars.map((c) => c.position)].forEach((p, i) => {
+        const q = a.cars[i].map((v, n) => v + (b.cars[i][n] - v) * u);
+        const d = Math.hypot(p.x - q[0], p.y - q[1], p.z - q[2]);
+        if (d > max) {
+          max = d;
+          at = `${train.state.railId} ${train.state.s.toFixed(1)} car ${i}`;
+        }
+      });
+      samples += 1;
+    }
+    if (railsBack[railsBack.length - 1] !== train.state.railId) railsBack.push(train.state.railId);
+    if (train.atReverseStop) break;
+  }
+  for (const a of ahead) if (rails[rails.length - 1] !== a.rail) rails.push(a.rail);
+  const result = { turned, max, at, samples, forward: rails.join(' → '), back: railsBack.join(' → '), stop: train.lastReverseStop };
+  train.setNotch(1);
+  return result;
+}
+
 const started = Date.now();
 let bad = 0;
 const browser = await chromium.launch({
@@ -190,6 +259,23 @@ try {
     if (over) bad++;
     console.log(`${run.stage} ${run.name}: max ${r.max.toFixed(3)} m${r.at ? ` (front ${r.at})` : ''}, ${r.samples} samples, ended ${r.end}${r.fell ? ' FELL' : ''}${over ? '  OUT OF BOUNDS' : ''}`);
     console.log(`    ${r.events.join(', ')}`);
+    await page.close();
+  }
+
+  console.log(`\n(3) retracing: each car against where it was at the same trail distance going forward, every frame (up to ${LIFT_TOLERANCE} m)`);
+  for (const run of RETRACES) {
+    if (wanted.length > 0 && !wanted.includes(run.stage)) continue;
+    const page = await browser.newPage({ viewport: { width: 800, height: 500 }, deviceScaleFactor: 1, serviceWorkers: 'block' });
+    page.on('pageerror', (e) => console.error(`  [${run.stage}] ${e.message}`));
+    await page.goto(`${origin}/?stage=${run.stage}`);
+    await page.waitForSelector('#app[data-ready="1"]', { state: 'attached', timeout: 120_000 });
+    // The switch is there once うしろむき is learned (the test course has it; a stage's title screen does not ask).
+    await page.evaluate(() => window.__debugView.onStageEvent({ type: 'ability', id: 'reverse' }));
+    const r = await page.evaluate(retraceOne, run);
+    const back = r.back.split(' → ').reverse().join(' → ');
+    const over = r.max > LIFT_TOLERANCE || back !== r.forward || r.turned !== 'turned';
+    if (over) bad++;
+    console.log(`${run.stage} ${run.name}: max ${r.max.toFixed(3)} m${r.at ? ` (${r.at})` : ''}, ${r.samples} frames; forward ${r.forward}; back ${r.back}; stopped: ${r.stop}${over ? '  OUT OF BOUNDS' : ''}`);
     await page.close();
   }
 } finally {

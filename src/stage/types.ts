@@ -221,7 +221,11 @@ export interface RailDef {
   points: Vec3[];
   up?: Vec3;
   gaps?: GapDef[];
-  oneWay?: boolean;
+  /**
+   * The first plan's "逆走専用" rail. v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A8.6): not used any more: the loader refuses
+   * it ("use junctions[].back": a back siding is an ordinary rail).
+   */
+  oneWay?: never;
   /** v1.2: a wrong turn. Reaching its buffer puts the train back before the junction. */
   deadEnd?: boolean;
   /** v1.3: "follow" = up turns with the rail's bends (vertical loops, riding upside down). Default "fixed". */
@@ -293,6 +297,21 @@ export interface JunctionDef {
    * LIGHT.revealDistance m, as a reversed sign) the phantom pops ("ぽわん").
    */
   phantom?: boolean;
+  /**
+   * v1.11 (PR8a, PHASE9_0 §5, 第 3 部 A8): a back junction (a switchback): it works only reversing. One side is a
+   * siding whose end merges into `railId` at `at` (its start, s = 0, is a buffer); the other side is `railId` itself
+   * (the default: without a choice the train stays on the rail it came along). Left and right are as seen reversing
+   * (from the rear window). The loader keeps back junctions apart (StageData.backJunctions); `junctions` in the rest of
+   * the game are the forward ones.
+   */
+  back?: boolean;
+  /** v1.11 (back only): said when the switch starts to glow past it (else the line "backNear"). */
+  line?: string | LineDef | null;
+  /**
+   * v1.11 (back only): when the switch glows past it: "auto" (default) = the siding has a record not found yet or the
+   * step's station; true = always; false = never.
+   */
+  glow?: 'auto' | boolean;
   /**
    * v1.11 (5-3, set by the loader from a magnet "turn" target, never written): the target whose pull turns the mirror
    * that shows this fork's true way. No arrows show for it, the light alone does not see through it, and the light
@@ -382,6 +401,12 @@ export interface StationDef {
    * (`plow-wall`): the platform and its sign are under snow until the snowplow clears it.
    */
   buried?: boolean;
+  /**
+   * v1.11 (PR8a, 第 3 部 B6.3): a platform at the end of a back siding ("うしろむきの ホーム"): `at` (≤ 1) is where the rear
+   * end stops (REVERSE.bufferGap from the buffer); the platform runs along +s from it. Arriving is stopping at the
+   * buffer reversing (always "ぴたっ！", no gauge). Never a mission's last step.
+   */
+  reverse?: boolean;
 }
 
 export interface WorldPlacement {
@@ -458,7 +483,22 @@ export type RecordDef = Placement & {
    * hidden and cannot be found this try.
    */
   hush?: boolean;
+  /**
+   * v1.11 (PR8a, 第 3 部 A12.1): said at the back siding's buffer once this record is found (once a mission; the lines
+   * of 6-1's library and 6-2's hideouts).
+   */
+  endLines?: LineDef[];
 };
+
+/** v1.11 (PR8a, 第 3 部 A8.3): the swirl posts the loader stands by back junctions (their tags, their place). */
+export const REVERSE_POST = { lateral: 3.2, tag: 'reverse-post', tagOff: 'reverse-post-off' } as const;
+
+/** v1.11 (PR8a): a line with its speaker (default the partner) and an optional little picture (PR8b). */
+export interface LineDef {
+  who?: 'partner' | 'amanojaku';
+  text: string;
+  icon?: 'hand-stop' | 'run-swirl' | 'ride';
+}
 
 /** v1.7 / v1.10: the countdown panel's picture, which also picks how a time-up looks. */
 export type CountdownIcon = 'volcano' | 'clock' | 'moon';
@@ -721,7 +761,17 @@ export type MissionLines = Partial<
     | 'mirrorGateNear'
     | 'mirrorGateOpen'
     | 'mirrorGateBump'
-    | 'mirrorGateAfter',
+    | 'mirrorGateAfter'
+    // v1.11 (PR8a うしろむき, PHASE9_CHAPTER5_6 第 3 部 A14)
+    | 'backNear'
+    | 'backArrows'
+    | 'reverseNudge'
+    | 'reverseStop'
+    | 'reverseStopGap'
+    | 'reverseEnd'
+    | 'backUp'
+    | 'refuseRocketBack'
+    | 'reverseOops',
     string
   >
 >;
@@ -1181,6 +1231,8 @@ export interface StageData {
   magnets: MagnetTarget[];
   /** v1.11 (PR5): the iron odds and ends by the line (scattered, and the props with `iron`), by rail then `at`. */
   ironProps: IronProp[];
+  /** v1.11 (PR8a): the back junctions (taken out of `file.junctions`, which holds the forward ones only). */
+  backJunctions: JunctionDef[];
 }
 
 // ---- v1.11 (PR5): the magnet light (PHASE9_CHAPTER5_6 第 2 部 M9) ------------------------------------------------

@@ -55,7 +55,9 @@ export type StageEvent =
         // v1.11 (5-1): little tanukis dancing on the rail, "ききっ" (soft)
         | 'lure'
         // v1.11 (PR5): "ぽよん" off an unopened magnet gap's soap film or an iron gate (soft)
-        | 'magnet';
+        | 'magnet'
+        // v1.11 (PR8a): just in case something goes wrong reversing (never meant to happen; soft)
+        | 'reverse';
       /** v1.11 (5-2): a soft fail (a small dip, no shake): a wind-up toy, a ball pit, the snow… (a test hook). */
       soft?: boolean;
     }
@@ -66,6 +68,17 @@ export type StageEvent =
   | { type: 'rewind'; boarded?: Record<string, number> }
   /** The player has this ability (at load and when it is learned). */
   | { type: 'ability'; id: AbilityId }
+  /**
+   * v1.11 (PR8a, うしろむき): the train turned round: reversing (`on`) or forward again. The view moves the light's beam
+   * to the last car and lights its two white rear lamps.
+   */
+  | { type: 'reverse'; on: boolean }
+  /** v1.11 (PR8a, A17): reversing, stopped at a stop point (A6). */
+  | { type: 'reverse:stop'; why: 'gap' | 'air' | 'dive' | 'station' | 'floor' | 'portal' | 'buffer' }
+  /** v1.11 (PR8a): reversing, the rear went into back junction `junction`'s siding. */
+  | { type: 'reverse:siding'; junction: string }
+  /** v1.11 (PR8a, A9): the train overshot station `stationId` with うしろむき learned ("うしろで もどって"). */
+  | { type: 'reverse:backup'; stationId: string }
   | { type: 'light'; on: boolean }
   /**
    * v1.11 (PR5, PHASE9_CHAPTER5_6 第 2 部 M15): the light button's step (the beam's colour, the lamp's rim). `light`

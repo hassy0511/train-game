@@ -27,6 +27,8 @@ const TOY_SOUNDS = ['wind-up', 'band-fanfare', 'band-step', 'spin-turn', 'spin-g
 const MAGNET_SOUNDS = ['magnet-on', 'magnet-pull', 'magnet-catch', 'rail-snap', 'gate-open', 'magnet-bounce', 'iron-biyon', 'iron-karan', 'sign-bell'];
 /** v1.11 (5-3): the mirror world's effects, the group「かがみ」(PHASE9_CHAPTER5_6 第 6 部 §10; the turn with and without the flash). */
 const MIRROR_SOUNDS = ['mirror-gate', 'mirror-ripple', 'mirror-bump', 'phantom-pop', 'glass-on', 'mirror-turn', 'mirror-turn-back', 'letter-reflect'];
+/** v1.11 (PR8a): うしろむき's effects, the group「うしろむき」(PHASE9_CHAPTER5_6 第 3 部 A15). */
+const REVERSE_SOUNDS = ['reverse-on', 'reverse-off', 'switch-pending', 'reverse-stop', 'reverse-bump', 'hop-back', 'sakasa-hop'];
 
 test('sounds page: every effect plays, is heard and does not clip; the running sound on each track', async ({ page }) => {
   const errors: string[] = [];
@@ -79,6 +81,7 @@ test('sounds page: every effect plays, is heard and does not clip; the running s
     ...TOY_SOUNDS,
     ...MAGNET_SOUNDS,
     ...MIRROR_SOUNDS,
+    ...REVERSE_SOUNDS,
   ]) {
     await page.locator(`button[data-sound="${id}"]`).click();
   }
@@ -155,6 +158,11 @@ test('sounds page: every effect plays, is heard and does not clip; the running s
   for (const id of ['firefly', 'windows', 'bridge', 'world-step', ...TOY_SOUNDS, ...MIRROR_SOUNDS]) await expect(page.locator(`button[data-sound="${id}"]`)).toHaveCount(1);
   // v1.11 (5-3): the group「かがみ」on the page.
   await expect(page.locator('button[data-sound="mirror-gate"]')).toBeVisible();
+  // v1.11 (PR8a): the group「うしろむき」, each heard.
+  for (const id of REVERSE_SOUNDS) {
+    await expect(page.locator(`button[data-sound="${id}"]`)).toHaveCount(1);
+    expect(measured.find((m) => m.id === id)?.rms ?? 0, `${id} is heard`).toBeGreaterThan(0.001);
+  }
   expect(errors).toEqual([]);
 });
 

@@ -1,0 +1,337 @@
+{
+  "schemaVersion": 1,
+  "id": "0-5",
+  "title": "てすとの うしろむき",
+  "chapter": 0,
+  "hidden": true,
+  "unlock": {
+    "requires": [
+      "5-3"
+    ],
+    "purchase": null
+  },
+  "unlocks": [],
+  "environment": {
+    "sky": {
+      "top": "#4f9dff",
+      "bottom": "#d9f1ff"
+    },
+    "fog": {
+      "color": "#d9f1ff",
+      "near": 150,
+      "far": 450
+    },
+    "lighting": "day",
+    "ground": {
+      "y": -0.6,
+      "size": 3400,
+      "color": "#7fc96f"
+    },
+    "bgm": null,
+    "ambience": "town",
+    "surface": "rail"
+  },
+  "start": {
+    "railId": "main",
+    "at": 45,
+    "direction": 1
+  },
+  "rails": [
+    {
+      "id": "main",
+      "points": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          500
+        ],
+        [
+          0,
+          0,
+          1000
+        ],
+        [
+          0,
+          0,
+          1500
+        ]
+      ],
+      "end": {
+        "type": "buffer"
+      }
+    },
+    {
+      "id": "ura",
+      "points": [
+        [
+          8,
+          0,
+          342
+        ],
+        [
+          8,
+          0,
+          354
+        ],
+        [
+          7.6,
+          0,
+          366
+        ],
+        [
+          5.4,
+          0,
+          378
+        ],
+        [
+          2.4,
+          0,
+          390
+        ],
+        [
+          0,
+          0,
+          400
+        ]
+      ],
+      "end": {
+        "type": "merge",
+        "railId": "main",
+        "at": 400
+      }
+    }
+  ],
+  "junctions": [
+    {
+      "id": "ura-guchi",
+      "railId": "main",
+      "at": 400,
+      "back": true,
+      "left": "main",
+      "right": "ura",
+      "default": "left",
+      "line": "うしろに ホームが ある！"
+    }
+  ],
+  "stations": [
+    {
+      "id": "hajime",
+      "name": "はじまりのえき",
+      "railId": "main",
+      "at": 45,
+      "platformSide": "left"
+    },
+    {
+      "id": "ura-home",
+      "name": "うらの ホーム",
+      "railId": "ura",
+      "at": 0.5,
+      "platformSide": "left",
+      "reverse": true
+    },
+    {
+      "id": "naka",
+      "name": "なかのえき",
+      "railId": "main",
+      "at": 700,
+      "platformSide": "left"
+    },
+    {
+      "id": "owari",
+      "name": "おわりのえき",
+      "railId": "main",
+      "at": 1300,
+      "platformSide": "left"
+    }
+  ],
+  "props": [
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "main",
+        "at": 90,
+        "lateral": -12
+      },
+      "rotationY": 20
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "main",
+        "at": 160,
+        "lateral": 14
+      },
+      "rotationY": 110
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "main",
+        "at": 300,
+        "lateral": -16
+      },
+      "rotationY": 200
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "main",
+        "at": 520,
+        "lateral": -14
+      },
+      "rotationY": 40
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "main",
+        "at": 620,
+        "lateral": 15
+      },
+      "rotationY": 300
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "main",
+        "at": 900,
+        "lateral": -13
+      },
+      "rotationY": 80
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "main",
+        "at": 1060,
+        "lateral": 14
+      },
+      "rotationY": 150
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "main",
+        "at": 1200,
+        "lateral": -15
+      },
+      "rotationY": 250
+    },
+    {
+      "model": "snow-fence-small",
+      "onRail": {
+        "railId": "main",
+        "at": 1060,
+        "lateral": 6
+      }
+    },
+    {
+      "model": "snow-fence-small",
+      "onRail": {
+        "railId": "main",
+        "at": 1060,
+        "lateral": -6
+      }
+    }
+  ],
+  "actors": [
+    {
+      "id": "neko",
+      "type": "cat",
+      "onRail": {
+        "railId": "main",
+        "at": 250,
+        "heightFromRail": 0
+      },
+      "reactsTo": "whistle",
+      "params": {
+        "wakeDistance": 60,
+        "dangerDistance": 8,
+        "fleeLateral": 6,
+        "fleeSeconds": 2
+      }
+    }
+  ],
+  "records": [],
+  "missions": [
+    {
+      "id": "m1",
+      "type": "pickup",
+      "title": "うしろの ホーム",
+      "steps": [
+        {
+          "stationId": "ura-home",
+          "board": 2,
+          "say": "うしろから きてくれた！",
+          "reply": "うしろむき だよ！"
+        },
+        {
+          "stationId": "naka",
+          "alight": 2
+        }
+      ],
+      "hints": [
+        {
+          "railId": "main",
+          "at": 200,
+          "text": "ねこさんだ！ きてき！"
+        }
+      ],
+      "lines": {
+        "start": "うしろむきの ためしだよ！\nうしろの ホームへ いこう",
+        "moving": "そうそう、その ちょうし！",
+        "stationNear": "{station}だ。ゆっくり！",
+        "complete": "うしろむきの ためし、できたね！"
+      }
+    },
+    {
+      "id": "m2",
+      "type": "deliver",
+      "title": "ゆきの なみの まね",
+      "steps": [
+        {
+          "stationId": "owari",
+          "parcel": "unload",
+          "chase": {
+            "railId": "main",
+            "from": 760,
+            "until": {
+              "railId": "main",
+              "at": 1110
+            },
+            "fence": 1060,
+            "pace": 6,
+            "retry": [
+              740
+            ]
+          }
+        }
+      ],
+      "lines": {
+        "start": "ゆきの なみの まねっこ！\nふつう で にげよう",
+        "chaseStart": "もこもこが くる！ ふつう で にげよう",
+        "stationNear": "おわりの えきだ。ゆっくり！",
+        "complete": "ぜんぶ できたね！"
+      }
+    }
+  ],
+  "gimmicks": [],
+  "cutscenes": {
+    "opening": [
+      {
+        "caption": "てすとの うしろむき",
+        "seconds": 2
+      },
+      {
+        "say": "レバーの となりが まえ／うしろ だよ",
+        "emote": "tilt"
+      }
+    ]
+  },
+  "opening": "opening"
+}

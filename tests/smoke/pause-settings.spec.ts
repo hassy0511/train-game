@@ -138,6 +138,59 @@ async function checkLayout(page: Page, leftHanded: boolean, width: number, heigh
     const right = layoutEdges.get(mirrorKey);
     if (right) for (const id of ids) expect(Math.abs(edges[id] - right[id]), `${id} mirrored`).toBeLessThanOrEqual(2);
   }
+  // v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A3): the まえ／うしろ switch sits beside the lever on the screen's middle side
+  // (left-handed: with the lever, on the right), on screen, clear of the lever and its words, the round buttons, the
+  // door (shown for a moment to measure it) and the corner buttons; mirrored left-handed. On the iPad also clear of the
+  // partner's bubble (a two-line one, shown for a moment); on the phones the bubble lies over the lever already.
+  const sw = page.locator('#reverse-switch');
+  if (await sw.isVisible()) {
+    const s = await box(page, '#reverse-switch');
+    const lever = await box(page, '#lever');
+    expect(s.x >= 0 && s.y >= cam.y + cam.height && s.x + s.width <= width && s.y + s.height <= height, 'the switch on screen, under the corner').toBe(true);
+    expect(leftHanded ? s.x + s.width <= lever.x : s.x >= lever.x + lever.width, 'the switch on the middle side of the lever').toBe(true);
+    if (leftHanded) expect(s.x).toBeGreaterThan(width / 2);
+    else expect(s.x + s.width).toBeLessThan(width / 2);
+    const labels = await page.locator('.lever-label').evaluateAll((els) => els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height, text: el.textContent ?? '' };
+    }));
+    for (const l of labels) expect(overlaps(s, l), `the switch clear of the lever's "${l.text}"`).toBe(false);
+    for (let i = 0; i < ids.length; i++) expect(overlaps(s, buttons[i]), `the switch clear of #${ids[i]}`).toBe(false);
+    expect(overlaps(s, cam)).toBe(false);
+    expect(overlaps(s, pause)).toBe(false);
+    const door = await page.evaluate(() => {
+      const el = document.getElementById('door');
+      if (!el) throw new Error('#door missing');
+      const was = el.hidden;
+      el.hidden = false;
+      const r = el.getBoundingClientRect();
+      el.hidden = was;
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    });
+    expect(overlaps(s, door), 'the switch clear of the door button').toBe(false);
+    if (width >= 1000) {
+      const bubble = await page.evaluate(() => {
+        const el = document.getElementById('bubble');
+        if (!el?.parentElement) throw new Error('#bubble missing');
+        // A copy of it with a long line, measured and taken away (the real one keeps what it is saying).
+        const copy = document.createElement('div');
+        copy.className = el.className;
+        copy.textContent = 'いきすぎ〜！ うしろで もどって！ うしろむきで いって みよう！';
+        el.parentElement.appendChild(copy);
+        const r = copy.getBoundingClientRect();
+        copy.remove();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      });
+      expect(overlaps(s, bubble), 'the switch clear of the bubble').toBe(false);
+    }
+    const edge = leftHanded ? width - (s.x + s.width) : s.x;
+    const key = `switch:${width}x${height}`;
+    if (!leftHanded) layoutEdges.set(key, { edge });
+    else {
+      const right = layoutEdges.get(key);
+      if (right) expect(Math.abs(edge - right.edge), 'the switch mirrored').toBeLessThanOrEqual(2);
+    }
+  }
   // (The smallest phone checks the buttons only; the top bar's own rules are checked at the two sizes above.)
   if (buttonsOnly) return;
   // The stop gauge (shown near a station) stays clear of the corner camera: shown for a moment to measure it.
@@ -221,7 +274,8 @@ test('corner buttons in the six-button ring, lever left and right, iPad and smal
   for (const leftHanded of [false, true]) {
     await page.goto('/?stage=1-1');
     await page.evaluate((lh) => {
-      localStorage.setItem('train-game.progress.v1', JSON.stringify({ schema: 1, cleared: [], abilities: ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow'], records: [], mapLinks: [] }));
+      // v1.11 (PR8a): with うしろむき too, so the まえ／うしろ switch is laid out with the rest.
+      localStorage.setItem('train-game.progress.v1', JSON.stringify({ schema: 1, cleared: [], abilities: ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'reverse'], records: [], mapLinks: [] }));
       localStorage.setItem('train-game.settings.v1', JSON.stringify({ music: 2, sound: 2, calm: false, leftHanded: lh }));
     }, leftHanded);
     await page.setViewportSize({ width: 1194, height: 834 });
@@ -238,6 +292,7 @@ test('corner buttons in the six-button ring, lever left and right, iPad and smal
       await page.waitForTimeout(150);
     }
     await expect(app).toHaveAttribute('data-phase', 'driving');
+    await expect(page.locator('#reverse-switch')).toBeVisible();
     await checkLayout(page, leftHanded, 1194, 834, leftHanded ? 'corner-left.png' : 'corner-right.png');
     await checkLayout(page, leftHanded, 667, 375, leftHanded ? 'corner-left-small.png' : 'corner-right-small.png', false);
     await checkLayout(page, leftHanded, 568, 320, undefined, false, true);

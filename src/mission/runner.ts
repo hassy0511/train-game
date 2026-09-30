@@ -63,6 +63,7 @@ import {
   PASSENGER_SECONDS,
   RECORD,
   REFUSE_COOLDOWN,
+  REVERSE,
   REWIND_DISTANCE,
   SLOPE,
   SNOW_WAVE,
@@ -70,6 +71,7 @@ import {
 } from '../train/params';
 import type { JunctionSide, Train } from '../train/train';
 import { StopMonitor, type GaugeState, type StopGrade } from './station-stop';
+import { REVERSE_LINES, type ReverseLine, type ReverseSystem } from '../gimmick/reverse';
 
 /**
  * What the clear card shows (PHASE7_FINISH §4 item 10): the graded stops of this run (`perfect` of them "ぴったり")
@@ -133,6 +135,8 @@ export interface MissionSystems {
   /** v1.11 (PR5): the magnet light's targets, and the iron odds and ends by the line (made by the caller). */
   magnet?: MagnetSystem;
   iron?: IronProps;
+  /** v1.11 (PR8a): うしろむき's glow and lines (made by the caller). */
+  reverse?: ReverseSystem;
 }
 
 export type MissionPhase = 'idle' | 'driving' | 'stopped' | 'doors' | 'cutscene' | 'failing' | 'clear';
@@ -265,7 +269,9 @@ type DefaultLine =
   | 'magnetBumpAfter'
   | 'magnetPlay'
   // v1.11 (5-3 かがみの せかい)
-  | MirrorWorldLine;
+  | MirrorWorldLine
+  // v1.11 (PR8a うしろむき)
+  | Exclude<keyof typeof REVERSE_LINES, 'needAbility'>;
 
 /** v1.11 (5-3): the mirror world's lines (PHASE9_CHAPTER5_6 第 6 部 §4.8). */
 export type MirrorWorldLine = 'flipIn' | 'flipOut' | 'mirrorGateNear' | 'mirrorGateOpen' | 'mirrorGateBump' | 'mirrorGateAfter';
@@ -413,6 +419,16 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   mirrorGateOpen: 'かがみが ぷるん！ はいれる！',
   mirrorGateBump: 'ぽよん！ かがみが かたい〜',
   mirrorGateAfter: 'きてきで あいず しよう！',
+  // v1.11 (PR8a うしろむき, PHASE9_CHAPTER5_6 第 3 部 A14).
+  backNear: REVERSE_LINES.backNear,
+  backArrows: REVERSE_LINES.backArrows,
+  reverseNudge: REVERSE_LINES.reverseNudge,
+  reverseStop: REVERSE_LINES.reverseStop,
+  reverseStopGap: REVERSE_LINES.reverseStopGap,
+  reverseEnd: REVERSE_LINES.reverseEnd,
+  backUp: REVERSE_LINES.backUp,
+  refuseRocketBack: REVERSE_LINES.refuseRocketBack,
+  reverseOops: REVERSE_LINES.reverseOops,
 };
 
 /**
@@ -427,6 +443,8 @@ const NEED_LINES: Partial<Record<AbilityId, string>> = {
   plow: 'ゆきかきが あれば いけそう…',
   // v1.11 (PR5)
   magnetLight: 'じしゃくライトが あれば いけそう…',
+  // v1.11 (PR8a, 第 3 部 A14)
+  reverse: REVERSE_LINES.needAbility,
 };
 const NEED_LINE_OTHER = 'いまは まだ いけないみたい…';
 
@@ -448,8 +466,10 @@ export const ABILITY_NAMES: Partial<Record<AbilityId, string>> = {
   dive: 'もぐる',
   // v1.10 (4-2): chapter 4's, given by 4-2 (3-2's third record waits for it).
   plow: 'ゆきかき',
-  // Chapter 5's ability (not given anywhere yet): 3-1's third record waits for it.
+  // Chapter 5's ability (5-3): the third records of chapters 3–5 wait for it.
   magnetLight: 'じしゃくライト',
+  // v1.11 (PR8a): chapter 6's (6-1 M2, PR8b/PR9): 1-3's, 5-3's and 6-1's third records wait for it.
+  reverse: 'うしろむき',
 };
 
 /**
@@ -474,8 +494,10 @@ export function abilityInUse(ability: AbilityId | null, train: Train, lightOn: b
     case 'magnetLight':
       // v1.11 (PR5): never by passing near: a record needing the magnet is found when it has been pulled to the train.
       return false;
+    case 'reverse':
+      // v1.11 (PR8a, 第 3 部 A12.1): reversing (standing too), measured from the tail car.
+      return train.reversing;
     default:
-      // Abilities of later chapters (reverse, ...) have no rule yet: such records stay "?".
       return false;
   }
 }
@@ -634,6 +656,12 @@ export class MissionRunner {
   private readonly magnetLines = new Set<string>();
   /** v1.11 (PR5): target lines waiting for a quiet moment (said while the train is in the first half of the glow). */
   private readonly magnetWaiting = new Map<string, { text: string; railId: string; at: number; until: number }>();
+  /** v1.11 (PR8a): うしろむき's glow and lines; the station overshot this drive (A9) and when "うしろで もどって" came. */
+  private readonly reverse: ReverseSystem | null;
+  private backUpAt = -Infinity;
+  private backUpSaidFor: string | null = null;
+  /** v1.11 (PR8a, B6.3): the step drives to a reverse platform: arriving is stopping at its siding's buffer. */
+  private reverseArrival: StationDef | null = null;
 
   constructor(
     private readonly stage: StageData,
@@ -651,6 +679,13 @@ export class MissionRunner {
     this.tunnel = systems?.tunnel ?? null;
     this.magnet = systems?.magnet ?? null;
     this.iron = systems?.iron ?? null;
+    this.reverse = systems?.reverse ?? null;
+    // v1.11 (PR8a, B6.3): arriving at a reverse platform = stopping at its siding's buffer, reversing.
+    train.events.on('reverseStop', ({ why }) => {
+      const st = this.reverseArrival;
+      if (!st || this.phase !== 'driving' || why !== 'buffer' || train.state.railId !== st.railId) return;
+      this.finishDrive({ kind: 'stopped', grade: 'perfect' });
+    });
     this.listenMagnet();
     // v1.10 (4-3): "トンネルだ！ ライトを つけよう" (only useful now: said at once), unless the light is on already.
     this.tunnel?.events.on('near', () => {
@@ -1528,9 +1563,28 @@ export class MissionRunner {
       case 'station':
         this.sayRefusal(this.lines.rocketQuiet ?? DEFAULT_LINES.rocketQuiet);
         break;
+      case 'reverse':
+        // v1.11 (PR8a, 第 3 部 A11): "ぷすっ" (the caller) and "うしろでは つかえないよ".
+        this.sayRefusal(this.lines.refuseRocketBack ?? DEFAULT_LINES.refuseRocketBack);
+        break;
       default:
         break;
     }
+  }
+
+  /**
+   * v1.11 (PR8a, 第 3 部 A14): a line of うしろむき's (ReverseSystem): the stage's own words, else the mission's line of
+   * that key, else the default. Only while driving or standing (not in a cutscene or a fail).
+   */
+  sayReverse(line: ReverseLine): void {
+    if (this.phase !== 'driving' && this.phase !== 'stopped' && this.phase !== 'doors') return;
+    if (line.own && line.own.length > 0) {
+      for (const l of line.own) this.ports.sayAsync(typeof l === 'string' ? l : l.text, typeof l === 'string' ? undefined : l.who === 'amanojaku' ? 'amanojaku' : undefined);
+      return;
+    }
+    const text = line.key === 'needAbility' ? this.needLine('reverse') : (this.lines[line.key] ?? DEFAULT_LINES[line.key]);
+    if (line.key === 'backUp') this.ports.sayNow(text);
+    else this.ports.sayAsync(text);
   }
 
   /** v1.7: rocket and slope lines, and the slip fail. */
@@ -1600,6 +1654,12 @@ export class MissionRunner {
 
   get currentMission(): MissionDef | null {
     return this.stage.file.missions[this.missionIndex] ?? null;
+  }
+
+  /** v1.11 (PR8a): the station the step being played drives to (the switch glows for a reverse platform), or null. */
+  get stepStation(): StationDef | null {
+    const step = this.currentMission?.steps[this.stepIndex];
+    return step ? (this.stage.file.stations.find((st) => st.id === step.stationId) ?? null) : null;
   }
 
   /** A cutscene is playing and has not been skipped yet (the "▶▶" may show). */
@@ -1735,6 +1795,7 @@ export class MissionRunner {
       this.slopeGlows.clear();
       this.zoneLines.clear();
       this.nightMission.clear();
+      this.reverse?.newMission();
       await this.ports.card(`ミッション ${i + 1}\n${mission.title}`, 'スタート');
       if (this.lines.start) for (const line of this.lines.start.split('\n')) await this.ports.say(line, 'partner');
 
@@ -1788,6 +1849,13 @@ export class MissionRunner {
       this.movingSaid = true;
       if (this.lines.moving) this.ports.sayAsync(this.lines.moving);
     }
+    // v1.11 (PR8a, 第 3 部 A7): reversing, and going forward again over the way reversed along, the gimmicks, animals
+    // and hints passed already stay as they are (records are still found, the stop is still watched).
+    if (this.train.stillGimmicks) {
+      this.updateRecords();
+      this.checkStop(dt);
+      return;
+    }
     const hints = this.currentMission?.hints ?? [];
     hints.forEach((h, i) => {
       if (this.hintsFired.has(i)) return;
@@ -1813,30 +1881,7 @@ export class MissionRunner {
     if (this.updateNight(dt)) return;
     this.updateToys(dt);
     if (this.checkDeadEnd() || this.checkSpur()) return;
-    const outcome = this.stop?.update(dt) ?? null;
-    if (outcome) {
-      switch (outcome.kind) {
-        case 'gaugeShown':
-          if (this.lines.gauge) this.ports.sayAsync(this.lines.gauge);
-          break;
-        case 'near':
-          // v1.10 (3-3): "{station}" is the station's name (a mission with two stations says each one's).
-          if (this.lines.stationNear) this.ports.sayAsync(this.lines.stationNear.replace('{station}', this.stop?.station.name ?? ''));
-          break;
-        case 'short':
-          this.ports.sayAsync(this.lines.short ?? DEFAULT_LINES.short);
-          break;
-        case 'tooFast':
-          this.finishDrive({ kind: 'fail', reason: 'tooFast' });
-          return;
-        case 'overshoot':
-          this.finishDrive({ kind: 'fail', reason: 'overshoot' });
-          return;
-        case 'stopped':
-          this.finishDrive({ kind: 'stopped', grade: outcome.grade });
-          return;
-      }
-    }
+    if (this.checkStop(dt)) return;
     for (const cat of this.cats) {
       const c = cat.update(dt);
       if (!c) continue;
@@ -1928,6 +1973,48 @@ export class MissionRunner {
     this.updateHoppers();
     this.updateBridges(dt);
     this.updateFragiles(dt);
+  }
+
+  /** The station's stop (the gauge, the grade). True when the drive ended. */
+  private checkStop(dt: number): boolean {
+    const outcome = this.stop?.update(dt) ?? null;
+    if (!outcome) return false;
+    switch (outcome.kind) {
+      case 'gaugeShown':
+        if (this.lines.gauge) this.ports.sayAsync(this.lines.gauge);
+        return false;
+      case 'near':
+        // v1.10 (3-3): "{station}" is the station's name (a mission with two stations says each one's).
+        if (this.lines.stationNear) this.ports.sayAsync(this.lines.stationNear.replace('{station}', this.stop?.station.name ?? ''));
+        return false;
+      case 'short':
+        this.ports.sayAsync(this.lines.short ?? DEFAULT_LINES.short);
+        return false;
+      case 'backUp':
+        // v1.11 (PR8a, 第 3 部 A9): past the line, and うしろむき is there: no fail; "うしろで もどって！", the switch glows.
+        this.reverse?.setBackUp(outcome.stationId);
+        this.events.post({ type: 'reverse:backup', stationId: outcome.stationId });
+        if (this.backUpSaidFor !== outcome.stationId) {
+          this.backUpSaidFor = outcome.stationId;
+          this.backUpAt = this.clock;
+          this.ports.sayNow(this.lines.backUp ?? DEFAULT_LINES.backUp);
+        } else if (this.clock - this.backUpAt >= REVERSE.stopLineEvery && this.train.state.speed < 0.05 && !this.train.reversing) {
+          // Standing there without backing up: again every REVERSE.stopLineEvery s (when nothing else is said).
+          this.backUpAt = this.clock;
+          this.ports.sayIfQuiet(this.lines.backUp ?? DEFAULT_LINES.backUp);
+        }
+        return false;
+      case 'tooFast':
+        this.finishDrive({ kind: 'fail', reason: 'tooFast' });
+        return true;
+      case 'overshoot':
+        this.finishDrive({ kind: 'fail', reason: 'overshoot' });
+        return true;
+      case 'stopped':
+        this.finishDrive({ kind: 'stopped', grade: outcome.grade });
+        return true;
+    }
+    return false;
   }
 
   /** v1.7: the countdown of this step. Returns true when time ran out (the drive ended). */
@@ -2466,6 +2553,12 @@ export class MissionRunner {
   }
 
   private recordDistance(record: ResolvedRecord): number | null {
+    // v1.11 (PR8a, 第 3 部 A12.1): reversing, from the tail car (along the rails when it is on the record's rail).
+    if (this.train.reversing) {
+      const tail = this.train.tailFrame();
+      if (record.onRail && record.onRail.railId === tail.railId) return Math.abs(record.onRail.at - tail.s);
+      return record.position.distanceTo(this.train.getPose().tail.position);
+    }
     if (record.onRail) {
       const d = this.train.distanceAhead(record.onRail.railId, record.onRail.at);
       return d === null ? null : Math.abs(d);
@@ -2532,6 +2625,8 @@ export class MissionRunner {
 
   private onWhistle(): void {
     if (this.phase !== 'driving') return;
+    // v1.11 (PR8a, 第 3 部 A7): the animals passed already do not stir (reversing, retracing).
+    if (this.train.stillGimmicks) return;
     // v1.11 (5-1): in a whistle-reversed stretch the tanukis come (decided before anything else there reacts).
     const rev = this.reversed.onWhistle();
     if (rev) {
@@ -2646,6 +2741,7 @@ export class MissionRunner {
     const station = this.station(step.stationId);
     // Already standing at this station (previous mission ended here): no driving, no grading.
     const alreadyHere =
+      !station.reverse &&
       this.train.state.speed === 0 &&
       this.train.state.railId === station.railId &&
       Math.abs(this.train.offsetTo(station.at)) <= new StopMonitor(this.train, station).rule.ok;
@@ -2712,7 +2808,11 @@ export class MissionRunner {
   }
 
   private drive(station: StationDef): Promise<DriveOutcome> {
-    this.stop = new StopMonitor(this.train, station);
+    // v1.11 (PR8a, B6.3): a reverse platform has no stop monitor (arriving is stopping at its siding's buffer); a
+    // station overshot can be backed up to once うしろむき is learned (A9).
+    this.reverseArrival = station.reverse ? station : null;
+    this.stop = station.reverse ? null : new StopMonitor(this.train, station, 120, () => this.abilities.has('reverse'));
+    this.backUpSaidFor = null;
     this.phase = 'driving';
     this.lastRefusal = null;
     if (this.rearm) {
@@ -2738,6 +2838,8 @@ export class MissionRunner {
 
   private finishDrive(outcome: DriveOutcome): void {
     this.phase = outcome.kind === 'fail' ? 'failing' : 'stopped';
+    this.reverseArrival = null;
+    this.reverse?.setBackUp(null);
     if (this.stop) this.ports.gauge(this.stop.gauge);
     this.train.lockInput(this.phase);
     const r = this.resolveDrive;
@@ -2837,6 +2939,7 @@ export class MissionRunner {
       this.events.post({ type: 'chase', state: 'run' });
     }
     this.tunnel?.reset();
+    this.reverse?.reset();
     for (const cat of this.cats) cat.reset();
     for (const cat of this.cats) this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'sleep', position: cat.actor.position });
     this.resetActors(target);
