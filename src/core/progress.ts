@@ -179,7 +179,7 @@ export async function storagePersisted(): Promise<boolean | null> {
  */
 const PASSCODE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
-interface PasscodeVersion {
+export interface PasscodeVersion {
   version: number;
   letters: number;
   checkBits: number;
@@ -221,8 +221,9 @@ const PASSCODE_V1: PasscodeVersion = {
 
 /**
  * Chapters 3 and 4 after version 1's items, in stage order (3 records a stage). 4-3's are the ones its design gives
- * (PHASE8_CHAPTER3_4 第 8 部); pause-settings.spec.ts checks that every stage file's clear, ability and records
- * have a place here, so a stage that ships with other ids fails before this version is published.
+ * (PHASE8_CHAPTER3_4 第 8 部); scripts/check-stages.mjs (npm run build) and pause-settings.spec.ts check that every
+ * stage file's clear, ability and records have a place here, so a stage that ships with other ids fails before this
+ * version is published.
  * `magnetLight` (chapter 5) and `reverse` (chapter 6) wait for the next version, with their chapters' stages.
  */
 const PASSCODE_V2: PasscodeVersion = {
@@ -254,9 +255,10 @@ const PASSCODE_V2: PasscodeVersion = {
   ],
 };
 
-const PASSCODE_VERSIONS: readonly PasscodeVersion[] = [PASSCODE_V1, PASSCODE_V2];
+/** Every version ever published (scripts/check-stages.mjs checks their bit counts and lists at build time). */
+export const PASSCODE_VERSIONS: readonly PasscodeVersion[] = [PASSCODE_V1, PASSCODE_V2];
 /** New codes are written in this one. */
-const PASSCODE_LATEST = PASSCODE_V2;
+export const PASSCODE_LATEST = PASSCODE_V2;
 /** How many letters a new あいことば has (for the parents' page). */
 export const PASSCODE_LETTERS = PASSCODE_LATEST.letters;
 

@@ -91,7 +91,7 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
   - はじめ方は `MissionRunner.prepareResume(i)`: オープニングと ミッション 0〜i−1 の `onComplete` の 寸劇を 早送り（`fastForwardCutscene`: 線路を 切る・能力・役者の 出し入れを さいごの 形で 一瞬に。せりふ・待ち・札・字幕・カメラ・効果は とばす）、電車を ミッション i−1 の さいごの 駅に 止めて 置き、乗客と 荷物は 各 ステップの 乗り降りを 足して 出す。役者（ねこ・恐竜・バッタ・石 など）は その駅へ 巻きもどしたときと 同じ（うしろの ものは もう かかわらない）。花の橋は スタートから その駅までの 道（分かれ道と 合流を たどって 探す）に あるものを ひらいて おく（STAGE_SCHEMA の とおり「ステージの 間 ずっと ひらいたまま」だから）
   - 「▶▶」（クリアしたことのある ステージの 寸劇だけ）は 同じ 早送りで のこりを 済ませる。札（とその 能力の 札）の 間は かくれ、札は 最後まで 待つ
 - 保存のたびに（1 回の起動で 1 回だけ）`navigator.storage.persist()` を頼む。Safari のタブは しばらく開かないと消されることがあるので、「おうちの かたへ」にホーム画面への追加を書く
-- **あいことば**（`core/progress.ts`）: 進み具合ぜんぶを 16 文字（Crockford base32、`XXXX-XXXX-XXXX-XXXX`）にして書き写し、あとで入れれば戻る。通信なし。1 文字めが版。版ごとに項目の並びを固定し、公開した版の並びは変えない。章やきろくが増えたら新しい版を足す（`pause-settings.spec.ts` がステージファイルと world.json の全部で往復を確かめるので、足し忘れると落ちる）。出す あいことばは いつも 最新の版、入れる ほうは 出した ことの ある 版を ぜんぶ 読む
+- **あいことば**（`core/progress.ts`）: 進み具合ぜんぶを 16 文字（Crockford base32、`XXXX-XXXX-XXXX-XXXX`）にして書き写し、あとで入れれば戻る。通信なし。1 文字めが版。版ごとに項目の並びを固定し、公開した版の並びは変えない。章やきろくが増えたら新しい版を足す（`scripts/check-stages.mjs` が bit の計算と、ステージファイルの クリア・能力・記録の 場所を ビルドで 確かめ、`pause-settings.spec.ts` が ステージファイルと world.json の全部で往復を確かめるので、足し忘れると落ちる）。出す あいことばは いつも 最新の版、入れる ほうは 出した ことの ある 版を ぜんぶ 読む
   - **v2**（いま 出す 版、2026-09-28）: 80 bit ＝ 16 文字（例 `2ZZQ-ZZZZ-ZZZG-A0CD`）= 版 5 + 項目 54（12 ステージ 1-1〜4-3・6 能力 whistle/jump/light/rocket/dive/plow・36 記録、1 項目 1 bit。並びは v1 の 項目の あとに 3・4章を ステージ順に 足した もの）+ 検査 21（FNV-1a）。**線路は のせない**: 入れた ときに クリアから 作る（`world/pages.ts` の `seenMapLinks`）。しかれる 線路は ぜんぶ「もう 見た」、おわった 章の おわり（線路の ない 章は `finale:<id>`）も「見た」に する ので、地図を ひらいても のびる 線路や 章の おわりは 出ない。まだ おわって いない 章の しめくくりの 線路は 入れない（その 章が ほんとうに おわった ときに おわりが 出る）。4-3 の 記録 3 つ（`snow-hare`・`ice-flower`・`sleigh-bell`）は PHASE8_CHAPTER3_4 第 8 部の 設計の ID で 先に 入れて ある（4-3 が ちがう ID で 入ると テストが 落ちる）。`magnetLight`（5章）・`reverse`（6章）は つぎの 版で 足す
   - **v1**（2026-09 まで 出して いた 版。これからも 読める）: 60 bit ＝ 12 文字 = 版 5 + 項目 34（6 ステージ・4 能力・18 記録・6 線路、1 項目 1 bit）+ 検査 21。線路は あいことばに 入って いる もの だけ もどる（くもの もんへの 線路は つぎに 地図を ひらいた ときに のびる）
   - 打ちまちがい: 使えない 文字・知らない 版・文字の 数（その 版の 文字数を 出す）・検査ちがいで はじく。小文字・空白・ダッシュ・O（→ 0）・I／L（→ 1）は そのまま 読む
@@ -124,6 +124,14 @@ GitHub Actions
 ```
 
 - 進め方の規約は `CLAUDE.md`。2026-09-24 までは Codex に実装を発注していた（`archive/codex/`）
+
+### ビルドの検査（`npm run build`。2026-09-30、PR2a）
+`tsc --noEmit` → `check-models.mjs` → `check-stages.mjs` → `vite build` の 順。どれかが 落ちれば ビルドが 落ちる ので、2 時間の CI を まつ 前に（数秒で）わかる。`npm run check:stages` で 単独でも 走る。
+- `scripts/check-models.mjs`: 3D モデルの 一覧・予算・原点・裏返り・ステージが 使う モデル（`docs/ASSET_PIPELINE.md`）
+- **`scripts/check-stages.mjs`**: TypeScript は Node が 直接 読めない ので、Vite の `ssrLoadModule`（`createServer({ server: { middlewareMode: true } })`。ブラウザも 通信も 使わない）で `src/stage/loader.ts` と `src/core/progress.ts` を 読む。読み込みの ときの `throw` では `vite build` は 落ちない ので、読んだ 値を ここで たしかめる。約 1 秒。
+  1. `src/stages/*.json` の ぜんぶが `prepareStage(raw)` を とおる（`loader.ts` に 切り出した、ブラウザなしで 走る 部分: `validateStageFile`・線路網・範囲・水／氷／雪の 検査・props／actors／stations／records の 位置きめ。`loadStage` は JSON を 読んで これを よぶ だけ）。ファイル名 ＝ `id`
+  2. `tests/stages-bad/<名前>.json`（わざと まちがえた 形。1 ファイル 1 つ）が **はじかれる** こと、しかも `_expect` の 文が エラーの 中に ある こと（べつの 理由で はじかれたら 落ちる）。形は 「ステージ 1 つぶんの JSON ＋ `_expect`」か、本物の ステージの 写しに 直しを 入れる `{ "_expect", "_base": "1-1", "_edit": [{ "path": "start.at", "value": 99999 }] }`（`"delete": true` で その キーを 消す）。ステージに 新しい 検査を 足す PR は、そのまちがいの 例も ここに 足す
+  3. あいことばの 版（`PASSCODE_VERSIONS`）: `5 ＋ 項目の 数 ＋ 検査 ＝ 5 × 文字数`・検査 ≥ 16 bit・同じ ID を 2 回 書かない・新しい 版は 前の 版の クリア／能力／記録の 並びで はじまる・**あそべる（`hidden` でない）ステージの クリア・能力（`unlocks` と 寸劇の `unlock`）・記録の ぜんぶが 最新の 版に 場所を もつ**（足し忘れると ビルドが 落ちる。`pause-settings.spec.ts` の 往復は 保存と 読み込みの 動きを 見る）
 
 ### ホーム画面アプリ（2026-09-24）
 - iPad の Safari で「ホーム画面に追加」すると、アイコン「ワンダーごう」から全画面・横向きで起動する（`public/manifest.webmanifest`、`index.html` の apple 用 meta）
@@ -187,6 +195,7 @@ GitHub Actions
     audio/
   tests/
     smoke/            # Playwright
+    stages-bad/       # わざと まちがえた ステージ（check-stages.mjs が はじかれる ことを 見る）
   .github/workflows/
 ```
 
