@@ -55,7 +55,7 @@ const RUNS = [
 /** The runs of (3): forward from `at` on `rail` (arrows chosen as `choose`) until `until`, then back to the floor. */
 const RETRACES = [
   { stage: '0-0', name: 'main → to-jishaku (right) → jishaku, and back', rail: 'main', at: 500, choose: { 'to-jishaku': 'right' }, until: { rail: 'jishaku', s: 150 } },
-  { stage: '1-3', name: 'main2 → kaze-michi (right) → wind, and back', rail: 'main2', at: 40, choose: { 'kaze-michi': 'right' }, until: { rail: 'wind', s: 90 } },
+  { stage: '1-3', name: 'main2 → kaze-michi (right) → wind, and back', rail: 'main2', at: 40, choose: { 'kaze-michi': 'right' }, until: { rail: 'wind', s: 40 } },
   { stage: '2-2', name: 'main → to-mizutamari (left) → mizutamari, and back', rail: 'main', at: 360, choose: { 'to-mizutamari': 'left' }, until: { rail: 'mizutamari', s: 80 } },
   { stage: '3-1', name: 'umi → awa-1 → the loop uso-1 → merge into umi, and back', rail: 'umi', at: 2380, choose: {}, until: { rail: 'umi', s: 2400, after: 'uso-1' } },
 ];
@@ -180,13 +180,22 @@ async function retraceOne(run) {
     if (seenAfter && train.state.railId === run.until.rail && train.state.s >= run.until.s) break;
   }
   train.setNotch(1);
-  while (train.state.speed > 0) await frame();
+  t0 = performance.now();
+  while (train.state.speed > 0 && performance.now() - t0 < 60000) await frame();
   const turned = train.pressSwitch();
   for (let i = 0; i < 20; i++) await frame();
   train.setNotch(3);
   let max = 0;
   let at = '';
   let samples = 0;
+  // Going forward, the lead car's front bogie (4 m ahead of its centre, past the trail's head) runs on along the rail
+  // it is on until the lead car centre changes rail (as before PR7): up to 4 m before a branch taken it is a little
+  // off the branch. Retracing it is on the branch (the way back is known). Those samples are kept apart.
+  const changes = [];
+  for (let i = 1; i < ahead.length; i++) if (ahead[i].rail !== ahead[i - 1].rail) changes.push(ahead[i].x);
+  const bogie = 4;
+  let lead = 0;
+  let leadAt = '';
   const railsBack = [];
   t0 = performance.now();
   while (performance.now() - t0 < 180000) {
@@ -201,7 +210,12 @@ async function retraceOne(run) {
       [pose.position, ...pose.cars.map((c) => c.position)].forEach((p, i) => {
         const q = a.cars[i].map((v, n) => v + (b.cars[i][n] - v) * u);
         const d = Math.hypot(p.x - q[0], p.y - q[1], p.z - q[2]);
-        if (d > max) {
+        if (i === 0 && changes.some((c) => x >= c - bogie - 1 && x <= c + 1)) {
+          if (d > lead) {
+            lead = d;
+            leadAt = `${train.state.railId} ${train.state.s.toFixed(1)}`;
+          }
+        } else if (d > max) {
           max = d;
           at = `${train.state.railId} ${train.state.s.toFixed(1)} car ${i}`;
         }
@@ -212,7 +226,7 @@ async function retraceOne(run) {
     if (train.atReverseStop) break;
   }
   for (const a of ahead) if (rails[rails.length - 1] !== a.rail) rails.push(a.rail);
-  const result = { turned, max, at, samples, forward: rails.join(' → '), back: railsBack.join(' → '), stop: train.lastReverseStop };
+  const result = { turned: `${turned}${turned === 'turned' ? '' : ` (${train.inputLock ?? 'speed ' + train.state.speed.toFixed(2)} falling ${!!train.falling} emergency ${!!train.emergency} turnT ${train.turnT} at ${train.state.railId} ${train.state.s.toFixed(1)})`}`, max, at, lead, leadAt, samples, forward: rails.join(' → '), back: railsBack.join(' → '), stop: train.lastReverseStop };
   train.setNotch(1);
   return result;
 }
@@ -274,8 +288,10 @@ try {
     const r = await page.evaluate(retraceOne, run);
     const back = r.back.split(' → ').reverse().join(' → ');
     const over = r.max > LIFT_TOLERANCE || back !== r.forward || r.turned !== 'turned';
+    if (r.turned !== 'turned') console.log(`    the switch: ${r.turned}`);
     if (over) bad++;
     console.log(`${run.stage} ${run.name}: max ${r.max.toFixed(3)} m${r.at ? ` (${r.at})` : ''}, ${r.samples} frames; forward ${r.forward}; back ${r.back}; stopped: ${r.stop}${over ? '  OUT OF BOUNDS' : ''}`);
+    if (r.lead > 0) console.log(`    lead car, 4 m before a branch taken (forward its front bogie was still on the old rail): ${r.lead.toFixed(3)} m (${r.leadAt})`);
     await page.close();
   }
 } finally {
