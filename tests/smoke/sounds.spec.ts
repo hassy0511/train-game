@@ -23,6 +23,8 @@ interface Measure {
 const SONG_IDS = ['title', 'town', 'valley', 'forest', 'meadow', 'volcano', 'hurry', 'sky', 'umi', 'kawa', 'hoshimatsuri', 'koori', 'mura', 'yuki', 'yoru', 'omocha'];
 /** v1.11 (5-2): the toy town's effects (PHASE9_CHAPTER5_6 第 5 部 §10). */
 const TOY_SOUNDS = ['wind-up', 'band-fanfare', 'band-step', 'spin-turn', 'spin-good', 'spin-stop', 'ball-pit', 'toy-puff'];
+/** v1.11 (5-3): the mirror world's effects, the group「かがみ」(PHASE9_CHAPTER5_6 第 6 部 §10; the turn with and without the flash). */
+const MIRROR_SOUNDS = ['mirror-gate', 'mirror-ripple', 'mirror-bump', 'phantom-pop', 'glass-on', 'mirror-turn', 'mirror-turn-back', 'letter-reflect'];
 
 test('sounds page: every effect plays, is heard and does not clip; the running sound on each track', async ({ page }) => {
   const errors: string[] = [];
@@ -73,6 +75,7 @@ test('sounds page: every effect plays, is heard and does not clip; the running s
     'bridge',
     'world-step',
     ...TOY_SOUNDS,
+    ...MIRROR_SOUNDS,
   ]) {
     await page.locator(`button[data-sound="${id}"]`).click();
   }
@@ -143,7 +146,9 @@ test('sounds page: every effect plays, is heard and does not clip; the running s
     await expect(page.locator(`button[data-ambience="${kind}"]`)).toHaveAttribute('aria-pressed', 'true');
   }
   // v1.11: every new effect has a button.
-  for (const id of ['firefly', 'windows', 'bridge', 'world-step', ...TOY_SOUNDS]) await expect(page.locator(`button[data-sound="${id}"]`)).toHaveCount(1);
+  for (const id of ['firefly', 'windows', 'bridge', 'world-step', ...TOY_SOUNDS, ...MIRROR_SOUNDS]) await expect(page.locator(`button[data-sound="${id}"]`)).toHaveCount(1);
+  // v1.11 (5-3): the group「かがみ」on the page.
+  await expect(page.locator('button[data-sound="mirror-gate"]')).toBeVisible();
   expect(errors).toEqual([]);
 });
 

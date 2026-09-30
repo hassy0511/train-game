@@ -123,9 +123,9 @@
   "missions": [
     {
       "id": "m1",
-      "type": "repair",
+      "type": "pickup",
       "title": "かがみの ためし",
-      "steps": [{ "stationId": "naka" }],
+      "steps": [{ "stationId": "naka", "board": 1, "say": "かがみの もんに いきたいの", "reply": "どうぞ！ のって のって！" }],
       "lines": {
         "start": "かがみの せかいの ためしだよ！",
         "flipIn": "かがみの なかに はいった！\nぜんぶ はんたい！",
@@ -148,7 +148,7 @@
       "id": "m2",
       "type": "deliver",
       "title": "かがみの もん",
-      "steps": [{ "stationId": "owari" }],
+      "steps": [{ "stationId": "owari", "alight": 1, "say": "ありがとう！ たのしかった！" }],
       "lines": { "start": "おわりの えきまで いこう！", "deadEnd": "まぼろし だった〜！\nかがみを みてね", "stationNear": "おわりの えきだ。ゆっくり！", "complete": "とどいた！" },
       "hints": [{ "railId": "main", "at": 940, "text": "また まぼろし かも…？" }]
     }

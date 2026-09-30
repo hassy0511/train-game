@@ -1280,3 +1280,76 @@ type LineKey = /* v1.11 (5-2) */ 'spinCall' | 'spinStop' | 'paradeNear' | 'parad
 
 ### テスト用の しるし
 `#app` の `data-windups`（まきなおした 数の 合計: おもちゃ・がくたい・ポイント・寸劇。ふえる だけ）・`data-actors`（`hiyoko:sleep|walk|awake|stopped`）・`data-parade`（`idle`／`back`／`turn`／`march`／`wait`／`exit`／`gone`）・`data-parade-gap`（m）・`data-parade-held`（1: でんしゃが おさえられて いる）・`data-spins`（`kuru-1:sleep,kuru-2:stay-good`。`sleep`／`stay-good`／`stay-other`／`turn`／`hold`／`fixed`／`mercy`）・`data-spin-taken`（`kuru-1:loop,kuru-1:good`、ふえる だけ）・`data-town`（`wound`）。`#junction[data-spin]`。できごと: `windup`・`parade`・`parade:fanfare`・`spin`・`spin:taken`
+
+## 21. v1.11 の追加（5-3「かがみのせかい」の しくみ: かがみの なか・まぼろしと ガラス・かがみの 足し・さかさもじ・寸劇、2026-09-30 PR6a）
+`schemaVersion` は 1 の まま、ぜんぶ 省略可。設計は `docs/PHASE9_CHAPTER5_6.md` 第 6 部 §4（§0 の 決まりと `docs/PHASE9_0_FREE_ABILITIES.md` が 先に きく: 光るのは ヒント、ジャンプの ボタンは 灰色に しない）。実例は ためしの ステージ `src/stages/0-3.json`（てすとの かがみ、`hidden: true`・`chapter: 0`、`scripts/layout-0-3.mjs`。JSON を 手で 直さない）。5-3 本体は PR6b。全ステージ共通の 数は `src/train/params.ts` の `MIRROR_WORLD`（と いまの `MIRROR`・`LIGHT`）。§20（じしゃくライト、PR5）の `magnet` の `turn` が かがみを まわす 口は この 節の `mirror` の `id`・`facing` と 寸劇の `fx: "mirrorTurn"` と 同じ しくみ（`mirror:turn` の できごと）。
+
+### かがみの なか（`gimmicks[]` の `mirror-flip`）
+```json
+{ "type": "mirror-flip", "railId": "main", "from": 260, "to": 440, "params": { "id": "k-flip1", "gate": "open" } }
+{ "type": "mirror-flip", "railId": "main", "from": 1200, "to": 1380, "params": { "id": "k-flip2", "gate": "whistle", "line": null } }
+```
+- 先頭が `from`（入り口の もんの 面）を こえてから `to`（出口の もんの 面）を こえるまで、**3D の 画面だけ** 左右 はんてん（`#view` に `.is-flipped` ＝ CSS の `scaleX(-1)`。描く 回数・三角形は かわらない）。レバー・丸ボタン・矢印・ゲージ・ふきだし・札・一時停止は `#ui` に あるので **はんてん しない**（指の 位置は そのまま）。切りかえは 0.35 秒の ラベンダーの きらきら（`#mirror-fade`、`prefers-reduced-motion` では 0.15 秒の うすい 白）の まんなか。位置で きまる（巻き戻し・つづきの あとも すぐ）
+- もんは 線路を ふさぐ 銀と ラベンダーの アーチ（うちのり `width` 14・`height` 10 m）に ゆらぐ ガラス。もんは かがみ でもある（入り口は 来る 電車を、出口は 中から 来る 電車を 写す）
+- `gate`: `open`（既定。30 m 手前から ゆらぐ、のる だけ）／`whistle`（しまって いて くもりガラス、写さない）。`whistle` の もんは 先頭が 面の 80 m 手前から きてきが 光る（ヒント）。光って いる とき きてきを 押すと ひらく（「ぽわわん」、1 回だけ。きてきの 2 秒 まちは いつもの まま）。押さずに 着くと ガラスに 面の 1 m 手前で ふれて「ぽよん」（0.15 秒で 止まり 0.5 秒で 3 m もどる。**空中でも**。ジャンプは その場で おわる）→ そこから 面の 4 m 手前より 先へ すすまない（レバーが どこでも。めざす 速さ 0）。**しっぱいでは ない**（しずまない・戻らない）。ひらいた もんは ステージを やりなおすまで ひらいた まま。つづきでは はじまる 駅までの もんは ひらいて いる
+- `line`・`lineOut`: 入った・出た ときの ひとこと（ミッションの `flipIn`・`flipOut` を 上書き。`null` で 言わない）。`flipIn`・`flipOut` は ミッションで はじめて の とき だけ
+- 検査（`validateMirrorWorld`）: `params.id` は 文字で ひとつ、長さ 150〜400 m、同じ 線路の `mirror-flip` どうしは 200 m 以上。`from − 20`〜`to + 60` に 分かれ道・合流・駅の 停止ゾーン・切れ目（と その 60 m 手前）・水・雪の かべ・うきもの・線路の 上の 役者・`jump-pad`・`updraft`・`slope`・`ice`・`thin-ice`・`camera`・`bough`・`fragile`・`flower-bridge`・`plow-wall`・じしゃくの `bridge`／`gate`／`turn`・かがみ（もん いがい）・`chase` の 区間 なし。しっぱいの 戻り先（切れ目・いきどまり・駅・役者・`rewind`・`rewindAt`）が 中に 入らない。`whistle` は `from − 120`〜`from + 10` に きてきで 光る もの（役者・ジャンプだい・`whistle-reversed`・ほたる／くるくるの 分かれ道）なし、前の 駅から 150 m 以上
+
+### まぼろしの 分かれ道（`junctions[].phantom`）
+```json
+{ "id": "k-j1", "railId": "main", "at": 540, "left": "k-maboroshi1", "right": "main", "default": "left", "signReversed": true, "phantom": true }
+```
+- 4-1 の かがみの わかれみち と 同じ（`signReversed`、`default` は `deadEnd` の 線路、その おくに かがみ〈`mirror` の `railId`・`junction`〉）。ちがい: **標識を 立てない**（かがみが 標識）。`default` の 線路は ピンクの まぼろし（`#ffc6e4` の 色、ピンクの きらきら、さいごの 30 m は うすく。**ふるえない**）で、**かがみには 写らない**（写しの 中では まっすぐの 道が とちゅうで ない。まぼろしに 入った 電車も 写らない）。おわりは ラベンダーの クッション（`mirror-cushion`、ローダーの 車止めの かわり）
+- 見やぶりは いまの `signReversed` の まま（ライトが ついて 40 m 以内 → ほんとうの 道へ 自動、矢印が 光る、`sign:reveal`）。見やぶると まぼろしが「ぽわん」と ピンクの あわに なって きえる。矢印で ほんとうの 側を 押しても よい（まぼろしは きえない）。まちがえると いきどまりの やわらかい しっぱい → 80 m 手前、つぎは 80 m 手前から ライトが 光る。巻き戻しで まぼろしは もどる
+- 検査: `signReversed: true`、`default` の 線路は `deadEnd`、`needs`・`dive`・`bubbles`・`fireflies`・`spin` と いっしょに 書かない
+- `junctions[].turn` は ローダーが つける（じしゃくの `turn` の まと。書かない）。`turn` の 分かれ道は 矢印を 出さない・ライトだけでは 見やぶれない・まちがえた あとの ライトの 黄色の 光も 出さない（`MissionRunner.revealTurn()` で 見やぶる。PR5／PR6b）
+
+### まぼろしの はし（`gaps[].phantom`）
+```json
+{ "from": 700, "to": 706, "hint": "fast", "pit": false, "phantom": true, "line": "まぼろしの はし だった〜！" }
+```
+- 切れ目の 上に ピンクの にせの はし（見た目だけ。切れ目の 判定は いまの `gaps` の まま）。**写しには 描かない**（かがみには 切れ目が 写る）
+- きえる とき: ライトが ついて いて 先頭が 40 m 以内／先頭が 60 m 以内で ジャンプ した／ジャンプ せずに 落ちた（その まま いまの 落ちる しっぱい、`line` を 言う）。巻き戻しで もどる
+- 検査: `pit: false`（下に 雲を 置く）、`hint` が ある、その 切れ目を 写す かがみ（`reflectRadius` の 中、切れ目の 60 m 手前が 前に ある）が ある
+
+### ガラスの せんろ（`rails[].glass`）
+```json
+{ "id": "main", "glass": [{ "from": 140, "to": 200 }], "…": "…" }
+```
+- ちょくせつは すきとおった レール（`#e9f6ff`、不透明度 `glassOpacity` 0.28、白い ふち、きらきらが 前へ ながれる）、**かがみの 中では ふつうの レール**。その 区間は `base` を 描かない（ローダーが `skip` を 足す）。ミッションで はじめて のった とき「しゃららん」。しかけ では ない
+- 検査: `from < to`、線路の 中、同じ 線路で かさならない、切れ目・駅の ホーム（`at − 45`〜`at + 10`）と かさならない、`look: "silk"` の 線路には 書かない
+
+### かがみの 足し（`gimmicks[]` の `mirror` の `params`）
+| param | 意味 | 既定 |
+|---|---|---|
+| `id` | 寸劇（`fx: "mirrorTurn"`）・じしゃくの `turn`・テストの 名前。ステージで ひとつ | なし |
+| `look` | `"ice"`（4-1）／`"frame"`（銀と ラベンダーの わく、2 本 足、うらは てつの 板） | `"ice"` |
+| `facing` | `false` ＝ そっぽ（うらを むけて いる。写さない・きらーん しない） | `true` |
+| `turnFrom` | そっぽの ときの まわり かた（度、30〜180） | 180 |
+| `back` | うら: `"swirl"`（てつの 板に ピンクの ぐるぐる）／`"plain"` | `"swirl"` |
+- いま 写す かがみは `facing` の かがみ だけ から えらぶ（いちばん 近い 1 まい）。`facing: false` の かがみには じしゃくの `turn` の まと（`params.mirror` で よぶ）が ちょうど 1 つ（検査）
+- 4-1 の かがみ（`look` なし）は なにも かわらない
+
+### さかさもじの かんばん（`gimmicks[]` の `letter-sign`、見た目だけ）
+```json
+{ "type": "letter-sign", "params": { "onRail": { "railId": "main", "at": 230, "lateral": -5 }, "rotationY": 180, "text": "ようこそ", "mirror": true } }
+```
+- 板（4 × 1.6 m、2 本 足、クリーム色、ピンクの ふち、すみに ピンクの ぐるぐる）に `text`（ひらがな・カタカナ 1〜8 文字、空白なし）。`mirror: true` で かがみ文字（ふつうの 画面では よめない、かがみの なかでは よめる）。置き方は `Placement`（`onRail` か `position`）
+
+### 寸劇の 足し
+- `spawn` の `"mirror": "only" | "hide"`: `only` ＝ `reflect` に `"cutscene"` の ある かがみの 写しの 中に だけ 描く、`hide` ＝ 写さない（ステージに そういう かがみが ないと 検査で はじく）。同じ 所に 本人（`hide`、そっぽ）と かがみの サカサ（`only`、かがみの ほうを むく）を 置く
+- `{ "fx": "mirrorTurn", "mirror": "m-oo", "to": "back" }`: かがみが 0.8 秒で くるっと まわる（`back`: うらを むける ＝ 写さない、`front`: こちらを むく）。**割らない**。のこる 変化（▶▶・つづきでも）。音「くるっ… ぱたん」（`front` は「きらーん」つき）。`mirror` は ある `mirror` の `id`
+- `card` の `"mirror": "reflect"` と `"notes": 1 | 2`: 左に かがみ文字の 紙（`notes` まい）、右に 銀の わくの かがみ。0.4 秒で 紙が かがみに 近づき、きらきらが 0.6 秒 はしって、かがみの 中に ふつうの 字の `title` と ワンダーごうの まどに ぐるぐる ぼうしの 小さな え。ボタンは 0.9 秒 あと。`aria-label`「かがみに うつった てがみ」。`notes` は `reflect` と だけ
+- `amanojaku-wave`（かがみの サカサ、手を あげて ゆれる）・`amanojaku-shy`（手を まえで あわせ、首を かしげる）は 組み立てずみの `amanojaku` を ポーズ した 仮の 形（チケット 0020）
+
+### せりふの キー（v1.11 の 5-3 の 分）
+```ts
+type LineKey = /* v1.11 (5-3) */ 'flipIn' | 'flipOut' | 'mirrorGateNear' | 'mirrorGateOpen' | 'mirrorGateBump' | 'mirrorGateAfter';
+```
+- 既定: `flipIn`「かがみの なかに はいった！」・`flipOut`「もどって きた！」（ミッションで はじめての とき）・`mirrorGateNear`「かがみの もん！ きてきで あいずだ！」（きてきが 光りはじめた とき）・`mirrorGateOpen`「かがみが ぷるん！ はいれる！」・`mirrorGateBump`「ぽよん！ かがみが かたい〜」→ `mirrorGateAfter`「きてきで あいず しよう！」（1 回の ためしに 1 回）
+- いまの `mirrorNear`・`mirrorFlash`・`mirrorFake`・`signRevealed`・`deadEnd`・`gapNear` は ステージで 上書き して つかう。しっぱいの 理由は ふえない（`deadEnd`・`fellNoJump`・`fellShort`。きてきの もんは しっぱいに しない）
+
+### わざと まちがえた 形・テスト用の しるし
+- わざと まちがえた 形は `tests/stages-bad/mirror-*.json`（はんてんの 中に 分かれ道、みじかい はんてん、きてきの もんが 駅に 近い、切れ目を 写す かがみが ない、まぼろしの はしに 穴、まぼろしの 道が いきどまり で ない、そっぽの かがみに まと が ない、かんばんの 字、ない かがみを まわす、`notes` だけ）
+- `#app` の `data-flip`（`1`／空）・`data-flips`（入った 回数。ふえる だけ）・`data-flip-gate`（200 m 以内の きてきの もんの `shut`／`open`／空）・`data-gate-bumps`（ぽよんの 回数）・`data-phantoms`（`k-j1:solid,gap:main:700:gone` の ように。`solid`／`gone`／`fall`）・`data-glass`（先頭が ガラスの 上 1）・`data-mirror-facing`（まわった かがみ `m-oo:back`）。`#view.is-flipped`・`#mirror-fade.is-on`・`#card.is-reflect`
+- できごと（`src/core/stage-events.ts`）: `flip:in`・`flip:out`・`flip:gate`（`open`／`bump`）・`phantom`・`mirror:turn`・`glass`。本番に デバッグの 口は 足さない（テストは `addInitScript` の 記録係 `window.__mirror`）

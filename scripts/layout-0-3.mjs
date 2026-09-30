@@ -196,9 +196,9 @@ const stage = {
   missions: [
     {
       id: 'm1',
-      type: 'repair',
+      type: 'pickup',
       title: 'かがみの ためし',
-      steps: [{ stationId: 'naka' }],
+      steps: [{ stationId: 'naka', board: 1, say: 'かがみの もんに いきたいの', reply: 'どうぞ！ のって のって！' }],
       lines: lines1,
       hints: [
         { railId: 'main', at: GLASS.from - 20, text: 'あれ？ せんろが すけてる…' },
@@ -212,7 +212,7 @@ const stage = {
       id: 'm2',
       type: 'deliver',
       title: 'かがみの もん',
-      steps: [{ stationId: 'owari' }],
+      steps: [{ stationId: 'owari', alight: 1, say: 'ありがとう！ たのしかった！' }],
       lines: lines2,
       hints: [{ railId: 'main', at: J2 - 60, text: 'また まぼろし かも…？' }],
     },
@@ -271,7 +271,7 @@ check(OWARI - 30 > FLIP2.to + 60, 'owari stops clear of the mirror world');
 const said = [
   ...Object.values(lines1).flatMap((t) => t.split('\n')),
   ...Object.values(lines2).flatMap((t) => t.split('\n')),
-  ...stage.missions.flatMap((m) => m.hints.map((h) => h.text)),
+  ...stage.missions.flatMap((m) => [...m.hints.map((h) => h.text), ...m.steps.flatMap((st) => [st.say, st.reply].filter(Boolean))]),
   ...Object.values(stage.cutscenes).flatMap((steps) => steps.flatMap((st) => (st.say ? [st.say] : st.caption ? [st.caption] : []))),
   stage.rails[0].gaps[0].line,
   stage.records[0].hint,

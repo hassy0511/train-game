@@ -1,0 +1,1 @@
+{ "_expect": "params.text must be 1–8 hiragana or katakana", "_base": "0-3", "_edit": [{ "path": "gimmicks.5.params.text", "value": "よう こそ" }] }

@@ -1,0 +1,1 @@
+{ "_expect": "a whistle gate comes 150 m or more after station \"naka\"", "_base": "0-3", "_edit": [{ "path": "stations.1.at", "value": 1100 }] }

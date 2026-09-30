@@ -763,6 +763,7 @@ async function boot(): Promise<void> {
   const mirrorFade = document.createElement('div');
   mirrorFade.className = 'mirror-fade';
   mirrorFade.id = 'mirror-fade';
+  mirrorFade.addEventListener('animationend', () => mirrorFade.classList.remove('is-on'));
   uiEl.prepend(mirrorFade);
   /** The shimmer the view turns round behind ("しゃらん"). */
   const shimmer = (): void => {
