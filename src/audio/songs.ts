@@ -504,4 +504,39 @@ export const SONGS: Record<string, Song> = {
       },
     ],
   },
+
+  // 5-2 おもちゃのまち「ぜんまい マーチ」(PHASE9_CHAPTER5_6 第 1 部 §8.1): a hopping 2/4 in C, marimba melody with a music
+  // box and a soft trumpet answering, a bouncy bass, a tiny snare. It opens with two bars going DOWN the scale (so it is
+  // clearly none of the well-known toy songs, toy soldiers' marches, ballet dolls' marches or sports-day tunes).
+  omocha: {
+    id: 'omocha',
+    title: 'ぜんまい マーチ',
+    bpm: 116,
+    stepsPerBeat: 2,
+    tracks: [
+      {
+        voice: 'wood',
+        notes:
+          'G5:1 F5:1 E5:1 D5:1 | C5:1 B4:1 A4:1 G4:1 | C5:2 E5:1 G5:1 | A5:2 G5:2 | F5:1 A5:1 G5:1 E5:1 | D5:1 F5:1 E5:1 C5:1 | D5:1 E5:1 F5:1 D5:1 | G5:3 -:1 | ' +
+          'E5:1 G5:1 C6:2 | B5:1 A5:1 G5:2 | A5:1 F5:1 D5:1 F5:1 | G5:2 E5:2 | C5:1 E5:1 G5:1 E5:1 | F5:1 A5:1 G5:1 F5:1 | E5:1 D5:1 G4:1 B4:1 | C5:3 -:1',
+      },
+      {
+        voice: 'lead',
+        gain: 0.45,
+        notes: `${repeat('-:4', 8)} | -:2 G4:2 | -:2 D5:2 | -:2 A4:2 | C5:2 -:2 | -:2 G4:2 | -:2 C5:2 | B4:2 D5:2 | E5:3 -:1`,
+      },
+      {
+        voice: 'bell',
+        gain: 0.4,
+        notes: `-:4 | -:4 | -:2 G6:1 E6:1 | -:4 | -:2 A6:1 F6:1 | -:4 | -:2 B6:1 G6:1 | -:4 | -:4 | -:2 D7:1 B6:1 | -:4 | -:2 G6:1 E6:1 | -:4 | -:2 A6:1 F6:1 | -:4 | C7:2 -:2`,
+      },
+      {
+        voice: 'bass',
+        notes:
+          'C3:1 -:1 G2:1 -:1 | G2:1 -:1 D3:1 -:1 | C3:1 -:1 G2:1 -:1 | F2:1 -:1 C3:1 -:1 | F2:1 -:1 C3:1 -:1 | C3:1 -:1 G2:1 -:1 | G2:1 -:1 D3:1 -:1 | G2:1 -:1 B2:1 -:1 | ' +
+          'C3:1 -:1 G2:1 -:1 | G2:1 -:1 D3:1 -:1 | D3:1 -:1 A2:1 -:1 | C3:1 -:1 G2:1 -:1 | C3:1 -:1 G2:1 -:1 | F2:1 -:1 C3:1 -:1 | G2:1 -:1 D3:1 -:1 | C3:1 -:1 C2:1 -:1',
+      },
+      { voice: 'drums', gain: 0.35, notes: `${repeat('k:1 -:1 s:1 -:1', 15)} | k:1 s:1 k:1 -:1` },
+    ],
+  },
 };

@@ -20,7 +20,9 @@ interface Measure {
   joints?: number;
 }
 
-const SONG_IDS = ['title', 'town', 'valley', 'forest', 'meadow', 'volcano', 'hurry', 'sky', 'umi', 'kawa', 'hoshimatsuri', 'koori', 'mura', 'yuki'];
+const SONG_IDS = ['title', 'town', 'valley', 'forest', 'meadow', 'volcano', 'hurry', 'sky', 'umi', 'kawa', 'hoshimatsuri', 'koori', 'mura', 'yuki', 'omocha'];
+/** v1.11 (5-2): the toy town's effects (PHASE9_CHAPTER5_6 第 5 部 §10). */
+const TOY_SOUNDS = ['wind-up', 'band-fanfare', 'band-step', 'spin-turn', 'spin-good', 'spin-stop', 'ball-pit', 'toy-puff'];
 
 test('sounds page: every effect plays, is heard and does not clip; the running sound on each track', async ({ page }) => {
   const errors: string[] = [];
@@ -70,6 +72,7 @@ test('sounds page: every effect plays, is heard and does not clip; the running s
     'windows',
     'bridge',
     'world-step',
+    ...TOY_SOUNDS,
   ]) {
     await page.locator(`button[data-sound="${id}"]`).click();
   }
@@ -140,7 +143,7 @@ test('sounds page: every effect plays, is heard and does not clip; the running s
     await expect(page.locator(`button[data-ambience="${kind}"]`)).toHaveAttribute('aria-pressed', 'true');
   }
   // v1.11: every new effect has a button.
-  for (const id of ['firefly', 'windows', 'bridge', 'world-step']) await expect(page.locator(`button[data-sound="${id}"]`)).toHaveCount(1);
+  for (const id of ['firefly', 'windows', 'bridge', 'world-step', ...TOY_SOUNDS]) await expect(page.locator(`button[data-sound="${id}"]`)).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 
