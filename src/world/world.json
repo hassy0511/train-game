@@ -1631,6 +1631,7 @@
       "y": 70,
       "diorama": {
         "base": "island-b",
+        "ground": "#d9cdf4",
         "rail": {
           "radius": 11
         },

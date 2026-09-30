@@ -104,6 +104,8 @@ export interface WorldDiorama {
   base: string;
   /** v1.11 (5-1): drawn under the night's blue light at 70 % (the map's pictures stay bright enough to read). */
   lighting?: 'night';
+  /** v1.11 (5-3): the island top's colour (e.g. lavender "#d9cdf4"); the rock underneath keeps its own. */
+  ground?: string;
   /** A ring of track on the top. */
   rail?: { radius: number };
   camera?: { yaw: number; pitch: number };

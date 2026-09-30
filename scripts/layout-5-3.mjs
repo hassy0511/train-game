@@ -149,23 +149,39 @@ function forkMirror(id, way, junction, extra = {}) {
   const t = [end.x - Math.sin(end.h) * 60, 0, end.z - Math.cos(end.h) * 60];
   return mirrorAt(id, p, t, { width: 22, height: 14, railId: way.id, junction, ...extra });
 }
-const endAt = main.at(main.length);
-// The big mirror 14 m past the buffer (§5.1 says 25: nearer, so the ending's two Sakasas read on screen).
-const OO = [endAt.x + Math.sin(endAt.h) * 14, 0, endAt.z + Math.cos(endAt.h) * 14];
-// The glimpse's mirror and camera: close enough that the two Sakasas read (the camera stands on the track ahead of the
-// stopped train, low; §12's numbers were a first guess).
-const MEIRO_MIRROR = at(2266, 24);
-const GLIMPSE_CAM = at(2257, 2, 2.8);
+/**
+ * The two cutscene mirrors (M2's m-meiro, the ending's big m-oo) stand beside the line just ahead of the stopped train,
+ * `MIRROR_SHOT.lateral` m to the right, their glass facing the rail (a 20 m mirror turning round clears the rail). Sakasa
+ * stands `front` m before the glass; the camera, low (a child's eye), `cam` m before it and `side` m further along,
+ * looks at her reflection: the mirror Sakasa, with her hearts and stars, fills about a third of the screen height (a
+ * 60° view, some 4 m off), Sakasa herself looking away at the left, the line's bubble below them both. (§5.5 and §12
+ * put the mirrors further off: there the mirror Sakasa was a few pixels tall.)
+ */
+const MIRROR_SHOT = { lateral: 11, front: 1, cam: 2.2, side: 2.2, eye: 0.4, look: 0.15 };
+const shot = (sMirror) => {
+  const L = MIRROR_SHOT.lateral;
+  return {
+    mirror: at(sMirror, L),
+    faces: at(sMirror, 0),
+    sakasa: { at: sMirror, lateral: L - MIRROR_SHOT.front },
+    camera: at(sMirror + MIRROR_SHOT.side, L - MIRROR_SHOT.cam, MIRROR_SHOT.eye),
+    // Her reflection's middle (as far behind the glass as she stands before it).
+    image: at(sMirror, L + MIRROR_SHOT.front, MIRROR_SHOT.look),
+  };
+};
+const MEIRO = shot(2270);
+const OO_SHOT = shot(3538);
+const OO = OO_SHOT.mirror;
 const MIRRORS = {
   'm-start': mirrorAt('m-start', at(150, 22), at(55), { width: 16, height: 11 }),
   'm-glass': mirrorAt('m-glass', at(560, 16), at(495), { width: 20, height: 13, reflectRadius: 100 }),
   'm-fork1': forkMirror('m-fork1', kagami1, 'j-kagami1', { lightHint: true }),
   'm-fork2': forkMirror('m-fork2', kagami2, 'j-kagami2'),
-  'm-meiro': mirrorAt('m-meiro', MEIRO_MIRROR, GLIMPSE_CAM, { width: 24, height: 16, reflect: ['train', 'cutscene'] }, SUNK),
+  'm-meiro': mirrorAt('m-meiro', MEIRO.mirror, MEIRO.faces, { width: 20, height: 14, reflect: ['train', 'cutscene'] }, SUNK),
   'm-bridge': mirrorAt('m-bridge', at(2850, -18), at(2790), { width: 20, height: 13 }),
   'm-turn': mirrorAt('m-turn', at(KURUTTO.at, KURUTTO.lateral), at(2985), { width: 12, height: 9, facing: false, turnFrom: 180, back: 'swirl' }),
   'm-ura': mirrorAt('m-ura', at(3270, 26), at(33, 0, 0, ura), { width: 22, height: 14, reflectRadius: 90 }),
-  'm-oo': mirrorAt('m-oo', OO, at(3490), { width: 30, height: 18, reflect: ['train', 'cutscene'] }, SUNK),
+  'm-oo': mirrorAt('m-oo', OO, OO_SHOT.faces, { width: 20, height: 16, reflect: ['train', 'cutscene'] }, SUNK),
 };
 
 const GIMMICKS = [
@@ -344,10 +360,10 @@ const opening = [
 ];
 
 /** The glimpse: at めいろえき, from the platform towards m-meiro. Sakasa looks away; the one in the mirror waves. */
-const G = { at: 2266, lateral: 15 };
+const G = MEIRO.sakasa;
 const glimpse = [
-  cam(GLIMPSE_CAM, up(MEIRO_MIRROR, 8)),
-  { spawn: 'sakasa', model: 'amanojaku', onRail: onMain(G.at, G.lateral, stand), rotationY: 0, mirror: 'hide' },
+  cam(MEIRO.camera, MEIRO.image),
+  { spawn: 'sakasa', model: 'amanojaku', onRail: onMain(G.at, G.lateral, stand), rotationY: 180, mirror: 'hide' },
   { spawn: 'sakasa-mirror', model: 'amanojaku-wave', onRail: onMain(G.at, G.lateral, stand), rotationY: -90, mirror: 'only' },
   { say: 'あれ？ サカサ だ！', emote: 'jump' },
   { say: 'わあ！ かがみの サカサ、にこにこ！', emote: 'jump' },
@@ -357,38 +373,41 @@ const glimpse = [
   { spawn: 'sakasa', model: 'amanojaku-blush', onRail: onMain(G.at, G.lateral, stand), rotationY: -60, mirror: 'hide' },
   { wait: 0.6 },
   { remove: 'sakasa' },
-  { spawn: 'sakasa', model: 'amanojaku', onRail: onMain(G.at, G.lateral, stand), rotationY: 0, mirror: 'hide' },
+  { spawn: 'sakasa', model: 'amanojaku', onRail: onMain(G.at, G.lateral, stand), rotationY: 180, mirror: 'hide' },
   { move: 'sakasa', onRail: onMain(G.at, G.lateral, stand + 0.4), seconds: 0.2 },
   { move: 'sakasa', onRail: onMain(G.at, G.lateral, stand), seconds: 0.2 },
   { say: 'こ、こんにちは〜！', who: 'amanojaku' },
   { remove: 'sakasa-mirror' },
-  { move: 'sakasa', onRail: onMain(2300, 70, stand), seconds: 3 },
+  // Off along the mirror's front first (never through the glass), then away from the line.
+  { move: 'sakasa', onRail: onMain(G.at - 14, G.lateral, stand), seconds: 1.2 },
+  { move: 'sakasa', onRail: onMain(G.at - 20, 60, stand), seconds: 2.5 },
   { remove: 'sakasa' },
   { say: 'サカサ、てれてる みたい', emote: 'tilt' },
 ];
 
 /** The ending at おおかがみえき: the mirror Sakasa's true wish, the big mirror turned over, the notes in a mirror. */
-const E = { at: 3559, lateral: 3 };
+const E = OO_SHOT.sakasa;
 const PICO = { at: 3481, lateral: -5, height: 1.1 };
 const STAND = { at: 3478, lateral: -6.5, height: 1.1 };
 const ending = [
   // Scene 1: from the platform towards the big mirror m-oo.
-  cam(at(3538, 2, 2.8), up(OO, 6)),
-  { spawn: 'sakasa', model: 'amanojaku', onRail: onMain(E.at, E.lateral, stand), rotationY: 90, mirror: 'hide' },
-  { spawn: 'sakasa-mirror', model: 'amanojaku-shy', onRail: onMain(E.at, E.lateral, stand), rotationY: 0, mirror: 'only' },
+  cam(OO_SHOT.camera, OO_SHOT.image),
+  { spawn: 'sakasa', model: 'amanojaku', onRail: onMain(E.at, E.lateral, stand), rotationY: 180, mirror: 'hide' },
+  { spawn: 'sakasa-mirror', model: 'amanojaku-shy', onRail: onMain(E.at, E.lateral, stand), rotationY: -90, mirror: 'only' },
   { say: 'あれ？ かがみに サカサ…', emote: 'tilt' },
   { fx: 'hearts', id: 'sakasa-mirror' },
   { say: 'ほんとうは のりたい', who: 'amanojaku', name: MIRROR_SAKASA, icon: 'ride' },
   { say: 'サカサの きもち…！', emote: 'jump' },
   // Scene 2: closer. She starts, says goodbye (her hello), and turns the big mirror over (never breaks it).
-  cam(at(3547, -3, 2.4), up(OO, 5)),
+  cam(at(3512, -4, 3), up(OO, 4)),
   { move: 'sakasa', onRail: onMain(E.at, E.lateral, stand + 0.4), seconds: 0.2 },
   { move: 'sakasa', onRail: onMain(E.at, E.lateral, stand), seconds: 0.2 },
   { say: 'さ、さようなら！', who: 'amanojaku' },
   { remove: 'sakasa-mirror' },
   { fx: 'mirrorTurn', mirror: 'm-oo', to: 'back' },
   { say: 'こ、こんにちは〜！', who: 'amanojaku' },
-  { move: 'sakasa', onRail: onMain(E.at - 10, 60, stand), seconds: 3 },
+  { move: 'sakasa', onRail: onMain(E.at - 14, E.lateral, stand), seconds: 1.2 },
+  { move: 'sakasa', onRail: onMain(E.at - 20, 60, stand), seconds: 2.5 },
   { remove: 'sakasa' },
   // Scene 3: the partner gets off and holds 3-1's and 3-3's notes up to the platform's little mirror.
   { door: 'open' },

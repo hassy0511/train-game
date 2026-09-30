@@ -343,6 +343,11 @@ test('stage 5-3 full run: the magnet light learned, the mirror world, phantoms, 
   await expect(app).toHaveAttribute('data-cutscene-actors', /(^|,)sakasa(,|$)/);
   await page.waitForTimeout(1_200);
   await page.screenshot({ path: resolve(OUT, '5-3-09-glimpse.png') });
+  // Then the hearts and stars round the mirror Sakasa (she fills about a third of the screen); her "こんにちは".
+  await tapUntil(page, '#bubble:has-text("こ、こんにちは")', 60_000);
+  await expect(app).toHaveAttribute('data-cutscene-actors', /sakasa-mirror/);
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: resolve(OUT, '5-3-09b-glimpse-hearts.png') });
 
   // ---- M3 かがみの なかへ ----
   await card(page, 'ミッション 3');
@@ -397,7 +402,7 @@ test('stage 5-3 full run: the magnet light learned, the mirror world, phantoms, 
   await expect(page.locator('#bubble .bubble-name')).toHaveText('かがみの サカサ');
   await expect(app).toHaveAttribute('data-cutscene-actors', /sakasa-mirror/);
   await expect(app).toHaveAttribute('data-ambience', '');
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(900);
   await page.screenshot({ path: resolve(OUT, '5-3-12-mirror-sakasa.png') });
   await tapUntil(page, '#card.is-reflect', 120_000);
   await expect(app).toHaveAttribute('data-mirror-facing', /m-oo:back/);

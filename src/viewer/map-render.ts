@@ -6,7 +6,9 @@
 import {
   Box3,
   BoxGeometry,
+  Color,
   DirectionalLight,
+  Float32BufferAttribute,
   Group,
   HemisphereLight,
   MathUtils,
@@ -51,9 +53,47 @@ function railRing(radius: number): Group {
   return g;
 }
 
+/** Paints the upward faces of `root`'s meshes `color` (vertex colours on a copy of each geometry, else the material). */
+function tintTop(root: Group, color: string): void {
+  const c = new Color(color);
+  const top = new Box3().setFromObject(root).max.y;
+  root.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    const geometry = mesh.geometry.clone();
+    const normals = geometry.getAttribute('normal');
+    const colors = geometry.getAttribute('color');
+    if (!normals) return;
+    const material = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as MeshLambertMaterial;
+    let out = colors;
+    if (!out) {
+      // A material colour: every vertex that colour, then its own copy of the material painted by vertices.
+      const base = material.color ?? new Color('#ffffff');
+      const array = new Float32Array(normals.count * 3);
+      for (let i = 0; i < normals.count; i++) base.toArray(array, i * 3);
+      out = new Float32BufferAttribute(array, 3);
+      geometry.setAttribute('color', out);
+      const painted = material.clone();
+      painted.vertexColors = true;
+      painted.color = new Color('#ffffff');
+      mesh.material = painted;
+    }
+    // The top and its grassy edge (everything within 2 m of the island's top, in world height); the rock keeps its colour.
+    root.updateMatrixWorld(true);
+    const positions = geometry.getAttribute('position');
+    const p = new Vector3();
+    for (let i = 0; i < positions.count; i++) if (p.fromBufferAttribute(positions, i).applyMatrix4(mesh.matrixWorld).y > top - 2) out.setXYZ(i, c.r, c.g, c.b);
+    out.needsUpdate = true;
+    mesh.geometry = geometry;
+  });
+}
+
 async function build(diorama: WorldDiorama | null, models: ModelLibrary): Promise<Group> {
   const root = new Group();
-  root.add((await models.load(diorama?.base ?? 'island-b')).clone(true));
+  const base = (await models.load(diorama?.base ?? 'island-b')).clone(true);
+  // v1.11: a ground colour of its own (5-3's lavender): the top faces of the island take it, the rock underneath keeps its.
+  if (diorama?.ground) tintTop(base, diorama.ground);
+  root.add(base);
   if (!diorama) return root;
   if (diorama.rail) root.add(railRing(diorama.rail.radius));
   for (const item of diorama.items) {
