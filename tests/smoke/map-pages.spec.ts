@@ -1,15 +1,17 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { knownPages, openingPage, type PageFacts } from '../../src/world/pages';
+import { knownPages, openingPage, seenMapLinks, type PageFacts } from '../../src/world/pages';
 import type { WorldFile } from '../../src/world/types';
 
 /**
  * The map's pages (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3–§5), from prepared saves: page 1 alone until chapter 2 is
  * done; then the rail grows from the first town to the cloud gate, the map turns to page 2 and the rail grows on to
  * 3-1 (once). ◀ ▶, a swipe or a tap on the gate turn the pages. Chapter 3's end (the water light, snow on chapter
- * 4) and chapter 4's end (the aurora, then chapter 5's "?") play once each with their cards.
+ * 4) and chapter 4's end (the aurora) play once each with their cards. Page 3 (chapters 5 and 6,
+ * docs/PHASE9_CHAPTER5_6.md 第 1 部 §3, §11): once chapter 4 is done, the rail grows from 4-3 to the gate where
+ * chapter 5's "?" used to be, the map turns to page 3 and the rail grows on to 5-1 (once).
  */
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), 'output');
 mkdirSync(OUT, { recursive: true });
@@ -23,6 +25,13 @@ const CH3 = ['3-1', '3-2', '3-3'];
 const CH4 = ['4-1', '4-2', '4-3'];
 const RING = ['1-1>1-2', '1-2>1-3', '1-3>2-1', '2-1>2-2', '2-2>2-3', '2-3>1-1'];
 const GATE = '1-1>3-1';
+/** The rail from chapter 4 through the gate to page 3 (docs/PHASE9_CHAPTER5_6.md 第 1 部 §3.3). */
+const GATE5 = '4-3>5-1';
+/**
+ * Whether 5-1's stage is there yet: the map and the あいことば come before it (the island is a "?" until then, like
+ * chapters 3 and 4's islands were before their stages). The tests below hold either way.
+ */
+const HAS_5_1 = existsSync(resolve(ROOT, 'src/stages/5-1.json'));
 const ABILITIES = ['whistle', 'jump', 'light', 'rocket'];
 
 type Save = { cleared: string[]; abilities: string[]; mapLinks: string[]; resume?: { stage: string; mission: number } };
@@ -151,13 +160,16 @@ test('the page to open on and the pages known (§3.4–3.5), one rule at a time'
   expect(knownPages(WORLD, facts({ laid: RING }))).toEqual([1]);
   expect(knownPages(WORLD, facts({ laid: [...RING, GATE] }))).toEqual([1, 2]);
   expect(knownPages(WORLD, facts({ unlocked: ['3-1'] }))).toEqual([1, 2]);
-  expect(knownPages(WORLD, facts({ teaser: 'teaser:5' }))).toEqual([1, 2]);
+  // Page 3 once the rail through the second gate is laid.
+  expect(knownPages(WORLD, facts({ laid: [...RING, GATE, GATE5] }))).toEqual([1, 2, 3]);
+  expect(knownPages(WORLD, facts({ laid: [...RING, GATE] }))).toEqual([1, 2]);
   const both = { laid: [...RING, GATE] };
   // 1. A chapter's end not seen yet: its page.
   expect(open({ ...both, finale: 3, fresh: ['1-1>1-2'], next: '1-2' })).toBe(2);
   expect(open({ ...both, finale: 2, next: '3-2' })).toBe(1);
   // 2. A new rail: the page it starts from (through the gate: page 1, then it turns by itself).
   expect(open({ ...both, fresh: [GATE], next: '3-1' })).toBe(1);
+  expect(openingPage(WORLD, facts({ laid: [...RING, GATE, GATE5], fresh: [GATE5], next: '5-1' }))).toBe(2);
   expect(open({ ...both, fresh: ['3-1>3-2'], next: '1-2' })).toBe(2);
   // 3. The next island's page.
   expect(open({ ...both, next: '3-2', cleared: ['1-1', '2-3'] })).toBe(2);
@@ -170,13 +182,28 @@ test('the page to open on and the pages known (§3.4–3.5), one rule at a time'
   expect(open({ next: '3-2' })).toBe(1);
 });
 
+test('the rails an あいことば counts as seen stop at the pages its version had (第 1 部 §7.3)', () => {
+  const all4 = [...CH1, ...CH2, ...CH3, ...CH4];
+  // Version 2 came out with two pages: the rail through the gate to page 3 is still to grow.
+  const v2 = seenMapLinks(WORLD, all4, 2);
+  expect(v2).toContain(GATE);
+  expect(v2).toContain('4-2>4-3');
+  expect(v2).toContain('finale:4');
+  expect(v2).not.toContain(GATE5);
+  // Version 3 (three pages), and no limit: seen.
+  expect(seenMapLinks(WORLD, all4, 3)).toContain(GATE5);
+  expect(seenMapLinks(WORLD, all4)).toEqual(seenMapLinks(WORLD, all4, 3));
+  // Chapter 4 not done: its rail out waits either way.
+  expect(seenMapLinks(WORLD, [...CH1, ...CH2, ...CH3, '4-3'], 3)).not.toContain(GATE5);
+});
+
 test('before chapter 2 is done: page 1 alone, as it always was', async ({ page }) => {
   const errors = watchErrors(page);
   await seed(page, { cleared: [...CH1, '2-1'], abilities: ABILITIES, mapLinks: RING.slice(0, 4) });
   await toTitle(page);
-  // Stars: chapter 3 and 4 are there, faint (their first island is not open).
-  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ☆\s*3しょう ☆\s*4しょう ☆/);
-  await expect(page.locator('.title-chapter.is-faint')).toHaveCount(2);
+  // Stars: chapters 3, 4 and 5 are there, faint (their first island is not open).
+  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ☆\s*3しょう ☆\s*4しょう ☆\s*5しょう ☆/);
+  await expect(page.locator('.title-chapter.is-faint')).toHaveCount(3);
   const map = await openMap(page);
   await expect(map).toHaveAttribute('data-page', '1');
   await expect(page.locator('.map-page')).toHaveCount(1);
@@ -404,60 +431,169 @@ const CH4_DONE: Save = {
   mapLinks: [...RING, GATE, '3-1>3-2', '3-2>3-3', '3-3>4-1', '4-1>4-2', '4-2>4-3'],
 };
 
-test("chapter 4's end: the aurora and the islands twinkling, the card, then chapter 5's \"?\"", async ({ page }) => {
+test("chapter 4's end: the aurora and the islands twinkling, the card, then the rail through the gate to page 3", async ({ page }) => {
   const errors = watchErrors(page);
   await seed(page, CH4_DONE);
   await toTitle(page);
-  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ★\s*3しょう ★\s*4しょう ★/);
+  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ★\s*3しょう ★\s*4しょう ★\s*5しょう ☆/);
   const map = await openMap(page);
   await expect(map).toHaveAttribute('data-page', '2');
   await expect(map).toHaveAttribute('data-finale', 'playing');
   await expect(map).toHaveClass(/is-dusk/);
-  await expect(page.locator('.map-island.is-teaser')).toBeHidden();
+  // The rail out of chapter 4 waits for the card: not growing, its gate not there.
+  await expect(page.locator(`[data-link="${GATE5}"]`)).toHaveClass(/is-pending/);
+  await expect(page.locator(`.map-gate[data-gate-link="${GATE5}"][data-gate="exit"]`)).toBeHidden();
   await page.waitForSelector('.map-aurora', { state: 'attached', timeout: 10_000 });
   await page.waitForTimeout(700);
   await page.screenshot({ path: resolve(OUT, 'map-ch4-finale.png') });
   const card = page.locator('#card');
   await expect(card).toBeVisible({ timeout: 20_000 });
-  // The gate, then every island of the page in turn.
+  // The gate (the one into this page), then every island of the page in turn.
   await expect(map).toHaveAttribute('data-trail', `gate:${GATE},3-1,3-2,3-3,4-1,4-2,4-3`);
   await expect(card).toContainText('4しょう クリア！');
   await expect(card).toContainText('こおりと ゆきの せかいも');
   await expect(card).toContainText('ぜんぶ つながった！');
   await expect(page.locator('#card-button')).toHaveText('やったね！');
   await expect(page.locator('#card-button')).toBeVisible();
+  await expect(page.locator(`[data-link="${GATE5}"]`)).not.toHaveClass(/is-growing/);
   await page.screenshot({ path: resolve(OUT, 'map-ch4-card.png') });
   expect((await saved(page)).mapLinks).not.toContain('finale:4');
   await page.locator('#card-button').click();
   expect((await saved(page)).mapLinks).toContain('finale:4');
-  await expect(map).toHaveAttribute('data-finale', 'done');
   await expect(map).not.toHaveClass(/is-dusk/);
 
-  // Chapter 5's "?" floats in at the right edge with its dotted line from 4-3; a tap says "later".
-  const teaser = page.locator('.map-island.is-teaser');
-  await expect(teaser).toBeVisible();
-  await expect(teaser).toHaveAttribute('data-island', 'teaser:5');
-  await expect(teaser).toContainText('5しょう');
-  await expect(page.locator('[data-link="4-3>teaser:5"]')).toBeVisible();
-  await expect(teaser).not.toHaveClass(/is-appear/, { timeout: 10_000 });
-  await recordAdded(page, '.map-say');
-  await teaser.dispatchEvent('click');
-  const [said] = await added(page, '.map-say');
-  expect(said.text).toBe('つづきは また こんど！');
-  await page.screenshot({ path: resolve(OUT, 'map-teaser5.png') });
-  // The bubble stays on the screen (said to the left of the island at the right edge).
-  const say = said.box;
-  expect(say.x).toBeGreaterThanOrEqual(0);
-  expect(say.x + say.width).toBeLessThanOrEqual(1194);
+  // Only after the card: the rail grows from 4-3 to the gate where chapter 5's "?" was, the page turns, and it
+  // grows on from the gate to 5-1.
+  await expect(page.locator(`[data-link="${GATE5}"]`)).toHaveClass(/is-growing/);
+  await expect(page.locator(`.map-gate[data-gate-link="${GATE5}"][data-gate="exit"]`)).toBeVisible();
+  await expect(page.locator('#map-close')).toBeHidden();
+  await turned(page, 3);
+  await expect(page.locator(`[data-link-enter="${GATE5}"]`)).toHaveClass(/is-growing/);
+  await expect(map).toHaveAttribute('data-finale', 'done', { timeout: 10_000 });
+  await expect(page.locator('#map-close')).toBeVisible();
+  expect((await saved(page)).mapLinks).toContain(GATE5);
+  await expect(page.locator('#map-page-title')).toHaveText('5しょう ふしぎ・6しょう さいご');
+  await expect(page.locator('.map-island.is-teaser')).toHaveCount(0);
+  await expect(page.locator('[data-island="teaser:5"]')).toHaveCount(0);
 
-  // Once only; the "?" is simply there.
+  // Once only.
   await page.locator('#map-close').click();
   await openMap(page);
   await page.waitForTimeout(2_000);
   await expect(card).toHaveCount(0);
   await expect(map).not.toHaveAttribute('data-finale', /.+/);
-  await expect(page.locator('.map-island.is-teaser')).toBeVisible();
+  await expect(map).not.toHaveAttribute('data-growing', /.+/);
+  await expect(page.locator('#map .is-growing')).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+/**
+ * A child who finished chapter 4 before page 3 came (its end seen, chapter 5's "?" seen): the update grows the
+ * rail through the gate once, the map turns to page 3 by itself (第 1 部 §3.5, §11).
+ */
+test('page 3: the rail from 4-3 through the gate, the page turns, then ◀ ▶ and a swipe over three pages, once', async ({ page }) => {
+  const errors = watchErrors(page);
+  await seed(page, { ...CH4_DONE, mapLinks: [...CH4_DONE.mapLinks, 'finale:4'] });
+  await toTitle(page);
+  const map = await openMap(page);
+  // It opens on page 2 (the new rail starts there); hands off while it grows to the gate.
+  await expect(map).toHaveAttribute('data-page', '2');
+  await expect(map).toHaveAttribute('data-growing', '1');
+  await expect(map).not.toHaveAttribute('data-finale', /.+/);
+  await expect(page.locator(`[data-link="${GATE5}"]`)).toHaveClass(/is-growing/);
+  await expect(page.locator('#map-close')).toBeHidden();
+  const exit = page.locator(`.map-gate[data-gate-link="${GATE5}"][data-gate="exit"]`);
+  await expect(exit).toBeVisible();
+  // The gate stands where chapter 5's "?" was (91 %, 42 % of the map).
+  const area = (await page.locator('.map-page[data-page="2"]').boundingBox())!;
+  const gateAt = await centre(exit);
+  expect(Math.abs(gateAt.x - (area.x + 0.91 * area.width))).toBeLessThan(area.width * 0.06);
+  await expect(page.locator('.map-island.is-teaser')).toHaveCount(0);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: resolve(OUT, 'map-page2-exit5.png') });
+  // Page 3 by itself; the rail grows on from the gate there to 5-1.
+  await turned(page, 3);
+  await expect(page.locator(`[data-link-enter="${GATE5}"]`)).toHaveClass(/is-growing/);
+  await expect(page.locator(`.map-page[data-page="3"] .map-gate[data-gate="enter"]`)).toBeVisible();
+  await expect(map).not.toHaveAttribute('data-growing', /.+/, { timeout: 10_000 });
+  expect((await saved(page)).mapLinks).toContain(GATE5);
+  await expect(page.locator('#map-close')).toBeVisible();
+  await expect(page.locator('#map-page-title')).toHaveText('5しょう ふしぎ・6しょう さいご');
+  await expect(page.locator('.map-dot')).toHaveCount(3);
+  await expect(page.locator('.map-dot.is-on')).toHaveAttribute('data-page', '3');
+  await expect(page.locator('#map-prev')).toBeVisible();
+  await expect(page.locator('#map-next')).toBeHidden();
+  // 5-1: the next island once its stage is there; until then a "?" that only wiggles.
+  const island51 = page.locator('.map-island[data-island="5-1"]');
+  await expect(island51).toBeVisible();
+  if (HAS_5_1) {
+    await expect(island51).not.toHaveClass(/is-unknown/);
+    await expect(island51).toHaveClass(/is-next/);
+  } else {
+    await expect(island51).toHaveClass(/is-unknown/);
+    await expect(island51.locator('.map-label')).toHaveCount(0);
+    await island51.evaluate((e) => {
+      const w = window as unknown as { islandAnims: string[] };
+      w.islandAnims = [];
+      e.addEventListener('animationstart', (ev) => w.islandAnims.push((ev as AnimationEvent).animationName));
+    });
+    await island51.click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { islandAnims: string[] }).islandAnims)).toContain('island-wiggle');
+    await page.waitForTimeout(300);
+    expect(new URL(page.url()).search).toBe('');
+  }
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: resolve(OUT, 'map-page3.png') });
+
+  // Turning: ◀ to page 2, ◀ to page 1, ▶ ▶ back; the gates on page 2 and 3; a swipe each way.
+  await page.locator('#map-prev').click();
+  await turned(page, 2);
+  await expect(page.locator('#map-page-title')).toHaveText('3しょう みず・4しょう こおりと ゆき');
+  await expect(page.locator('#map-next')).toBeVisible();
+  await page.locator('#map-prev').click();
+  await turned(page, 1);
+  await expect(page.locator('#map-prev')).toBeHidden();
+  await page.locator('#map-next').click({ force: true });
+  await turned(page, 2);
+  await page.locator('#map-next').click({ force: true });
+  await turned(page, 3);
+  await page.locator('.map-page[data-page="3"] .map-gate[data-gate="enter"]').click();
+  await turned(page, 2);
+  await page.locator(`.map-page[data-page="2"] .map-gate[data-gate-link="${GATE5}"]`).click();
+  await turned(page, 3);
+  await swipe(page, { x: 600, y: 420 }, 250);
+  await turned(page, 2);
+  await swipe(page, { x: 600, y: 420 }, -250);
+  await turned(page, 3);
+  // Nothing beyond page 3: a swipe on does nothing (and the tap it ends with reaches nothing for half a second).
+  await swipe(page, { x: 600, y: 420 }, -250);
+  await page.waitForTimeout(700);
+  await expect(map).toHaveAttribute('data-page', '3');
+
+  // Once only: opened again, nothing grows.
+  await page.locator('#map-close').click();
+  await openMap(page);
+  await expect(map).not.toHaveAttribute('data-growing', /.+/);
+  await expect(page.locator(`[data-link-enter="${GATE5}"]`)).toHaveClass(/is-laid/);
+  await expect(page.locator('#map .is-growing')).toHaveCount(0);
+  // It opens on 5-1's page when 5-1 is next; else on the page of the highest cleared island (4-3's).
+  await expect(map).toHaveAttribute('data-page', HAS_5_1 ? '3' : '2');
+  expect(errors).toEqual([]);
+});
+
+test('leaving while the rail grows through the gate to page 3 shows it again next time', async ({ page }) => {
+  await seed(page, { ...CH4_DONE, mapLinks: [...CH4_DONE.mapLinks, 'finale:4'] });
+  await toTitle(page);
+  await openMap(page);
+  await expect(page.locator(`[data-link="${GATE5}"]`)).toHaveClass(/is-growing/);
+  await page.reload();
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  expect((await saved(page)).mapLinks).not.toContain(GATE5);
+  await openMap(page);
+  await expect(page.locator(`[data-link="${GATE5}"]`)).toHaveClass(/is-growing/);
+  await turned(page, 3);
+  await expect(page.locator('#map')).not.toHaveAttribute('data-growing', /.+/, { timeout: 10_000 });
+  expect((await saved(page)).mapLinks).toContain(GATE5);
 });
 
 test("chapter 4's end with calm motion: the aurora does not sway, no snow", async ({ page }) => {
@@ -489,35 +625,66 @@ async function layout(page: Page): Promise<{ things: { id: string; box: DOMRect 
 const overlap = (a: DOMRect, b: DOMRect): number =>
   Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
 
+/** The title's stars: on the screen; one row, or two with ceil(n / 2) in the first (3 + 2 for five, 第 1 部 §6). */
+async function checkStars(page: Page, w: number): Promise<number> {
+  const row = (await page.locator('#title-chapters').boundingBox())!;
+  expect(row.x).toBeGreaterThanOrEqual(0);
+  expect(row.x + row.width).toBeLessThanOrEqual(w);
+  const boxes = await page.locator('.title-chapter').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
+  for (const b of boxes) {
+    expect(b.x).toBeGreaterThanOrEqual(0);
+    expect(b.x + b.width).toBeLessThanOrEqual(w);
+  }
+  const tops = boxes.map((b) => Math.round(b.top));
+  const rows = [...new Set(tops)];
+  expect(rows.length === 1 || (rows.length === 2 && tops.filter((t) => t === rows[0]).length === Math.ceil(tops.length / 2))).toBe(true);
+  return rows.length;
+}
+
+for (const [w, hgt, oneRow] of [
+  [1194, 834, true],
+  [667, 375, false],
+  [568, 320, false],
+] as const) {
+  test(`title at ${w}×${hgt}: five stars, ${oneRow ? 'one row' : 'three and two'}`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: hgt });
+    await seed(page, { ...CH4_DONE, mapLinks: [...CH4_DONE.mapLinks, 'finale:4', GATE5] });
+    await toTitle(page);
+    await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ★\s*3しょう ★\s*4しょう ★\s*5しょう ☆/);
+    await expect(page.locator('.title-chapter')).toHaveCount(5);
+    // 5-1 is open once its stage is there (4-3 is cleared); until then chapter 5 is faint.
+    await expect(page.locator('.title-chapter.is-faint')).toHaveCount(HAS_5_1 ? 0 : 1);
+    expect(await checkStars(page, w)).toBe(oneRow ? 1 : 2);
+    await page.screenshot({ path: resolve(OUT, `map-pages-title5-${w}.png`) });
+  });
+}
+
 for (const [w, hgt] of [
   [1194, 834],
   [568, 320],
 ] as const) {
-  test(`page 2 at ${w}×${hgt}: islands, gate and "?" apart; the arrows off the islands`, async ({ page }) => {
+  test(`pages 3, 2 and 1 at ${w}×${hgt}: islands and gates apart; the arrows off the islands`, async ({ page }) => {
     await page.setViewportSize({ width: w, height: hgt });
-    await seed(page, { ...CH4_DONE, mapLinks: [...CH4_DONE.mapLinks, 'finale:4'] });
+    await seed(page, { ...CH4_DONE, mapLinks: [...CH4_DONE.mapLinks, 'finale:4', GATE5] });
     await toTitle(page);
-    // The title's four stars fit on the screen.
-    const row = (await page.locator('#title-chapters').boundingBox())!;
-    expect(row.x).toBeGreaterThanOrEqual(0);
-    expect(row.x + row.width).toBeLessThanOrEqual(w);
-    // One row, or two at most (two chapters each), never one chip left alone on a row of its own.
-    const tops = await page.locator('.title-chapter').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
-    const rows = [...new Set(tops)];
-    expect(rows.length === 1 || (rows.length === 2 && tops.filter((t) => t === rows[0]).length === 2)).toBe(true);
+    await checkStars(page, w);
     await page.screenshot({ path: resolve(OUT, `map-pages-title-${w}.png`) });
     await openMap(page);
-    for (const n of [2, 1]) {
-      if (n === 1) {
-        await page.locator('#map-prev').click();
+    // Page 3 first (the next island is there once 5-1's stage is; else it opens on page 2 and turns).
+    if ((await page.locator('#map').getAttribute('data-page')) !== '3') await page.locator('#map-next').click({ force: true });
+    // At least: page 3 its gate and 5-1, page 2 its six islands and two gates, page 1 its six islands and gate.
+    const least = { 3: 2, 2: 8, 1: 7 } as const;
+    for (const n of [3, 2, 1] as const) {
+      if (n < 3) {
+        await page.locator('#map-prev').click({ force: true });
       }
       await turned(page, n);
       await page.waitForTimeout(300);
       const { things, arrows } = await layout(page);
-      expect(things.length).toBeGreaterThan(n === 2 ? 7 : 6);
+      expect(things.length).toBeGreaterThanOrEqual(least[n]);
       for (let i = 0; i < things.length; i++) {
-        // Page 1 is as it always was (its islands are close together on purpose); page 2 keeps them apart.
-        for (let j = i + 1; j < things.length && n === 2; j++) {
+        // Page 1 is as it always was (its islands are close together on purpose); pages 2 and 3 keep them apart.
+        for (let j = i + 1; j < things.length && n > 1; j++) {
           const a = things[i].box;
           const b = things[j].box;
           const share = overlap(a, b) / Math.min(a.width * a.height, b.width * b.height);

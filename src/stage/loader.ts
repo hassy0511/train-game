@@ -2,11 +2,15 @@ import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
 import { buildRailNetwork } from '../rail/network';
 import type { RailNetwork } from '../rail/types';
 import { iceZones, thinIceZones } from '../gimmick/ice';
+import { fireflyForks } from '../gimmick/fireflies';
+import { hushZones } from '../gimmick/hush';
 import { assignPlowSpans, plowSpans } from '../gimmick/plow';
+import { reversedZones } from '../gimmick/reversed-whistle';
+import { FIREFLY_FORK } from '../train/params';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import type { Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
-import { validateIceLayout, validatePlowLayout, validateSnowLayout, validateStageFile, validateStageLayout, validateWaterLayout } from './validate';
+import { validateIceLayout, validateNightLayout, validatePlowLayout, validateSnowLayout, validateStageFile, validateStageLayout, validateToyLayout, validateWaterLayout } from './validate';
 import { computeWaterSpans, diveForkSide } from './water';
 
 // One chunk per stage file; stages load lazily.
@@ -75,6 +79,10 @@ export function prepareStage(raw: unknown): StageData {
   assignPlowSpans(file, network);
   validatePlowLayout(file, network);
   validateSnowLayout(file, network);
+  // v1.11 (5-1): hush stretches, fawns, whistle-reversed stretches and firefly forks.
+  validateNightLayout(file, network);
+  // v1.11 (5-2): walking toys, the band's way, spinning forks and the whistle's windows.
+  validateToyLayout(file, network);
   const groundY = file.environment.ground?.y ?? null;
 
   const props: ResolvedProp[] = [...file.props, ...autoSigns(file)].map((p) => {
@@ -89,6 +97,8 @@ export function prepareStage(raw: unknown): StageData {
       onRail: 'onRail' in p ? { railId: p.onRail.railId, at: p.onRail.at } : undefined,
       ...(p.trace ? { trace: true, traceLine: p.traceLine } : {}),
       ...(p.reveal ? { reveal: p.reveal } : {}),
+      ...(p.sleeper ? { sleeper: true } : {}),
+      ...(p.windup ? { windup: true } : {}),
     };
   });
 
@@ -146,13 +156,28 @@ function autoSigns(file: StageFile): PropDef[] {
     rotationY: 180,
   });
   const out: PropDef[] = [];
-  for (const z of slopeZones(file.gimmicks)) if (z.sign) out.push(sign(z.kind === 'up' ? 'sign-steep' : 'sign-slide', z.railId, z.from));
+  // v1.11 (5-2): a toy slide (params.look "slide") has its own sign.
+  for (const z of slopeZones(file.gimmicks)) {
+    const toy = (file.gimmicks[z.index].params as { look?: string } | undefined)?.look === 'slide';
+    if (z.sign) out.push(sign(z.kind === 'up' ? 'sign-steep' : toy ? 'sign-slide-toy' : 'sign-slide', z.railId, z.from));
+  }
   for (const z of rocketZones(file.gimmicks)) if (!z.allow) out.push(sign('sign-no-rocket', z.railId, z.from));
   // v1.10 (4-1): ice (a snow crystal) and thin ice (cracks and the rocket).
   for (const z of iceZones(file.gimmicks)) if (z.sign) out.push(sign('sign-ice', z.railId, z.from));
   for (const z of thinIceZones(file.gimmicks)) if (z.sign) out.push(sign('sign-thin-ice', z.railId, Math.max(0, z.from - 20)));
   // v1.10 (4-2): a snow wall's purple snowplow sign, a little before the wall.
   for (const sp of plowSpans(file.gimmicks)) if (sp.sign) out.push(sign('sign-plow', sp.railId, Math.max(0, sp.from - 8)));
+  // v1.11 (5-1): the hush sign (a crescent and ZZZ) and the dancing-tanuki sign, before their stretches.
+  for (const z of hushZones(file.gimmicks)) if (z.sign) out.push(sign('sign-hush', z.railId, Math.max(0, z.from - 8)));
+  for (const z of reversedZones(file.gimmicks)) if (z.sign) out.push(sign('sign-whistle-reversed', z.railId, Math.max(0, z.from - 10)));
+  // v1.11 (5-1): the grass tufts the resting fireflies of a firefly fork sit in, both sides, 10–30 m before it.
+  for (const f of fireflyForks(file.junctions)) {
+    for (const [k, before] of FIREFLY_FORK.grass.entries()) {
+      for (const side of [-1, 1]) {
+        out.push({ model: 'firefly-grass', onRail: { railId: f.railId, at: Math.max(0, f.at - before), lateral: side * (3.2 + k) }, rotationY: k * 70 + side * 30 });
+      }
+    }
+  }
   return out;
 }
 

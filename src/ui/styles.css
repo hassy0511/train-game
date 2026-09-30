@@ -568,6 +568,20 @@ body {
   max-width: 96vw;
 }
 
+/* Five or six chapters: one row on a tablet, three a row (3 + 2 for five) on a phone 700 px wide or less. */
+.title-chapters.is-many {
+  display: grid;
+  /* --chapters (set by title.ts): no empty track, so the row stays centred. */
+  grid-template-columns: repeat(var(--chapters, 6), auto);
+  justify-content: center;
+}
+
+@media (max-width: 700px) {
+  .title-chapters.is-many {
+    grid-template-columns: repeat(3, auto);
+  }
+}
+
 /* A phone on its side: everything smaller so the train still shows between the title and the buttons. */
 @media (max-height: 520px) {
   .title-pico {
@@ -3461,5 +3475,47 @@ body {
   .chase-vignette i,
   .timer[data-mode='chase'][data-state='near'] .timer-art {
     animation: none;
+  }
+}
+
+/* ---- v1.11 (5-1): the hush mark and the hush glow ---- */
+/* The hush mark (a crescent moon and ZZZ, no face) in the top right corner of the light and whistle buttons: "ここは
+   しずかに". A hint only: the button works as always (PHASE9_0 §6). The same corner in the left-handed layout. */
+.hush-mark {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #27305e;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.hush-mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+.round-button[data-mark='hush'] .hush-mark {
+  display: flex;
+}
+
+/* The light is on where everyone sleeps: a soft moon-blue glow ("press = off"), not the yellow "the light helps". */
+#light[data-glow='1'][data-glow-for='dim'] .face {
+  background: #dfe4ff;
+  animation: hush-glow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes hush-glow {
+  from {
+    box-shadow: 0 0 0 0 rgba(143, 164, 232, 0.9), 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+  to {
+    box-shadow: 0 0 0 14px rgba(143, 164, 232, 0), 0 4px 10px rgba(0, 0, 0, 0.3);
   }
 }

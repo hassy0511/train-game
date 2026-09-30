@@ -346,17 +346,27 @@ export class AudioEngine {
     this.bell(scale[n % scale.length] * 2 ** octave, delay, 0.16, 0.25);
   }
 
-  /** A two-tone steam-whistle-like chord with a breath of air, a soft attack and a short tail in the room. */
-  playWhistle(): void {
+  /**
+   * A two-tone steam-whistle-like chord with a breath of air, a soft attack and a short tail in the room. v1.11 (5-1)
+   * `reversed` (a whistle-reversed stretch): the same chord with its loudness turned round, "…っぴー": it swells in over
+   * 0.9 s and stops short (the same pitch; never a scary sound).
+   */
+  playWhistle(options: { reversed?: boolean } = {}): void {
     const ctx = this.ctx;
     const dest = this.out(0.25);
     if (!ctx || !dest) return;
     const now = ctx.currentTime;
     const master = ctx.createGain();
-    master.gain.setValueAtTime(0.0001, now);
-    master.gain.exponentialRampToValueAtTime(0.3, now + 0.06);
-    master.gain.setValueAtTime(0.3, now + 0.55);
-    master.gain.exponentialRampToValueAtTime(0.0001, now + 0.95);
+    if (options.reversed) {
+      master.gain.setValueAtTime(0.0001, now);
+      master.gain.exponentialRampToValueAtTime(0.3, now + 0.88);
+      master.gain.exponentialRampToValueAtTime(0.0001, now + 0.95);
+    } else {
+      master.gain.setValueAtTime(0.0001, now);
+      master.gain.exponentialRampToValueAtTime(0.3, now + 0.06);
+      master.gain.setValueAtTime(0.3, now + 0.55);
+      master.gain.exponentialRampToValueAtTime(0.0001, now + 0.95);
+    }
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(1800, now);
@@ -380,9 +390,144 @@ export class AudioEngine {
       osc.stop(now + 1.0);
       vibrato.stop(now + 1.0);
     }
-    // The steam: breathy noise around the chord, a little ahead of it.
-    this.hiss({ color: 'pink', seconds: 0.95, gain: 0.05, attack: 0.04, freq: 1300, q: 1.5, dest });
-    this.hiss({ seconds: 0.25, gain: 0.03, attack: 0.01, filter: 'highpass', freq: 3000, dest });
+    // The steam: breathy noise around the chord, a little ahead of it (reversed: swelling in with it).
+    if (options.reversed) {
+      this.hiss({ color: 'pink', seconds: 0.95, gain: 0.05, attack: 0.85, freq: 1300, q: 1.5, dest });
+    } else {
+      this.hiss({ color: 'pink', seconds: 0.95, gain: 0.05, attack: 0.04, freq: 1300, q: 1.5, dest });
+      this.hiss({ seconds: 0.25, gain: 0.03, attack: 0.01, filter: 'highpass', freq: 3000, dest });
+    }
+  }
+
+  // ---- v1.11 (5-1 よるの もり, PHASE9_CHAPTER5_6 第 4 部 §10): all small and soft; no owl, growl or creak ----
+
+  /** A startled rabbit ducks into its nest: three tiny rising wood taps, "ぴょこっ". */
+  playHushStartle(): void {
+    const o = this.out(0.15, 1.4);
+    for (let i = 0; i < 3; i++) this.ping(900, i * 0.08, 0.05, 'triangle', 0.12, 1200, 0.002, o);
+  }
+
+  /** The fawn blinks: two tiny clicks, "ぱちぱち". */
+  playFawnBlink(): void {
+    const o = this.out(0.1, 1.4);
+    this.ping(2400, 0, 0.05, 'sine', 0.1, 2400, 0.001, o);
+    this.ping(2400, 0.12, 0.05, 'sine', 0.1, 2400, 0.001, o);
+  }
+
+  /** The fawn hops off: "ぴょん ぴょん" on two woodblocks. */
+  playFawnHop(): void {
+    const o = this.out(0.1, 1.2);
+    this.knock(600, 0, 0.12, o);
+    this.knock(800, 0.18, 0.12, o);
+  }
+
+  /** The little tanukis come: woodblocks back and forth six times, "ぴょこぴょこ". */
+  playLureCome(): void {
+    const o = this.out(0.1, 1.2);
+    for (let i = 0; i < 6; i++) this.knock(i % 2 ? 900 : 700, i * 0.12, 0.1, o);
+  }
+
+  /** The little tanukis dance: a bell running up and down a five-note scale, "くるくる". */
+  playLureDance(): void {
+    const scale = [784, 880, 988, 1175, 1319, 1175, 988, 880];
+    scale.forEach((f, i) => this.bell(f, i * 0.09, 0.05, 0.3));
+  }
+
+  /**
+   * The fireflies fly up: three soft rising "ぽわん" (the map's firefly, a little apart) and a bell on top, "しゃらん".
+   */
+  playFireflyWake(): void {
+    const wet = this.out(0.35, 1.1);
+    for (let i = 0; i < 3; i++) this.ping(520, i * 0.15, 0.35, 'sine', 0.12, 780, 0.05, wet);
+    this.bell(2640, 0.3, 0.05, 0.8);
+  }
+
+  /** Sakasa's fake lanterns go out: a little puff and a soft falling note, "ぽしゅん". */
+  playFakeOut(): void {
+    const o = this.out(0.2, 1.8);
+    this.hiss({ seconds: 0.15, gain: 0.06, filter: 'lowpass', freq: 1200, q: 0.7, dest: o });
+    this.ping(400, 0.02, 0.2, 'sine', 0.1, 250, 0.01, o);
+  }
+
+  /** The hedgehog curls up and rolls aside: five small wood taps, "ころころ". */
+  playHedgehogRoll(): void {
+    const o = this.out(0.1, 1.1);
+    for (let i = 0; i < 5; i++) this.knock(500, i * 0.07, 0.09, o);
+  }
+
+  // ---- v1.11 (5-2) おもちゃの まち (PHASE9_CHAPTER5_6 第 5 部 §10) ----------------------------------------------------
+
+  /** A key wound back the right way: small clicks coming faster, then a rising "くるりん", "きりきり… くるりん！". */
+  playWindUp(): void {
+    const o = this.out(0.15, 1.4);
+    let t = 0;
+    for (let i = 0; i < 12; i++) {
+      this.ping(2400, t, 0.02, 'triangle', 0.05, 2400, 0.001, o);
+      t += 0.05 - (0.03 * i) / 11;
+    }
+    this.ping(660, t + 0.02, 0.15, 'sine', 0.1, 990, 0.01, o);
+  }
+
+  /** The toy band's "ぱっぱかぱーん": four notes of the game's own (G G C E) on a soft trumpet, and a soft cymbal. */
+  playBandFanfare(delay = 0): void {
+    const o = this.out(0.3, 1.3);
+    const notes: [number, number, number][] = [
+      [392, 0, 0.12],
+      [392, 0.14, 0.08],
+      [523, 0.24, 0.12],
+      [659, 0.38, 0.4],
+    ];
+    for (const [f, at, len] of notes) {
+      this.ping(f, delay + at, len, 'triangle', 0.11, f, 0.01, o);
+      this.ping(f * 2, delay + at, len * 0.6, 'sine', 0.03, f * 2, 0.01, o);
+    }
+    this.hiss({ delay: delay + 0.38, seconds: 0.2, gain: 0.03, filter: 'highpass', freq: 6000, dest: o });
+  }
+
+  /** The band's footstep "とん" on the beat (`accent`: every fourth, with a tiny cymbal "ちっ"). */
+  playBandStep(accent = false): void {
+    const o = this.out(0.05, 1);
+    this.ping(110, 0, 0.1, 'sine', 0.2, 90, 0.004, o);
+    this.hiss({ seconds: 0.04, gain: 0.06, filter: 'bandpass', freq: 900, q: 1, dest: o });
+    if (accent) this.hiss({ delay: 0.01, seconds: 0.06, gain: 0.04, filter: 'highpass', freq: 7000, dest: o });
+  }
+
+  /** A spinning fork turning over: four wooden clicks and a little rise, "かたかた… くるっ". */
+  playSpinTurn(): void {
+    const o = this.out(0.1, 1.1);
+    for (let i = 0; i < 4; i++) this.knock(900, i * 0.06, 0.06, o);
+    this.ping(500, 0.24, 0.1, 'sine', 0.06, 700, 0.01, o);
+  }
+
+  /** A spinning fork points the good way: two high notes, "ぴこん" (higher than the magnet's "ぴろん"). */
+  playSpinGood(): void {
+    const o = this.out(0.2, 1.2);
+    this.ping(1568, 0, 0.06, 'sine', 0.07, 1568, 0.004, o);
+    this.ping(2093, 0.07, 0.08, 'sine', 0.07, 2093, 0.004, o);
+  }
+
+  /** The whistle stopped a spinning fork: a wooden "ぴたっ" with a little bell. */
+  playSpinStop(): void {
+    const o = this.out(0.2, 1.3);
+    this.knock(1200, 0, 0.1, o);
+    this.ping(880, 0, 0.05, 'sine', 0.08, 880, 0.004, o);
+    this.bell(1319, 0.04, 0.08, 0.5);
+  }
+
+  /** Into the ball pit: a soft wobbling drop and a puff, "ぼよよん… ぽふっ". */
+  playBallPit(): void {
+    const o = this.out(0.1, 1.6);
+    this.ping(300, 0, 0.4, 'sine', 0.12, 180, 0.01, o);
+    this.ping(318, 0.04, 0.34, 'sine', 0.06, 190, 0.01, o);
+    this.ping(282, 0.08, 0.3, 'sine', 0.05, 170, 0.01, o);
+    this.hiss({ color: 'pink', delay: 0.35, seconds: 0.2, gain: 0.08, filter: 'lowpass', freq: 1000, q: 0.7, dest: o });
+  }
+
+  /** Sakasa's toy block train: two tiny puffs, "しゅっ しゅっ". */
+  playToyPuff(): void {
+    const o = this.out(0.05, 1.2);
+    this.hiss({ seconds: 0.1, gain: 0.12, filter: 'bandpass', freq: 2400, q: 1, dest: o });
+    this.hiss({ delay: 0.22, seconds: 0.1, gain: 0.12, filter: 'bandpass', freq: 2400, q: 1, dest: o });
   }
 
   /** Stop grade: a bell for ok; for perfect, two rising bells and a little sparkle. */

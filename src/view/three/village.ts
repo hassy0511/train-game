@@ -1,5 +1,6 @@
-import { Color, DirectionalLight, Fog, HemisphereLight, Mesh, Scene, ShaderMaterial } from 'three';
+import { Color, Scene, ShaderMaterial } from 'three';
 import type { StageEvent } from '../../core/stage-events';
+import type { EnvironmentState } from './environment-state';
 import { setLanternGlow, setTraceGlow } from './village-placeholders';
 
 /**
@@ -18,7 +19,7 @@ const EVENING = {
 interface SkyTween {
   t: number;
   seconds: number;
-  from: { top: Color; bottom: Color; fog: Color | null; background: Color | null; hemi: Color[]; sun: Color[] };
+  from: { top: Color; bottom: Color; fog: Color | null; background: Color | null; hemi: Color | null; sun: Color | null };
 }
 
 export class VillageGimmicks {
@@ -30,7 +31,8 @@ export class VillageGimmicks {
 
   constructor(
     private readonly scene: Scene,
-    private readonly sky: Mesh | null,
+    /** The look (PHASE9 B6.1): its sky, fog and lights are read when the evening comes (they may have changed). */
+    private readonly look: EnvironmentState,
   ) {
     setLanternGlow(0);
     setTraceGlow(0);
@@ -39,26 +41,27 @@ export class VillageGimmicks {
   onEvent(e: StageEvent): void {
     if (e.type === 'trace') this.traceTarget = e.on ? 1 : 0;
     if (e.type !== 'sky') return;
-    const uniforms = (this.sky?.material as ShaderMaterial | undefined)?.uniforms;
-    const lights = { hemi: [] as HemisphereLight[], sun: [] as DirectionalLight[] };
-    this.scene.traverse((o) => {
-      if ((o as HemisphereLight).isHemisphereLight) lights.hemi.push(o as HemisphereLight);
-      else if ((o as DirectionalLight).isDirectionalLight) lights.sun.push(o as DirectionalLight);
-    });
+    const uniforms = (this.look.sky?.material as ShaderMaterial | undefined)?.uniforms;
+    const lights = this.look.lights;
     this.tween = {
       t: 0,
       seconds: Math.max(0.001, e.seconds),
       from: {
         top: (uniforms?.topColor.value as Color | undefined)?.clone() ?? new Color(),
         bottom: (uniforms?.bottomColor.value as Color | undefined)?.clone() ?? new Color(),
-        fog: (this.scene.fog as Fog | null)?.color.clone() ?? null,
+        fog: this.look.fogObject?.color.clone() ?? null,
         background: this.scene.background instanceof Color ? this.scene.background.clone() : null,
-        hemi: lights.hemi.map((l) => l.color.clone()),
-        sun: lights.sun.map((l) => l.color.clone()),
+        hemi: lights?.hemisphere.color.clone() ?? null,
+        sun: lights?.sun.color.clone() ?? null,
       },
     };
     this.lanternTarget = 1;
     if (e.seconds <= 0) this.lanterns = 1;
+  }
+
+  /** v1.11: a new look was applied (day ⇄ night): an evening still turning stops where the new look put things. */
+  onLook(): void {
+    this.tween = null;
   }
 
   update(dt: number): void {
@@ -66,21 +69,20 @@ export class VillageGimmicks {
     if (tw && tw.t < 1) {
       tw.t = Math.min(1, tw.t + dt / tw.seconds);
       const k = tw.t * tw.t * (3 - 2 * tw.t);
-      const uniforms = (this.sky?.material as ShaderMaterial | undefined)?.uniforms;
+      const uniforms = (this.look.sky?.material as ShaderMaterial | undefined)?.uniforms;
       if (uniforms) {
         (uniforms.topColor.value as Color).copy(tw.from.top).lerp(EVENING.top, k);
         (uniforms.bottomColor.value as Color).copy(tw.from.bottom).lerp(EVENING.bottom, k);
         if (uniforms.mistColor) (uniforms.mistColor.value as Color).copy(EVENING.fog).convertLinearToSRGB();
       }
-      const fog = this.scene.fog as Fog | null;
+      const fog = this.look.fogObject;
       if (fog && tw.from.fog) fog.color.copy(tw.from.fog).lerp(EVENING.fog, k);
       if (this.scene.background instanceof Color && tw.from.background) this.scene.background.copy(tw.from.background).lerp(EVENING.bottom, k);
-      let h = 0;
-      let s = 0;
-      this.scene.traverse((o) => {
-        if ((o as HemisphereLight).isHemisphereLight) (o as HemisphereLight).color.copy(tw.from.hemi[h++] ?? EVENING.hemisphere).lerp(EVENING.hemisphere, k);
-        else if ((o as DirectionalLight).isDirectionalLight) (o as DirectionalLight).color.copy(tw.from.sun[s++] ?? EVENING.sun).lerp(EVENING.sun, k);
-      });
+      const lights = this.look.lights;
+      if (lights) {
+        lights.hemisphere.color.copy(tw.from.hemi ?? EVENING.hemisphere).lerp(EVENING.hemisphere, k);
+        lights.sun.color.copy(tw.from.sun ?? EVENING.sun).lerp(EVENING.sun, k);
+      }
     }
     if (this.lanterns !== this.lanternTarget) {
       this.lanterns = Math.min(this.lanternTarget, this.lanterns + dt / 2.5);

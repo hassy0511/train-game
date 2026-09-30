@@ -6,7 +6,8 @@
 // title has "[full]").
 //
 // With SHARD=i/n (CI's four parallel jobs, PHASE9 §0.11) it prints only the specs of shard i (1-based) of n: every spec
-// picked above, spread so each shard gets about the same running time (a stage's full run weighs ~10 quick specs). A
+// picked above, spread so each shard gets about the same running time (a stage's full run weighs ~10 quick specs, a
+// quick spec with several drives more than one: SLOW_QUICK). A
 // shard left with nothing prints "none" (the job then skips the run; an empty list would make Playwright run all).
 //
 // Usage: node scripts/select-smoke.mjs [base-ref]   (default origin/main)
@@ -18,6 +19,8 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SPECS = 'tests/smoke';
 const FULL_RUN = /^stage-(\d+-\d+)-full\.spec\.ts$/;
+/** Quick specs that run several drives (weights for the shards; a stage's full run weighs 10). */
+const SLOW_QUICK = { 'night.spec.ts': 4, 'toy.spec.ts': 3 };
 
 const allSpecs = () =>
   readdirSync(resolve(root, SPECS))
@@ -33,7 +36,8 @@ function print(specs) {
     process.exit(0);
   }
   const [index, count] = [Number(shard[1]), Number(shard[2])];
-  const weight = (spec) => (FULL_RUN.test(spec.slice(SPECS.length + 1)) ? 10 : 1);
+  const name = (spec) => spec.slice(SPECS.length + 1);
+  const weight = (spec) => (FULL_RUN.test(name(spec)) ? 10 : (SLOW_QUICK[name(spec)] ?? 1));
   // Longest first, each to the lightest shard so far (ties: the lower shard), so the four jobs end about together.
   const loads = Array.from({ length: count }, () => ({ total: 0, specs: [] }));
   for (const spec of [...(specs ?? allSpecs())].sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) {

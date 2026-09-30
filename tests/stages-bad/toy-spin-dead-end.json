@@ -1,0 +1,1 @@
+{ "_expect": "a spinning fork's other side must be a loop back onto its rail before the fork", "_base": "0-2", "_edit": [{ "path": "rails.1.end", "value": { "type": "buffer" } }] }

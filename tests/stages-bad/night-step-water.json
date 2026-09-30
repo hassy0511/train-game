@@ -1,0 +1,1 @@
+{ "_expect": "belongs to the stage's own environment", "_base": "0-1", "_edit": [{ "path": "cutscenes.ending.1.environment.water", "value": [] }] }

@@ -1,6 +1,6 @@
 # ステージJSON スキーマ v1
 
-最終更新: 2026-09-27（v1.10）
+最終更新: 2026-09-30（v1.11 の 5-1 夜の 分）
 状態: v1 確定（2026-09-13）。型の実体は `src/stage/types.ts`、検証は `src/stage/validate.ts`
 
 1ステージ = 1ファイル。`src/stages/<chapter>-<n>.json`。
@@ -1105,3 +1105,178 @@ type LineKey = /* v1.10 (4-3) */
 
 ### テスト用の しるし
 `#app` の `data-chase`（`run`／`near`／`caught`／`safe`／空）、`data-chase-gap`（m、整数）、`data-chase-catches`、`data-tunnel`（先頭が トンネルの 中 1）、`#timer[data-mode="chase"]`
+
+## 18. v1.11 の追加（5-1「よるのもり」の しくみ: 夜・しーっ・さかさ きてき・ほたる、2026-09-30 PR2c）
+`schemaVersion` は 1 の まま、ぜんぶ 省略可。設計は `docs/PHASE9_CHAPTER5_6.md` 第 4 部 §4（§0 の 決まりと `docs/PHASE9_0_FREE_ABILITIES.md` が 先に きく）。実例は ためしの ステージ `src/stages/0-1.json`（てすとの よる、`hidden: true`・`chapter: 0`。`scripts/layout-0-1.mjs` が 作る。JSON を 手で 直さない）。5-1 そのものは PR3。全ステージ共通の 数は `src/train/params.ts` の `NIGHT`・`HUSH`・`GLARE`・`LURE`・`FIREFLY_FORK`・`AMBIENT_FIREFLIES`。
+
+### 夜（`environment.lighting: "night"`・`moon`・`fireflies`）
+```json
+"environment": { "sky": { "top": "#141c46", "bottom": "#3d3f7e" }, "fog": { "color": "#2a3566", "near": 60, "far": 260 },
+                 "lighting": "night", "ground": { "y": 0, "size": 4000, "color": "#2f4a3a" },
+                 "stars": { "count": 400 }, "moon": { "azimuth": 20, "elevation": 32, "size": 1 },
+                 "fireflies": { "count": 160, "radius": 60 }, "ambience": "night" }
+```
+- 光: 半球光（空 `#b8c6ff`・地面 `#34406a`・0.85）＋ 月の 平行光（`#dfe7ff`・0.62、`moon` の 向きから）。昼の 70%（くらく しすぎない）
+- `moon`: 空に うすい 黄色の 円板と ぼんやりした 光の 輪（顔なし、描く 回数 1、霧なし、空の ドームに のる ので 水の 中では 見えない）。`azimuth`（0〜360°、+Z から +X へ）・`elevation`（5〜80°）・`size`（0.5〜3 倍）
+- `fireflies`: カメラの まわり `radius`（60）m に `count`（0〜400）この 黄みどりの 点が ふわふわ・ぽわっと 光る（`Points` 1 つ、描く 回数 1）
+- 夜は 客車の まどが あたたかく 光る。ライトの 光の すじは こく しない かわりに、先へ いくほど うすれて きえ、カメラの 目より 高い ところは 描かない（運転席から 見ると ランプの 近くが 空に 三角に 見えるので。暗い 空に 明るい 三角が 出ない。昼の すじは 前の まま）。見た目の 環境は `EnvironmentState`（TECH_SPEC）
+
+### 昼 ⇄ 夜（寸劇の `environment`）
+```json
+{ "environment": { "lighting": "night", "sky": { … }, "fog": { … }, "moon": { … }, "fireflies": { … }, "ambience": "night" }, "seconds": 1.2 }
+{ "environment": {}, "seconds": 1.2 }
+```
+- ステージの `environment` に、書いた 欄 だけ 上書きした 見た目に かわる（6-2 の 区画の `environment` と 同じ 考え）。`{}` で ステージの もとの 見た目に もどる。その あとは ステージの おわりまで その まま（しっぱいの 巻き戻しでも かわらない）
+- `seconds`（既定 1.2）: うすい 夜空色の フェード（`#look-fade`）の うしろで かわる。0 なら すぐ。▶▶・つづき では すぐ かわる
+- かえる 欄: `sky`・`fog`・`lighting`・`ground`・`stars`・`moon`・`fireflies`・`ambience`（曲 `bgm`・しっぱいの 色 `fall`・走る 音 `surface` は かわらない）。`water`・`snow`・`festival`・`cloudSea` は ステージの もの なので 書かない（検査）
+- 0-1 は 入りで 昼 → 夜、出で 夜 → 昼
+
+### しーっ の ばしょ（`gimmicks[]` の `hush`）
+```json
+{ "type": "hush", "railId": "main", "from": 470, "to": 650,
+  "params": { "id": "harappa-1", "glowBefore": 70, "startleAfter": 0.8, "rewind": { "railId": "main", "at": 400 }, "sign": true,
+              "line": "つきの はらっぱ… みんな ねてる" } }
+```
+- 先頭が `from − glowBefore`〜`to` に いる あいだ、ライトと きてきの 丸の 右上に「しーっ」の しるし（三日月と ZZZ、`data-mark="hush"`）。**しるしは ヒント だけ**（押せば いつもどおり 働く。きてきも 鳴る。PHASE9_0 §6）
+- ライトが ついて いれば ライトの 丸が うすい 夜空色に 光る（`data-glow="1"`・`data-glow-for="dim"` ＝ 押すと けす）
+- `line`（なければ `hushNear`）を `from − glowBefore` で、ライトが ついて いれば つづけて `hushLightOff`
+- **びっくり**: 区間の 中で ライトが ついて いた 時間の 合計が `startleAfter` 秒を こえるか、きてきを 鳴らすと、ねて いる もの（`props[].sleeper`・`records[].hush`）が 巣に もぐる（0.4 秒）。`hushStartle`。**しっぱいでは ない**。巻き戻しで また ねて いる
+- かくれさせずに `to` を こえたら `hushQuiet`（ステージで 1 回）
+- `sign`（既定 true）: `sign-hush`（こん色の 板に 三日月と ZZZ）を `from − 8`・左に 自動で 立てる。`rewind`（既定 `from − 70`）: こじかの しっぱいの 戻り先
+- ロケットの おやすみは いまの `rocket`（`allow: false`・`icon: "sleep"`）を 同じ 所に 書く
+
+### こじか（`actors[]` の `dino-small` に `look: "fawn"`・`glare: true`）
+```json
+{ "id": "kojika-1", "type": "dino-small", "reactsTo": "light", "onRail": { "railId": "main", "at": 610 }, "rotationY": -90,
+  "params": { "look": "fawn", "glare": true, "startDistance": 100, "crossSeconds": 3, "dangerDistance": 12, "lateral": 7 } }
+```
+- ふだんは 子恐竜と 同じに わたる。わたる 前か とちゅうで ライトが ついて いると、線路の まんなかで 止まって ライトに **みとれる**（`glareFreeze`→`glareFreezeAfter`）。けすと 0.2 秒 ぱちぱち → 0.6 秒で ぴょんと どく（`glareFree`）
+- みとれて いる あいだに 先頭が `dangerDistance` まで 来ると 電車が 止まり、こじかは ぴょーんと かけて いく。**失敗の 理由 `glare`（やわらかい）**。`glareBump`→`glareBumpAfter` → その `hush` の `rewind`
+- **たすけ**: 同じ `hush` で `glare` が 2 回 つづくと（`HUSH.mercyAfter`）、3 回めは ライトが ついて いても わたる（`glareMercy`）。`to` を こえると 数えなおし
+- `rotationY: -90` で 顔を わたる 向きに（仮の 形は +Z が 前）
+
+### さかさ きてき（`gimmicks[]` の `whistle-reversed`）と こだぬき（`actors[]` の `lure`）
+```json
+{ "type": "whistle-reversed", "railId": "main", "from": 1480, "to": 1680,
+  "params": { "id": "sakasa-kiteki", "sign": true, "line": "たぬきの ふだ… さかさ きてき？", "rewind": { "railId": "main", "at": 1420 } } }
+{ "id": "tanuki-a", "type": "lure", "reactsTo": "whistle", "onRail": { "railId": "main", "at": 1560, "lateral": -6 },
+  "params": { "look": "tanuki", "count": 3 } }
+```
+- 区間の 中は きてきの 丸に しーっ の しるし、**きてきは 光らない**。`line`（なければ `reversedNear`）を `from − 60` で、`reversedIn` を `from` で
+- **鳴らすと**: きてきは 鳴る（さかさの 音「…っぴー」）。区間の 中で 前に いる むれの うち、とまれる きょり（v² ÷ 6 ＋ 2v ＋ 8 m）より 遠い むれが 自分の `at` の 線路へ よってきて（0.8 秒）5 秒 おどる（`lureCome`、レバーの「とまる」が 光る）。近い むれは やぶで はねる だけ。おどって いる あいだに また 鳴らすと 1 秒 のびる（8 秒まで）。むれは 1 回の ためしに 1 回だけ 線路へ
+- とまって まてば しっぱい なし（おどり おわって かえる とき 止まって いれば `lureBye`）。おどって いる むれに 8 m まで 近づくと 止まって **失敗の 理由 `lure`（やわらかい）**、`lureBump`→`lureBumpAfter` → `rewind`（既定 `from − 60`）
+- **たすけ**: 同じ 区間で `lure` が 2 回 つづくと、3 回めは やぶで おどる だけ（`lureMercy`）
+- 鳴らさずに `to` を こえたら `reversedQuiet`（ミッションで 1 回）
+- `sign`（既定 true）: `sign-whistle-reversed`（おどる たぬきの かげと 三日月・ZZZ）を `from − 10`・左に 自動で。`lure` の params: `count`（1〜4）・`dance`・`danceMax`・`dangerDistance`・`reaction`・`margin`
+
+### ほたるの 分かれ道（`junctions[].fireflies`）
+```json
+{ "id": "hotaru-1", "railId": "main", "at": 2180, "left": "main", "right": "kurai1", "default": "right",
+  "fireflies": { "callFrom": 100, "callTo": 15 } }
+{ "id": "hotaru-3", "railId": "main", "at": 2500, "left": "main", "right": "kurai3", "default": "right",
+  "signReversed": true, "fireflies": { "fake": true } }
+```
+- **ほんとうの 道 ＝ `default` で ない 側**。分かれ道の 10〜30 m 手前の 左右の 草むら（`firefly-grass`、ローダーが 置く）に とまって いる ほたるが 光る。ふつうの ほたるの 分かれ道には 標識を 立てない
+- 先頭から 分かれ道までが `callTo`〜`callFrom`（15〜100 m）の あいだ、きてきが 光る（`fireflyNear`）。鳴らすと `count`（24）この ほたるが とびたち、ほんとうの 側の 80 m に ならぶ。その 側の 矢印が 光り、進路も その 側に（`fireflyCall`、矢印を 押せば かえられる）。1 回の ためしに 1 回
+- 鳴らさずに `default` へ 行くと いまの いきどまり（`deadEnd`、やわらかい）→ 80 m 手前。もう 一度 近づくと `fireflyAgain`
+- `fake: true`（にせの ひかり、`signReversed` が 要る）: うその 側に `props[].reveal` の `fake-lantern`（ピンクの ちょうちん）。**見やぶるまで きてきは 光らない**（ライトが きえて いれば 80 m 手前から ライトの 丸が 光る）。鳴らすと ほたるは まよう（`fireflyConfused`／ライトが ついて いれば `fireflyConfusedLit`）。ライトで 40 m に 入ると ちょうちんが「ぽしゅん」と きえ、ほたるは ほんとうの 側へ（`fakeRevealed`）
+
+### 小さな 足し
+- `cat` に `params.look: "hedgehog"`（線路の はりねずみ。汽笛で まるまって ころころ。ぶつかりそうは やわらかい）、`params.glow: true`（`wakeDistance`〜`dangerDistance` の あいだ、まだ どいて いなければ きてきが 光る）
+- `records[].hush: true`: その `hush` が びっくりした ためしの あいだは 見つからない（モデルも かくれる）。`props[].sleeper: true`: `hush` の 中の ねて いる 小物（かくれる）
+- `missions[].hints[].unless: "<能力>"`: その 能力を もって いれば 言わない（あとの 能力の 記録の なぞかけ）
+- 失敗の 理由（`fail.reason`）に `glare`・`lure`（どちらも やわらかい）
+```ts
+type LineKey = /* v1.11 (5-1) */
+  | 'hushNear' | 'hushLightOff' | 'hushStartle' | 'hushQuiet'
+  | 'glareFreeze' | 'glareFreezeAfter' | 'glareFree' | 'glareMercy' | 'glareBump' | 'glareBumpAfter'
+  | 'lureMercy' | 'reversedNear' | 'reversedIn' | 'lureCome' | 'lureBye' | 'lureBump' | 'lureBumpAfter' | 'reversedQuiet'
+  | 'fireflyNear' | 'fireflyCall' | 'fireflyAgain' | 'fireflyFakeNear' | 'fireflyConfused' | 'fireflyConfusedLit' | 'fakeRevealed';
+```
+
+### 読み込み時の 検査（`validate.ts` の 形の 検査 ＋ `validateNightLayout`）
+- 形: `moon`（`azimuth` 0〜360・`elevation` 5〜80・`size` 0.5〜3）、`fireflies`（`count` 0〜400 の 整数・`radius` > 0）。`hush`・`whistle-reversed` は 線路・`from < to`・`params.id`（ステージで ひとつ）、`glowBefore` 0〜80・`startleAfter` > 0。`lure` は onRail・`reactsTo: "whistle"`・`count` 1〜4。`fireflies` は 左右 両方・`callFrom > callTo ≥ 6`・`count` 1〜64・`needs`／`dive`／`bubbles` と いっしょに しない・`fake` なら `signReversed`（`fake` で なければ なし）・うその 側は いきどまりか 手前に もどる わ。`glare` は `look: "fawn"` だけ。`hints[].unless` は 能力。寸劇の `environment` は 形の 検査（`water` など ステージの 欄は 書かない）
+- `hush`（`from − glowBefore − 20`〜`to`）: 霧・トンネル・`signReversed`／`bubbles`／`fireflies` の 分かれ道（その 80 m 先まで）・かがみ・花の はし・ジャンプだい・`whistle-reversed`・ライトの 記録・`trace`／`reveal` の 小物・駅の 停止ゾーン・切れ目・水・雪の かべ が ない。`rewind` は `from` より 手前で 霧・トンネルの 外
+- こじか（`glare`）: どれかの `hush` の 中（`at + 10 ≤ to`）、`at − startDistance ≥ from`、`startDistance − 22 × crossSeconds ≥ dangerDistance + 20`（ライトを けして いれば びゅーんでも 先に わたり おわる）
+- `records[].hush` は どれかの `hush` の 中
+- `whistle-reversed`（`from − 20`〜`to + 10`）: ねこ・`dino-mid`・リス・くじら・汽笛の バッタ・ジャンプだい・ほたるの よべる 所・駅・水・`hush` が ない。`rewind` は `from` より 手前。`lure` は どれかの 区間の 中で `at ≥ from + 40`
+- ほたるの よべる 所（`at − callFrom`〜`at − callTo`）どうしが かさならない
+- わざと まちがえた 形は `tests/stages-bad/night-*.json`（`scripts/check-stages.mjs` が はじかれる ことを たしかめる）
+
+### テスト用の しるし
+`#app` の `data-lighting`（`day`／`evening`／`night`）・`data-look-changes`（寸劇で 見た目が かわった 回数）・`data-hush`（空／`near`／`in`／`startled`）・`data-hush-startles`・`data-fawns`（`kojika:wait`、`wait`／`cross`／`freeze`／`gone`）・`data-glare-freezes`・`data-reversed`（1）・`data-lure`（空／`come`／`dance`）・`data-lure-calls`・`data-lure-dances`・`data-fireflies`（`hotaru:home`、`sleep`／`home`／`lost`）・`data-firefly-calls`・`data-fake-out`（この ためしで 見やぶった にせの 分かれ道）・`data-fail-reason`・`data-fails`（数は ふえる だけ）。`#light[data-mark="hush"]`・`#light[data-glow-for]`（`light`／`dim`）・`#whistle[data-mark="hush"]`。できごと: `hush:near`・`hush:startle`・`hush:quiet`・`glare:freeze`・`glare:free`・`lure`・`lure:come`・`lure:bye`・`fireflies:call`・`fireflies:home`・`fireflies:lost`・`fireflies:away`・`fake:out`・`environment`
+
+## 19. v1.11 の追加（5-2「おもちゃのまち」: ぜんまい・がくたい・くるくる ポイント、2026-09-30 PR4）
+`schemaVersion` は 1 の まま、ぜんぶ 省略可。設計は `docs/PHASE9_CHAPTER5_6.md` 第 5 部 §4（§0 の 決まりと `docs/PHASE9_0_FREE_ABILITIES.md` が 先に きく: きてきが 光るのは ヒント。光って いない ときに 鳴らしても 何も かわらない）。実例は `src/stages/5-2.json`（`scripts/layout-5-2.mjs`）と ためしの ステージ `src/stages/0-2.json`（てすとの おもちゃ、`hidden: true`・`chapter: 0`、`scripts/layout-0-2.mjs`）。JSON を 手で 直さない。全ステージ共通の 数は `src/train/params.ts` の `WINDUP`・`PARADE`・`SPIN`。
+
+### ぎゃくまきの おもちゃ（`actors[]` の `cat` に `look: "windup-chick"`／`"windup-car"`・`walk`・`glow`）
+```json
+{ "id": "hiyoko", "type": "cat", "reactsTo": "whistle", "onRail": { "railId": "main", "at": 220, "heightFromRail": 0 },
+  "params": { "look": "windup-chick", "wakeDistance": 70, "dangerDistance": 8, "fleeLateral": 5, "fleeSeconds": 1.5,
+              "walk": { "speed": 0.8, "max": 10 }, "glow": true,
+              "say": "ひよこさんが うしろあるき！ きてき！", "woke": "くるりん！ まえむきに なった！",
+              "danger": "わわっ、ひよこさん！", "after": "ひかったら きてきで まきなおそう" } }
+```
+- 判定は いまの `cat`（きてきで どく、近づきすぎると 止まる）の まま。形は `-back`（うしろに かたむき、ねじに ピンクの ぐるぐる）→ まきなおすと `-back` なしへ。ねじが `WINDUP.keySeconds`（0.8 秒）まわってから よこへ ぴょん
+- `walk`: 先頭が `from`（既定 `WINDUP.walkFrom` 150）m まで 来たら `speed` m/s で でんしゃの 方へ `max` m まで うしろあるき（おきる・あぶない の 距離は いまの 位置で）。`windup-car` は `walk` なし
+- `glow: true`: まだ まいて いない あいだ、先頭が `dangerDistance`〜`wakeDistance` m で きてきが 光る（いまの ねこ・うみどりは 光らない）
+- 近づきすぎは **やわらかい**（しずみ 0.3・ゆれ 0。おもちゃは その場で かたかた）。戻り先は 置いた 所の 80 m 手前
+- 1 回の きてきで `wakeDistance` の 中の おもちゃ ぜんぶが まきなおる（3 ば の ときは 手前の 1 ぱ だけに `say`・`woke`）
+
+### がくたいの パレード（`actors[]` の `parade`）
+```json
+{ "id": "gakutai", "type": "parade", "reactsTo": "whistle", "onRail": { "railId": "main", "at": 1540, "heightFromRail": 0 },
+  "params": { "members": ["band-drum", "band-cymbal", "band-glock", "band-trumpet", "band-flag"],
+              "back": { "from": 150, "speed": 1.0, "min": 1500 }, "speed": 5, "gap": 14, "exit": 1660, "exitSide": "left" } }
+```
+- `onRail.at` は しっぽ（いちばん うしろ）。`members` は しっぽから まえへ 1〜6 人、`spacing`（3）m おき
+- ようす: `idle`（まいて いない）→ `back`（先頭が しっぽの `back.from` m で うしろあるき、しっぽが `back.min` か 先頭まで `gap + 4` m で とまる）→ `turn`（きてきで まきなおし 1.2 秒）→ `march`（`speed` m/s）⇄ `wait`（先頭との 間が `waitGap` 40 m より ひらくと あしぶみ、35 m で また あるく）→ `exit`（あたまが `exit` で 1 人ずつ `exitSide` の ひろばへ 2.4 秒）→ `gone`（ひろばで えんそう）
+- **でんしゃを おさえる**（しっぱい では ない）: `gone` まで、めざす 速さを √(v² ＋ 2 × 2.5 × (d − gap)) より 上に しない（d ＝ 先頭から しっぽまで、v ＝ `march` なら `speed`、ほかは 0）。`march` の あいだは さらに v ＋ 0.3 ＋ 0.03 × (d − gap) まで（うしろから 追いつく とき 5.6 m/s を こえない）。`gap − 2` より 近いと 0。ロケットで 追いつくと「ぷしゅっ」と きれる
+- きてき: `idle`・`back` で 先頭が `callRange`（90）〜 8 m の あいだ 光る → 押すと `turn`。`march`・`wait` で 押すと 「ぱっぱかぱーん！」と こたえる だけ
+- `march`・`wait` で 先頭が しっぽの 40 m 以内の あいだ、レバーの「ゆっくり」が 光る
+- 巻き戻しで 戻り先が `exit` より 先なら `gone` の まま、手前なら `idle` に もどる。つづき（あとの ミッション）は `gone`
+
+### くるくる ポイント（`junctions[].spin`）
+```json
+{ "id": "kuru-1", "railId": "main", "at": 2080, "left": "main", "right": "kuru-wa1", "default": "left",
+  "spin": { "good": "left", "stay": 4, "turn": 1, "range": 120, "line": "くるくる ポイント！ よく みてね" } }
+```
+- **矢印は 出ない**（はたと きてきの 光 だけが 合図）。`#junction[data-spin]` に id
+- ねて いる あいだは `good` で ない 側。先頭が `range` m まで 来ると `line` を 言って まわりだす（**いつも ちがう 側の `stay` 秒から**。同じ 運転なら 同じ 結果）: `stay` 秒 → `turn` 秒で くるっ → いい ほうで `stay` 秒 → …
+- いい ほうを むいて いる あいだ、先頭が `range`〜12 m なら きてきが 光る（`spinCall`）。押すと そこで とまり（`spinStop`）、その ステージの あいだ ずっと いい ほう。**光って いない ときの きてきでは とまらない**
+- 通る 向きは 先頭が `at − 5` に ついた ときの 向き（まわる とちゅうは 半分 すぎた 側）。先頭が 40 m 先へ 行くまで その 向き
+- ちがう 側は ループ（`end.merge` で 同じ 線路の `at` より 手前へ もどる。しっぱい では ない。`hints` で ループの 中の ことば）。1 回 ループを 通ると、つぎは いい ほうで まって いて きてきは ずっと 光る（押さなくても いい ほう）
+- `signReversed`・`needs`・`dive`・`bubbles`・`fireflies` と いっしょに 書かない。`stay` 2〜8、`turn` 0.5〜2、`range` 80〜200
+
+### 寸劇で まきなおす（`press` の `fx: "windup"` と `target`）
+```json
+{ "spawn": "tut-chick", "model": "windup-chick-back", "onRail": { "railId": "main", "at": 30, "lateral": -4.5, "heightFromRail": 1 } },
+{ "press": "whistle", "say": "きてきを ならして みて！", "fx": "windup", "target": "tut-chick" }
+```
+- きてきの 丸だけ 光って まつ（いまの `press`）。押すと `target` の 形が `-back` なしに かわる。`target` が `castle-key-back`（おしろの おおぜんまい）なら、`props[].windup` の かざりの おもちゃ ぜんぶが まえむきに なる（`#app[data-town="wound"]`）
+- ▶▶・つづき: 形の いれかえと `data-town` だけ 入る
+- `target` は その 寸劇で 前に `spawn` した id（まだ `remove` して いない）で、モデル名が `-back` で おわる
+
+### 小さな 足し
+- `environment.fall: "balls"`: すきまの 下の ボールプール。おちると「ぼよよん… ぽふっ」、ボールが はねて ももいろ `#ffe0f0` に ふわっと。**やわらかい**（しずみ 0.3・ゆれ 0）。ボールプールは `props` の `ball-pit`、すきまは `pit: false`
+- `rails[].base` の `look: "blocks"`: 線路の 下の パステルの つみき（`skip` で 下の 線路を こえる 所を あける）
+- `slope` の `params.look: "slide"`（`pull > 0` の とき だけ）: すべりだい。ピンクの てすり、入口の 札 `sign-slide-toy`
+- `tunnel` の `params.look: "toybox"`: 四角い はこの 中（クリーム色の かべに うすい しま、ほしの シールが ぼんやり 光る）、口は ふたの あいた はこ `toybox-lid`。既定は `"ice"`（4-3 の まま）
+- `environment.ground.look: "playmat"`: 地面が パステルの ます目（4 m、シェーダで 色を かえる だけ）
+- `props[].windup: true`: かざりの ぎゃくまきの おもちゃ（モデルは `-back` で おわる）。町の おおぜんまいで まえむきに
+- 失敗の 理由は ふえない（おもちゃ ＝ `cat` の やわらかい、ボールプール ＝ `fellShort`／`fellNoJump` の やわらかい）
+```ts
+type LineKey = /* v1.11 (5-2) */ 'spinCall' | 'spinStop' | 'paradeNear' | 'paradeCall' | 'paradeTurn' | 'paradeFollow' | 'paradeMatch' | 'paradeWait' | 'paradeBye';
+```
+- 既定: `spinCall`「こっちを むいた！ いま きてき！」・`spinStop`「ぴたっ！ とまった！」・`paradeCall`「がくたいさんを きてきで まきなおそう」（光った とき、おさえられて 止まって いる あいだ 8 秒ごと）・`paradeTurn`「くるりん！ ぱっぱかぱーん！」・`paradeFollow`「パレードだ！ ゆっくり ついていこう」・`paradeMatch`「ぴったり！ パレードの なかまだ！」（「ゆっくり」で 3 秒）・`paradeWait`「がくたいさんが まってるよ！」（うしろで 6 秒 とまる）・`paradeBye`「ありがとう〜 がくたいさん！」。`paradeNear`（130 m）は 書いた とき だけ
+
+### 読み込み時の 検査（`validate.ts` の 形の 検査 ＋ `validateToyLayout`）
+- 形: `cat` の `look` と `walk`（`speed` 0.2〜2・`max` 0〜20・`from` は `wakeDistance` より 大きい）。`parade` は onRail・`reactsTo: "whistle"`・`members` 1〜6・`speed` 2〜8・`gap` 8〜30・`callRange` は `back.from` より 小さく `gap + 4` より 大きい・`back.min` ≤ `at`・`exit` は あたまより 先・`exitSide`。`spin` は 上の とおり。`press` の `fx` は `beacon`／`windup`（`windup` は `target` が 要る）。`fall` に `balls`、`base.look` に `blocks`、`slope.look` は `slide`、`tunnel.look` は `ice`／`toybox`、`ground.look` は `playmat`、`props[].windup`（モデルは `-back`）
+- おもちゃの あるく 道（`at − max − dangerDistance − 20`〜`at`）: 切れ目・分かれ道・合流・坂・駅の 停止ゾーン なし
+- パレードの 道（`back.min − gap − 60`〜`exit + 40`）: 切れ目・ジャンプだい・坂・分かれ道・合流・駅の 停止ゾーン・ほかの 線路の 上の 役者・水・雪の かべ・`chase` の 区間 なし（パレードの 最中に しっぱいが おきない）。1 つの 線路に パレードは 1 つ
+- くるくる ポイント（`at − 80`〜`at + 70`）: 切れ目・坂・ほかの 分かれ道・駅の 停止ゾーン なし（ループの 合流は よい）。`spin` どうしは `range + 60` m 以上
+- きてきの 窓（光る 所）が かさならない: おもちゃ `[at − max − wakeDistance, at − dangerDistance]`（12 m 以内に ならぶ おもちゃは 1 つの むれ）、がくたい `[back.min − callRange, at − 8]`、くるくる ポイント `[at − range, at − 12]`、ジャンプだい、くじら
+- わざと まちがえた 形は `tests/stages-bad/toy-*.json`
+
+### テスト用の しるし
+`#app` の `data-windups`（まきなおした 数の 合計: おもちゃ・がくたい・ポイント・寸劇。ふえる だけ）・`data-actors`（`hiyoko:sleep|walk|awake|stopped`）・`data-parade`（`idle`／`back`／`turn`／`march`／`wait`／`exit`／`gone`）・`data-parade-gap`（m）・`data-parade-held`（1: でんしゃが おさえられて いる）・`data-spins`（`kuru-1:sleep,kuru-2:stay-good`。`sleep`／`stay-good`／`stay-other`／`turn`／`hold`／`fixed`／`mercy`）・`data-spin-taken`（`kuru-1:loop,kuru-1:good`、ふえる だけ）・`data-town`（`wound`）。`#junction[data-spin]`。できごと: `windup`・`parade`・`parade:fanfare`・`spin`・`spin:taken`

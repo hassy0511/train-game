@@ -6,11 +6,13 @@ import { buildHarbourPlaceholder } from './harbour-placeholders';
 import { buildIcePlaceholder } from './ice-placeholders';
 import { buildVillagePlaceholder } from './village-placeholders';
 import { buildMeadowPlaceholder } from './meadow-placeholders';
+import { addHandLantern, buildNightPlaceholder } from './night-placeholders';
 import { buildRecordPlaceholder } from './record-placeholders';
 import { buildRiverPlaceholder } from './river-placeholders';
 import { buildSeaPlaceholder } from './sea-placeholders';
 import { buildSkyPlaceholder } from './sky-placeholders';
 import { buildSnowPlaceholder } from './snow-placeholders';
+import { buildToyPlaceholder } from './toy-placeholders';
 import { buildVolcanoPlaceholder } from './volcano-placeholders';
 
 const PLACEHOLDER_COLORS: Record<string, number> = {
@@ -52,6 +54,13 @@ export class ModelLibrary {
       return blush;
     }
 
+    // v1.11 (5-1): Sakasa with 4-2's paper lantern (lit, or out), made from the built amanojaku (ticket 0018).
+    if ((name === 'amanojaku-lantern' || name === 'amanojaku-lantern-off') && !this.available.has(name)) {
+      const held = this.load('amanojaku').then((m) => addHandLantern(m, name === 'amanojaku-lantern'));
+      this.cache.set(name, held);
+      return held;
+    }
+
     // Models that are not built yet (pending Blender tickets) get a flat box of the right size,
     // so stages stay playable and no 404 requests are made.
     if (!this.available.has(name)) {
@@ -66,6 +75,8 @@ export class ModelLibrary {
         buildHarbourPlaceholder(name) ??
         buildVillagePlaceholder(name) ??
         buildSnowPlaceholder(name) ??
+        buildNightPlaceholder(name) ??
+        buildToyPlaceholder(name) ??
         buildRecordPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(drawn ?? makePlaceholder(name));

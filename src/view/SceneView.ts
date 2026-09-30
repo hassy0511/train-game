@@ -2,7 +2,7 @@ import type { Scene } from 'three';
 import type { StageEvent } from '../core/stage-events';
 import type { CameraMode, OrbitCamera } from './camera-rig';
 import type { RailNetwork } from '../rail/types';
-import type { StageData } from '../stage/types';
+import type { EnvironmentDef, StageData } from '../stage/types';
 import type { TrainPose } from '../train/types';
 
 /** Per-frame camera effects, 0..1 each. `dip` lowers the camera (emergency stop), `shake` jitters it. */
@@ -41,6 +41,13 @@ export interface SceneView {
    * its state (null: none out).
    */
   setSnowWave(wave: { railId: string; s: number; speed: number; state: string } | null): void;
+  /** v1.11 (5-2): how each spinning fork looks now (the side its flag points, turning, glowing the good way). Optional. */
+  setSpinLooks?(looks: { id: string; side: 'left' | 'right'; turning: boolean; good: boolean }[]): void;
+  /**
+   * v1.11 (PHASE9 B6.1): changes the look (the sky, the fog, the light, the ground, the stars, the moon, the fireflies)
+   * as often as wanted: 5-1's day and night, 6-2's sections.
+   */
+  applyEnvironment(env: EnvironmentDef): void;
   resize(width: number, height: number, devicePixelRatio: number): void;
   getStats(): { drawCalls: number; triangles: number } | null;
   /** For dev-only helpers (spline visualizer). May return null. */

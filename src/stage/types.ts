@@ -2,7 +2,7 @@ import type { Quaternion, Vector3 } from 'three';
 import type { RunSurface } from '../audio/run-sound';
 import type { RailNetwork } from '../rail/types';
 
-/** Stage JSON schema v1 (additions up to v1.10). See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
+/** Stage JSON schema v1 (additions up to v1.11). See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
 export type Vec3 = [number, number, number];
 
 /** `plow` (ゆきかき) is chapter 4's, given by 4-2 (3-2's third record waits for it); `magnetLight` is chapter 5's. */
@@ -12,14 +12,16 @@ export interface EnvironmentDef {
   sky: { top: string; bottom: string };
   fog: { color: string; near: number; far: number } | null;
   lighting: 'day' | 'evening' | 'night' | 'cave';
-  ground: { y: number; size: number; color: string } | null;
+  /** v1.11 (5-2) `look` "playmat": pastel squares (4 m) over the ground's colour (a shader, no texture). */
+  ground: { y: number; size: number; color: string; look?: 'playmat' } | null;
   /** Song id in src/audio/songs.ts (Phase 4), or null for silence. */
   bgm: string | null;
   /**
    * v1.3: how a fall looks: "dark" (default, fade to black) or "cloud" (caught by a cloud, fade to white).
    * v1.10: "water" (a soft fade to water blue), "snow" (a soft white with a little blue, 4-2).
+   * v1.11 (5-2): "balls" (a ball pit under the gaps: "ぼよよん… ぽふっ", a soft pink; the falls are soft).
    */
-  fall?: 'dark' | 'cloud' | 'leaf' | 'water' | 'snow';
+  fall?: 'dark' | 'cloud' | 'leaf' | 'water' | 'snow' | 'balls';
   /** v1.3: a soft sea of clouds far below (stages in the sky). */
   cloudSea?: { y: number };
   /** v1.9: the quiet sound around the island (src/audio/ambience.ts); omitted = none. */
@@ -43,6 +45,13 @@ export interface EnvironmentDef {
    * the moon comes up at `moon` (azimuth degrees from +Z towards +X, elevation degrees).
    */
   festival?: { bursts: Vec3[]; moon?: { azimuth: number; elevation: number } };
+  /**
+   * v1.11 (5-1): the moon in the night sky (a pale disc with a soft ring, no face): `azimuth` degrees from +Z towards
+   * +X, `elevation` degrees (5–80), `size` times the usual (0.5–3, default 1). It also sets where the moonlight comes from.
+   */
+  moon?: { azimuth: number; elevation: number; size?: number };
+  /** v1.11 (5-1): firefly motes floating round the camera: `count` (0–400) within `radius` m (default 60). */
+  fireflies?: { count: number; radius?: number };
 }
 
 /** v1.10 (4-1): falling snow: `count` flakes (0–2000) in a box `radius` m round the camera, falling `fall` m/s. */
@@ -218,9 +227,9 @@ export interface RailDef {
 export interface RailBaseDef {
   /**
    * v1.10 (3-3) "pier": a wooden pier (a plank deck and square posts down to the ground) instead of rock. v1.10 (4-2)
-   * "snow": a snowy ridge (white and pale blue) instead of rock.
+   * "snow": a snowy ridge (white and pale blue) instead of rock. v1.11 (5-2) "blocks": toy blocks in pastel colours.
    */
-  look: 'rock' | 'pier' | 'snow';
+  look: 'rock' | 'pier' | 'snow' | 'blocks';
   depth?: number;
   toGround?: boolean;
   skip?: { from: number; to: number }[];
@@ -251,6 +260,65 @@ export interface JunctionDef {
   diveSide?: 'left' | 'right';
   /** v1.10 (3-1): a bubble fork (see BubbleForkDef). */
   bubbles?: BubbleForkDef;
+  /** v1.11 (5-1): a firefly fork (see FireflyForkDef). */
+  fireflies?: FireflyForkDef;
+  /** v1.11 (5-2): a spinning fork, "くるくる ポイント" (see SpinDef). No arrows show for it. */
+  spin?: SpinDef;
+}
+
+/**
+ * v1.11 (5-2): a spinning fork (`junctions[].spin`). Asleep, it points the other way until the train front is `range` m
+ * off; then it turns from side to side (`stay` s a side, `turn` s turning over). The whistle glows while it points the
+ * `good` way: a press fixes it there for the rest of the stage. The way taken is the one it points when the front is
+ * SPIN.lockAt m before it. The other side must be a loop back onto the same rail before the fork (never a fail); after
+ * that the fork waits on the good side.
+ */
+export interface SpinDef {
+  good: 'left' | 'right';
+  /** Default SPIN.stay (4). */
+  stay?: number;
+  /** Default SPIN.turn (1). */
+  turn?: number;
+  /** Default SPIN.range (120). */
+  range?: number;
+  /** Said when it wakes. */
+  line?: string | null;
+}
+
+/** v1.11 (5-2): the looks of a "cat" actor (an animal or a toy on the rail). */
+export type CatLook = 'cat' | 'seabird' | 'seal' | 'turtle' | 'snowman' | 'hedgehog' | 'windup-chick' | 'windup-car';
+export const CAT_LOOKS: readonly CatLook[] = ['cat', 'seabird', 'seal', 'turtle', 'snowman', 'hedgehog', 'windup-chick', 'windup-car'];
+
+/**
+ * v1.11 (5-2): params of a "parade" actor (the toy band; `onRail.at` is the tail, the last member). Unwound, it walks
+ * back towards the train from `back.from` m (at `back.speed` m/s) until the tail is at `back.min`; the whistle winds it
+ * and it marches at `speed`, the train keeping at least `gap` m behind it (automatically: never a fail). The head leaves
+ * the rail at `exit`, to `exitSide`. Defaults: PARADE.
+ */
+export interface ParadeParams {
+  /** Models from the tail forwards (1–6). */
+  members: string[];
+  spacing?: number;
+  back?: { from?: number; speed?: number; min: number };
+  speed?: number;
+  gap?: number;
+  callRange?: number;
+  waitGap?: number;
+  exit: number;
+  exitSide?: 'left' | 'right';
+}
+
+/**
+ * v1.11 (5-1): a firefly fork (`junctions[].fireflies`). The true way is the side that is not `default`. The whistle
+ * glows while the train front is `callTo`–`callFrom` m before the fork; whistled, `count` fireflies fly up and line the
+ * true way (its arrow lights and it becomes the way taken). `fake`: Sakasa's pink lanterns on the false side (needs
+ * `signReversed`): the fireflies lose their way until the light has seen through it.
+ */
+export interface FireflyForkDef {
+  callFrom?: number;
+  callTo?: number;
+  count?: number;
+  fake?: boolean;
 }
 
 export interface StopRule {
@@ -311,6 +379,13 @@ export type PropDef = Placement & {
   traceLine?: string;
   /** v1.10 (4-3): its mark glows once junction `reveal` is seen through with the light (the false exit's swirl). */
   reveal?: string;
+  /** v1.11 (5-1): a sleeper in a hush stretch (a sleeping rabbit): it hides when the stretch is startled (looks only). */
+  sleeper?: boolean;
+  /**
+   * v1.11 (5-2): a reverse-wound toy (its model ends in "-back"): it marks time backwards until the town is wound (a
+   * cutscene press with fx "windup" on WINDUP.townKey), then shows the model without "-back" (looks only).
+   */
+  windup?: boolean;
 };
 
 export type ReactsTo = 'whistle' | 'light' | 'none';
@@ -337,6 +412,11 @@ export type RecordDef = Placement & {
    * record while it can be taken (the ability is there, or none is needed).
    */
   hint?: string;
+  /**
+   * v1.11 (5-1): it sleeps in a hush stretch: while that stretch is startled (the light or the whistle woke it) it is
+   * hidden and cannot be found this try.
+   */
+  hush?: boolean;
 };
 
 /** v1.7 / v1.10: the countdown panel's picture, which also picks how a time-up looks. */
@@ -407,6 +487,8 @@ export interface HintDef {
   railId: string;
   at: number;
   text: string;
+  /** v1.11: not said when the player has this ability (a riddle about a record for a later ability). */
+  unless?: AbilityId;
 }
 
 /** Partner lines keyed by situation. Missing keys mean the partner stays quiet. */
@@ -549,7 +631,43 @@ export type MissionLines = Partial<
     | 'chaseCaughtAfter'
     | 'chaseTired'
     | 'chaseSafe'
-    | 'tunnelNear',
+    | 'tunnelNear'
+    // v1.11 (5-1 よるの もり)
+    | 'hushNear'
+    | 'hushLightOff'
+    | 'hushStartle'
+    | 'hushQuiet'
+    | 'glareFreeze'
+    | 'glareFreezeAfter'
+    | 'glareFree'
+    | 'glareMercy'
+    | 'glareBump'
+    | 'glareBumpAfter'
+    | 'lureMercy'
+    | 'reversedNear'
+    | 'reversedIn'
+    | 'lureCome'
+    | 'lureBye'
+    | 'lureBump'
+    | 'lureBumpAfter'
+    | 'reversedQuiet'
+    | 'fireflyNear'
+    | 'fireflyCall'
+    | 'fireflyAgain'
+    | 'fireflyFakeNear'
+    | 'fireflyConfused'
+    | 'fireflyConfusedLit'
+    | 'fakeRevealed'
+    // v1.11 (5-2 おもちゃの まち)
+    | 'spinCall'
+    | 'spinStop'
+    | 'paradeNear'
+    | 'paradeCall'
+    | 'paradeTurn'
+    | 'paradeFollow'
+    | 'paradeMatch'
+    | 'paradeWait'
+    | 'paradeBye',
     string
   >
 >;
@@ -619,9 +737,10 @@ export type CutsceneStep =
   | { fx: 'festival' }
   /**
    * v1.10 (3-3): the child presses one button during the cutscene (it alone glows; the partner says `say` again every
-   * DOOR_REMIND_SECONDS). `fx` "beacon": the press lights the lighthouse.
+   * DOOR_REMIND_SECONDS). `fx` "beacon": the press lights the lighthouse. v1.11 (5-2) `fx` "windup": the press winds
+   * `target` (a figure this cutscene brought on, its model ending in "-back"): it turns the right way round.
    */
-  | { press: 'light' | 'whistle' | 'rocket' | 'jump'; say?: string; fx?: 'beacon' }
+  | { press: 'light' | 'whistle' | 'rocket' | 'jump'; say?: string; fx?: 'beacon' | 'windup'; target?: string }
   /** v1.10 (3-3): the doors on the platform side of the station the train stands at open or close (looks only). */
   | { door: 'open' | 'close' }
   /** Full-screen dark caption that fades after `seconds`. */
@@ -632,7 +751,14 @@ export type CutsceneStep =
    * v1.10 (4-2): the sky, the light and the fog turn to `sky` ("evening") over `seconds` s and stay so for the rest
    * of the stage (the lanterns come on with it).
    */
-  | { sky: 'evening'; seconds?: number };
+  | { sky: 'evening'; seconds?: number }
+  /**
+   * v1.11 (PR2c): the look changes to the stage's own `environment` with these fields written over it (as a 6-2
+   * section's will), for the rest of the stage: the sky, the fog, the light, the ground, the stars, the moon, the
+   * fireflies and the sound around. `{}` goes back to the stage's own. `seconds`: through a short dusk-blue fade (0 = at
+   * once). Day ⇄ night.
+   */
+  | { environment: Partial<EnvironmentDef>; seconds?: number };
 
 export interface GimmickDef {
   type: string;
@@ -677,6 +803,33 @@ export interface PlowSpan {
   sign: boolean;
 }
 
+/**
+ * v1.11 (5-1): params of a "hush" gimmick (つきの はらっぱ, the stretch `from`–`to`): where everyone sleeps. The light
+ * button gets the moon mark from `glowBefore` m before it, and glows (press = off) while the light is on; `startleAfter`
+ * s of light inside it, or the whistle, startles the sleepers (not a fail). `rewind`: a fawn's fail goes back there
+ * (default `from` − HUSH.rewindBefore). `sign`: the moon-and-ZZZ sign 8 m before it (default true).
+ */
+export interface HushParams {
+  id: string;
+  glowBefore?: number;
+  startleAfter?: number;
+  rewind?: { railId: string; at: number };
+  sign?: boolean;
+  line?: string;
+}
+
+/**
+ * v1.11 (5-1): params of a "whistle-reversed" gimmick (たぬきの もり): the whistle sounds reversed and brings the lure
+ * groups in it dancing onto the rail. `rewind`: a lure fail goes back there (default `from` − LURE.rewindBefore).
+ * `sign`: the dancing-tanuki sign 10 m before it (default true).
+ */
+export interface WhistleReversedParams {
+  id: string;
+  rewind?: { railId: string; at: number };
+  sign?: boolean;
+  line?: string;
+}
+
 /** v1.7: params of a "slope" gimmick (the stretch `from`–`to` of `railId`, judged at the train front). */
 export interface SlopeParams {
   /** m/s² (required, not 0): negative = too steep to climb without the rocket; positive = a slide (no lever). */
@@ -689,6 +842,8 @@ export interface SlopeParams {
   line?: string | null;
   /** A sign at its start (sign-steep / sign-slide). Default true. */
   sign?: boolean;
+  /** v1.11 (5-2), a slide only: "slide" = a toy slide (pink handrails, the sign "sign-slide-toy"). */
+  look?: 'slide';
 }
 
 /** v1.7: params of a "rocket" gimmick (a stretch where the rocket rests, or where it glows). */
@@ -854,6 +1009,10 @@ export interface ResolvedProp {
   traceLine?: string;
   /** v1.10 (4-3): see PropDef.reveal. */
   reveal?: string;
+  /** v1.11 (5-1): see PropDef.sleeper. */
+  sleeper?: boolean;
+  /** v1.11 (5-2): see PropDef.windup. */
+  windup?: boolean;
 }
 
 /** A record with its placement resolved. */

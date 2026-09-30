@@ -1,4 +1,5 @@
 import {
+  AdditiveBlending,
   BackSide,
   BufferGeometry,
   CanvasTexture,
@@ -15,8 +16,10 @@ import {
   PointsMaterial,
   ShaderMaterial,
   SphereGeometry,
+  Vector3,
 } from 'three';
 import type { EnvironmentDef, SnowDef } from '../../stage/types';
+import { AMBIENT_FIREFLIES, NIGHT } from '../../train/params';
 import { buildWaterGround } from './water';
 
 export const SKY_RADIUS = 550;
@@ -127,12 +130,36 @@ export function buildLights(): { hemisphere: HemisphereLight; sun: DirectionalLi
 /** A snowy stage's light from below (the hemisphere light's ground colour): bouncing off snow it is white. */
 const SNOW_BOUNCE = '#DCE8F2';
 
+/** v1.11 (5-1): where the moon stands when a night stage does not say (degrees; 第 4 部 §4.1). */
+const MOON_DEFAULT = { azimuth: 20, elevation: 32 };
+
+/** The unit direction to azimuth `az` (degrees from +Z towards +X) and elevation `el` (degrees). */
+function skyDirection(az: number, el: number): { x: number; y: number; z: number } {
+  const a = (az * Math.PI) / 180;
+  const e = (el * Math.PI) / 180;
+  return { x: Math.sin(a) * Math.cos(e), y: Math.sin(e), z: Math.cos(a) * Math.cos(e) };
+}
+
 /**
  * Sets the lights for `environment.lighting` ("day", or v1.10 (3-3) "evening": a warm low sun from the pink side of
- * the sky and a bluer ground light, not darker overall). On snow the light from below is white, not the grass green
- * of the other islands (v1.10, 4-1).
+ * the sky and a bluer ground light, not darker overall; v1.11 (5-1) "night": a blue moonlight from where the moon
+ * stands, 70% of the day's light in all, NIGHT). On snow the light from below is white, not the grass green of the
+ * other islands (v1.10, 4-1).
  */
 export function lightUp(hemisphere: HemisphereLight, sun: DirectionalLight, environment: EnvironmentDef): void {
+  if (environment.lighting === 'night') {
+    hemisphere.color.set(NIGHT.hemiSky);
+    hemisphere.groundColor.set(environment.surface === 'snow' ? SNOW_BOUNCE : NIGHT.hemiGround);
+    hemisphere.intensity = NIGHT.hemi;
+    hemisphere.name = 'night-hemisphere';
+    sun.color.set(NIGHT.moonColor);
+    sun.intensity = NIGHT.moon;
+    sun.name = 'night-sun';
+    const m = environment.moon ?? MOON_DEFAULT;
+    const d = skyDirection(m.azimuth, m.elevation);
+    sun.position.set(d.x, d.y, d.z).multiplyScalar(100);
+    return;
+  }
   const evening = environment.lighting === 'evening';
   hemisphere.color.set(evening ? 0xffd9b8 : 0xffffff);
   hemisphere.groundColor.set(environment.surface === 'snow' ? SNOW_BOUNCE : evening ? 0x6a7ab0 : 0x99bb77);
@@ -159,7 +186,36 @@ export function buildGround(environment: EnvironmentDef): Mesh | null {
   ground.name = 'ground';
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = environment.ground.y;
+  if (environment.ground.look === 'playmat') playmat(ground.material as MeshLambertMaterial);
   return ground;
+}
+
+/** v1.11 (5-2): the play mat's squares (m a side) and their pastel colours, mixed over the ground's colour. */
+const PLAYMAT_SQUARE = 4;
+
+/**
+ * v1.11 (5-2): the ground as a big play mat: pastel squares PLAYMAT_SQUARE m a side in the shader (from the world x, z;
+ * no texture, still one draw call), a soft line between them.
+ */
+function playmat(material: MeshLambertMaterial): void {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vMat;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvMat = (modelMatrix * vec4(transformed, 1.0)).xz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vMat;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        vec2 cell = floor(vMat / ${PLAYMAT_SQUARE.toFixed(1)});
+        float k = mod(cell.x + cell.y * 3.0, 4.0);
+        vec3 pastel = k < 1.0 ? vec3(1.0, 0.86, 0.9) : k < 2.0 ? vec3(0.84, 0.94, 1.0) : k < 3.0 ? vec3(1.0, 0.96, 0.8) : vec3(0.86, 1.0, 0.9);
+        vec2 f = abs(fract(vMat / ${PLAYMAT_SQUARE.toFixed(1)}) - 0.5);
+        float line = smoothstep(0.47, 0.5, max(f.x, f.y));
+        diffuseColor.rgb *= mix(pastel, vec3(0.93), line * 0.6);`,
+      );
+  };
+  material.customProgramCacheKey = () => 'playmat';
 }
 
 /** Sets the ground's colour; a snowy ground gets a little light of its own, so the snow is white rather than grey. */
@@ -171,8 +227,150 @@ export function paintGround(ground: Mesh, environment: EnvironmentDef): void {
   else material.emissive.setRGB(0, 0, 0);
 }
 
+const moonVertexShader = `
+varying vec2 vUv;
+
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const moonFragmentShader = `
+uniform vec3 discColor;
+uniform vec3 haloColor;
+varying vec2 vUv;
+
+void main() {
+  // The quad is four moons wide: the disc in the middle quarter, a soft ring of light round it.
+  float r = length(vUv - 0.5) * 4.0;
+  float disc = 1.0 - smoothstep(0.94, 1.0, r);
+  // The ring fades out before the quad's edge (no square shows round it).
+  float halo = (1.0 - disc) * 0.45 * exp(-2.6 * max(r - 1.0, 0.0)) * (1.0 - smoothstep(1.5, 1.95, r));
+  gl_FragColor = vec4(discColor * disc + haloColor * halo, 1.0);
+}
+`;
+
+/** v1.11 (5-1): how big the moon is at size 1 (radius, m, on the sky dome 0.8 × SKY_RADIUS away: about 2.6°). */
+const MOON_RADIUS = 20;
+
+/**
+ * v1.11 (5-1): the moon (environment.moon): a pale yellow disc with a soft ring of light round it, no face (one quad,
+ * one draw, additive over the sky, no fog). It rides on the sky dome, so it stays where it is in the sky however the
+ * train moves, and hides with the sky under water.
+ */
+export function buildMoon(moon: NonNullable<EnvironmentDef['moon']>): Mesh {
+  const size = MOON_RADIUS * (moon.size ?? 1) * 4;
+  const quad = new Mesh(
+    new PlaneGeometry(size, size),
+    new ShaderMaterial({
+      uniforms: { discColor: { value: new Color('#fff4c8') }, haloColor: { value: new Color('#8fa4e8') } },
+      vertexShader: moonVertexShader,
+      fragmentShader: moonFragmentShader,
+      transparent: true,
+      blending: AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+    }),
+  );
+  quad.name = 'moon';
+  quad.frustumCulled = false;
+  const d = skyDirection(moon.azimuth, moon.elevation);
+  quad.position.set(d.x, d.y, d.z).multiplyScalar(SKY_RADIUS * 0.8);
+  // Facing the dome's middle (where the camera is).
+  quad.lookAt(0, 0, 0);
+  return quad;
+}
+
+const fireflyVertexShader = `
+attribute float phase;
+uniform float time;
+uniform vec3 center;
+uniform float radius;
+uniform float size;
+varying float vGlow;
+
+void main() {
+  // Each one keeps its place in a box round the camera (wrapping as the train moves), floating slowly.
+  vec2 rel = mod(position.xz - center.xz + radius, 2.0 * radius) - radius;
+  vec3 w = vec3(center.x + rel.x, center.y - 2.5 + position.y * 7.0, center.z + rel.y);
+  w.x += sin(time * 0.45 + phase * 11.0) * 0.9;
+  w.y += sin(time * 0.7 + phase * 6.3) * 0.6;
+  w.z += cos(time * 0.4 + phase * 7.0) * 0.9;
+  vec4 mv = viewMatrix * vec4(w, 1.0);
+  gl_Position = projectionMatrix * mv;
+  // A slow "ぽわっ": bright for a while, then gone for a while.
+  float pulse = 0.5 + 0.5 * sin(time * (0.6 + phase * 0.8) + phase * 40.0);
+  vGlow = smoothstep(0.35, 1.0, pulse);
+  gl_PointSize = size * 260.0 / max(1.0, -mv.z);
+}
+`;
+
+const fireflyFragmentShader = `
+uniform vec3 color;
+varying float vGlow;
+
+void main() {
+  float d = length(gl_PointCoord - 0.5);
+  float a = (1.0 - smoothstep(0.1, 0.5, d)) * vGlow;
+  gl_FragColor = vec4(color * a, a);
+}
+`;
+
+/**
+ * v1.11 (5-1): firefly motes round the camera (environment.fireflies): `count` yellow-green points (#d8ff7a) within
+ * `radius` m, each floating and glowing in and out on the shader's clock: one Points, one draw, additive, no fog. The
+ * CPU only moves the box's centre (update()).
+ */
+export class AmbientFireflies {
+  readonly points: Points<BufferGeometry, ShaderMaterial>;
+  private readonly time: { value: number };
+  private readonly center: { value: Vector3 };
+
+  constructor(def: NonNullable<EnvironmentDef['fireflies']>) {
+    const radius = def.radius ?? AMBIENT_FIREFLIES.radius;
+    const count = Math.min(def.count, AMBIENT_FIREFLIES.max);
+    const pos = new Float32Array(count * 3);
+    const phase = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      pos[i * 3] = hash(i * 5 + 1) * 2 * radius;
+      pos[i * 3 + 1] = hash(i * 5 + 2);
+      pos[i * 3 + 2] = hash(i * 5 + 3) * 2 * radius;
+      phase[i] = hash(i * 5 + 4);
+    }
+    const g = new BufferGeometry();
+    g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+    g.setAttribute('phase', new Float32BufferAttribute(phase, 1));
+    const material = new ShaderMaterial({
+      uniforms: {
+        time: { value: 0 },
+        center: { value: new Vector3() },
+        radius: { value: radius },
+        size: { value: 0.5 },
+        color: { value: new Color('#d8ff7a') },
+      },
+      vertexShader: fireflyVertexShader,
+      fragmentShader: fireflyFragmentShader,
+      transparent: true,
+      blending: AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+    });
+    this.points = new Points(g, material);
+    this.points.name = 'fireflies';
+    this.points.frustumCulled = false;
+    this.time = material.uniforms.time as { value: number };
+    this.center = material.uniforms.center as { value: Vector3 };
+  }
+
+  update(dt: number, camera: PerspectiveCamera): void {
+    this.time.value += dt;
+    this.center.value.copy(camera.position);
+  }
+}
+
 /** A soft round dot (a snowflake). */
-function dotTexture(): CanvasTexture | null {
+export function dotTexture(): CanvasTexture | null {
   if (typeof document === 'undefined') return null;
   const c = document.createElement('canvas');
   c.width = c.height = 32;

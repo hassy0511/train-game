@@ -58,6 +58,10 @@ async function build(diorama: WorldDiorama | null, models: ModelLibrary): Promis
   if (diorama.rail) root.add(railRing(diorama.rail.radius));
   for (const item of diorama.items) {
     const model = (await models.load(item.model)).clone(true);
+    // A glow meant for the night sky (additive) would print as a dark blot on the picture's transparent background.
+    model.traverse((o) => {
+      if (o.name === 'great-tree-halo') o.visible = false;
+    });
     const scale = item.scale ?? 1;
     const rot = MathUtils.degToRad(item.rotY ?? 0);
     model.scale.setScalar(scale);
@@ -119,12 +123,14 @@ async function main(): Promise<void> {
   document.body.appendChild(renderer.domElement);
 
   const scene = new Scene();
-  scene.add(new HemisphereLight(0xffffff, 0x99bb77, 1.1));
-  const sun = new DirectionalLight(0xffffff, 1.5);
+  // v1.11: a night island (5-1) under a blue moonlight at 70 % of the day's (第 4 部 §11).
+  const night = diorama?.lighting === 'night';
+  scene.add(night ? new HemisphereLight(0xa9b8f0, 0x2f4a3a, 1.1 * 0.8) : new HemisphereLight(0xffffff, 0x99bb77, 1.1));
+  const sun = new DirectionalLight(night ? 0xc9d4ff : 0xffffff, night ? 1.5 * 0.62 : 1.5);
   sun.position.set(40, 80, 30);
   scene.add(sun);
   // Lift the rock underside a little: on the map it should read as a friendly island, not a dark cone.
-  const under = new DirectionalLight(0xfff2e0, 0.7);
+  const under = new DirectionalLight(night ? 0xb8c4ff : 0xfff2e0, night ? 0.5 : 0.7);
   under.position.set(-20, -30, 60);
   scene.add(under);
 

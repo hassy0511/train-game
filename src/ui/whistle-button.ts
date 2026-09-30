@@ -1,7 +1,11 @@
+import { HUSH_MARK, markButton } from './ability-buttons';
+
 export interface WhistleButton {
   setProgress(progress: number): void;
   /** Glow: something in reach reacts to the whistle right now (a hidden jump pad). */
   setGlow(on: boolean): void;
+  /** v1.11 (5-1): the hush mark in the corner (a hint: it still sounds), or none. */
+  setMark(mark: 'hush' | null): void;
 }
 
 const ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
@@ -17,7 +21,7 @@ export function createWhistleButton(root: HTMLElement, onPress: () => void): Whi
   button.type = 'button';
   button.dataset.cooldown = '0';
   button.setAttribute('aria-label', 'きてき');
-  button.innerHTML = `<span class="ring"></span><span class="face">${ICON}<span class="label">きてき</span></span>`;
+  button.innerHTML = `<span class="ring"></span><span class="face">${ICON}<span class="label">きてき</span>${HUSH_MARK}</span>`;
   button.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     onPress();
@@ -36,6 +40,9 @@ export function createWhistleButton(root: HTMLElement, onPress: () => void): Whi
     setGlow(on: boolean): void {
       const v = on ? '1' : '0';
       if (button.dataset.glow !== v) button.dataset.glow = v;
+    },
+    setMark(mark): void {
+      markButton(button, mark);
     },
   };
 }

@@ -297,6 +297,11 @@ export class WireSceneView implements SceneView {
     return false;
   }
 
+  /** The wireframe view has no look to change (v1.11: day ⇄ night is the 3D view's). */
+  applyEnvironment(): void {
+    // Nothing to do.
+  }
+
   resize(width: number, height: number, devicePixelRatio: number): void {
     if (!this.renderer) return;
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));

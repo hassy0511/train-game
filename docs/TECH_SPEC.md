@@ -62,7 +62,9 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
 
 ### 見た目の 環境（`EnvironmentState`、2026-09-30 PHASE9 PR2b）
 - `src/view/three/environment-state.ts`。ステージ JSON の `environment` から 画面の「見た目の 環境」を 作る 入れもの。`ThreeSceneView.applyEnvironment(env)`（中で `EnvironmentState.apply(env)`）で **何度でも** かえられる（6-2 の 区画ごとの 見た目、5-1 の 昼 ⇄ 夜。PHASE9_CHAPTER5_6 第 3 部 B6.1）。一つ一つの 部品の 作り方は `environment.ts`
-- 中身: 背景の 色・空の ドーム・霧・カメラの 遠い 面（霧の far ＋ 40 m、最大 600 m。空の ドームも その 内がわに ちぢめる）・光（半球光と 太陽）・地面（水の ある ステージは 池の 穴あき）・星・雲海・ふる 雪。**あとから 来る もの の 席**: 月・ほたるの つぶ（PR2c 夜）、`landmark`（6-2）。いまは 何も 作らない
+- 中身: 背景の 色・空の ドーム・霧・カメラの 遠い 面（霧の far ＋ 40 m、最大 600 m。空の ドームも その 内がわに ちぢめる）・光（半球光と 太陽）・地面（水の ある ステージは 池の 穴あき）・星・雲海・ふる 雪・**月**（`environment.moon`、空の ドームに のる 板 1 まい、顔なし）・**ほたるの つぶ**（`environment.fireflies`、`Points` 1 つ、カメラの まわりで シェーダが ふわふわ させる）（どちらも 2026-09-30 PR2c）。**あとから 来る もの の 席**: `landmark`（6-2）。いまは 何も 作らない
+- 夜（`lighting: "night"`、PR2c）: 半球光 `#b8c6ff`／`#34406a`・0.85 ＋ 月の 平行光 `#dfe7ff`・0.62（`moon` の 向きから）＝ 昼の 70%（`params.ts` の `NIGHT`）。夜は 客車の まどが 光り、ライトの すじは 夜用の 先で うすれる 円すいに かわる（こく しない。`night.ts`・`abilities.ts` の `buildLightBeam`・`ThreeSceneView.lookChanged`）
+- ゲームの 中で かえる のは 寸劇の `{ "environment": { … }, "seconds" }`（STAGE_SCHEMA §18）: `main.ts` が ステージの `environment` に 書いた 欄を 上書きして `SceneView.applyEnvironment` を よぶ（夜空色の フェード `#look-fade` の うしろで。まわりの 音も かえる）。0-1 は 入りで 昼 → 夜、出で 夜 → 昼
 - きまり:
   - 空・霧・2 つの 光は ずっと 同じ もの（ほかの しかけ、たとえば 村の 夕方・雪の トンネル・かがみ が つかんで いる ので）。`apply` は 色や 強さを 入れなおす だけ
   - 星・雲海・地面・ふる 雪 は「何から 作ったか」を おぼえて おき、同じ なら そのまま、ちがえば ふるい 方を 外して `dispose`（形・材質・テクスチャ）してから 作りなおす。いらなく なったら 外して `dispose`
@@ -70,8 +72,8 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
   - 雪（`surface: "snow"`）: 地面に すこし 自分の 光（白く 見える）、半球光の 下からの 色を 雪の 白に（もとの `IceGimmicks.brightenSnow`）。線路の 雪の 床は `snowBeds(線路の 一覧, env)` で 線路の 一覧ごと（いまは ステージの ぜんぶ、6-2 では 区画ごと）
   - 水の 中に いる ときに `apply` したら、水の 中の 見た目は つぎの コマで 新しい 環境から とりなおす。寸劇の 決まった カメラの ときは 遠い 面を また のばす
   - 水（`water`）は ステージ ぜんぶ で 1 つ（区画で かえない）。地面の 穴の 形に 入る ので、地面の「何から 作ったか」に ふくめる
-  - 雪の トンネル（`SnowGimmicks`）は 読み込みの とき の 霧の 色と 光の 強さを おぼえて いる。環境を かえる ステージで トンネルを つかう ときは、そこも `EnvironmentState` から 読む ように する（いまは 4-3 だけ で、環境は かえない）
-- テスト: `tests/smoke/environment-state.spec.ts`（開発サーバーで `__debugView` を つかう。0-0 で ちがう 環境と もとの 環境を 3 回 行き来 して、シーンの 物の 数・霧・遠い 面が もとに もどり、`renderer.info.memory` が ふえつづけない こと。本番ビルドに `__debugView` が ない ことも みる）
+  - 雪の トンネル（`SnowGimmicks`）と 村の 夕方（`VillageGimmicks`）は、霧の 色・2 つの 光の 強さと 色・空を `EnvironmentState` から その とき 読む（`baseFogColor`・`lights`・`lightLevels`・`sky`・`fogObject`。PR2c から。読み込みの ときの 値を おぼえない）。夕方が かわる とちゅうで `apply` したら、あたらしい 見た目が 勝つ（`VillageGimmicks.onLook`）
+- テスト: `tests/smoke/environment-state.spec.ts`（開発サーバーで `__debugView` を つかう。0-0 で ちがう 環境〈夜・月・ほたるの つぶ も〉と もとの 環境を 3 回 行き来 して、シーンの 物の 数・霧・遠い 面が もとに もどり、`renderer.info.memory` が ふえつづけない こと。本番ビルドに `__debugView` が ない ことも みる）。ゲームの 中の 昼 ⇄ 夜 は `tests/smoke/night.spec.ts`（0-1）
 
 ---
 
@@ -104,10 +106,11 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
   - はじめ方は `MissionRunner.prepareResume(i)`: オープニングと ミッション 0〜i−1 の `onComplete` の 寸劇を 早送り（`fastForwardCutscene`: 線路を 切る・能力・役者の 出し入れを さいごの 形で 一瞬に。せりふ・待ち・札・字幕・カメラ・効果は とばす）、電車を ミッション i−1 の さいごの 駅に 止めて 置き、乗客と 荷物は 各 ステップの 乗り降りを 足して 出す。役者（ねこ・恐竜・バッタ・石 など）は その駅へ 巻きもどしたときと 同じ（うしろの ものは もう かかわらない）。花の橋は スタートから その駅までの 道（分かれ道と 合流を たどって 探す）に あるものを ひらいて おく（STAGE_SCHEMA の とおり「ステージの 間 ずっと ひらいたまま」だから）
   - 「▶▶」（クリアしたことのある ステージの 寸劇だけ）は 同じ 早送りで のこりを 済ませる。札（とその 能力の 札）の 間は かくれ、札は 最後まで 待つ
 - 保存のたびに（1 回の起動で 1 回だけ）`navigator.storage.persist()` を頼む。Safari のタブは しばらく開かないと消されることがあるので、「おうちの かたへ」にホーム画面への追加を書く
-- **あいことば**（`core/progress.ts`）: 進み具合ぜんぶを 16 文字（Crockford base32、`XXXX-XXXX-XXXX-XXXX`）にして書き写し、あとで入れれば戻る。通信なし。1 文字めが版。版ごとに項目の並びを固定し、公開した版の並びは変えない。章やきろくが増えたら新しい版を足す（`scripts/check-stages.mjs` が bit の計算と、ステージファイルの クリア・能力・記録の 場所を ビルドで 確かめ、`pause-settings.spec.ts` が ステージファイルと world.json の全部で往復を確かめるので、足し忘れると落ちる）。出す あいことばは いつも 最新の版、入れる ほうは 出した ことの ある 版を ぜんぶ 読む
-  - **v2**（いま 出す 版、2026-09-28）: 80 bit ＝ 16 文字（例 `2ZZQ-ZZZZ-ZZZG-A0CD`）= 版 5 + 項目 54（12 ステージ 1-1〜4-3・6 能力 whistle/jump/light/rocket/dive/plow・36 記録、1 項目 1 bit。並びは v1 の 項目の あとに 3・4章を ステージ順に 足した もの）+ 検査 21（FNV-1a）。**線路は のせない**: 入れた ときに クリアから 作る（`world/pages.ts` の `seenMapLinks`）。しかれる 線路は ぜんぶ「もう 見た」、おわった 章の おわり（線路の ない 章は `finale:<id>`）も「見た」に する ので、地図を ひらいても のびる 線路や 章の おわりは 出ない。まだ おわって いない 章の しめくくりの 線路は 入れない（その 章が ほんとうに おわった ときに おわりが 出る）。4-3 の 記録 3 つ（`snow-hare`・`ice-flower`・`sleigh-bell`）は PHASE8_CHAPTER3_4 第 8 部の 設計の ID で 先に 入れて ある（4-3 が ちがう ID で 入ると テストが 落ちる）。`magnetLight`（5章）・`reverse`（6章）は つぎの 版で 足す
+- **あいことば**（`core/progress.ts`）: 進み具合ぜんぶを 20 文字（Crockford base32、`XXXX-XXXX-XXXX-XXXX-XXXX`）にして書き写し、あとで入れれば戻る。通信なし。1 文字めが版。版ごとに項目の並びを固定し、公開した版の並びは変えない。章やきろくが増えたら新しい版を足す（`scripts/check-stages.mjs` が bit の計算と、ステージファイルの クリア・能力・記録の 場所を ビルドで 確かめ、`pause-settings.spec.ts` が ステージファイルと world.json の全部で往復を確かめるので、足し忘れると落ちる）。出す あいことばは いつも 最新の版、入れる ほうは 出した ことの ある 版を ぜんぶ 読む
+  - **v3**（いま 出す 版、2026-09-30。PHASE9_CHAPTER5_6 第 1 部 §7.2・§0.6）: 100 bit ＝ 20 文字（例 `3ZZZ-ZZZZ-ZZZZ-ZZZZ-N3VD`）= 版 5 + 項目 76（17 ステージ 1-1〜6-2・8 能力 ＝ v2 の 6 つ ＋ magnetLight/reverse・51 記録、1 項目 1 bit。並びは v2 の 項目の あとに 5・6章を ステージ順に 足した もの）+ 検査 19（FNV-1a。まちがいが とおるのは 52 万回に 1 回）。線路は のせない（v2 と 同じく クリアから 作る）。**`pages: 3`**: 版ごとに「その 版を 出した ときに あった 地図の ページ」を もち、入れた ときに 作る 線路と 章の おわりは その ページまで だけ「見た」に する（`seenMapLinks(world, cleared, v.pages)`。両はしが その ページ 以下の 線路、その ページ 以下の 章の おわり）。5・6章の ステージは まだ 5-1 も できて いない うちに 出す ので、まだ ない ステージの bit は 0 の まま。5-1〜6-2 の 記録 15 こ（`moon-bunnies`・`pond-moonstone`・`lantern-bell`／`gold-screw`・`glow-marble`・`tin-key`／`kagami-kanban`・`hand-mirror`・`sakasa-doodle`／`up-raindrop`・`upside-top`・`backward-book`／`swirl-acorn`・`left-shell`・`sakasa-tag`）は 設計の ID で 先に 入れて ある（ステージが ちがう ID で 入ると `check-stages.mjs` と `pause-settings.spec.ts` が 落ちる。直すのは ステージの ほう）。検査が 16 bit より 少なく なる 版は 文字を ふやし、あまりを 0 の うめ bit（`padBits`。項目と 検査の あいだ。0 で なければ 打ちまちがいと して はじく）で うめる。v3 は うめ なし
+  - **v2**（2026-09-28〜09-30 に 出して いた 版。これからも 読める）: `pages: 2`（地図が 2 ページ だった ころ の 版。入れると 3 ページめへ 行く 線路 `4-3>5-1` は「まだ 見て いない」に なり、つぎに 地図を ひらいた とき 1 回 のびる）。80 bit ＝ 16 文字（例 `2ZZQ-ZZZZ-ZZZG-A0CD`）= 版 5 + 項目 54（12 ステージ 1-1〜4-3・6 能力 whistle/jump/light/rocket/dive/plow・36 記録、1 項目 1 bit。並びは v1 の 項目の あとに 3・4章を ステージ順に 足した もの）+ 検査 21（FNV-1a）。**線路は のせない**: 入れた ときに クリアから 作る（`world/pages.ts` の `seenMapLinks`）。しかれる 線路は ぜんぶ「もう 見た」、おわった 章の おわり（線路の ない 章は `finale:<id>`）も「見た」に する ので、地図を ひらいても のびる 線路や 章の おわりは 出ない。まだ おわって いない 章の しめくくりの 線路は 入れない（その 章が ほんとうに おわった ときに おわりが 出る）。4-3 の 記録 3 つ（`snow-hare`・`ice-flower`・`sleigh-bell`）は PHASE8_CHAPTER3_4 第 8 部の 設計の ID で 先に 入れて ある（4-3 が ちがう ID で 入ると テストが 落ちる）。`magnetLight`（5章）・`reverse`（6章）は v3 で 足した
   - **v1**（2026-09 まで 出して いた 版。これからも 読める）: 60 bit ＝ 12 文字 = 版 5 + 項目 34（6 ステージ・4 能力・18 記録・6 線路、1 項目 1 bit）+ 検査 21。線路は あいことばに 入って いる もの だけ もどる（くもの もんへの 線路は つぎに 地図を ひらいた ときに のびる）
-  - 打ちまちがい: 使えない 文字・知らない 版・文字の 数（その 版の 文字数を 出す）・検査ちがいで はじく。小文字・空白・ダッシュ・O（→ 0）・I／L（→ 1）は そのまま 読む
+  - 打ちまちがい: 使えない 文字・知らない 版・文字の 数（その 版の 文字数 12／16／20 を 出す）・うめ bit・検査ちがいで はじく。小文字・空白・ダッシュ・O（→ 0）・I／L（→ 1）は そのまま 読む
 
 ---
 
@@ -144,7 +147,7 @@ GitHub Actions
 - **`scripts/check-stages.mjs`**: TypeScript は Node が 直接 読めない ので、Vite の `ssrLoadModule`（`createServer({ server: { middlewareMode: true } })`。ブラウザも 通信も 使わない）で `src/stage/loader.ts` と `src/core/progress.ts` を 読む。読み込みの ときの `throw` では `vite build` は 落ちない ので、読んだ 値を ここで たしかめる。約 1 秒。
   1. `src/stages/*.json` の ぜんぶが `prepareStage(raw)` を とおる（`loader.ts` に 切り出した、ブラウザなしで 走る 部分: `validateStageFile`・線路網・範囲・水／氷／雪の 検査・props／actors／stations／records の 位置きめ。`loadStage` は JSON を 読んで これを よぶ だけ）。ファイル名 ＝ `id`
   2. `tests/stages-bad/<名前>.json`（わざと まちがえた 形。1 ファイル 1 つ）が **はじかれる** こと、しかも `_expect` の 文が エラーの 中に ある こと（べつの 理由で はじかれたら 落ちる）。形は 「ステージ 1 つぶんの JSON ＋ `_expect`」か、本物の ステージの 写しに 直しを 入れる `{ "_expect", "_base": "1-1", "_edit": [{ "path": "start.at", "value": 99999 }] }`（`"delete": true` で その キーを 消す）。ステージに 新しい 検査を 足す PR は、そのまちがいの 例も ここに 足す
-  3. あいことばの 版（`PASSCODE_VERSIONS`）: `5 ＋ 項目の 数 ＋ 検査 ＝ 5 × 文字数`・検査 ≥ 16 bit・同じ ID を 2 回 書かない・新しい 版は 前の 版の クリア／能力／記録の 並びで はじまる・**あそべる（`hidden` でない）ステージの クリア・能力（`unlocks` と 寸劇の `unlock`）・記録の ぜんぶが 最新の 版に 場所を もつ**（足し忘れると ビルドが 落ちる。`pause-settings.spec.ts` の 往復は 保存と 読み込みの 動きを 見る）
+  3. あいことばの 版（`PASSCODE_VERSIONS`）: `5 ＋ 項目の 数 ＋ うめ（padBits）＋ 検査 ＝ 5 × 文字数`・検査 ≥ 16 bit・同じ ID を 2 回 書かない・新しい 版は 前の 版の クリア／能力／記録の 並びで はじまる・線路を のせない 版（v2 から）は `pages` を もち、前の 版より へらない・**あそべる（`hidden` でない）ステージの クリア・能力（`unlocks`・寸劇の `unlock`・記録の `requires`）・記録の ぜんぶが 最新の 版に 場所を もつ**（足し忘れると ビルドが 落ちる。`pause-settings.spec.ts` の 往復は 保存と 読み込みの 動きを 見る）
 
 ### ホーム画面アプリ（2026-09-24）
 - iPad の Safari で「ホーム画面に追加」すると、アイコン「ワンダーごう」から全画面・横向きで起動する（`public/manifest.webmanifest`、`index.html` の apple 用 meta）

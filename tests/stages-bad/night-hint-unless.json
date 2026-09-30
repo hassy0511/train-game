@@ -1,0 +1,1 @@
+{ "_expect": "hint \"unless\" must be an ability", "_base": "0-1", "_edit": [{ "path": "missions.0.hints.0.unless", "value": "flying" }] }

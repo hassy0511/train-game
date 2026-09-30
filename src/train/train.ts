@@ -19,6 +19,7 @@ import {
   UPDRAFT_ACCELERATION,
   JUNCTION_LOCK_DISTANCE,
   LEVER_NOTCHES,
+  PARADE,
   ROCKET,
   SLOPE,
   SPEED_NOTCHES,
@@ -170,6 +171,8 @@ export class Train {
 
   private pending: JunctionDef[] = [];
   private announced: JunctionDef | null = null;
+  /** v1.11 (5-1): ways chosen for junctions before their arrows show (preferJunction). */
+  private readonly preferred = new Map<string, JunctionSide>();
   private locked = false;
   private choice: JunctionSide | null = null;
   private ended = false;
@@ -245,6 +248,11 @@ export class Train {
   private bumping: { t: number; from: number } | null = null;
   /** v1.10 (4-2): the train front last frame (on its rail), to see it reach a wall. */
   private plowFront: { railId: string; s: number } | null = null;
+  /** v1.11 (5-2): something walking ahead on the rails (the band), and whether it held the lever's speed last frame. */
+  private leader: (() => { railId: string; at: number; speed: number; gap: number } | null) | null = null;
+  private leaderHeld = false;
+  /** v1.11 (5-2): the side a spinning fork sends the train (SpinSystem.side). */
+  private spinSides: ((j: JunctionDef) => JunctionSide) | null = null;
 
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
@@ -575,8 +583,44 @@ export class Train {
     return null;
   }
 
+  /**
+   * v1.11 (5-2): something walking ahead on the rails (the band): the lever's speed target is held so the front keeps
+   * `gap` m behind it (PARADE: a soft approach, then its pace). Null: nothing.
+   */
+  setLeader(fn: (() => { railId: string; at: number; speed: number; gap: number } | null) | null): void {
+    this.leader = fn;
+  }
+
+  /** v1.11 (5-2): the leader held the lever's speed down last frame (the test hook data-parade-held). */
+  get leaderHolding(): boolean {
+    return this.leaderHeld;
+  }
+
+  /** v1.11 (5-2): the side a spinning fork will send the train (routeSide() and the pass ask it for junctions with `spin`). */
+  setSpinSides(fn: ((j: JunctionDef) => JunctionSide) | null): void {
+    this.spinSides = fn;
+  }
+
+  /**
+   * v1.11 (5-2): the fastest the leader lets the train go now (m/s), or null (no leader, or not ahead on the way): a
+   * braking curve of PARADE.approachBrake down to its speed at `gap` m, and while it moves no more than a little faster
+   * than it (catching up slowly). Nearer than `gap − 2` m: 0.
+   */
+  private leaderCap(): number | null {
+    const l = this.leader?.();
+    if (!l) return null;
+    const d = this.routeDistance(l.railId, l.at);
+    if (d === null || d < -TRAIN.length) return null;
+    if (d < l.gap - 2) return 0;
+    const over = Math.max(0, d - l.gap);
+    let cap = Math.sqrt(l.speed * l.speed + 2 * PARADE.approachBrake * over);
+    if (l.speed > 0) cap = Math.min(cap, l.speed + PARADE.catchUp + PARADE.catchUpPerMetre * over);
+    return cap;
+  }
+
   /** The side the train will take at junction `j` as things are now (a dive fork: its dive side while diving). */
   private routeSide(j: JunctionDef): JunctionSide {
+    if (j.spin && this.spinSides) return this.spinSides(j);
     if (j.dive && j.diveSide) return this.diving ? j.diveSide : j.diveSide === 'left' ? 'right' : 'left';
     return j === this.announced && this.choice ? this.choice : j.default;
   }
@@ -601,6 +645,21 @@ export class Train {
   /** The junction the arrows are shown for (announced and not passed yet), or null. */
   get announcedJunction(): JunctionDef | null {
     return this.announced;
+  }
+
+  /**
+   * v1.11 (5-1): the way to take at junction `id` when it comes (a firefly fork's true way, called before its arrows
+   * show); null forgets it. The child can still tap the other arrow.
+   */
+  preferJunction(id: string, side: JunctionSide | null): void {
+    if (side === null) this.preferred.delete(id);
+    else this.preferred.set(id, side);
+    if (side !== null && this.announced?.id === id && !this.locked && this.announced[side] !== undefined) this.choice = side;
+  }
+
+  /** v1.11 (5-1): forget every preferred way (a rewind). */
+  clearPreferred(): void {
+    this.preferred.clear();
   }
 
   chooseJunction(side: JunctionSide): void {
@@ -629,6 +688,13 @@ export class Train {
         brake = Math.max(brake, BRAKING * this.grip);
       }
     }
+    // v1.11 (5-2): the band walking ahead holds the speed down (never nearer than its gap).
+    const cap = this.leaderCap();
+    this.leaderHeld = cap !== null && cap < target - 1e-3;
+    if (cap !== null && cap < target) {
+      target = cap;
+      brake = Math.max(brake, BRAKING);
+    }
     return { target, brake };
   }
 
@@ -651,6 +717,8 @@ export class Train {
     let target = lever.target;
     const brake = lever.brake;
 
+    // v1.11 (5-2): a burn catching up with the band ahead is cut short ("ぷしゅっ"): the band's pace wins.
+    if (this.rocketLeft > 0 && this.leaderHeld && st.speed >= target) this.stopRocket();
     // The rocket burns for its time wherever the train is (in the air too), but only pushes on the rail.
     const burning = this.rocketLeft > 0 && !this.falling && !this.emergency;
     if (burning) {
@@ -1366,7 +1434,8 @@ export class Train {
     // v1.10: a dive fork shows no arrows (diving or not picks the way).
     if (!this.announced && !j.dive && st.s >= j.at - JUNCTION_ARROW_DISTANCE) {
       this.announced = j;
-      this.choice = null;
+      const preferred = this.preferred.get(j.id);
+      this.choice = preferred !== undefined && j[preferred] !== undefined ? preferred : null;
       this.locked = false;
       this.events.emit('junctionApproach', {
         junction: j,
@@ -1380,7 +1449,7 @@ export class Train {
       this.events.emit('junctionLocked');
     }
     if (st.s >= j.at) {
-      const side = j.dive && j.diveSide ? this.routeSide(j) : this.choice ?? j.default;
+      const side = (j.dive && j.diveSide) || (j.spin && this.spinSides) ? this.routeSide(j) : this.choice ?? j.default;
       const targetId = j[side] ?? st.railId;
       // Down into the water at a dive fork: the dome stays on until the water takes over.
       if (j.dive && side === j.diveSide) {

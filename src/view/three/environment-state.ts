@@ -1,6 +1,6 @@
 import { Color, Fog, type DirectionalLight, type HemisphereLight, type Material, type Mesh, type Object3D, type PerspectiveCamera, type Scene } from 'three';
 import type { EnvironmentDef, RailDef } from '../../stage/types';
-import { buildCloudSea, buildGround, buildLights, buildSky, buildStars, lightUp, paintGround, paintSky, SKY_RADIUS, Snowfall } from './environment';
+import { AmbientFireflies, buildCloudSea, buildGround, buildLights, buildMoon, buildSky, buildStars, lightUp, paintGround, paintSky, SKY_RADIUS, Snowfall } from './environment';
 
 /** The camera's draw distance without a fog (m). */
 export const CAMERA_FAR = 600;
@@ -11,8 +11,8 @@ export const FOG_CULL_MARGIN = 40;
 const SNOW_BED = '#E8EEF4';
 
 /**
- * The pieces that come and go with the look. `moon`, `fireflies` and `landmark` are slots for looks still to come
- * (the night's moon and firefly motes, PR2c; a far landmark past the fog, 6-2): nothing builds them yet.
+ * The pieces that come and go with the look. v1.11 (PR2c): the night's moon and firefly motes. `landmark` is a slot for
+ * a look still to come (a far landmark past the fog, 6-2): nothing builds it yet.
  */
 type PieceName = 'cloudSea' | 'stars' | 'ground' | 'snowfall' | 'moon' | 'fireflies' | 'landmark';
 
@@ -34,11 +34,15 @@ export class EnvironmentState {
   private skyMesh: Mesh | null = null;
   private fog: Fog | null = null;
   private readonly background = new Color();
-  private lights: { hemisphere: HemisphereLight; sun: DirectionalLight } | null = null;
+  private lightsObjects: { hemisphere: HemisphereLight; sun: DirectionalLight } | null = null;
   private readonly pieces = new Map<PieceName, Piece>();
   private snowfall: Snowfall | null = null;
+  private fireflies: AmbientFireflies | null = null;
   private fogAsSet: { near: number; far: number } | null = null;
+  private readonly fogColorAsSet = new Color();
   private farAsSet = 0;
+  private lightsAsSet = { hemisphere: 0, sun: 0 };
+  private lightingAsSet: EnvironmentDef['lighting'] = 'day';
 
   constructor(
     private readonly scene: Scene,
@@ -58,6 +62,31 @@ export class EnvironmentState {
   /** The camera's usual draw distance (set from the fog; 0 without a fog); a fixed camera draws further. */
   get baseFar(): number {
     return this.farAsSet;
+  }
+
+  /** The fog's colour as the look sets it (a tunnel's dark eases from it), or null without a fog. */
+  get baseFogColor(): Color | null {
+    return this.fogAsSet ? this.fogColorAsSet : null;
+  }
+
+  /** The two lights (the same objects for good; null before the first apply). */
+  get lights(): { hemisphere: HemisphereLight; sun: DirectionalLight } | null {
+    return this.lightsObjects;
+  }
+
+  /** How bright the two lights are as the look sets them (a tunnel dims from these). */
+  get lightLevels(): { hemisphere: number; sun: number } {
+    return this.lightsAsSet;
+  }
+
+  /** v1.11: "day", "evening", "night" or "cave" (the look's lighting). */
+  get lighting(): EnvironmentDef['lighting'] {
+    return this.lightingAsSet;
+  }
+
+  /** The fog object (the same one for good; null before a look with a fog). */
+  get fogObject(): Fog | null {
+    return this.fog;
   }
 
   apply(env: EnvironmentDef): void {
@@ -83,15 +112,17 @@ export class EnvironmentState {
     // v1.10 (3-3): riding on the sky dome, so they follow the camera (and hide with it under water).
     this.piece('stars', env.stars ? String(env.stars.count) : null, () => buildStars(env.stars?.count ?? 0), sky);
 
-    if (!this.lights) {
-      this.lights = buildLights();
-      scene.add(this.lights.hemisphere);
-      scene.add(this.lights.sun, this.lights.sun.target);
+    if (!this.lightsObjects) {
+      this.lightsObjects = buildLights();
+      scene.add(this.lightsObjects.hemisphere);
+      scene.add(this.lightsObjects.sun, this.lightsObjects.sun.target);
     }
-    lightUp(this.lights.hemisphere, this.lights.sun, env);
+    lightUp(this.lightsObjects.hemisphere, this.lightsObjects.sun, env);
+    this.lightsAsSet = { hemisphere: this.lightsObjects.hemisphere.intensity, sun: this.lightsObjects.sun.intensity };
+    this.lightingAsSet = env.lighting;
 
     // v1.10: the stage's water is the same everywhere (it cuts the ground's holes), so it is part of the key.
-    const groundKey = env.ground || env.water?.length ? JSON.stringify([env.ground?.size, env.ground?.y, env.water ?? null]) : null;
+    const groundKey = env.ground || env.water?.length ? JSON.stringify([env.ground?.size, env.ground?.y, env.ground?.look ?? null, env.water ?? null]) : null;
     const ground = this.piece('ground', groundKey, () => buildGround(env), scene) as Mesh | null;
     if (ground) paintGround(ground, env);
 
@@ -100,23 +131,31 @@ export class EnvironmentState {
     if (this.pieces.get('snowfall')?.key !== snowKey) this.snowfall = snow ? new Snowfall(snow) : null;
     this.piece('snowfall', snowKey, () => this.snowfall?.points ?? null, scene);
 
-    // Looks still to come (PR2c: the moon and the firefly motes; 6-2: the landmark).
-    this.piece('moon', null, () => null, scene);
-    this.piece('fireflies', null, () => null, scene);
+    // v1.11 (5-1): the moon rides on the sky dome (it follows the camera and hides under water with the sky); the
+    // firefly motes float round the camera.
+    const moon = env.moon ?? null;
+    this.piece('moon', moon ? JSON.stringify(moon) : null, () => (moon ? buildMoon(moon) : null), sky);
+    const motes = env.fireflies && env.fireflies.count > 0 ? env.fireflies : null;
+    const motesKey = motes ? JSON.stringify(motes) : null;
+    if (this.pieces.get('fireflies')?.key !== motesKey) this.fireflies = motes ? new AmbientFireflies(motes) : null;
+    this.piece('fireflies', motesKey, () => this.fireflies?.points ?? null, scene);
+    // A look still to come (6-2: the landmark).
     this.piece('landmark', null, () => null, scene);
 
     // Past the fog nothing shows, so stop drawing there (the track and prop pieces beyond are culled); the sky dome
     // shrinks to stay inside the camera's reach.
     this.fogAsSet = env.fog ? { near: env.fog.near, far: env.fog.far } : null;
+    if (env.fog) this.fogColorAsSet.set(env.fog.color);
     this.camera.far = env.fog ? Math.min(CAMERA_FAR, env.fog.far + FOG_CULL_MARGIN) : CAMERA_FAR;
     this.camera.updateProjectionMatrix();
     this.farAsSet = env.fog ? this.camera.far : 0;
     sky.scale.setScalar(env.fog ? Math.min(1, (this.camera.far * 0.95) / SKY_RADIUS) : 1);
   }
 
-  /** Every frame, with the camera in place: the falling snow keeps round it. */
+  /** Every frame, with the camera in place: the falling snow and the firefly motes keep round it. */
   update(dt: number): void {
     this.snowfall?.update(dt, this.camera);
+    this.fireflies?.update(dt, this.camera);
   }
 
   /**

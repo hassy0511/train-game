@@ -504,4 +504,63 @@ export const SONGS: Record<string, Song> = {
       },
     ],
   },
+  // 5-1 よるのもり: "ほたる ぽつぽつ" (PHASE9_CHAPTER5_6 第 1 部 §8.1): a quiet, warm 4/4 in F at 80. The bell's
+  // melody walks softly in steps (fireflies here and there, "ぽつ ぽつ"); a high bell sparkles now and then; the
+  // marimba is a slow footstep on beats 1 and 3, the bass the same, a soft pad under it all. No drums, no minor key, no
+  // dissonance or low drone (nothing scary at night). Written away from the children's song "ほたるこい" (no
+  // repeated call on two notes) and from "ほたるの ひかり" (no pickup, no rising fourth on the first beat).
+  yoru: {
+    id: 'yoru',
+    title: 'ほたる ぽつぽつ',
+    bpm: 80,
+    stepsPerBeat: 2,
+    tracks: [
+      {
+        voice: 'bell',
+        notes:
+          'A5:2 -:1 C6:1 A5:2 G5:2 | F5:3 D5:1 F5:4 | D5:2 F5:1 G5:1 Bb5:4 | A5:2 G5:2 E5:2 C5:2 | A5:2 -:1 C6:1 F6:2 E6:2 | C6:3 A5:1 E5:4 | D5:2 F5:2 Bb5:2 A5:1 G5:1 | G5:6 -:2 | ' +
+          'F5:2 A5:2 D6:3 C6:1 | Bb5:2 D6:2 F5:4 | A5:2 C6:1 A5:1 F5:2 A5:2 | G5:3 E5:1 C5:4 | D5:1 F5:1 Bb5:2 A5:2 G5:2 | E5:1 G5:1 C6:2 Bb5:2 G5:2 | A5:3 G5:1 F5:2 C5:2 | F5:6 -:2',
+      },
+      { voice: 'bell', gain: 0.35, notes: '-:8 | -:6 F6:1 -:1 | -:8 | -:4 A6:1 -:1 C7:1 -:1 | -:8 | -:6 F6:1 -:1 | -:8 | -:4 A6:1 -:1 C7:1 -:1 | -:8 | -:6 F6:1 -:1 | -:8 | -:4 A6:1 -:1 C7:1 -:1 | -:8 | -:6 F6:1 -:1 | -:8 | -:4 A6:1 -:1 C7:1 -:1' },
+      { voice: 'wood', gain: 0.3, notes: 'F4:2 -:2 C4:2 -:2 | D4:2 -:2 A3:2 -:2 | D4:2 -:2 F4:2 -:2 | E4:2 -:2 G4:2 -:2 | F4:2 -:2 C4:2 -:2 | E4:2 -:2 C4:2 -:2 | D4:2 -:2 F4:2 -:2 | E4:2 -:2 G4:2 -:2 | D4:2 -:2 A3:2 -:2 | D4:2 -:2 F4:2 -:2 | F4:2 -:2 C4:2 -:2 | E4:2 -:2 G4:2 -:2 | D4:2 -:2 F4:2 -:2 | E4:2 -:2 G4:2 -:2 | F4:2 -:2 C4:2 -:2 | F4:2 -:2 C4:2 -:2' },
+      { voice: 'bass', gain: 0.8, notes: 'F2:2 -:2 C3:2 -:2 | D2:2 -:2 A2:2 -:2 | Bb1:2 -:2 F2:2 -:2 | C2:2 -:2 G2:2 -:2 | F2:2 -:2 C3:2 -:2 | A1:2 -:2 E2:2 -:2 | Bb1:2 -:2 F2:2 -:2 | C2:2 -:2 G2:2 -:2 | D2:2 -:2 A2:2 -:2 | Bb1:2 -:2 F2:2 -:2 | F2:2 -:2 C3:2 -:2 | C2:2 -:2 G2:2 -:2 | Bb1:2 -:2 F2:2 -:2 | C2:2 -:2 G2:2 -:2 | F2:2 -:2 C3:2 -:2 | F2:2 -:2 C3:2 -:2' },
+      { voice: 'pad', gain: 0.5, notes: 'A3:8 | F3:8 | Bb3:8 | G3:8 | A3:8 | A3:8 | Bb3:8 | G3:8 | F3:8 | Bb3:8 | A3:8 | G3:8 | Bb3:8 | G3:8 | A3:8 | A3:8' },
+      { voice: 'pad', gain: 0.4, notes: 'C4:8 | D4:8 | D4:8 | E4:8 | C4:8 | E4:8 | D4:8 | E4:8 | D4:8 | D4:8 | C4:8 | E4:8 | D4:8 | E4:8 | C4:8 | C4:8' },
+    ],
+  },
+
+  // 5-2 おもちゃのまち「ぜんまい マーチ」(PHASE9_CHAPTER5_6 第 1 部 §8.1): a hopping 2/4 in C, marimba melody with a music
+  // box and a soft trumpet answering, a bouncy bass, a tiny snare. It opens with two bars going DOWN the scale (so it is
+  // clearly none of the well-known toy songs, toy soldiers' marches, ballet dolls' marches or sports-day tunes).
+  omocha: {
+    id: 'omocha',
+    title: 'ぜんまい マーチ',
+    bpm: 116,
+    stepsPerBeat: 2,
+    tracks: [
+      {
+        voice: 'wood',
+        notes:
+          'G5:1 F5:1 E5:1 D5:1 | C5:1 B4:1 A4:1 G4:1 | C5:2 E5:1 G5:1 | A5:2 G5:2 | F5:1 A5:1 G5:1 E5:1 | D5:1 F5:1 E5:1 C5:1 | D5:1 E5:1 F5:1 D5:1 | G5:3 -:1 | ' +
+          'E5:1 G5:1 C6:2 | B5:1 A5:1 G5:2 | A5:1 F5:1 D5:1 F5:1 | G5:2 E5:2 | C5:1 E5:1 G5:1 E5:1 | F5:1 A5:1 G5:1 F5:1 | E5:1 D5:1 G4:1 B4:1 | C5:3 -:1',
+      },
+      {
+        voice: 'lead',
+        gain: 0.45,
+        notes: `${repeat('-:4', 8)} | -:2 G4:2 | -:2 D5:2 | -:2 A4:2 | C5:2 -:2 | -:2 G4:2 | -:2 C5:2 | B4:2 D5:2 | E5:3 -:1`,
+      },
+      {
+        voice: 'bell',
+        gain: 0.4,
+        notes: `-:4 | -:4 | -:2 G6:1 E6:1 | -:4 | -:2 A6:1 F6:1 | -:4 | -:2 B6:1 G6:1 | -:4 | -:4 | -:2 D7:1 B6:1 | -:4 | -:2 G6:1 E6:1 | -:4 | -:2 A6:1 F6:1 | -:4 | C7:2 -:2`,
+      },
+      {
+        voice: 'bass',
+        notes:
+          'C3:1 -:1 G2:1 -:1 | G2:1 -:1 D3:1 -:1 | C3:1 -:1 G2:1 -:1 | F2:1 -:1 C3:1 -:1 | F2:1 -:1 C3:1 -:1 | C3:1 -:1 G2:1 -:1 | G2:1 -:1 D3:1 -:1 | G2:1 -:1 B2:1 -:1 | ' +
+          'C3:1 -:1 G2:1 -:1 | G2:1 -:1 D3:1 -:1 | D3:1 -:1 A2:1 -:1 | C3:1 -:1 G2:1 -:1 | C3:1 -:1 G2:1 -:1 | F2:1 -:1 C3:1 -:1 | G2:1 -:1 D3:1 -:1 | C3:1 -:1 C2:1 -:1',
+      },
+      { voice: 'drums', gain: 0.35, notes: `${repeat('k:1 -:1 s:1 -:1', 15)} | k:1 s:1 k:1 -:1` },
+    ],
+  },
 };
