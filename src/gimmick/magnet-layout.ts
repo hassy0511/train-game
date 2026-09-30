@@ -21,7 +21,7 @@ export const MAGNET_LOOK_MODELS: Record<MagnetLook, string> = {
   'toy-blocks': 'toy-blocks-loose',
   door: 'iron-door',
   crossing: 'crossing-bar-iron',
-  mirror: 'turn-mirror',
+  mirror: 'turn-mirror-small',
 };
 
 const DEFAULT_LOOK: Record<MagnetKind, MagnetLook> = { pick: 'star', bridge: 'rail-piece', gate: 'door', turn: 'mirror' };

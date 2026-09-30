@@ -10,8 +10,19 @@ import { FIREFLY_FORK } from '../train/params';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import type { Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
-import { validateIceLayout, validateMagnetLayout, validateNightLayout, validatePlowLayout, validateSnowLayout, validateStageFile, validateStageLayout, validateToyLayout, validateWaterLayout } from './validate';
 import { ironDrawsProp, ironPropsFor, magnetTargets } from '../gimmick/magnet-layout';
+import {
+  validateIceLayout,
+  validateMagnetLayout,
+  validateMirrorWorld,
+  validateNightLayout,
+  validatePlowLayout,
+  validateSnowLayout,
+  validateStageFile,
+  validateStageLayout,
+  validateToyLayout,
+  validateWaterLayout,
+} from './validate';
 import { computeWaterSpans, diveForkSide } from './water';
 
 // One chunk per stage file; stages load lazily.
@@ -92,6 +103,9 @@ export function prepareStage(raw: unknown): StageData {
     if (j) j.turn = t.id;
   }
   const ironProps = ironPropsFor(file, network, magnets);
+  // v1.11 (5-3): the mirror world, phantoms and glass; glass has no base under it.
+  validateMirrorWorld(file, network);
+  addGlassSkips(file);
   const groundY = file.environment.ground?.y ?? null;
 
   // v1.11 (PR5): a can, a bucket or a whole sign with `iron` is drawn by the iron layer (it flies or stretches).
@@ -154,6 +168,14 @@ function addBridgeGaps(file: StageFile): void {
     const rewindAt = Number((g.params as { rewindAt?: number } | undefined)?.rewindAt ?? butterflyAt - 60);
     rail.gaps = [...(rail.gaps ?? []), { from: g.from, to: g.to, pit: false, bridge: index, rewind: { railId: g.railId, at: rewindAt } }];
   });
+}
+
+/** v1.11 (5-3): a glass stretch floats: the rail's base (rock, blocks…) leaves it out. */
+function addGlassSkips(file: StageFile): void {
+  for (const r of file.rails) {
+    if (!r.glass?.length || !r.base) continue;
+    for (const b of Array.isArray(r.base) ? r.base : [r.base]) b.skip = [...(b.skip ?? []), ...r.glass.map((k) => ({ from: k.from, to: k.to }))];
+  }
 }
 
 /** Signs a slope or a rocket rest stretch puts up by itself at its start (v1.7): on the left, facing the train. */

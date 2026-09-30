@@ -4,10 +4,23 @@ import type { GimmickDef, MirrorParams } from '../stage/types';
 import { MIRROR } from '../train/params';
 import type { Train } from '../train/train';
 
-/** One "mirror" gimmick (4-1) with its defaults filled in. */
+/** One "mirror" gimmick (4-1; v1.11 5-3's framed ones) with its defaults filled in. */
 export interface MirrorDef {
-  /** Its place in gimmicks[]. */
+  /** Its place in gimmicks[] (a mirror-flip gate: −1 − its section's index). */
   index: number;
+  /** v1.11 (5-3): its params.id ("" when it has none). */
+  id: string;
+  /**
+   * v1.11 (5-3): "ice" (4-1), "frame" (5-3's silver and lavender frame on two feet), or "gate" (a mirror-flip gate
+   * across the rail: its arch is the mirror world's; see gimmick/mirror-flip.ts gateMirrors).
+   */
+  look: 'ice' | 'frame' | 'gate';
+  /** v1.11 (5-3): it faces the train now (turned away, or a shut gate: no reflection, no flash). Changes at run time. */
+  facing: boolean;
+  /** v1.11 (5-3): degrees it is turned by while not facing. */
+  turnFrom: number;
+  /** v1.11 (5-3): its back. */
+  back: 'swirl' | 'plain';
   /** Bottom centre (world m). */
   position: Vector3;
   rotationY: number;
@@ -40,6 +53,11 @@ export function mirrorDefs(gimmicks: GimmickDef[]): MirrorDef[] {
     const reflect = p.reflect ?? ['train'];
     out.push({
       index,
+      id: p.id ?? '',
+      look: p.look ?? 'ice',
+      facing: p.facing !== false,
+      turnFrom: p.turnFrom ?? 180,
+      back: p.back ?? 'swirl',
       position: new Vector3(...p.position),
       rotationY,
       normal: new Vector3(Math.sin(a), 0, Math.cos(a)),
@@ -65,12 +83,13 @@ export function inFront(m: MirrorDef, point: Vector3): number {
 
 /**
  * The mirror that shows reflections now: the nearest one within its range with `point` (the lead car) in front of
- * its glass. Only one at a time (PHASE8 第 7 部 §4.3).
+ * its glass. Only one at a time (PHASE8 第 7 部 §4.3). v1.11 (5-3): only mirrors facing the train (not turned away).
  */
 export function activeMirror(mirrors: MirrorDef[], point: Vector3): MirrorDef | null {
   let best: MirrorDef | null = null;
   let bestD = Infinity;
   for (const m of mirrors) {
+    if (!m.facing) continue;
     const d = Math.hypot(point.x - m.position.x, point.z - m.position.z);
     if (d > m.range || d >= bestD || inFront(m, point) <= 0.5) continue;
     best = m;
@@ -80,6 +99,8 @@ export function activeMirror(mirrors: MirrorDef[], point: Vector3): MirrorDef | 
 }
 
 export interface MirrorEvents extends Record<string, unknown> {
+  /** v1.11 (5-3): mirror `mirror` turned round (to face the train, or its back to it). */
+  turn: { mirror: MirrorDef; face: 'front' | 'back' };
   /** The light caught in a mirror ahead: "きらーん" (once per approach). */
   flash: MirrorDef;
   /** On a mirror's false way, MIRROR.fakeWarn m before it: "ワンダーごうが もう 1だい！？" (once per try). */
@@ -114,6 +135,27 @@ export class MirrorSystem {
     this.flashed.clear();
   }
 
+  /** v1.11 (5-3): mirror `id` by its params.id, or null. */
+  byId(id: string): MirrorDef | null {
+    return this.mirrors.find((m) => m.id === id) ?? null;
+  }
+
+  /**
+   * v1.11 (5-3): turns mirror `id` to face the train ("front") or turns its back to it ("back"): a cutscene's fx
+   * "mirrorTurn", and the hook for the magnet's "turn" target (PR5/PR6b: a pull turns a turned-away mirror round).
+   * It stays so until the stage starts again (a rewind keeps it). Returns false when it has no mirror of that id or
+   * it already faces that way.
+   */
+  turn(id: string, face: 'front' | 'back'): boolean {
+    const m = this.byId(id);
+    if (!m || m.facing === (face === 'front')) return false;
+    m.facing = face === 'front';
+    // Facing round again: its "きらーん" may come again.
+    this.flashed.delete(m.index);
+    this.events.emit('turn', { mirror: m, face });
+    return true;
+  }
+
   /** Call every frame after the train moved. */
   update(): void {
     if (this.mirrors.length === 0) return;
@@ -124,7 +166,7 @@ export class MirrorSystem {
     for (const m of this.mirrors) {
       const d = Math.hypot(this.front.x - m.position.x, this.front.z - m.position.z);
       if (d > m.range) this.flashed.delete(m.index);
-      if (this.lightOn && !this.flashed.has(m.index) && d <= m.flashRange && inFront(m, this.front) > 0) {
+      if (this.lightOn && m.facing && !this.flashed.has(m.index) && d <= m.flashRange && inFront(m, this.front) > 0) {
         const toMirror = new Vector3(m.position.x - this.front.x, 0, m.position.z - this.front.z).normalize();
         if (toMirror.dot(this.forward) >= Math.cos(MathUtils.degToRad(MIRROR.flashCone))) {
           this.flashed.add(m.index);

@@ -456,6 +456,48 @@ export const THIN_ICE = {
 export const MIRROR = { range: 260, flashRange: 200, reflectRadius: 80, hintDistance: 100, fakeWarn: 45, tint: 0.25, flashCone: 40 } as const;
 
 /**
+ * v1.11 (5-3): the mirror world (PHASE9_CHAPTER5_6 第 6 部 §4.7). A "mirror-flip" stretch shows the 3D view mirrored left
+ * to right (CSS on the canvas's box; the DOM UI never flips) from the train front passing its entry gate to passing its
+ * exit gate, the switch hidden in a `fade` s shimmer. An "open" gate ripples from `openRipple` m. A "whistle" gate glows
+ * the whistle from `gateApproach` m while shut; reaching it shut, the train bounces (`bounceSeconds`, `bounceBack` m)
+ * and is held `gateHold` m before it until a whistle opens it (not a fail): the train touches the soft glass
+ * `gateHold − bounceBack` m before its face, so the bounce ends right at the hold. A stretch is `flipMin`–`flipMax` m
+ * long, `flipSpacing` m from the next on its rail, with nothing to choose or fail at from `flipClearBefore` m before it
+ * to `flipClearAfter` m after it. Phantoms (a false way's rail, a false bridge over a gap) are never reflected; the light
+ * pops them within LIGHT.revealDistance m, a jump from within `phantomTakeoff` m pops a false bridge (in `phantomPop`
+ * s), a false way fades to sparkles over its last `phantomFade` m (no shiver), and they come back after a rewind (as
+ * reveals do); its cushion shows from `cushionSeen` m. Glass stretches show `glassOpacity` directly and plain rails in
+ * mirrors. A turned-away mirror spins round in `turnSeconds` s (a cutscene's mirrorTurn in `fxTurnSeconds` s), and a
+ * magnet "turn" target keeps at least `turnWindowAfterRewind` m of its pull after the dead end's rewind.
+ */
+export const MIRROR_WORLD = {
+  fade: 0.35,
+  openRipple: 30,
+  gateApproach: 80,
+  gateHold: 4,
+  bounceSeconds: 0.5,
+  bounceBack: 3,
+  flipMin: 150,
+  flipMax: 400,
+  flipSpacing: 200,
+  flipClearBefore: 20,
+  flipClearAfter: 60,
+  phantomTakeoff: 60,
+  phantomPop: 0.6,
+  phantomFade: 30,
+  cushionSeen: 60,
+  glassOpacity: 0.28,
+  turnSeconds: 0.6,
+  fxTurnSeconds: 0.8,
+  turnWindowAfterRewind: 30,
+  /** The gates' size (m) when the stage does not say. */
+  gateWidth: 14,
+  gateHeight: 10,
+  /** A gate reflects the train (like a mirror) from this far (m). */
+  gateRange: 140,
+} as const;
+
+/**
  * v1.10 (3-2): waterfalls (gimmicks "waterfall", looks and sound only). Defaults for its params: the water is thrown
  * `throw` m out from the lip, the rock ledge juts `lip` m, the curtain lets `sheetOpacity` of the light through. Its
  * "さーーっ" is heard from `hearFar` m and loudest within `hearNear` m. A car whose roof is between the lip and the

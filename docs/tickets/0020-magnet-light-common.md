@@ -28,13 +28,13 @@
 | `crossing-bar-iron` | さかさ ふみきり（ぼうが 線路を ふさぐ 向き。6-1） | 6.8×3.2×0.3 | ≤ 360 | この ゲームの ふみきりの 色（きいろ `#f2c230` と くろ `#2e3440` の しま、ぎんの 柱） | 柱の 足もとが −3.2 m、原点は 線路の まんなか | ぼうが 上がる（ゲーム、6-1 で） |
 | `iron-star-small` | れんしゅうの てつの ほし（5-3 の 寸劇・M1）、`pick` の `star` | 0.6×0.6×0.1 | ≤ 120 | てつ `#7a8ca3` から ぎん `#dde6ee` へ | 底面中心、+Z が おもて | とぶ（ゲーム） |
 | `iron-bell-small` | `pick` の `bell`（てつの すず） | 0.45×0.55×0.45 | ≤ 120 | 明るい てつ `#a9b8cc`、わ `#56657a`、中の たま 金 `#e5b93c` | 底面中心 | とぶ（ゲーム） |
-| `turn-mirror` | そっぽを むいた かがみ（仮。5-3 は 自分の かがみ `mirror` を まわす） | 3.3×4.8×0.3 | ≤ 200 | うらは てつ `#7a8ca3`、おもては 白っぽい `#e9eef6` | 底面中心、おもてが +Z | くるっ（ゲーム） |
+| `turn-mirror-small` | そっぽを むいた かがみ（仮。5-3 は 自分の かがみ `mirror` を まわす） | 3.3×4.8×0.3 | ≤ 200 | うらは てつ `#7a8ca3`、おもては 白っぽい `#e9eef6` | 底面中心、おもてが +Z | くるっ（ゲーム） |
 | `iron-can` | どこでも の 小物: あきかん | 0.12×0.2×0.12 | ≤ 40 | ブリキ `#c9d3dc` に 水色の おび `#4fa3d9`（字 なし） | 底面中心 | びよん・からん・ころころ（ゲーム） |
 | `iron-bucket` | どこでも の 小物: バケツ | 0.34×0.46×0.34 | ≤ 140 | 水色の ブリキ `#8fd0e8`、ふち `#c8ecf7`、とって `#2e3440` | 底面中心 | 同じ |
 | `sign-bell` | どこでも の 小物: かんばんの ベル（柱 ＋ 字の ない 板 ＋ 金の ベル） | 0.7×1.6×0.5 | ≤ 100 | 柱 `#9c7a55`、板 `#f2e3c6`、ベル `#e5b93c`。ベルは 腕の 先（原点から (0, 1.53, 0.38)）に さがる | 底面中心、腕が +Z（線路の 方） | ベルが のびて もどる（ゲームは ベルだけ べつに 描く） |
 - 描く 回数・三角形（M12）: いちばん 多い 所（すきまの 前で ひっぱって いて 小物が 見える とき）でも **12 回・約 6,000 三角形まで**（予算 200 回・10 万）
 
 ## 受け入れ条件
-- モデル確認ページで 見られる: `https://hassy0511.github.io/train-game/models.html?model=magnet-mark`（`rail-piece`・`iron-door`・`crossing-bar-iron`・`iron-star-small`・`iron-bell-small`・`turn-mirror`・`iron-can`・`iron-bucket`・`sign-bell` も 同じ）、ならべて くらべる `https://hassy0511.github.io/train-game/models.html?compare=iron-can,iron-bucket,sign-bell`
+- モデル確認ページで 見られる: `https://hassy0511.github.io/train-game/models.html?model=magnet-mark`（`rail-piece`・`iron-door`・`crossing-bar-iron`・`iron-star-small`・`iron-bell-small`・`turn-mirror-small`・`iron-can`・`iron-bucket`・`sign-bell` も 同じ）、ならべて くらべる `https://hassy0511.github.io/train-game/models.html?compare=iron-can,iron-bucket,sign-bell`
 - または Playwright スモークの スクショ（`tests/smoke/magnet.spec.ts`: `magnet-button.png`・`magnet-pull.png`・`magnet-bridge.png`・`magnet-gate.png`・`magnet-iron.png`・`magnet-04.png`）で 見える こと
 - `npm run build`（`check-models`）が とおる。三角形・原点が 表の とおり

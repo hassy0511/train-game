@@ -124,13 +124,13 @@ function ironBell(): Group {
   return solid('iron-bell-small', parts);
 }
 
-/** "turn-mirror": a standing mirror that looks away (its back towards the rail: a plain iron back), 3 × 4 m. */
+/** "turn-mirror-small" (a magnet "turn" without `mirror`; 5-3's own is "turn-mirror"): a standing mirror that looks away (its back towards the rail: a plain iron back), 3 × 4 m. */
 function turnMirror(): Group {
   const parts: BufferGeometry[] = [];
   parts.push(part(box(3, 4, 0.12), '#E9EEF6', { at: [0, 2.6, 0.08] }));
   parts.push(part(box(3.3, 4.3, 0.14), IRON, { at: [0, 2.6, -0.02] }));
   parts.push(part(box(0.3, 0.6, 0.3), IRON_DARK, { at: [0, 0.3, 0] }));
-  return solid('turn-mirror', parts);
+  return solid('turn-mirror-small', parts);
 }
 
 /** The odds and ends' parts, each a merged geometry with its origin at the bottom centre (instanced by the view). */
@@ -195,7 +195,7 @@ const BUILDERS: Record<string, () => Group> = {
   'crossing-bar-iron': crossingBar,
   'iron-star-small': ironStar,
   'iron-bell-small': ironBell,
-  'turn-mirror': turnMirror,
+  'turn-mirror-small': turnMirror,
   'iron-can': ironCan,
   'iron-bucket': ironBucket,
   'sign-bell': signBell,

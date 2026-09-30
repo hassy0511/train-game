@@ -179,6 +179,9 @@ export class MagnetGimmicks {
           v.glintAt.copy(v.home).y += 0.8;
           v.film = this.makeFilm(frame.position, frame.tangent, frame.up);
           this.group.add(v.film);
+        } else if (t.kind === 'turn' && t.mirror) {
+          // 5-3: the stage's own framed mirror (drawn and turned by the mirrors, "mirror:turn"); only the glint here.
+          v.glintAt.copy(v.home).y += 4.5;
         } else {
           const model = (await models.load(t.model)).clone(true);
           model.name = `magnet:${t.id}`;

@@ -8,7 +8,8 @@ export type StageEvent =
   | { type: 'passengers'; stationId: string; board: number; alight: number }
   /** v1.11 (5-2) `delay`: the move to `position` starts after this many seconds (a toy's key turns first). */
   | { type: 'actor:state'; id: string; state: string; position?: Vector3; seconds?: number; delay?: number }
-  | { type: 'actor:spawn'; id: string; model: string; position: Vector3; quaternion: Quaternion }
+  /** v1.11 (5-3) `mirror`: "only" = seen only in a mirror's reflection, "hide" = never reflected. */
+  | { type: 'actor:spawn'; id: string; model: string; position: Vector3; quaternion: Quaternion; mirror?: 'only' | 'hide' }
   | { type: 'actor:move'; id: string; position: Vector3; seconds: number }
   | { type: 'actor:remove'; id: string }
   /**
@@ -255,6 +256,23 @@ export type StageEvent =
   | { type: 'spin'; id: string; state: 'wake' | 'turn' | 'good' | 'fixed'; side?: 'left' | 'right' }
   /** v1.11 (5-2): the train went `side` at spinning fork `id` (`good`: the way on, else round the loop). */
   | { type: 'spin:taken'; id: string; side: 'left' | 'right'; good: boolean }
+  /**
+   * v1.11 (5-3): the train front went through mirror-flip `id`'s entry gate ("in": the view is mirrored now) or its exit
+   * gate ("out"). `instant`: put so by a rewind or a resume (no shimmer, no sound).
+   */
+  | { type: 'flip:in'; id: string; instant?: boolean }
+  | { type: 'flip:out'; id: string; instant?: boolean }
+  /** v1.11 (5-3): mirror-flip `id`'s whistle gate opened ("ぽわわん"; `instant`: a resume) or bounced the train ("ぽよん"). */
+  | { type: 'flip:gate'; id: string; state: 'open' | 'bump'; instant?: boolean }
+  /**
+   * v1.11 (5-3): phantom `id` (a phantom fork's id, or "gap:<railId>:<from>") is whole ("solid"), popped ("gone") or
+   * popped under the falling train ("fall").
+   */
+  | { type: 'phantom'; id: string; state: 'solid' | 'gone' | 'fall' }
+  /** v1.11 (5-3): mirror `id` turned round (`face` "front": it faces the train; "back": its iron back). `instant`: skipped. */
+  | { type: 'mirror:turn'; id: string; face: 'front' | 'back'; seconds: number; instant?: boolean }
+  /** v1.11 (5-3): the train front went onto a glass stretch (the first time this mission: "しゃららん"). */
+  | { type: 'glass'; on: boolean }
   /** v1.7: a countdown started ("run"), got low, was beaten ("safe"), ran out ("up") or was put away ("off"). */
   | { type: 'countdown'; state: 'run' | 'low' | 'safe' | 'up' | 'off' };
 

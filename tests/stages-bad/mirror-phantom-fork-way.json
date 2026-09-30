@@ -1,0 +1,1 @@
+{ "_expect": "a phantom fork's default way must be a dead end", "_base": "0-3", "_edit": [{ "path": "rails.1.deadEnd", "delete": true }] }

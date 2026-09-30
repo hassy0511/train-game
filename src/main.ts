@@ -16,6 +16,7 @@ import {
   LEVER_NOTCHES,
   LIGHT,
   MAGNET,
+  MIRROR_WORLD,
   PLOW,
   RECORD,
   WINDUP,
@@ -57,6 +58,8 @@ import { PlowHint } from './gimmick/plow-hint';
 import { IceSystem, iceZones, thinIceZones } from './gimmick/ice';
 import { ThinIceSystem } from './gimmick/thin-ice';
 import { MirrorSystem } from './gimmick/mirror';
+import { MirrorFlipSystem } from './gimmick/mirror-flip';
+import { PhantomSystem } from './gimmick/phantom';
 import { TunnelSystem } from './gimmick/tunnel';
 import { LightSwitch } from './gimmick/light-switch';
 import { MagnetSystem } from './gimmick/magnet';
@@ -329,12 +332,17 @@ async function boot(): Promise<void> {
   // v1.10 (4-3): the rocket also glows when the snow wave is close (the runner knows the wave).
   rocket.extraGlow = () => thinIce.glow || (runner?.chaseRocketGlow ?? false);
   const mirrors = new MirrorSystem(stage.file.gimmicks, train);
+  // v1.11 (5-3): "かがみの なか" (the view mirrored between two gates; a whistle gate holds the train until it opens) and
+  // Sakasa's phantoms (a false way, a false bridge; never in a mirror).
+  const flip = new MirrorFlipSystem(stage.file.gimmicks, train);
+  const phantoms = new PhantomSystem(stage.file, train);
   // v1.10 (4-3): tunnels (dark inside; the light button glows for them).
   const tunnels = new TunnelSystem(stage.file.gimmicks, train);
   // v1.11 (PR5): the magnet light's iron targets (unopened gaps and gates stop the train: "ぽよん") and the iron odds
   // and ends by the line. Both do nothing until the magnet light is learned (showAbility).
   const magnet = new MagnetSystem(stage.magnets, train, stage.file.junctions, (id) => foundRecords.has(id));
-  if (stage.magnets.length > 0) train.setBlocks(() => magnet.blocks());
+  // The shut whistle gates (5-3) and the unopened magnet gaps and gates: "ぽよん" before them.
+  train.setBlocks(() => [...flip.blocks(), ...magnet.blocks()]);
   const ironProps = new IronProps(stage.ironProps, train);
   const hasMagnetHooks = stage.magnets.length > 0 || stage.ironProps.length > 0;
   const hasIce = iceZones(stage.file.gimmicks).length > 0 || thinIceZones(stage.file.gimmicks).length > 0;
@@ -418,6 +426,8 @@ async function boot(): Promise<void> {
       if (whistle.trigger()) {
         // v1.11 (5-1): in a whistle-reversed stretch it sounds reversed ("…っぴー"; it still works: PHASE9_0 §6).
         audio.playWhistle({ reversed: runner?.whistleReversed ?? false });
+        // v1.11 (5-3): a shut mirror gate glowing ahead opens ("ぽわわん"); only once (the whistle's own rest spaces presses).
+        flip.onWhistle();
         // v1.10 (3-3): in the dark the glowing motes flash ("ちりりん").
         const fog = zoneAt(stage.file.gimmicks, 'fog', train.state.railId, train.frontS);
         if (fog && typeof fog.params?.color === 'string') audio.playGlimmer();
@@ -671,7 +681,10 @@ async function boot(): Promise<void> {
   });
   magnet.events.on('open', ({ target, instant }) => {
     if (!instant && target.kind === 'gate') audio.playGateOpen();
-    if (!instant && target.kind === 'turn') audio.playMirror();
+    // A turn with `mirror` turns 5-3's framed mirror round (its own "きらーん"); without, PR5's code-drawn stand-in.
+    if (target.kind === 'turn' && target.mirror) {
+      events.post({ type: 'mirror:turn', id: target.mirror, face: 'front', seconds: MIRROR_WORLD.turnSeconds, instant });
+    } else if (!instant && target.kind === 'turn') audio.playMirror();
     events.post({ type: 'magnet:open', id: target.id, instant });
     // The test course has no runner to show the fork's true way.
     if (!hasMissions && target.kind === 'turn' && target.junction) events.post({ type: 'sign:reveal', junctionId: target.junction });
@@ -856,6 +869,94 @@ async function boot(): Promise<void> {
     audio.playMirror();
     events.post({ type: 'mirror', index: m.index, state: 'flash' });
   });
+  // ---- v1.11 (5-3) the mirror world: the view mirrored between two gates, the whistle gate, phantoms, glass ----
+  const mirrorWorld = flip.sections.length > 0 || phantoms.phantoms.length > 0 || stage.file.rails.some((r) => r.glass?.length) || mirrors.mirrors.some((m) => m.id !== '');
+  const mirrorFade = document.createElement('div');
+  mirrorFade.className = 'mirror-fade';
+  mirrorFade.id = 'mirror-fade';
+  mirrorFade.addEventListener('animationend', () => mirrorFade.classList.remove('is-on'));
+  uiEl.prepend(mirrorFade);
+  /** The shimmer the view turns round behind ("しゃらん"). */
+  const shimmer = (): void => {
+    mirrorFade.classList.remove('is-on');
+    void mirrorFade.offsetWidth;
+    mirrorFade.classList.add('is-on');
+  };
+  const turnedMirrors = new Map<string, 'front' | 'back'>();
+  if (mirrorWorld) {
+    app.dataset.flip = '';
+    app.dataset.flips = '0';
+    app.dataset.gateBumps = '0';
+    app.dataset.phantoms = phantoms.list;
+    app.dataset.glass = '0';
+    app.dataset.mirrorFacing = '';
+  }
+  flip.events.on('in', ({ section, instant }) => {
+    app.dataset.flips = String(flip.flips);
+    events.post({ type: 'flip:in', id: section.id, instant });
+    if (instant) return;
+    shimmer();
+    audio.playMirrorGate();
+    runner?.sayMirrorWorld('flipIn', { own: section.line });
+  });
+  flip.events.on('out', ({ section, instant }) => {
+    events.post({ type: 'flip:out', id: section.id, instant });
+    if (instant) return;
+    shimmer();
+    audio.playMirrorGate();
+    runner?.sayMirrorWorld('flipOut', { own: section.lineOut });
+  });
+  flip.events.on('near', (section) => runner?.sayMirrorWorld('mirrorGateNear', { tag: section.id }));
+  flip.events.on('open', ({ section, byWhistle }) => {
+    events.post({ type: 'flip:gate', id: section.id, state: 'open', instant: !byWhistle });
+    if (!byWhistle) return;
+    audio.playMirrorRipple();
+    runner?.sayMirrorWorld('mirrorGateOpen', { tag: section.id });
+  });
+  flip.events.on('bump', ({ section }) => {
+    app.dataset.gateBumps = String(flip.bumps);
+    audio.playMirrorBump();
+    events.post({ type: 'flip:gate', id: section.id, state: 'bump' });
+    runner?.sayMirrorWorld('mirrorGateBump', { tag: section.id });
+    runner?.sayMirrorWorld('mirrorGateAfter', { tag: section.id });
+  });
+  phantoms.events.on('change', ({ id, state }) => {
+    app.dataset.phantoms = phantoms.list;
+    events.post({ type: 'phantom', id, state });
+    if (state !== 'solid') audio.playPhantomPop();
+  });
+  // Glass: "しゃららん" the first time in a mission the train front goes onto it.
+  const glassRails = new Map(stage.file.rails.filter((r) => r.glass?.length).map((r) => [r.id, r.glass ?? []]));
+  let onGlass = false;
+  let glassMission = -2;
+  const updateGlass = (): void => {
+    if (glassRails.size === 0) return;
+    const f = train.frontS;
+    const on = (glassRails.get(train.state.railId) ?? []).some((k) => f >= k.from && f <= k.to);
+    if (on === onGlass) return;
+    onGlass = on;
+    app.dataset.glass = on ? '1' : '0';
+    events.post({ type: 'glass', on });
+    const mission = runner?.missionIndex ?? -1;
+    if (on && mission !== glassMission) {
+      glassMission = mission;
+      audio.playGlassOn();
+    }
+  };
+  events.on('event', (e) => {
+    if (e.type === 'sign:reveal') phantoms.onReveal(e.junctionId);
+    if (e.type === 'sign:reset') phantoms.reset(e.junctionId);
+    if (e.type === 'rewind') {
+      phantoms.reset();
+      flip.reset();
+    }
+    if (e.type === 'mirror:turn') {
+      // A cutscene's fx "mirrorTurn" (and the magnet's "turn", PR5/PR6b): the mirror turns round and stays so.
+      if (mirrors.turn(e.id, e.face) && !e.instant) audio.playMirrorTurn(e.face === 'front');
+      turnedMirrors.set(e.id, e.face);
+      app.dataset.mirrorFacing = [...turnedMirrors].map(([id, face]) => `${id}:${face}`).join(',');
+    }
+  });
   events.on('event', (e) => {
     if (e.type === 'rewind') {
       snowSplat.classList.remove('is-on');
@@ -949,7 +1050,8 @@ async function boot(): Promise<void> {
 
   train.events.on('junctionApproach', (e) => {
     // v1.11 (5-2): a spinning fork shows no arrows (its flag and the whistle's glow are the sign).
-    if (e.junction.spin) {
+    // v1.11 (5-3): nor does a turned-away mirror's fork (only the magnet turns the mirror round to show the way).
+    if (e.junction.spin || e.junction.turn) {
       ui.junction.hide();
       ui.junction.spin(e.junction.id);
       return;
@@ -1123,6 +1225,11 @@ async function boot(): Promise<void> {
     } else plowSprayIn = 0;
     thinIce.update(dt);
     mirrors.update();
+    // v1.11 (5-3): the view is mirrored while the train front is between a stretch's gates (a box's CSS: no draw cost).
+    flip.update();
+    phantoms.update({ lightOn });
+    updateGlass();
+    viewEl.classList.toggle('is-flipped', flip.flipped);
     tunnels.update();
     if (ice.sparkle !== iceSparkle) {
       iceSparkle = ice.sparkle;
@@ -1301,6 +1408,12 @@ async function boot(): Promise<void> {
       for (const t of stage.magnets) if (!t.recordId) app.setAttribute(`data-magnet-${t.id}`, magnet.state(t.id));
       app.dataset.iron = String(ironProps.count);
       app.dataset.lightMode = lightSwitch.mode;
+    }
+    if (mirrorWorld) {
+      // v1.11 (5-3) test hooks (PHASE9_CHAPTER5_6 第 6 部 §4.10). Counts only go up.
+      app.dataset.flip = flip.flipped ? '1' : '';
+      app.dataset.flipGate = flip.gateNear;
+      if (!runner) ui.whistle.setGlow(flip.whistleGlow);
     }
     app.dataset.timer = timer ? String(timer.seconds) : '';
     app.dataset.timerState = timer?.state ?? '';
@@ -1484,9 +1597,11 @@ async function boot(): Promise<void> {
       bubbles.clear();
       void bubbles.say(text);
     },
-    card: (title, button, icon, mirror) => {
-      audio.playCard();
-      return showCard(uiEl, title, button, icon, skipGuard(), undefined, { mirror });
+    card: (title, button, icon, mirror, notes) => {
+      // v1.11 (5-3): the notes shown in a mirror ring "しゃらーん" as the words come out in it.
+      if (mirror === 'reflect') audio.playLetterReflect();
+      else audio.playCard();
+      return showCard(uiEl, title, button, icon, skipGuard(), undefined, { mirror, notes });
     },
     // v1.10 (3-3): the runner opens and closes a cutscene's doors itself (it knows the station).
     door: () => undefined,
@@ -1607,7 +1722,8 @@ async function boot(): Promise<void> {
       await showCard(uiEl, `${ABILITY_NAMES[ability] ?? ability}を\nおぼえた！`, 'やったね！', 'badge');
     },
     revealJunction: (side) => ui.junction.reveal(side),
-    whistleHint: (on) => ui.whistle.setGlow(on),
+    // v1.11 (5-3): a shut mirror gate close ahead lights it too (a hint: it opens on the whistle).
+    whistleHint: (on) => ui.whistle.setGlow(on || flip.whistleGlow),
     recordFound: (record) => {
       toast.show(`みつけた！\n${record.name}`, 'perfect');
       audio.playRecord();
@@ -1781,6 +1897,10 @@ async function boot(): Promise<void> {
   runner.setLight(lightOn);
   if (resumeFrom > 0) {
     runner.prepareResume(resumeFrom, resume ?? undefined);
+    // v1.11 (5-3): the whistle gates on the way to the station it starts at are open.
+    const before = stage.file.missions[resumeFrom - 1].steps;
+    const at = stage.file.stations.find((st) => st.id === before[before.length - 1].stationId);
+    if (at) flip.reset({ resumeAt: { railId: at.railId, at: at.at } });
     // The train stands at another station now: the camera jumps there instead of flying over the stage.
     applyCamera(true);
   }

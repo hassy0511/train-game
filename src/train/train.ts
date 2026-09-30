@@ -19,6 +19,7 @@ import {
   UPDRAFT_ACCELERATION,
   JUNCTION_LOCK_DISTANCE,
   LEVER_NOTCHES,
+  MIRROR_WORLD,
   PARADE,
   ROCKET,
   SLOPE,
@@ -29,6 +30,20 @@ import {
 import type { TrainPose, TrainState } from './types';
 
 export type JunctionSide = 'left' | 'right';
+
+/**
+ * v1.11: a face across the rail the train front must not pass yet (Train.setBlocks; asked every frame, in the air
+ * too). "magnet" (PR5): an unopened magnet gap's soap film or iron gate; the front stops at `at`, bounces softly back
+ * ("ぽよん") and the caller puts the train back (magnetBounce). "mirror" (5-3): a shut whistle gate; the train touches
+ * its soft glass MIRROR_WORLD.gateHold − bounceBack m before it, bounces back ("ぽよん", not a fail) and is held there
+ * until the face is gone (mirrorBump).
+ */
+export interface TrainBlock {
+  kind: 'magnet' | 'mirror';
+  railId: string;
+  at: number;
+  id: string;
+}
 
 export interface JunctionApproach {
   junction: JunctionDef;
@@ -87,6 +102,8 @@ export interface TrainEvents extends Record<string, unknown> {
    * too). The train bounces softly back; the caller puts it back.
    */
   magnetBounce: { railId: string; s: number; id: string; kind: TrainBlock['kind'] };
+  /** v1.11 (5-3): "ぽよん" off a shut mirror gate (block `id`); `airborne`: it was in the air (the jump ends there). */
+  mirrorBump: { id: string; railId: string; s: number; airborne: boolean };
 }
 
 /**
@@ -100,13 +117,6 @@ export interface SpeedCap {
   holdAt?: { railId: string; s: number };
 }
 
-/** v1.11 (PR5): a place the train front may not pass yet (an unopened magnet gap or gate; 5-3's mirror gate). */
-export interface TrainBlock {
-  kind: 'magnet' | 'mirror';
-  railId: string;
-  at: number;
-  id: string;
-}
 
 /**
  * v1.10 (4-2): what a press of "ゆきかき" did. "play" (PHASE9_0 §3): no snow ahead to clear, so the blade goes down for
@@ -280,6 +290,10 @@ export class Train {
   private leaderHeld = false;
   /** v1.11 (5-2): the side a spinning fork sends the train (SpinSystem.side). */
   private spinSides: ((j: JunctionDef) => JunctionSide) | null = null;
+  /** v1.11 (5-3): "ぽよん" off a mirror block: seconds so far and where the car centre was when it touched. */
+  private blockBump: { t: number; from: number; id: string } | null = null;
+  /** v1.11 (5-3): mirror blocks bumped this try: held before them until they are gone. */
+  private readonly held = new Set<string>();
 
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
@@ -398,7 +412,7 @@ export class Train {
    * falling, slipping, in the air or already burning. Works from a standstill.
    */
   startRocket(): boolean {
-    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping) return false;
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping || this.blockBump) return false;
     if (this.airborne || this.rocketLeft > 0) return false;
     this.rocketLeft = ROCKET.burn;
     this.settling = false;
@@ -470,7 +484,7 @@ export class Train {
 
   /** Starts a jump. Distance = speed × air time; the lever does nothing until the lead car lands. */
   jump(): JumpResult {
-    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping) return 'locked';
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping || this.blockBump) return 'locked';
     if (this.airborne) return 'air';
     if (this.leadInDive || this.domeLatch > 0 || this.submerged || this.bobT >= 0) return 'busy';
     if (this.jumpCooldown > 0) return 'cooldown';
@@ -514,7 +528,7 @@ export class Train {
    */
   setNotch(notch: number): boolean {
     if (this.ended || this.lockReason !== null || this.emergency || this.airborne || this.falling) return false;
-    if (this.rocketLeft > 0 || this.slipping || this.onSlide || this.bouncing || this.bumping) return false;
+    if (this.rocketLeft > 0 || this.slipping || this.onSlide || this.bouncing || this.bumping || this.blockBump) return false;
     const next = Math.min(Math.max(Math.round(notch), 0), SPEED_NOTCHES.length - 1);
     if (next === HARD_BRAKE_NOTCH && this.state.notch !== HARD_BRAKE_NOTCH && this.state.speed > 3) {
       this.events.emit('hardBrake', { speed: this.state.speed });
@@ -546,6 +560,8 @@ export class Train {
     this.rocketRails = [];
     this.slope = null;
     this.jumpCooldown = 0;
+    this.blockBump = null;
+    this.held.clear();
     st.s = this.wrap(frontS - TRAIN.length / 2);
     st.speed = 0;
     st.notch = STOP_NOTCH;
@@ -627,6 +643,54 @@ export class Train {
   /** v1.11 (5-2): the side a spinning fork will send the train (routeSide() and the pass ask it for junctions with `spin`). */
   setSpinSides(fn: ((j: JunctionDef) => JunctionSide) | null): void {
     this.spinSides = fn;
+  }
+
+
+  /** v1.11 (5-3): "ぽよん" off a mirror gate is going on. */
+  get isBlockBumping(): boolean {
+    return this.blockBump !== null;
+  }
+
+  /** v1.11 (5-3): held before a shut mirror gate it bumped (the lever's target is 0 there). */
+  get blockHolding(): boolean {
+    return this.holdCap() !== null;
+  }
+
+  /** v1.11 (5-3): the fastest a mirror gate bumped this try lets the train go (0 at its hold), or null. */
+  private holdCap(): number | null {
+    if (this.held.size === 0 || !this.blocks) return null;
+    const blocks = this.blocks();
+    for (const id of [...this.held]) if (!blocks.some((b) => b.id === id)) this.held.delete(id);
+    for (const b of blocks) {
+      if (b.kind !== 'mirror' || !this.held.has(b.id)) continue;
+      const d = this.distanceAhead(b.railId, b.at);
+      if (d !== null && d > -1 && d <= MIRROR_WORLD.gateHold + 0.5) return 0;
+    }
+    return null;
+  }
+
+  /**
+   * v1.11 (5-3): the train front reached a mirror block's soft glass this frame (from `frontBefore`): stop there, end a
+   * jump, and bounce back ("ぽよん"); held before it from then on.
+   */
+  private handleMirrorBlocks(frontBefore: number, railBefore: string): void {
+    if (!this.blocks || this.blockBump || this.falling) return;
+    const st = this.state;
+    if (st.railId !== railBefore) return;
+    for (const b of this.blocks()) {
+      if (b.kind !== 'mirror' || b.railId !== st.railId) continue;
+      const contact = b.at - (MIRROR_WORLD.gateHold - MIRROR_WORLD.bounceBack);
+      if (frontBefore > contact + 1e-6 || this.frontS < contact) continue;
+      const airborne = this.airborne;
+      this.arcs = [];
+      this.stopRocket();
+      st.s = contact - TRAIN.length / 2;
+      st.speed = 0;
+      this.blockBump = { t: 0, from: st.s, id: b.id };
+      this.held.add(b.id);
+      this.events.emit('mirrorBump', { id: b.id, railId: st.railId, s: contact, airborne });
+      return;
+    }
   }
 
   /**
@@ -712,7 +776,10 @@ export class Train {
     return k;
   }
 
-  /** v1.11 (PR5): the places the train front may not pass yet (asked every frame; in the air too). */
+  /**
+   * v1.11: the faces the train front must not pass now (read every frame; see TrainBlock). The jump is never refused
+   * for them (PHASE9_0): a jump into one bounces off it in the air.
+   */
   setBlocks(fn: (() => readonly TrainBlock[]) | null): void {
     this.blocks = fn;
     this.blockFront = null;
@@ -768,6 +835,12 @@ export class Train {
       target = cap;
       brake = Math.max(brake, BRAKING);
     }
+    // v1.11 (5-3): held before a shut mirror gate it bumped (whatever the lever says), until the gate opens.
+    const hold = this.holdCap();
+    if (hold !== null && hold < target) {
+      target = hold;
+      brake = Math.max(brake, BRAKING);
+    }
     return { target, brake };
   }
 
@@ -808,6 +881,14 @@ export class Train {
       // Slide on a little while sinking; the runner fades out and puts the train back.
       this.falling.t = Math.min(this.falling.t + dt, FALL.seconds);
       st.speed = Math.max(0, st.speed - st.speed * 1.8 * dt);
+    } else if (this.blockBump) {
+      // v1.11 (5-3) "ぽよん" off a shut mirror gate: stopped at once, then back a few metres (and held there).
+      const bump = this.blockBump;
+      bump.t = Math.min(bump.t + dt, DIVE.bounceStop + MIRROR_WORLD.bounceSeconds);
+      const k = Math.max(0, bump.t - DIVE.bounceStop) / MIRROR_WORLD.bounceSeconds;
+      st.speed = 0;
+      st.s = bump.from - MIRROR_WORLD.bounceBack * k * (2 - k);
+      if (bump.t >= DIVE.bounceStop + MIRROR_WORLD.bounceSeconds) this.blockBump = null;
     } else if (wasAirborne) {
       // Ballistic: the speed does not change in the air (the arc keeps its shape). Up a steep slope without the
       // rocket, the climb is still paid, at landing (handleJump), as if the train had rolled the distance flown.
@@ -864,7 +945,10 @@ export class Train {
     } else if (st.speed < target) st.speed = Math.min(target, st.speed + ACCELERATION * dt);
     else if (st.speed > target) st.speed = Math.max(target, st.speed - (this.settling ? Math.max(brake, ROCKET.settle) : brake) * dt);
 
+    const frontBefore = this.frontS;
+    const railBefore = st.railId;
     st.s += st.speed * dt * st.direction;
+    this.handleMirrorBlocks(frontBefore, railBefore);
 
     this.handleJunctions();
     rail = this.currentRail;
@@ -872,7 +956,7 @@ export class Train {
     this.handleJump(dt, wasAirborne);
     this.handleDive(dt);
     this.handlePlow(dt);
-    this.handleBlocks();
+    this.handleMagnetBlocks();
     this.computePose();
   }
 
@@ -880,7 +964,7 @@ export class Train {
    * v1.11 (PR5): the train front reaching a block (an unopened magnet gap's film, an iron gate): "ぽよん" (a quick soft
    * stop, then bounced back a little; in the air the arc ends there: the block is too tall to jump).
    */
-  private handleBlocks(): void {
+  private handleMagnetBlocks(): void {
     const f = this.frontS;
     const rail = this.currentRail.id;
     const last = this.blockFront;
@@ -888,7 +972,7 @@ export class Train {
     if (!this.blocks || this.bouncing || this.bumping || this.falling) return;
     const before = last && last.railId === rail ? last.s : f;
     for (const b of this.blocks()) {
-      if (b.railId !== rail || !(before < b.at && f >= b.at)) continue;
+      if (b.kind !== 'magnet' || b.railId !== rail || !(before < b.at && f >= b.at)) continue;
       const st = this.state;
       this.arcs = [];
       st.s -= f - b.at;

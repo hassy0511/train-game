@@ -1,0 +1,1 @@
+{ "_expect": "needs a mirror that shows it", "_base": "0-3", "_edit": [{ "path": "gimmicks.2.params.position", "value": [400, 0, 400] }] }

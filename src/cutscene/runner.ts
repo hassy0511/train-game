@@ -2,14 +2,17 @@ import type { StageEvent, StageEventBus } from '../core/stage-events';
 import type { RailNetwork } from '../rail/types';
 import { resolvePlacement } from '../stage/loader';
 import type { AbilityId, CutsceneStep, Emote, Speaker, Vec3 } from '../stage/types';
-import { WINDUP } from '../train/params';
+import { MIRROR_WORLD, WINDUP } from '../train/params';
 import type { CameraMode } from '../view/camera-rig';
 
 /** What the cutscene runner needs from the UI. */
 export interface CutscenePorts {
   say(text: string, who: Speaker, name?: string): Promise<void>;
-  /** v1.10 `mirror`: a note on paper with its title written mirror-wise; icon "drawing" (3-2): a crayon picture. */
-  card(title: string, button: string, icon?: 'badge' | 'drawing', mirror?: boolean): Promise<void>;
+  /**
+   * v1.10 `mirror`: a note on paper with its title written mirror-wise; icon "drawing" (3-2): a crayon picture. v1.11
+   * (5-3) `mirror` "reflect": `notes` mirror-written notes held up to a mirror that shows the title in plain letters.
+   */
+  card(title: string, button: string, icon?: 'badge' | 'drawing', mirror?: boolean | 'reflect', notes?: 1 | 2): Promise<void>;
   caption(text: string, seconds: number): Promise<void>;
   wait(seconds: number): Promise<void>;
   /** Temporarily override the player's camera (null = give it back). */
@@ -113,7 +116,7 @@ export async function runCutscene(
       await race(ports.say(step.say, step.who ?? 'partner', step.name));
     } else if ('spawn' in step) {
       const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail }, rotationY: step.rotationY }, network, groundY);
-      events.post({ type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion });
+      events.post({ type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion, mirror: step.mirror });
     } else if ('move' in step) {
       const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail } }, network, groundY);
       events.post({ type: 'actor:move', id: step.move, position: t.position, seconds: step.seconds });
@@ -128,7 +131,7 @@ export async function runCutscene(
       events.post({ type: 'rail:cut', railId, from, to, style, props });
       await race(ports.wait(style === 'fall' ? CUT_FALL_SECONDS : 1));
     } else if ('card' in step) {
-      await ports.card(step.card.title, step.card.button, step.card.icon, step.card.mirror);
+      await ports.card(step.card.title, step.card.button, step.card.icon, step.card.mirror, step.card.notes);
     } else if ('camera' in step) {
       if (step.camera === 'fixed') {
         ports.fixedCamera(step.at, step.lookAt, step.reach);
@@ -142,6 +145,11 @@ export async function runCutscene(
       if (step.fx === 'sneeze') await race(ports.sneeze());
       else if (step.fx === 'pop') await race(ports.pop(step.id));
       else if (step.fx === 'festival') await race(ports.festival());
+      else if (step.fx === 'mirrorTurn') {
+        // v1.11 (5-3): a mirror turns round ("くるっ… ぱたん"); it stays so.
+        events.post({ type: 'mirror:turn', id: step.mirror, face: step.to ?? 'back', seconds: MIRROR_WORLD.fxTurnSeconds });
+        await race(ports.wait(MIRROR_WORLD.fxTurnSeconds));
+      }
     } else if ('caption' in step) {
       await race(ports.caption(step.caption, step.seconds ?? 3));
     } else if ('emote' in step) {
@@ -163,7 +171,8 @@ export async function runCutscene(
 
 /**
  * Applies at once only what the steps leave behind (PHASE7_FINISH §4 item 3): cut rails, learned abilities, and the
- * figures they bring on or take off, each where it ends up, and v1.10 (4-2) the evening sky, v1.11 the look (day ⇄ night). Lines, waits, cards, captions, cameras and effects are
+ * figures they bring on or take off, each where it ends up, and v1.10 (4-2) the evening sky, v1.11 the look (day ⇄ night)
+ * and (5-3) mirrors turned round. Lines, waits, cards, captions, cameras and effects are
  * left out (the caller gives the usual camera back). Used for the cutscenes before a resumed mission, and for the
  * rest of one skipped with "▶▶".
  */
@@ -183,7 +192,7 @@ export function fastForwardCutscene(
   for (const step of steps) {
     if ('spawn' in step) {
       const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail }, rotationY: step.rotationY }, network, groundY);
-      spawned.set(step.spawn, { type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion });
+      spawned.set(step.spawn, { type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion, mirror: step.mirror });
     } else if ('move' in step) {
       const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail } }, network, groundY);
       const own = spawned.get(step.move);
@@ -210,6 +219,9 @@ export function fastForwardCutscene(
       if (step.fx === 'windup' && step.target) windups.push(step.target);
     } else if ('fx' in step && step.fx === 'festival') {
       events.post({ type: 'festival', instant: true });
+    } else if ('fx' in step && step.fx === 'mirrorTurn') {
+      // v1.11 (5-3): the mirror stays turned (▶▶ and a resume too).
+      events.post({ type: 'mirror:turn', id: step.mirror, face: step.to ?? 'back', seconds: 0, instant: true });
     } else if ('sky' in step) {
       events.post({ type: 'sky', sky: step.sky, seconds: 0 });
     } else if ('environment' in step) {

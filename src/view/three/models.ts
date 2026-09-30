@@ -1,4 +1,4 @@
-import { Box3, BoxGeometry, Group, Mesh, MeshLambertMaterial, Raycaster, SphereGeometry, Vector3 } from 'three';
+import { Box3, BoxGeometry, BufferAttribute, Group, Mesh, MeshLambertMaterial, Quaternion, Raycaster, SphereGeometry, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { placeholderSize } from '../placeholder-sizes';
 import { buildForestPlaceholder } from './forest-placeholders';
@@ -14,6 +14,7 @@ import { buildSkyPlaceholder } from './sky-placeholders';
 import { buildSnowPlaceholder } from './snow-placeholders';
 import { buildToyPlaceholder } from './toy-placeholders';
 import { buildMagnetPlaceholder } from './magnet-placeholders';
+import { buildMirrorPlaceholder } from './mirror-placeholders';
 import { buildVolcanoPlaceholder } from './volcano-placeholders';
 
 const PLACEHOLDER_COLORS: Record<string, number> = {
@@ -62,6 +63,14 @@ export class ModelLibrary {
       return held;
     }
 
+    // v1.11 (5-3): the mirror Sakasa waving, and shy (hands together, head a little on one side), posed from the built
+    // amanojaku until ticket 0020 builds them.
+    if ((name === 'amanojaku-wave' || name === 'amanojaku-shy') && !this.available.has(name)) {
+      const posed = this.load('amanojaku').then((m) => poseAmanojaku(m, name));
+      this.cache.set(name, posed);
+      return posed;
+    }
+
     // Models that are not built yet (pending Blender tickets) get a flat box of the right size,
     // so stages stay playable and no 404 requests are made.
     if (!this.available.has(name)) {
@@ -79,6 +88,7 @@ export class ModelLibrary {
         buildNightPlaceholder(name) ??
         buildToyPlaceholder(name) ??
         buildMagnetPlaceholder(name) ??
+        buildMirrorPlaceholder(name) ??
         buildRecordPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(drawn ?? makePlaceholder(name));
@@ -117,6 +127,69 @@ function addBlush(model: Group): Group {
     cheek.position.set(x, y, z + 0.002);
     out.add(cheek);
   }
+  return out;
+}
+
+/**
+ * v1.11 (5-3): Sakasa posed without bones (the built model is one clay mesh): the vertices of an arm (away from the
+ * torso, between hip and shoulder) turn about the shoulder, blended in near it so nothing tears. "amanojaku-wave": her
+ * right arm raised high (the view sways her as she waves); "amanojaku-shy": both hands brought together in front and her
+ * head (hair and hat with it) tilted 10°. Model metres (assets/blender/amanojaku.py): shoulders at (±0.08, 0.866, 0).
+ */
+function poseAmanojaku(model: Group, name: 'amanojaku-wave' | 'amanojaku-shy'): Group {
+  const out = model.clone(true);
+  out.name = name;
+  const smooth = (a: number, b: number, x: number): number => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  const Z = new Vector3(0, 0, 1);
+  const X = new Vector3(1, 0, 0);
+  const q = new Quaternion();
+  const v = new Vector3();
+  const pivot = new Vector3();
+  const turnAbout = (at: Vector3, rot: Quaternion, w: number): void => {
+    if (w <= 0) return;
+    const moved = v.clone().sub(pivot).applyQuaternion(rot).add(pivot);
+    v.lerp(moved, w);
+    at.copy(v);
+  };
+  out.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    mesh.geometry = mesh.geometry.clone();
+    const pos = mesh.geometry.getAttribute('position') as BufferAttribute;
+    const at = new Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      at.copy(v);
+      // The arms (clay only lies out there; the cape is behind them).
+      for (const side of [-1, 1]) {
+        const armW = smooth(0.1, 0.14, side * v.x) * smooth(0.42, 0.47, v.y) * (1 - smooth(0.86, 0.9, v.y)) * smooth(-0.06, -0.03, v.z);
+        if (armW <= 0) continue;
+        pivot.set(side * 0.08, 0.866, 0);
+        if (name === 'amanojaku-wave' && side === -1) {
+          q.setFromAxisAngle(Z, side * 2.3);
+          turnAbout(at, q, armW);
+        } else if (name === 'amanojaku-shy') {
+          q.setFromAxisAngle(X, -0.9).multiply(new Quaternion().setFromAxisAngle(Z, -side * 0.35));
+          turnAbout(at, q, armW);
+        }
+      }
+      if (name === 'amanojaku-shy') {
+        const headW = smooth(0.9, 0.97, v.y);
+        if (headW > 0) {
+          pivot.set(0, 0.93, 0);
+          q.setFromAxisAngle(Z, 0.17);
+          turnAbout(at, q, headW);
+        }
+      }
+      pos.setXYZ(i, at.x, at.y, at.z);
+    }
+    pos.needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+    mesh.geometry.computeBoundingSphere();
+  });
   return out;
 }
 
