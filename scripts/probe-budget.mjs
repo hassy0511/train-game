@@ -15,6 +15,8 @@
  * The title screen's camera (PHASE7_FINISH §4 item 6: it swings around the train standing at the start) is measured
  * first, as the camera "title", at TITLE_ANGLES on both sides of the train (the game uses the side away from the
  * platform).
+ * v1.11: a hidden (test) stage is probed when it is named. A look a cutscene changes to (the "environment" step: 0-1's
+ * night) is probed too: every rail point again under it, as the cameras "<camera>+<lighting>".
  * Runs the dev server, since the __debugView / __debugTrain handles only exist in dev builds.
  * Needs Playwright's Chromium (PW_CHROMIUM_PATH to reuse an installed one). BUDGET_ROWS=40 lists more objects.
  */
@@ -44,19 +46,33 @@ const BREAKDOWN_ROWS = Number(process.env.BUDGET_ROWS) || 12;
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const stageDir = resolve(root, 'src/stages');
-const playable = readdirSync(stageDir)
+const every = readdirSync(stageDir)
   .filter((file) => file.endsWith('.json'))
   .map((file) => JSON.parse(readFileSync(resolve(stageDir, file), 'utf8')))
-  .filter((stage) => !stage.hidden)
   .sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true }));
+const playable = every.filter((stage) => !stage.hidden);
 const wanted = process.argv.slice(2);
 for (const id of wanted) {
-  if (!playable.some((stage) => stage.id === id)) {
-    console.error(`no playable stage ${id} (have: ${playable.map((stage) => stage.id).join(', ')})`);
+  if (!every.some((stage) => stage.id === id)) {
+    console.error(`no stage ${id} (have: ${every.map((stage) => stage.id).join(', ')})`);
     process.exit(2);
   }
 }
-const stages = wanted.length > 0 ? playable.filter((stage) => wanted.includes(stage.id)) : playable;
+// Named stages may be hidden ones (the test stages 0-x); with none named, every playable stage.
+const stages = wanted.length > 0 ? every.filter((stage) => wanted.includes(stage.id)) : playable;
+
+/** v1.11: the looks the stage's cutscenes change to (its own environment with each step's fields over it), once each. */
+function cutsceneLooks(stage) {
+  const seen = new Map();
+  for (const steps of Object.values(stage.cutscenes ?? {})) {
+    for (const st of steps) {
+      if (!st.environment || Object.keys(st.environment).length === 0) continue;
+      const env = { ...stage.environment, ...st.environment };
+      seen.set(JSON.stringify(env), env);
+    }
+  }
+  return [...seen.values()];
+}
 
 /** Front positions (m) to probe on one rail: the regular steps plus the finer ones around its stations. */
 function probePoints(rail, stations) {
@@ -261,21 +277,32 @@ try {
       if (over(f)) failures.push(frame);
     }
     let points = 0;
-    for (const rail of rails) {
-      const stations = stage.stations.filter((station) => station.railId === rail.id);
-      for (const s of probePoints(rail, stations)) {
-        points += 1;
-        const frames = await page.evaluate(([id, at, cameras]) => window.__probeAt(id, at, cameras), [rail.id, s, CAMERAS]);
-        for (const f of frames) {
-          const frame = { ...f, stage: stage.id, rail: rail.id, s };
-          const row = byCamera.get(f.camera);
-          row.frames += 1;
-          if (!row.calls || f.calls > row.calls.calls) row.calls = frame;
-          if (!row.tris || f.tris > row.tris.tris) row.tris = frame;
-          if (!row.worst || load(f) > load(row.worst)) row.worst = frame;
-          if (over(f)) failures.push(frame);
+    /** Every rail point under the look now; `suffix` names the look in the camera column ("" = the stage's own). */
+    const probeRails = async (suffix) => {
+      for (const rail of rails) {
+        const stations = stage.stations.filter((station) => station.railId === rail.id);
+        for (const s of probePoints(rail, stations)) {
+          points += 1;
+          const frames = await page.evaluate(([id, at, cameras]) => window.__probeAt(id, at, cameras), [rail.id, s, CAMERAS]);
+          for (const f of frames) {
+            const camera = `${f.camera}${suffix}`;
+            const frame = { ...f, camera, stage: stage.id, rail: rail.id, s };
+            if (!byCamera.has(camera)) byCamera.set(camera, { stage: stage.id, camera, frames: 0, calls: null, tris: null, worst: null });
+            const row = byCamera.get(camera);
+            row.frames += 1;
+            if (!row.calls || f.calls > row.calls.calls) row.calls = frame;
+            if (!row.tris || f.tris > row.tris.tris) row.tris = frame;
+            if (!row.worst || load(f) > load(row.worst)) row.worst = frame;
+            if (over(f)) failures.push(frame);
+          }
         }
       }
+    };
+    await probeRails('');
+    for (const env of cutsceneLooks(stage)) {
+      await page.evaluate((e) => window.__debugView.applyEnvironment(e), env);
+      await probeRails(`+${env.lighting}`);
+      await page.evaluate((e) => window.__debugView.applyEnvironment(e), stage.environment);
     }
     const fixed = Object.entries(stage.cutscenes ?? {}).flatMap(([id, steps]) =>
       steps.flatMap((st, i) => (st.camera === 'fixed' ? [[`${id}#${i}`, st.at, st.lookAt, st.reach]] : [])),
