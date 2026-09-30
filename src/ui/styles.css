@@ -3519,3 +3519,130 @@ body {
     box-shadow: 0 0 0 14px rgba(143, 164, 232, 0), 0 4px 10px rgba(0, 0, 0, 0.3);
   }
 }
+
+/* ---- v1.11 (PR5): the light button's three steps (ライト → じしゃく → けす), PHASE9_CHAPTER5_6 第 2 部 M5・M12 ---- */
+/* The magnet step: an emerald rim (told apart from yellow, orange, red, blue and purple), a little U magnet over the
+   lamp, the label "じしゃく". The button only shows the step the child chose; nothing changes it by place. */
+#light[data-light='magnet'] .ring.is-light {
+  --accent: #19b38a;
+}
+
+#light[data-light='magnet'] .face {
+  background: #e3fbf2;
+  box-shadow: 0 0 14px 4px rgba(25, 179, 138, 0.55);
+}
+
+#light .magnet-mark {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 20px;
+  height: 20px;
+  display: none;
+  pointer-events: none;
+}
+
+#light[data-light='magnet'] .magnet-mark {
+  display: block;
+}
+
+/* The steps' dots under the button (only with three steps; the two-step light looks as it always did). */
+#light .light-steps {
+  position: absolute;
+  left: 50%;
+  bottom: -11px;
+  transform: translateX(-50%);
+  display: none;
+  gap: 4px;
+  pointer-events: none;
+}
+
+#light[data-steps='3'] .light-steps {
+  display: flex;
+}
+
+#light .light-steps i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+#light[data-light='light'] .light-steps i[data-step='light'] {
+  background: #f4c542;
+}
+
+#light[data-light='magnet'] .light-steps i[data-step='magnet'] {
+  background: #19b38a;
+}
+
+#light[data-light='off'] .light-steps i[data-step='off'] {
+  background: #ffffff;
+}
+
+/* The step changing: a little swell (the pressed look). */
+#light[data-steps='3'].is-stepped .face {
+  animation: light-step 0.15s ease-out;
+}
+
+@keyframes light-step {
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+/* Green glow: an iron thing ahead, and the light is not in the magnet step (a hint: pressing on reaches it). The
+   little magnet peeks out too. */
+#light[data-glow='1'][data-glow-for='magnet'] .face {
+  background: #d5f7ea;
+  animation: magnet-glow 0.6s ease-in-out infinite alternate;
+}
+
+#light[data-glow='1'][data-glow-for='magnet'] .magnet-mark {
+  display: block;
+  animation: magnet-peek 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes magnet-glow {
+  from {
+    box-shadow: 0 0 0 0 rgba(25, 179, 138, 0.9), 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+  to {
+    box-shadow: 0 0 0 14px rgba(25, 179, 138, 0), 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+}
+
+@keyframes magnet-peek {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Pulling: a light runs round the rim. */
+#light[data-pulling='1'] .ring.is-light {
+  background: conic-gradient(from var(--pull-angle, 0deg), #ffffff 0 40deg, #19b38a 40deg 360deg);
+  animation: magnet-pull-rim 0.6s linear infinite;
+}
+
+@property --pull-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes magnet-pull-rim {
+  to {
+    --pull-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #light[data-pulling='1'] .ring.is-light,
+  #light[data-steps='3'].is-stepped .face {
+    animation: none;
+  }
+}

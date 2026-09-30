@@ -19,6 +19,7 @@ import {
   GRASSHOPPER,
   LEVER_NOTCHES,
   LURE,
+  MAGNET,
   PARADE,
   PLOW,
   RECORD,
@@ -33,13 +34,13 @@ import {
   WINDUP,
 } from '../train/params';
 import { inArea, openWaterAt } from './water';
-import { AMBIENCE_KINDS, CAT_LOOKS, FLOATER_LOOKS, WATER_LOOKS, type AmbienceKind, type CatLook, type FloaterLook, type Placement, type StageFile, type WaterDef, type WaterLook } from './types';
+import { AMBIENCE_KINDS, CAT_LOOKS, FLOATER_LOOKS, IRON_LOOKS, MAGNET_KINDS, MAGNET_LOOKS, WATER_LOOKS, type AmbienceKind, type CatLook, type FloaterLook, type IronLook, type MagnetKind, type MagnetLook, type MagnetTarget, type Placement, type StageFile, type WaterDef, type WaterLook } from './types';
 import { paradeSetup } from '../actors/parade';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
 const ABILITIES = ['whistle', 'light', 'jump', 'rocket', 'dive', 'plow', 'magnetLight', 'reverse'];
 /** v1.10 (3-3): the buttons a cutscene may ask the child to press. */
-const PRESSABLE = ['light', 'whistle', 'rocket', 'jump'];
+const PRESSABLE = ['light', 'whistle', 'rocket', 'jump', 'magnet'];
 const JUMP_HINTS = ['normal', 'fast', 'max'];
 
 class StageValidationError extends Error {
@@ -94,8 +95,14 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
     // v1.10 (3-3): the child presses one button in the cutscene.
     if (!PRESSABLE.includes(String(st.press))) fail(`${where}: press must be one of ${PRESSABLE.join(', ')}`);
     if (st.say !== undefined && !isString(st.say)) fail(`${where}: press "say" must be text`);
+    if (st.press === 'magnet') {
+      // v1.11 (PR5): the magnet light's first go: the figure `target` flies to the train.
+      if (st.fx !== undefined) fail(`${where}: a press "magnet" takes no fx`);
+      if (!isString(st.target)) fail(`${where}: a press "magnet" needs a "target" (a figure brought on before it)`);
+      return;
+    }
     if (st.fx !== undefined && st.fx !== 'beacon' && st.fx !== 'windup') fail(`${where}: press fx must be "beacon" or "windup"`);
-    if (st.target !== undefined && (st.fx !== 'windup' || !isString(st.target))) fail(`${where}: only a press with fx "windup" takes a "target" (a figure id)`);
+    if (st.target !== undefined && (st.fx !== 'windup' || !isString(st.target))) fail(`${where}: only a press with fx "windup" or a press "magnet" takes a "target" (a figure id)`);
     if (st.fx === 'windup' && !isString(st.target)) fail(`${where}: a press with fx "windup" needs a "target" (the figure it winds)`);
   } else if ('say' in st) {
     if (!isString(st.say)) fail(`${where}: "say" must be text`);
@@ -525,6 +532,8 @@ export function validateStageFile(raw: unknown): StageFile {
       steps.forEach((st: Record<string, unknown>, i) => {
         if (isString(st.spawn) && isString(st.model)) on.set(st.spawn, st.model);
         if (isString(st.remove)) on.delete(st.remove);
+        // v1.11 (PR5): a press "magnet" pulls a figure this cutscene brought on (and has not taken off yet).
+        if ('press' in st && st.press === 'magnet' && !on.has(String(st.target))) fail(`cutscene "${id}" step ${i}: press "magnet" target "${String(st.target)}" must be a figure brought on (spawn) before it`);
         if ('press' in st && st.fx === 'windup') {
           const model = on.get(String(st.target));
           if (!model) fail(`cutscene "${id}" step ${i}: press target "${String(st.target)}" must be a figure brought on (spawn) before it`);
@@ -714,6 +723,9 @@ export function validateStageFile(raw: unknown): StageFile {
       fail(`prop "${String(pr.model)}": "reveal" must name a junction with a reversed sign`);
     }
   }
+
+  // v1.11 (PR5): the magnet light's targets, the iron odds and ends.
+  checkMagnetShapes(raw, railIds);
 
   return raw as unknown as StageFile;
 }
@@ -1559,5 +1571,203 @@ export function validateToyLayout(file: StageFile, network: RailNetwork): void {
       if (a.group === 'toy' && b.group === 'toy' && Math.abs(a.to - b.to) <= 12) continue;
       fail(`${a.what} and ${b.what}: the whistle's windows overlap (${a.from.toFixed(0)}–${a.to.toFixed(0)} and ${b.from.toFixed(0)}–${b.to.toFixed(0)})`);
     }
+  }
+}
+
+// ---- v1.11 (PR5): the magnet light (PHASE9_CHAPTER5_6 第 2 部 M10) -------------------------------------------------
+
+/** The shape of the magnet gimmicks, `environment.ironProps` and `props[].iron` (before the rails are built). */
+function checkMagnetShapes(raw: Record<string, unknown>, railIds: Set<string>): void {
+  const ids = new Set<string>();
+  (raw.gimmicks as Record<string, unknown>[]).forEach((g, i) => {
+    if (g.type !== 'magnet') return;
+    const where = `gimmicks[${i}] magnet`;
+    const p = (g.params ?? {}) as Record<string, unknown>;
+    if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`${where}: needs a known railId and "from"`);
+    if (!isString(p.id)) fail(`${where}: params.id is required (text)`);
+    if (p.id.startsWith('record:')) fail(`${where}: params.id must not start with "record:"`);
+    if (ids.has(p.id)) fail(`${where}: params.id "${p.id}" is used twice`);
+    ids.add(p.id);
+    if (p.kind === 'lever') fail(`${where}: kind "lever" is a candidate for version 2 and cannot be used yet`);
+    if (!MAGNET_KINDS.includes(p.kind as MagnetKind)) fail(`${where}: params.kind must be one of ${MAGNET_KINDS.join(', ')}`);
+    const kind = p.kind as MagnetKind;
+    if (p.look !== undefined && !MAGNET_LOOKS[kind].includes(p.look as MagnetLook)) fail(`${where}: params.look for kind "${kind}" must be one of ${MAGNET_LOOKS[kind].join(', ')}`);
+    if (kind === 'bridge') {
+      if (!isNumber(g.to)) fail(`${where}: a bridge needs "to" (the end of the gap)`);
+      const length = (g.to as number) - (g.from as number);
+      if (length < MAGNET.gapMin || length > MAGNET.gapMax) fail(`${where}: a bridge's gap must be ${MAGNET.gapMin}–${MAGNET.gapMax} m long (it is ${length} m)`);
+      const piece = p.piece;
+      if (!isObject(piece) || !isNumber(piece.lateral)) fail(`${where}: a bridge needs params.piece { lateral, height?, rotationY? } (where the loose piece lies)`);
+      for (const k of ['height', 'rotationY']) if (piece[k] !== undefined && !isNumber(piece[k])) fail(`${where}: params.piece.${k} must be a number`);
+    } else if (g.to !== undefined) fail(`${where}: a ${kind} takes no "to"`);
+    for (const k of ['lateral', 'height']) if (p[k] !== undefined && !isNumber(p[k])) fail(`${where}: params.${k} must be a number`);
+    if (Math.hypot(Number(p.lateral ?? 0), Number(p.height ?? 0)) > MAGNET.maxOffset) fail(`${where}: must be within ${MAGNET.maxOffset} m of its rail`);
+    for (const k of ['line', 'done', 'miss']) if (p[k] !== undefined && p[k] !== null && !isString(p[k])) fail(`${where}: params.${k} must be text or null`);
+    if (p.model !== undefined && (!isString(p.model) || !MODEL_NAME.test(p.model))) fail(`${where}: params.model must match [a-z0-9-]+`);
+    const rw = p.rewind;
+    if (rw !== undefined) {
+      if (kind !== 'bridge' && kind !== 'gate') fail(`${where}: only a bridge or a gate takes params.rewind`);
+      if (!(isObject(rw) && isString(rw.railId) && railIds.has(rw.railId) && isNumber(rw.at))) fail(`${where}: params.rewind needs a known railId and at`);
+    }
+    if (kind === 'turn') {
+      if (!isString(p.junction)) fail(`${where}: a turn needs params.junction (the fork with a reversed sign it shows the way at)`);
+      const j = (raw.junctions as Record<string, unknown>[]).find((x) => x.id === p.junction);
+      if (!j || j.signReversed !== true) fail(`${where}: params.junction "${p.junction}" must be a junction with a reversed sign`);
+      if (p.mirror !== undefined) {
+        const mirror = (raw.gimmicks as Record<string, unknown>[]).some((x) => x.type === 'mirror' && isObject(x.params) && x.params.id === p.mirror);
+        if (!isString(p.mirror) || !mirror) fail(`${where}: params.mirror must be the id of a mirror (gimmicks "mirror" params.id)`);
+      }
+    } else if (p.junction !== undefined || p.mirror !== undefined) fail(`${where}: only a turn takes params.junction and params.mirror`);
+  });
+  for (const j of raw.junctions as Record<string, unknown>[]) if (j.turn !== undefined) fail(`junction "${String(j.id)}": "turn" is set by the loader (write a magnet "turn" instead)`);
+  const env = raw.environment as Record<string, unknown>;
+  const ip = env.ironProps;
+  if (ip !== undefined && ip !== false) {
+    if (!isObject(ip)) fail('"environment.ironProps" must be false or { every?, looks? }');
+    if (ip.every !== undefined && !(isNumber(ip.every) && ip.every >= 80 && ip.every <= 400)) fail('"environment.ironProps.every" must be 80–400 m');
+    if (ip.looks !== undefined && !(Array.isArray(ip.looks) && ip.looks.length > 0 && ip.looks.every((l) => IRON_LOOKS.includes(l as IronLook)))) {
+      fail(`"environment.ironProps.looks" must list some of ${IRON_LOOKS.join(', ')}`);
+    }
+  }
+  (raw.props as Record<string, unknown>[]).forEach((pr, i) => {
+    if (pr.iron === undefined) return;
+    if (!IRON_LOOKS.includes(pr.iron as IronLook)) fail(`props[${i}]: "iron" must be one of ${IRON_LOOKS.join(', ')}`);
+    const on = pr.onRail as Record<string, unknown> | undefined;
+    const lateral = Math.abs(Number(on?.lateral ?? 0));
+    if (!isObject(on) || lateral < 2 || lateral > 12) fail(`props[${i}]: an "iron" prop stands on a rail (onRail), 2–12 m from it`);
+  });
+}
+
+/**
+ * Where the magnet targets may be (第 2 部 M10, with PHASE9 §0.9 の 4・6・10): apart from each other, gaps and gates
+ * clear of everything else that asks something of the child, side-way ones well past their fork, a side way that needs
+ * the magnet light with a target on it, before 5-3 the gaps, gates and mirrors only behind such a side way (the test
+ * stages of chapter 0 excepted), the records' glow outside the stations' braking, the turn's fork after its pull and a
+ * pull left after the dead end's rewind.
+ */
+export function validateMagnetLayout(file: StageFile, network: RailNetwork, magnets: MagnetTarget[]): void {
+  const where = (t: MagnetTarget): string => (t.recordId ? `record "${t.recordId}"` : `gimmicks[${t.gimmick}] magnet "${t.id}"`);
+  const overlaps = (a0: number, a1: number, b0: number, b1: number): boolean => a0 <= b1 && b0 <= a1;
+  const feeder = (railId: string) => file.junctions.find((j) => j.railId !== railId && (j.left === railId || j.right === railId));
+  const stopLines = (railId: string) => file.stations.filter((st) => st.railId === railId);
+  for (const t of magnets) {
+    const rail = network.getRail(t.railId);
+    if (t.at < 0 || t.end > rail.length) fail(`${where(t)}: must be on rail "${t.railId}"`);
+    if (t.recordId) {
+      const r = file.records.find((x) => x.id === t.recordId);
+      if (!r || !('onRail' in r)) fail(`${where(t)}: a record needing the magnet light is placed with onRail`);
+    }
+    if (Math.hypot(t.offset.lateral, t.offset.height) > MAGNET.maxOffset) fail(`${where(t)}: must be within ${MAGNET.maxOffset} m of its rail`);
+    const open = t.kind === 'bridge' || t.kind === 'gate';
+    // Two targets on one rail: at least MAGNET.spacing m apart.
+    for (const u of magnets) {
+      if (u === t || u.railId !== t.railId || u.at < t.at) continue;
+      if (u.at - t.end < MAGNET.spacing) fail(`${where(t)} and ${where(u)}: two iron targets must be at least ${MAGNET.spacing} m apart`);
+    }
+    // A side way's gap or gate: well past its fork.
+    const fed = feeder(t.railId);
+    if (open && fed && t.at < MAGNET.sideWayMin) fail(`${where(t)}: must be at least ${MAGNET.sideWayMin} m past the fork of its side way`);
+    // The glow (hint) of a record outside the stations' braking: at least 30 m of it.
+    if (t.recordId) {
+      const from = t.at - MAGNET.hintAhead;
+      const to = t.at - t.minAhead;
+      let covered = 0;
+      for (const st of stopLines(t.railId)) covered += Math.max(0, Math.min(to, st.at) - Math.max(from, st.at - MAGNET.stationQuiet));
+      if (to - from - covered < 30 - 0.05) fail(`${where(t)}: at least 30 m of its glow must be outside a station's braking`);
+    }
+    if (open) {
+      const z0 = t.at - MAGNET.zoneBefore;
+      const z1 = t.end + MAGNET.zoneAfter;
+      const inZone = (what: string, a: number, b = a): void => {
+        if (overlaps(z0, z1, a, b)) fail(`${where(t)}: ${what} is in its stretch (${Math.round(z0)}–${Math.round(z1)})`);
+      };
+      for (const g of rail.gaps) inZone(`a gap (${g.from}–${g.to})`, g.from - 60, g.to);
+      for (const w of [...rail.surfaces, ...rail.dives]) {
+        inZone('the way into water', w.from - 120, w.from + 40);
+        inZone('the way out of water', w.to - 120, w.to + 40);
+      }
+      for (const sp of rail.plows) inZone('a snow wall', sp.from, sp.to);
+      for (const j of file.junctions) if (j.railId === t.railId) inZone(`junction "${j.id}"`, j.at);
+      for (const g of file.gimmicks) {
+        if (g.railId !== t.railId || g.from === undefined) continue;
+        if (['jump-pad', 'updraft', 'bough', 'flower-bridge', 'fragile', 'thin-ice'].includes(g.type)) inZone(`a "${g.type}"`, g.from, g.to ?? g.from);
+      }
+      for (const a of file.actors) {
+        if (!('onRail' in a) || a.onRail.railId !== t.railId) continue;
+        if (['cat', 'dino-small', 'dino-mid', 'dino-large', 'rock-roll', 'rock-drop', 'squirrel', 'nut', 'grasshopper'].includes(a.type)) inZone(`actor "${a.id}"`, a.onRail.at);
+      }
+      for (const m of file.missions) {
+        for (const st of m.steps) {
+          const c = st.chase;
+          if (c && c.railId === t.railId) inZone('the snow wave', c.from, c.until.railId === t.railId ? c.until.at : rail.length);
+        }
+      }
+      for (const st of stopLines(t.railId)) {
+        if (st.at >= t.at - 30 && st.at <= t.end + 20) fail(`${where(t)}: station "${st.id}" stops too close to it`);
+      }
+      for (const z of slopeZones(file.gimmicks)) {
+        if (z.kind === 'down' && z.railId === t.railId && t.at >= z.from && t.at <= z.to) fail(`${where(t)}: its face must not be on a slide`);
+      }
+      // Its glow and its rewind clear of a station's braking and stop (the child is braking there).
+      const rw = t.rewind as { railId: string; at: number };
+      for (const st of file.stations) {
+        const b0 = st.at - MAGNET.stationQuiet;
+        const b1 = st.at + (st.stop?.ok ?? STOP_RULE.ok);
+        if (st.railId === t.railId && overlaps(t.at - MAGNET.hintAhead, t.at, b0, b1)) fail(`${where(t)}: its glow overlaps station "${st.id}"'s braking`);
+        if (st.railId === rw.railId && rw.at >= b0 && rw.at <= b1) fail(`${where(t)}: its rewind is in station "${st.id}"'s braking`);
+      }
+      // The rewind: on a rail, before the face (or on the rail its side way forks off, before the fork).
+      const back = network.rails.get(rw.railId);
+      if (!back || rw.at < 0 || rw.at > back.length) fail(`${where(t)}: its rewind is not on a rail`);
+      const before = rw.railId === t.railId ? rw.at < t.at : fed !== undefined && rw.railId === fed.railId && rw.at < fed.at;
+      if (!before) fail(`${where(t)}: its rewind must be before it (on its rail, or before its side way's fork)`);
+      for (const z of slopeZones(file.gimmicks)) if (z.railId === rw.railId && rw.at >= z.from && rw.at <= z.to) fail(`${where(t)}: rewinds onto a slope`);
+      for (const z of thinIceZones(file.gimmicks)) if (z.railId === rw.railId && rw.at >= z.from && rw.at <= z.to) fail(`${where(t)}: rewinds onto thin ice`);
+      for (const w of [...back.surfaces, ...back.dives]) if (rw.at >= w.from && rw.at <= w.to) fail(`${where(t)}: rewinds onto water`);
+      for (const sp of back.plows) if (rw.at >= sp.from && rw.at <= sp.to) fail(`${where(t)}: rewinds into snow`);
+    }
+    if (t.kind === 'turn') {
+      const j = file.junctions.find((x) => x.id === t.junction);
+      if (!j || j.railId !== t.railId) fail(`${where(t)}: its junction must be on its rail`);
+      const pullEnd = t.at - t.minAhead;
+      if (pullEnd > j.at - MAGNET.turnBefore) fail(`${where(t)}: its pull must end at least ${MAGNET.turnBefore} m before junction "${j.id}"`);
+      const left = pullEnd - Math.max(j.at - REWIND_DISTANCE, t.at - MAGNET.reach);
+      if (left < MAGNET.turnWindowAfterRewind) fail(`${where(t)}: after the dead end's rewind only ${Math.round(left)} m of its pull is left (at least ${MAGNET.turnWindowAfterRewind})`);
+    }
+  }
+  // Behind a side way that needs the magnet light: a target (a gap, a gate, a mirror or a magnet record) within reach.
+  const reachable = (railId: string, budget: number, seen = new Set<string>()): string[] => {
+    if (budget <= 0 || seen.has(railId)) return [];
+    seen.add(railId);
+    const rail = network.getRail(railId);
+    const out = [railId];
+    for (const j of file.junctions) {
+      if (j.railId !== railId || j.at > budget) continue;
+      for (const to of [j.left, j.right]) if (to && to !== railId) out.push(...reachable(to, budget - j.at, seen));
+    }
+    if (rail.end.type === 'merge' && rail.length <= budget) out.push(...reachable(rail.end.railId, budget - rail.length, seen));
+    return out;
+  };
+  const behindNeeds = new Set<string>();
+  for (const j of file.junctions) {
+    if (j.needs !== 'magnetLight') continue;
+    const side = j.default === 'left' ? j.right : j.left;
+    if (!side) continue;
+    const rails = reachable(side, MAGNET.needsReach);
+    for (const r of rails) behindNeeds.add(r);
+    const found = magnets.some((t) => (t.kind !== 'pick' || t.recordId) && rails.includes(t.railId));
+    if (!found) fail(`junction "${j.id}": its side way needs the magnet light, but has no gap, gate, mirror or magnet record within ${MAGNET.needsReach} m`);
+  }
+  // Before 5-3 (chapters 1–4, and 5-1 and 5-2), gaps, gates and mirrors only behind such a side way.
+  const early = file.chapter > 0 && (file.chapter < 5 || (file.chapter === 5 && !file.unlocks.includes('magnetLight')));
+  if (early) {
+    const behind = (railId: string): boolean => {
+      for (let r: string | undefined = railId, hop = 0; r && hop < 6; hop++) {
+        if (behindNeeds.has(r)) return true;
+        r = feeder(r)?.railId;
+      }
+      return false;
+    };
+    for (const t of magnets) if (t.kind !== 'pick' && !behind(t.railId)) fail(`${where(t)}: before 5-3 a ${t.kind} goes only behind a side way that needs the magnet light`);
   }
 }

@@ -168,6 +168,85 @@ export const FALL = { bogieLead: 2, seconds: 0.8, depth: 3.5 } as const;
 export const LIGHT = { speedScale: 0.7, revealDistance: 40, cooldown: 0.4 } as const;
 
 /**
+ * v1.11 (PR5, PHASE9_CHAPTER5_6 第 2 部 M4 and PHASE9_0): the magnet light is the third step of the light button (off →
+ * light → magnet → off). In the magnet step the nearest iron target on the train's route, `minAhead` (or its offset) to
+ * `reach` m ahead (bridge/gate: 0 to `reach` m before its face), is pulled, one at a time: `pullBase` + distance /
+ * `pullRate` s (between `pullMin` and `pullMax`) while the speed target is scaled by `pullScale`; a gap closed, a gate
+ * opened or a mirror turned counts at the pull's start. Outside the magnet step the light button glows green from
+ * `hintAhead` m before a target still waiting (pick targets not within `stationQuiet` m of the stop line the train is
+ * braking for). Without the pull an open gap or a shut gate bounces the train (`bounceSeconds`, `bounceBack` m; in the
+ * air too) and it is put back `rewindBefore` m before. The green beam reaches `beamRange` of the light's extra distance
+ * in fog, night and tunnels. A fetched thing stops `catchGap` m before the lamp and goes back in `returnSeconds`.
+ * Targets glint white every `glint` s; `maxOffset` is the furthest a target may be from its rail, `spacing` the least
+ * between two on a rail. The checks: gap and gate zones `zoneBefore`..`zoneAfter`, gaps `gapMin`–`gapMax` m, side-way
+ * faces `sideWayMin` m past their fork.
+ */
+export const MAGNET = {
+  hintAhead: 80,
+  reach: 50,
+  minAhead: 4,
+  maxOffset: 20,
+  spacing: 30,
+  glint: 2.0,
+  pullBase: 0.6,
+  pullRate: 40,
+  pullMin: 0.8,
+  pullMax: 2.0,
+  pullScale: 0.5,
+  catchGap: 2.5,
+  bounceSeconds: 0.5,
+  bounceStop: 0.15,
+  bounceBack: 3,
+  rewindBefore: 60,
+  zoneBefore: 120,
+  zoneAfter: 40,
+  gapMin: 4,
+  gapMax: 16,
+  sideWayMin: 60,
+  stationQuiet: 80,
+  returnSeconds: 1.2,
+  beamRange: 0.5,
+  /** A turn target's pull must end this far before its fork, and this much of it must be left after a dead end's rewind. */
+  turnBefore: 40,
+  turnWindowAfterRewind: 30,
+  /** How far along the way from its fork a `needs: "magnetLight"` side way must have a target. */
+  needsReach: 400,
+} as const;
+
+/**
+ * v1.11 (PR5, PHASE9_0 §3, 第 2 部 M3.4): iron odds and ends by the line that the magnet step tugs at ("びよん" …
+ * "からん"). Scattered about every `every` m (± `jitter`) along every rail, `lateralMin`–`lateralMax` m out, sides by
+ * turns, `max` a stage, kinds by `weights`; kept `clearStation`/`clearGap`/`clearTarget`/`clearJunction` m from stop
+ * lines, gaps, magnet targets and forks, and off rails higher than `groundMax` m above the ground. In the magnet step
+ * (no target being pulled) the nearest one `nearest`..`reach` m ahead and within `sideMax` m of the rail flies over in
+ * `flySeconds`, sticks for `stickSeconds` and drops off, rolling for `rollSeconds`; a bell stretches out for
+ * `bellHold` s. One at a time, `gapSeconds` between.
+ */
+export const IRON_PROPS = {
+  every: 140,
+  jitter: 40,
+  lateralMin: 3.5,
+  lateralMax: 6,
+  max: 40,
+  weights: { can: 5, bucket: 3, bell: 2 },
+  reach: 25,
+  nearest: 3,
+  sideMax: 7,
+  flySeconds: 0.4,
+  stickSeconds: 2.0,
+  rollSeconds: 1.5,
+  bellHold: 1.0,
+  gapSeconds: 1.0,
+  clearStation: 60,
+  clearGap: 40,
+  clearTarget: 60,
+  clearJunction: 30,
+  groundMax: 1.5,
+  /** The bell of a sign hangs this high (m above the ground). */
+  bellHeight: 1.35,
+} as const;
+
+/**
  * Records (v1.8): found when the train front passes within `distance` m (along the rail for a record placed on a
  * rail) while using the ability it needs: the light on, in the air for the jump, the rocket burning or its push
  * still in the speed. The partner's `hint` for a record comes `hintDistance` m before it.

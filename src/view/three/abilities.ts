@@ -29,7 +29,7 @@ import { resolvePlacement } from '../../stage/loader';
 import type { GapDef, JunctionDef, StageData } from '../../stage/types';
 import { buildAbilitySign } from './ability-picture';
 import type { ModelLibrary } from './models';
-import { LEAP } from '../../train/params';
+import { LEAP, MAGNET } from '../../train/params';
 import { addModelPlacements, sourceMeshes, type ModelPlacement, type SourceMesh } from './props';
 
 /** Dark "pit" strips on the ground under rail gaps, so a missing piece of rail reads as a hole. */
@@ -431,6 +431,8 @@ export class SkyGimmicks {
   private readonly pads = new Map<number, PadVisual>();
   private time = 0;
   private lightOn = false;
+  /** v1.11 (PR5): the light button is in the magnet step. */
+  private magnetOn = false;
   private fogNear = 0;
   private fogFar = 0;
 
@@ -484,6 +486,8 @@ export class SkyGimmicks {
 
   onStageEvent(event: StageEvent): void {
     if (event.type === 'light') this.lightOn = event.on;
+    // v1.11 (PR5): the magnet step's thin green beam sees half as much further as the light does.
+    if (event.type === 'light:mode') this.magnetOn = event.mode === 'magnet';
     if (event.type !== 'pad') return;
     const pad = this.pads.get(event.index);
     if (!pad) return;
@@ -524,6 +528,7 @@ export class SkyGimmicks {
     if (zone) {
       near = param(zone, 'near', 2);
       far = this.lightOn ? param(zone, 'lightFar', 70) : param(zone, 'far', 22);
+      if (this.magnetOn) far += (param(zone, 'lightFar', 70) - far) * MAGNET.beamRange;
     }
     const k = 1 - Math.exp(-dt * 2.5);
     this.mist += ((zone ? (this.lightOn ? 0.75 : 1) : 0) - this.mist) * k;

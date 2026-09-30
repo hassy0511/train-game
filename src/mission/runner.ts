@@ -23,6 +23,8 @@ import type { SlopeSystem, SlopeZone } from '../gimmick/slope';
 import { Countdown, type CountdownView } from './countdown';
 import { SnowWave, type SnowWaveView } from './chase';
 import type { TunnelSystem } from '../gimmick/tunnel';
+import type { MagnetSystem } from '../gimmick/magnet';
+import type { IronProps } from '../gimmick/iron-props';
 import { FlowerBridges, type BridgeOutcome } from '../gimmick/flower-bridge';
 import { FragileBridges } from '../gimmick/fragile';
 import { addToProgress, advanceResume, loadProgress, type Resume } from '../core/progress';
@@ -56,6 +58,7 @@ import {
   LIGHT,
   LURE,
   MIRROR,
+  MAGNET,
   PARADE,
   PASSENGER_SECONDS,
   RECORD,
@@ -108,6 +111,8 @@ export interface MissionPorts extends CutscenePorts {
   whistleHint(on: boolean): void;
   /** v1.7: play this song (a countdown's hurry music), or the stage's own song again (null). */
   music(id: string | null): void;
+  /** v1.11 (PR5): say this only when nothing is being said or waiting (a hint that may as well not come). */
+  sayIfQuiet(text: string): boolean;
 }
 
 /** v1.7: the rocket and the slopes (made by the caller: they also work on the test course, without a runner). */
@@ -125,6 +130,9 @@ export interface MissionSystems {
   plowHint?: PlowHint;
   /** v1.10 (4-3): tunnels (the light button glows for them; "トンネルだ！"). */
   tunnel?: TunnelSystem;
+  /** v1.11 (PR5): the magnet light's targets, and the iron odds and ends by the line (made by the caller). */
+  magnet?: MagnetSystem;
+  iron?: IronProps;
 }
 
 export type MissionPhase = 'idle' | 'driving' | 'stopped' | 'doors' | 'cutscene' | 'failing' | 'clear';
@@ -249,7 +257,13 @@ type DefaultLine =
   | 'paradeFollow'
   | 'paradeMatch'
   | 'paradeWait'
-  | 'paradeBye';
+  | 'paradeBye'
+  // v1.11 (PR5 じしゃくライト)
+  | 'magnetNear'
+  | 'magnetGo'
+  | 'magnetBump'
+  | 'magnetBumpAfter'
+  | 'magnetPlay';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -381,6 +395,12 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   paradeMatch: 'ぴったり！ パレードの なかまだ！',
   paradeWait: 'がくたいさんが まってるよ！',
   paradeBye: 'ありがとう〜 がくたいさん！',
+  // v1.11 (PR5 じしゃくライト, PHASE9_CHAPTER5_6 第 2 部 M14). magnetBump's default is by kind (magnetBumpLine).
+  magnetNear: 'てつの ものだ！ じしゃくに しよう！',
+  magnetGo: 'きゅいーん… くっついた！',
+  magnetBump: 'ぽよん！ レールが たりない〜',
+  magnetBumpAfter: 'ひかったら じしゃくに してね',
+  magnetPlay: 'びよん！ くっついちゃった！',
 };
 
 /**
@@ -393,6 +413,8 @@ const NEED_LINES: Partial<Record<AbilityId, string>> = {
   light: 'ライトが あれば みえそう…',
   dive: 'もぐれたら いけそう…',
   plow: 'ゆきかきが あれば いけそう…',
+  // v1.11 (PR5)
+  magnetLight: 'じしゃくライトが あれば いけそう…',
 };
 const NEED_LINE_OTHER = 'いまは まだ いけないみたい…';
 
@@ -437,6 +459,9 @@ export function abilityInUse(ability: AbilityId | null, train: Train, lightOn: b
     case 'plow':
       // v1.10 (4-2): clearing a buried stretch with the snowplow.
       return train.plowing;
+    case 'magnetLight':
+      // v1.11 (PR5): never by passing near: a record needing the magnet is found when it has been pulled to the train.
+      return false;
     default:
       // Abilities of later chapters (reverse, ...) have no rule yet: such records stay "?".
       return false;
@@ -588,6 +613,15 @@ export class MissionRunner {
   private paradeMatchFor = 0;
   /** v1.11 (5-2): the ways taken at spinning forks, "kuru-1:loop,kuru-1:good" (only grows; a test hook). */
   private readonly spinTaken: string[] = [];
+  /** v1.11 (PR5): the magnet light's targets and the odds and ends; their lines said (this mission, this try, the stage). */
+  private readonly magnet: MagnetSystem | null;
+  private readonly iron: IronProps | null;
+  private magnetNearSaid = false;
+  private magnetGoSaid = false;
+  private magnetPlaySaid = false;
+  private readonly magnetLines = new Set<string>();
+  /** v1.11 (PR5): target lines waiting for a quiet moment (said while the train is in the first half of the glow). */
+  private readonly magnetWaiting = new Map<string, { text: string; railId: string; at: number; until: number }>();
 
   constructor(
     private readonly stage: StageData,
@@ -603,6 +637,9 @@ export class MissionRunner {
     this.dive = systems?.dive ?? null;
     this.plow = systems?.plow ?? null;
     this.tunnel = systems?.tunnel ?? null;
+    this.magnet = systems?.magnet ?? null;
+    this.iron = systems?.iron ?? null;
+    this.listenMagnet();
     // v1.10 (4-3): "トンネルだ！ ライトを つけよう" (only useful now: said at once), unless the light is on already.
     this.tunnel?.events.on('near', () => {
       if (this.phase !== 'driving' || this.lightOn) return;
@@ -703,6 +740,89 @@ export class MissionRunner {
     if (this.plowNearSaid) return;
     this.plowNearSaid = true;
     this.ports.sayNow(this.lines.plowNear ?? DEFAULT_LINES.plowNear);
+  }
+
+  /**
+   * v1.11 (PR5, PHASE9_CHAPTER5_6 第 2 部 M7・M8・M14): the magnet light's lines, records and "ぽよん". A target's own
+   * line (a record's hint) once a try, else magnetNear the first time in a mission, both only when nothing else is
+   * being said (while the train is in the first half of the glow); the first catch "きゅいーん… くっついた！"; a gap
+   * closed or a gate opened says its `done`; a record pulled to the train is found; "ぽよん" off a film or a gate is a
+   * soft fail; the first odd or end of the stage "びよん！ くっついちゃった！".
+   */
+  private listenMagnet(): void {
+    const m = this.magnet;
+    if (!m) return;
+    m.events.on('near', ({ target }) => {
+      if (this.phase !== 'driving') return;
+      let text = target.line;
+      if (text) {
+        if (this.magnetLines.has(target.id)) return;
+        this.magnetLines.add(target.id);
+      } else {
+        if (this.magnetNearSaid) return;
+        this.magnetNearSaid = true;
+        text = this.lines.magnetNear ?? DEFAULT_LINES.magnetNear;
+      }
+      // The first half of the glow (from MAGNET.hintAhead m to half way to where the pull ends).
+      this.magnetWaiting.set(target.id, { text, railId: target.railId, at: target.at, until: (MAGNET.hintAhead + target.minAhead) / 2 });
+    });
+    m.events.on('caught', ({ target }) => {
+      // A record is found when it arrives (also in a fail's fade or a cutscene: the flight got there).
+      if (target.recordId) {
+        const def = this.stage.records.find((r) => r.def.id === target.recordId)?.def;
+        if (def && !this.found.has(def.id)) this.takeRecord(def);
+        return;
+      }
+      if (this.phase !== 'driving' || target.kind !== 'pick') return;
+      if (target.done) this.ports.sayAsync(target.done);
+      else if (!this.magnetGoSaid) {
+        this.magnetGoSaid = true;
+        this.ports.sayAsync(this.lines.magnetGo ?? DEFAULT_LINES.magnetGo);
+      }
+    });
+    m.events.on('open', ({ target, instant }) => {
+      if (target.kind === 'turn' && target.junction) {
+        // The mirror turned round: the fork's true way shows (instead of the light's "signRevealed", its `done`).
+        this.revealed.add(target.junction);
+        this.events.post({ type: 'sign:reveal', junctionId: target.junction });
+      }
+      if (instant || this.phase !== 'driving') return;
+      this.magnetWaiting.delete(target.id);
+      if (target.done) this.ports.sayNow(target.done);
+      if (!this.magnetGoSaid) this.magnetGoSaid = true;
+    });
+    m.events.on('miss', ({ target }) => {
+      if (this.phase === 'driving' && target.miss) this.ports.sayAsync(target.miss);
+    });
+    this.train.events.on('magnetBounce', (e) => {
+      if (this.phase !== 'driving') return;
+      const target = m.targets.find((t) => t.id === e.id);
+      const text = this.lines.magnetBump ?? (target?.kind === 'gate' ? 'ぽよん！ とびらが しまってた〜' : DEFAULT_LINES.magnetBump);
+      this.finishDrive({ kind: 'fail', reason: 'magnet', text, rewind: target?.rewind ?? { railId: e.railId, at: Math.max(0, e.s - MAGNET.rewindBefore) } });
+    });
+    this.iron?.events.on('biyon', () => {
+      if (this.phase !== 'driving' || this.magnetPlaySaid) return;
+      // Only in a quiet moment; if something else is being said, the next one says it.
+      this.magnetPlaySaid = this.ports.sayIfQuiet(this.lines.magnetPlay ?? DEFAULT_LINES.magnetPlay);
+    });
+  }
+
+  /** v1.11 (PR5): the target lines waiting for a quiet moment (dropped once the train is past the glow's first half). */
+  private updateMagnetLines(): void {
+    for (const [id, w] of this.magnetWaiting) {
+      const d = this.train.routeDistance(w.railId, w.at);
+      if (d === null || d < w.until) {
+        this.magnetWaiting.delete(id);
+        continue;
+      }
+      if (this.ports.sayIfQuiet(w.text)) this.magnetWaiting.delete(id);
+    }
+  }
+
+  /** v1.11 (PR5): the station the train is driving to (the magnet's pick targets do not glow in its braking). */
+  get stopLine(): { railId: string; at: number } | null {
+    const st = this.phase === 'driving' ? this.stop?.station : null;
+    return st ? { railId: st.railId, at: st.at } : null;
   }
 
   /** v1.10 (4-2): "ざざざ〜！ ずっと ゆきかき！" once in a mission, 20 m into clearing a buried stretch. */
@@ -1201,7 +1321,8 @@ export class MissionRunner {
     if (this.tunnel?.lightHint(false)) return true;
     for (const id of this.wrongTurns) {
       const j = this.stage.file.junctions.find((x) => x.id === id);
-      if (!j || this.revealed.has(j.id)) continue;
+      // v1.11 (PR5): the light does not help at a turn's fork (only the magnet does: its glow is green).
+      if (!j || j.turn || this.revealed.has(j.id)) continue;
       const d = this.train.distanceAhead(j.railId, j.at);
       if (d !== null && d > 0 && d <= 80) return true;
     }
@@ -1496,6 +1617,8 @@ export class MissionRunner {
     this.resetActors(target);
     // v1.11 (5-2): the spinning forks on the way here were stopped the good way.
     this.spins.reset({ resumeAt: target });
+    // v1.11 (PR5): the gaps, gates and mirrors on the way here are open (the rewind event puts the picks back).
+    this.magnet?.reset({ passed: (t) => passed.some((leg) => leg.railId === t.railId && t.at >= leg.from && t.at <= leg.to) });
     // The flower bridges the way from the start to this station crosses must have bloomed.
     const way = this.wayTo(target);
     const crossed = (railId: string, from: number, to: number): boolean =>
@@ -1561,6 +1684,8 @@ export class MissionRunner {
       this.plowNearSaid = false;
       this.plowGoSaid = false;
       this.plowLongSaid = false;
+      this.magnetNearSaid = false;
+      this.magnetGoSaid = false;
       this.bubbleNearSaid.clear();
       this.bubbleTrueSaid.clear();
       this.iceSaid.clear();
@@ -1644,6 +1769,7 @@ export class MissionRunner {
     this.updatePlowLines();
     this.updateTraces();
     this.updateRecords();
+    this.updateMagnetLines();
     if (this.updateNight(dt)) return;
     this.updateToys(dt);
     if (this.checkDeadEnd() || this.checkSpur()) return;
@@ -2219,7 +2345,8 @@ export class MissionRunner {
   /** Reversed signs: a line when one comes up; with the light on, the true way lights up and becomes the default. */
   private updateJunctionSigns(): void {
     const j = this.junctionAhead(80);
-    if (!j || !j.signReversed || this.revealed.has(j.id)) return;
+    // v1.11 (PR5): a turn's fork is seen through only by the mirror the magnet turns round.
+    if (!j || !j.signReversed || j.turn || this.revealed.has(j.id)) return;
     if (!this.signLines.has(j.id)) {
       this.signLines.add(j.id);
       if (this.lines.signNear && !this.lightOn) this.ports.sayAsync(this.lines.signNear);
@@ -2254,6 +2381,8 @@ export class MissionRunner {
       if (this.found.has(def.id)) continue;
       // v1.11 (5-1): a sleeper startled this try has hidden: not to be found (nor pointed out) now.
       if (def.hush && record.onRail && this.hush.startledAt(record.onRail.railId, record.onRail.at)) continue;
+      // v1.11 (PR5): a record needing the magnet light is found when it is pulled to the train (its hint: listenMagnet).
+      if (def.requires === 'magnetLight') continue;
       const d = this.recordDistance(record);
       if (d === null) continue;
       const takeable = def.requires === null || this.abilities.has(def.requires);
@@ -2262,12 +2391,17 @@ export class MissionRunner {
         this.ports.sayAsync(def.hint);
       }
       if (d > RECORD.distance || !takeable || !this.usingAbility(def.requires)) continue;
-      this.found.add(def.id);
-      addToProgress('records', [def.id]);
-      this.events.post({ type: 'record:found', id: def.id });
-      this.ports.recordFound(def);
-      this.ports.sayAsync(this.lines.recordFound ?? DEFAULT_LINES.recordFound);
+      this.takeRecord(def);
     }
+  }
+
+  /** A record is found now (saved, the toast, "みつけた！"). v1.11 (PR5): also when the magnet pulled it to the train. */
+  private takeRecord(def: RecordDef): void {
+    this.found.add(def.id);
+    addToProgress('records', [def.id]);
+    this.events.post({ type: 'record:found', id: def.id });
+    this.ports.recordFound(def);
+    this.ports.sayAsync(this.lines.recordFound ?? DEFAULT_LINES.recordFound);
   }
 
   /** v1.8: the ability a record needs is in use right now (null: nothing needed). */
@@ -2594,6 +2728,7 @@ export class MissionRunner {
       reason === 'snow' ||
       reason === 'glare' ||
       reason === 'lure' ||
+      reason === 'magnet' ||
       outcome.soft === true ||
       iceStation;
     this.events.post({ type: 'fail', reason, soft });
@@ -2616,6 +2751,7 @@ export class MissionRunner {
     if (reason === 'plow') await this.ports.say(this.lines.plowBumpAfter ?? DEFAULT_LINES.plowBumpAfter, 'partner');
     if (reason === 'glare') await this.ports.say(this.lines.glareBumpAfter ?? DEFAULT_LINES.glareBumpAfter, 'partner');
     if (reason === 'lure') await this.ports.say(this.lines.lureBumpAfter ?? DEFAULT_LINES.lureBumpAfter, 'partner');
+    if (reason === 'magnet') await this.ports.say(this.lines.magnetBumpAfter ?? DEFAULT_LINES.magnetBumpAfter, 'partner');
     if (reason === 'snow') {
       // v1.10 (4-3): the catch that tires the wave out says so ("もこもこ、つかれてきた みたい").
       const tired = (this.chase?.catches ?? 0) + 1 >= SNOW_WAVE.giveUpAfter;
@@ -2676,6 +2812,8 @@ export class MissionRunner {
     this.signLines.clear();
     this.revealed.clear();
     this.nightTry.clear();
+    this.magnetLines.clear();
+    this.magnetWaiting.clear();
     this.events.post({ type: 'rewind', boarded: Object.fromEntries(this.boarded) });
     this.ports.resetLever();
     this.ports.autoCamera(null);
@@ -2821,6 +2959,7 @@ const FAIL_LINES: Partial<Record<FailReason, DefaultLine>> = {
   snow: 'chaseCaught',
   glare: 'glareBump',
   lure: 'lureBump',
+  magnet: 'magnetBump',
 };
 const BRIDGE_LINES: Record<NonNullable<BridgeOutcome>['kind'], DefaultLine> = {
   near: 'butterflyNear',

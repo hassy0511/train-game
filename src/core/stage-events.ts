@@ -52,7 +52,9 @@ export type StageEvent =
         // v1.11 (5-1): a fawn gazing at the light stood on the rail, "ききっ… ぴょーん" (soft)
         | 'glare'
         // v1.11 (5-1): little tanukis dancing on the rail, "ききっ" (soft)
-        | 'lure';
+        | 'lure'
+        // v1.11 (PR5): "ぽよん" off an unopened magnet gap's soap film or an iron gate (soft)
+        | 'magnet';
       /** v1.11 (5-2): a soft fail (a small dip, no shake): a wind-up toy, a ball pit, the snow… (a test hook). */
       soft?: boolean;
     }
@@ -64,6 +66,28 @@ export type StageEvent =
   /** The player has this ability (at load and when it is learned). */
   | { type: 'ability'; id: AbilityId }
   | { type: 'light'; on: boolean }
+  /**
+   * v1.11 (PR5, PHASE9_CHAPTER5_6 第 2 部 M15): the light button's step (the beam's colour, the lamp's rim). `light`
+   * still says whether the light's own step is on.
+   */
+  | { type: 'light:mode'; mode: 'off' | 'light' | 'magnet' }
+  /** v1.11 (PR5): the light button glows green for magnet target `id` (null: no longer). */
+  | { type: 'magnet:hint'; id: string | null }
+  /** v1.11 (PR5): target `id` is pulled over `seconds` s from `distance` m ahead (the rings flow, it flies). */
+  | { type: 'magnet:pull'; id: string; kind: 'pick' | 'bridge' | 'gate' | 'turn'; seconds: number; distance: number }
+  /** v1.11 (PR5): the pulled thing arrived (`instant`: at once, after a rewind). */
+  | { type: 'magnet:caught'; id: string; instant: boolean }
+  /** v1.11 (PR5): a gap closed, a gate opened, a mirror turned (`instant`: a resume; no sound, no motion). */
+  | { type: 'magnet:open'; id: string; instant: boolean }
+  /** v1.11 (PR5): "ぽよん" off target `id`'s film or cushion. */
+  | { type: 'magnet:bump'; id: string }
+  /** v1.11 (PR5): a turn's fork passed without the magnet. */
+  | { type: 'magnet:miss'; id: string }
+  /** v1.11 (PR5): a cutscene figure (5-3's little star) flies to the train over `seconds` s ("press": "magnet"). */
+  | { type: 'magnet:fetch'; id: string; seconds: number }
+  /** v1.11 (PR5): an iron odd or end tugged ("びよん") and let go ("からん"). `index`: its place in StageData.ironProps. */
+  | { type: 'iron:biyon'; index: number; look: 'can' | 'bucket' | 'bell' }
+  | { type: 'iron:karan'; index: number; look: 'can' | 'bucket' | 'bell' }
   | { type: 'jump' }
   /** The light showed which way a reversed junction really goes. */
   | { type: 'sign:reveal'; junctionId: string }

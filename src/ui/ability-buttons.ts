@@ -27,12 +27,23 @@ export interface PlowButton {
 
 export interface LightButton {
   show(): void;
+  /** The light's own step on or off (kept for the two-step light; setMode says the same). */
   setOn(on: boolean): void;
+  /**
+   * v1.11 (PR5, PHASE9_CHAPTER5_6 第 2 部 M5): the step the child chose (`data-light`): "off", "light" (the yellow lamp,
+   * data-on 1) or "magnet" (an emerald rim, a little U magnet over the lamp, the label "じしゃく"). Never set by place.
+   */
+  setMode(mode: 'off' | 'light' | 'magnet'): void;
+  /** v1.11 (PR5): how many steps the button has (3 with the magnet light: three dots under it; 2: none shown). */
+  setSteps(steps: 2 | 3): void;
   /**
    * Something ahead waits for the light (a butterfly, a reversed sign that fooled the train before). v1.11 (5-1)
    * `kind` (data-glow-for): "light" (yellow: the light helps here) or "dim" (the hush glow: pressing puts it out).
+   * v1.11 (PR5) "magnet": green, an iron thing ahead (pressing on reaches the magnet step). A hint only.
    */
-  setGlow(on: boolean, kind?: 'light' | 'dim'): void;
+  setGlow(on: boolean, kind?: 'light' | 'dim' | 'magnet'): void;
+  /** v1.11 (PR5): a pull going on (a light runs round the rim). */
+  setPulling(on: boolean): void;
   /** v1.11 (5-1): the hush mark in the corner (a hint), or none. */
   setMark(mark: 'hush' | null): void;
 }
@@ -74,6 +85,17 @@ const LIGHT_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
   <circle cx="11" cy="16" r="6" fill="#2b3a4a"/>
   <path d="M19 10l9-4M19 16h10M19 22l9 4" stroke="#2b3a4a" stroke-width="2.4" stroke-linecap="round"/>
 </svg>`;
+
+/**
+ * v1.11 (PR5): the little U magnet over the lamp in the magnet step (red, white tips; like any toy magnet), and the
+ * steps' dots under the button.
+ */
+export const MAGNET_MARK_ICON = `<svg class="magnet-mark" viewBox="0 0 20 20" aria-hidden="true">
+  <path d="M5 3v7a5 5 0 0 0 10 0V3" fill="none" stroke="#e0473c" stroke-width="3.6"/>
+  <path d="M3.2 3h3.6M13.2 3h3.6" stroke="#ffffff" stroke-width="2.6"/>
+</svg>`;
+const LIGHT_STEPS = '<span class="light-steps" aria-hidden="true"><i data-step="light"></i><i data-step="magnet"></i><i data-step="off"></i></span>';
+const LIGHT_LABELS = { off: 'ライト', light: 'ライト', magnet: 'じしゃく' } as const;
 
 /** v1.8: diving (later chapters): a drop going down under a wave line, with bubbles. */
 const DIVE_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
@@ -275,28 +297,58 @@ export function createPlowButton(root: HTMLElement, onPress: () => void): PlowBu
   };
 }
 
-/** Light: a toggle. The face lights up while on. */
+/**
+ * Light: each press one step on (off → light, and v1.11 PR5 with the magnet light → magnet → off). The face lights up
+ * in the light's step; in the magnet step the rim turns emerald with a little U magnet over the lamp.
+ */
 export function createLightButton(root: HTMLElement, onToggle: () => void): LightButton {
   const button = roundButton(root, 'light', 'ライト', LIGHT_ICON, 'is-light');
-  button.querySelector('.face')?.insertAdjacentHTML('beforeend', HUSH_MARK);
+  const face = button.querySelector('.face');
+  face?.insertAdjacentHTML('beforeend', HUSH_MARK + MAGNET_MARK_ICON);
+  button.insertAdjacentHTML('beforeend', LIGHT_STEPS);
+  const label = button.querySelector('.label');
   button.dataset.on = '0';
+  button.dataset.light = 'off';
+  button.dataset.steps = '2';
   button.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     onToggle();
   });
+  const setMode = (mode: 'off' | 'light' | 'magnet'): void => {
+    if (button.dataset.light === mode) return;
+    button.dataset.light = mode;
+    const on = mode === 'light';
+    button.dataset.on = on ? '1' : '0';
+    button.setAttribute('aria-pressed', mode === 'off' ? 'false' : 'true');
+    if (label) label.textContent = LIGHT_LABELS[mode];
+    button.setAttribute('aria-label', LIGHT_LABELS[mode]);
+    // A little swell as the step changes (the pressed look).
+    button.classList.remove('is-stepped');
+    void button.offsetWidth;
+    button.classList.add('is-stepped');
+  };
   return {
     show(): void {
       button.hidden = false;
     },
     setOn(on): void {
-      button.dataset.on = on ? '1' : '0';
-      button.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (on) setMode('light');
+      else if (button.dataset.light === 'light') setMode('off');
+    },
+    setMode,
+    setSteps(steps): void {
+      const v = String(steps);
+      if (button.dataset.steps !== v) button.dataset.steps = v;
     },
     setGlow(on, kind = 'light'): void {
       const v = on ? '1' : '0';
       if (button.dataset.glow !== v) button.dataset.glow = v;
       const k = on ? kind : '';
       if (button.dataset.glowFor !== k) button.dataset.glowFor = k;
+    },
+    setPulling(on): void {
+      const v = on ? '1' : '0';
+      if (button.dataset.pulling !== v) button.dataset.pulling = v;
     },
     setMark(mark): void {
       markButton(button, mark);

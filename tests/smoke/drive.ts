@@ -154,3 +154,54 @@ export async function budget(page: Page): Promise<{ draws: number; tris: number 
     tris: Number(document.getElementById('app')?.dataset.trisMax),
   }));
 }
+
+/**
+ * v1.11 (PR5, PHASE9_CHAPTER5_6 第 2 部 M15): steps the light button to `mode` ("off" | "light" | "magnet"): a
+ * pointerdown on #light every 0.45 s (over its 0.4 s lockout, in game time roughly) until data-light is `mode`; at most
+ * four presses. Done in the page, so a slow CI frame does not lose a press.
+ */
+export async function lightTo(page: Page, mode: 'off' | 'light' | 'magnet'): Promise<void> {
+  const ok = await page.evaluate(async (want) => {
+    const b = document.getElementById('light');
+    if (!b) return false;
+    for (let i = 0; i < 5; i++) {
+      if (b.dataset.light === want) return true;
+      if (i === 4) break;
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      // Wait 0.45 s of game time (the lockout is in game time; a slow frame is clamped to 0.1 s).
+      const app = document.getElementById('app') as HTMLElement;
+      const t0 = Number(app.dataset.time);
+      const w0 = performance.now();
+      while (Number(app.dataset.time) < t0 + 0.45 && performance.now() - w0 < 10_000) await new Promise((r) => setTimeout(r, 30));
+    }
+    return b.dataset.light === want;
+  }, mode);
+  expect(ok, `light to ${mode}`).toBe(true);
+}
+
+/**
+ * v1.11 (PR5): waits (every frame, in the page) for #light to glow for `mode` ("magnet": green; "light": yellow) while
+ * driving or stopped, then steps it to `mode` with lightTo. Fails when the front passes `latest` on `rail` first.
+ */
+export async function lightOnGlow(page: Page, mode: 'light' | 'magnet', rail: string, latest: number): Promise<void> {
+  const seen = await page.waitForFunction(
+    ([m, r, t]) => {
+      const app = document.getElementById('app');
+      const b = document.getElementById('light');
+      if (!app || !b) return false;
+      if (app.dataset.rail === r && Number(app.dataset.s) >= Number(t)) return 'late';
+      const phase = app.dataset.phase ?? 'driving';
+      if (b.dataset.glow === '1' && b.dataset.glowFor === m && (phase === 'driving' || phase === 'stopped')) return 'glow';
+      return false;
+    },
+    [mode, rail, latest - FRONT] as const,
+    { timeout: 240_000, polling: 'raf' },
+  );
+  expect(await seen.jsonValue()).toBe('glow');
+  await lightTo(page, mode);
+}
+
+/** v1.11 (PR5): waits until magnet target `id` has arrived (data-magnet-caught lists it). */
+export async function waitCaught(page: Page, id: string, timeoutMs = 120_000): Promise<void> {
+  await page.waitForFunction((i) => (document.getElementById('app')?.dataset.magnetCaught ?? '').split(',').includes(i), id, { timeout: timeoutMs });
+}
