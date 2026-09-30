@@ -2,12 +2,10 @@ import {
   BufferGeometry,
   CanvasTexture,
   Color,
-  DirectionalLight,
   DoubleSide,
   Float32BufferAttribute,
   Fog,
   Group,
-  HemisphereLight,
   Mesh,
   MeshLambertMaterial,
   Object3D,
@@ -23,6 +21,7 @@ import { tunnelZones, type TunnelZone } from '../../gimmick/tunnel';
 import type { StageData } from '../../stage/types';
 import { SNOW_WAVE, TRAIN, TUNNEL } from '../../train/params';
 import { bakeModel } from './bake';
+import type { EnvironmentState } from './environment-state';
 import { hash, mix } from './placeholder-kit';
 import type { ModelLibrary } from './models';
 import { setFakeExitGlow } from './snow-placeholders';
@@ -55,8 +54,6 @@ export class SnowGimmicks {
   /** 0 outside, 1 all the way into a tunnel's dark. */
   private dark = 0;
   private lightOn = false;
-  private baseFogColor: Color | null = null;
-  private readonly lights: { light: HemisphereLight | DirectionalLight; base: number }[] = [];
   private readonly tint = new Color();
   private wave: Object3D | null = null;
   private powder: Points<BufferGeometry, PointsMaterial> | null = null;
@@ -82,6 +79,8 @@ export class SnowGimmicks {
   constructor(
     private readonly stage: StageData,
     private readonly scene: Scene,
+    /** The look (PHASE9 B6.1): the fog's colour and the lights as it sets them, read every frame (it may change). */
+    private readonly look: EnvironmentState,
   ) {
     this.group.name = 'snow-mountain';
     this.zones = tunnelZones(stage.file.gimmicks);
@@ -120,14 +119,6 @@ export class SnowGimmicks {
       this.powder.visible = false;
       this.group.add(this.powder);
     }
-    // The fog's colour and the lights as they are outside (the dark eases from them).
-    this.baseFogColor = (this.scene.fog as Fog | null)?.color.clone() ?? null;
-    this.scene.traverse((o) => {
-      if ((o as HemisphereLight).isHemisphereLight || (o as DirectionalLight).isDirectionalLight) {
-        const light = o as HemisphereLight | DirectionalLight;
-        this.lights.push({ light, base: light.intensity });
-      }
-    });
   }
 
   /** The stretches of a tunnel that get a tube: all of it but its ice hall. */
@@ -249,13 +240,20 @@ export class SnowGimmicks {
     const z = this.inside ?? this.lastZone;
     if (this.inside) this.lastZone = this.inside;
     const k = this.dark;
+    // The dark eases from the fog's colour and the lights as the look sets them outside (read now: it may change).
     const fog = this.scene.fog as Fog | null;
-    if (fog && z && this.baseFogColor) {
-      fog.color.copy(this.baseFogColor).lerp(this.tint.set(z.fogColor), k);
+    const baseFogColor = this.look.baseFogColor;
+    if (fog && z && baseFogColor) {
+      fog.color.copy(baseFogColor).lerp(this.tint.set(z.fogColor), k);
       fog.near += (z.near - fog.near) * k;
       fog.far += ((this.lightOn ? z.lightFar : z.far) - fog.far) * k;
     }
-    for (const { light, base } of this.lights) light.intensity = base * (1 - (1 - (z?.dim ?? TUNNEL.dim)) * k);
+    const lights = this.look.lights;
+    if (lights) {
+      const dim = 1 - (1 - (z?.dim ?? TUNNEL.dim)) * k;
+      lights.hemisphere.intensity = this.look.lightLevels.hemisphere * dim;
+      lights.sun.intensity = this.look.lightLevels.sun * dim;
+    }
     const snow = this.scene.getObjectByName('snowfall');
     if (snow) snow.visible = k < 0.5;
   }

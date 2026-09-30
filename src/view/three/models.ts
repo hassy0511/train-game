@@ -6,6 +6,7 @@ import { buildHarbourPlaceholder } from './harbour-placeholders';
 import { buildIcePlaceholder } from './ice-placeholders';
 import { buildVillagePlaceholder } from './village-placeholders';
 import { buildMeadowPlaceholder } from './meadow-placeholders';
+import { buildNightPlaceholder } from './night-placeholders';
 import { buildRecordPlaceholder } from './record-placeholders';
 import { buildRiverPlaceholder } from './river-placeholders';
 import { buildSeaPlaceholder } from './sea-placeholders';
@@ -66,6 +67,7 @@ export class ModelLibrary {
         buildHarbourPlaceholder(name) ??
         buildVillagePlaceholder(name) ??
         buildSnowPlaceholder(name) ??
+        buildNightPlaceholder(name) ??
         buildRecordPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(drawn ?? makePlaceholder(name));

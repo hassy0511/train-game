@@ -27,6 +27,7 @@ import { buildVillagePlaceholder } from '../view/three/village-placeholders';
 import { buildSnowPlaceholder } from '../view/three/snow-placeholders';
 import { ModelLibrary } from '../view/three/models';
 import { buildMeadowPlaceholder } from '../view/three/meadow-placeholders';
+import { buildNightPlaceholder } from '../view/three/night-placeholders';
 import { buildRecordPlaceholder } from '../view/three/record-placeholders';
 import { buildSeaPlaceholder } from '../view/three/sea-placeholders';
 import { buildRiverPlaceholder } from '../view/three/river-placeholders';
@@ -36,10 +37,10 @@ import { buildVolcanoPlaceholder } from '../view/three/volcano-placeholders';
 const GROUPS: [string, RegExp][] = [
   ['のりもの', /^(train-|car-|rocket-unit)/],
   ['しらべもの', /^(dino-egg|footprint)/],
-  ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird|squirrel|grasshopper|butterfly|spider|seabird|seal|snowbird|frog|duck|sea-turtle|lantern-jelly|snowman|snow-hare)/],
+  ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird|squirrel|grasshopper|butterfly|spider|seabird|seal|snowbird|frog|duck|sea-turtle|lantern-jelly|snowman|snow-hare|bunny|fawn|hedgehog|tanuki)/],
   ['えき・せんろ', /^(platform|station|stop|buffer|crossing|direction|jump|updraft|sky-buoy|sign-|old-bridge)/],
   ['たてもの', /^(house|shop|tower|hq|observatory|lighthouse|harbour-house|lodge)/],
-  ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud|canopy|branch|bough|leaf|grass|clover|meadow|water|dandelion|volcano|mesa|pumice|sandbar|reef|sand-island|palm|kelp|coral|spring-vent|snow|ice-|tunnel|reed|lily|water-weed|islet|rapids|river-|sea-arch|falls|stepping|kawa-rock|cape-rock|trench|glow-coral)/],
+  ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud|canopy|branch|bough|leaf|grass|clover|meadow|water|dandelion|volcano|mesa|pumice|sandbar|reef|sand-island|palm|kelp|coral|spring-vent|snow|ice-|tunnel|reed|lily|water-weed|islet|rapids|river-|sea-arch|falls|stepping|kawa-rock|cape-rock|trench|glow-coral|firefly-grass)/],
   ['うみ', /^(whale|fish|current-ring|awa-)/],
   ['こもの', /.*/],
 ];
@@ -92,6 +93,7 @@ const drawn = (name: string): Group | null =>
   buildHarbourPlaceholder(name) ??
   buildVillagePlaceholder(name) ??
   buildSnowPlaceholder(name) ??
+  buildNightPlaceholder(name) ??
   buildRecordPlaceholder(name);
 /** Stand-ins made from a built model (4-3's blushing Sakasa: the built one with pink cheeks), as the game makes them. */
 const COMPOSED = new Set(['amanojaku-blush']);

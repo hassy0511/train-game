@@ -9,12 +9,17 @@ import { fileURLToPath } from 'node:url';
 // own (the suite's server is the production build, where the handle must not exist; checked first).
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const ENV = JSON.parse(readFileSync(resolve(ROOT, 'src/stages/0-0.json'), 'utf8')).environment;
-/** Another look, with every piece 0-0 does not have: evening, no fog, snow on the ground and falling, stars, clouds. */
+/**
+ * Another look, with every piece 0-0 does not have: v1.11 night (the moon, the firefly motes round the camera), no fog,
+ * snow on the ground and falling, stars, clouds.
+ */
 const OTHER = {
   ...ENV,
   sky: { top: '#3b4a8c', bottom: '#f3b7a4' },
   fog: null,
-  lighting: 'evening',
+  lighting: 'night',
+  moon: { azimuth: 340, elevation: 20 },
+  fireflies: { count: 160 },
   ground: { ...ENV.ground, color: '#f4f8fb' },
   surface: 'snow',
   cloudSea: { y: -60 },
@@ -125,8 +130,9 @@ test('apply(env) can switch the look back and forth without leaking', async ({ p
   for (let round = 1; round <= 3; round++) {
     await apply(OTHER);
     const now = await snapshot();
-    // Stars, the cloud sea and the falling snow came in; no fog, so the camera draws to its full reach.
-    expect(now.objects).toBe(start.objects + 3);
+    // Stars, the cloud sea, the falling snow, the moon and the firefly motes came in; no fog, so the camera draws to its
+    // full reach.
+    expect(now.objects).toBe(start.objects + 5);
     expect(now.fog).toBeNull();
     expect(now.far).toBe(600);
     expect(now.background).toBe('f3b7a4');

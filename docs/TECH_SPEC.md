@@ -62,7 +62,9 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
 
 ### 見た目の 環境（`EnvironmentState`、2026-09-30 PHASE9 PR2b）
 - `src/view/three/environment-state.ts`。ステージ JSON の `environment` から 画面の「見た目の 環境」を 作る 入れもの。`ThreeSceneView.applyEnvironment(env)`（中で `EnvironmentState.apply(env)`）で **何度でも** かえられる（6-2 の 区画ごとの 見た目、5-1 の 昼 ⇄ 夜。PHASE9_CHAPTER5_6 第 3 部 B6.1）。一つ一つの 部品の 作り方は `environment.ts`
-- 中身: 背景の 色・空の ドーム・霧・カメラの 遠い 面（霧の far ＋ 40 m、最大 600 m。空の ドームも その 内がわに ちぢめる）・光（半球光と 太陽）・地面（水の ある ステージは 池の 穴あき）・星・雲海・ふる 雪。**あとから 来る もの の 席**: 月・ほたるの つぶ（PR2c 夜）、`landmark`（6-2）。いまは 何も 作らない
+- 中身: 背景の 色・空の ドーム・霧・カメラの 遠い 面（霧の far ＋ 40 m、最大 600 m。空の ドームも その 内がわに ちぢめる）・光（半球光と 太陽）・地面（水の ある ステージは 池の 穴あき）・星・雲海・ふる 雪・**月**（`environment.moon`、空の ドームに のる 板 1 まい、顔なし）・**ほたるの つぶ**（`environment.fireflies`、`Points` 1 つ、カメラの まわりで シェーダが ふわふわ させる）（どちらも 2026-09-30 PR2c）。**あとから 来る もの の 席**: `landmark`（6-2）。いまは 何も 作らない
+- 夜（`lighting: "night"`、PR2c）: 半球光 `#b8c6ff`／`#34406a`・0.85 ＋ 月の 平行光 `#dfe7ff`・0.62（`moon` の 向きから）＝ 昼の 70%（`params.ts` の `NIGHT`）。夜は 客車の まどが 光り、ライトの すじが 1.3 倍（`night.ts`・`ThreeSceneView.lookChanged`）
+- ゲームの 中で かえる のは 寸劇の `{ "environment": { … }, "seconds" }`（STAGE_SCHEMA §18）: `main.ts` が ステージの `environment` に 書いた 欄を 上書きして `SceneView.applyEnvironment` を よぶ（夜空色の フェード `#look-fade` の うしろで。まわりの 音も かえる）。0-1 は 入りで 昼 → 夜、出で 夜 → 昼
 - きまり:
   - 空・霧・2 つの 光は ずっと 同じ もの（ほかの しかけ、たとえば 村の 夕方・雪の トンネル・かがみ が つかんで いる ので）。`apply` は 色や 強さを 入れなおす だけ
   - 星・雲海・地面・ふる 雪 は「何から 作ったか」を おぼえて おき、同じ なら そのまま、ちがえば ふるい 方を 外して `dispose`（形・材質・テクスチャ）してから 作りなおす。いらなく なったら 外して `dispose`
@@ -70,8 +72,8 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
   - 雪（`surface: "snow"`）: 地面に すこし 自分の 光（白く 見える）、半球光の 下からの 色を 雪の 白に（もとの `IceGimmicks.brightenSnow`）。線路の 雪の 床は `snowBeds(線路の 一覧, env)` で 線路の 一覧ごと（いまは ステージの ぜんぶ、6-2 では 区画ごと）
   - 水の 中に いる ときに `apply` したら、水の 中の 見た目は つぎの コマで 新しい 環境から とりなおす。寸劇の 決まった カメラの ときは 遠い 面を また のばす
   - 水（`water`）は ステージ ぜんぶ で 1 つ（区画で かえない）。地面の 穴の 形に 入る ので、地面の「何から 作ったか」に ふくめる
-  - 雪の トンネル（`SnowGimmicks`）は 読み込みの とき の 霧の 色と 光の 強さを おぼえて いる。環境を かえる ステージで トンネルを つかう ときは、そこも `EnvironmentState` から 読む ように する（いまは 4-3 だけ で、環境は かえない）
-- テスト: `tests/smoke/environment-state.spec.ts`（開発サーバーで `__debugView` を つかう。0-0 で ちがう 環境と もとの 環境を 3 回 行き来 して、シーンの 物の 数・霧・遠い 面が もとに もどり、`renderer.info.memory` が ふえつづけない こと。本番ビルドに `__debugView` が ない ことも みる）
+  - 雪の トンネル（`SnowGimmicks`）と 村の 夕方（`VillageGimmicks`）は、霧の 色・2 つの 光の 強さと 色・空を `EnvironmentState` から その とき 読む（`baseFogColor`・`lights`・`lightLevels`・`sky`・`fogObject`。PR2c から。読み込みの ときの 値を おぼえない）。夕方が かわる とちゅうで `apply` したら、あたらしい 見た目が 勝つ（`VillageGimmicks.onLook`）
+- テスト: `tests/smoke/environment-state.spec.ts`（開発サーバーで `__debugView` を つかう。0-0 で ちがう 環境〈夜・月・ほたるの つぶ も〉と もとの 環境を 3 回 行き来 して、シーンの 物の 数・霧・遠い 面が もとに もどり、`renderer.info.memory` が ふえつづけない こと。本番ビルドに `__debugView` が ない ことも みる）。ゲームの 中の 昼 ⇄ 夜 は `tests/smoke/night.spec.ts`（0-1）
 
 ---
 

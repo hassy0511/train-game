@@ -140,6 +140,8 @@ export class JunctionSigns {
     for (const junction of this.stage.file.junctions) {
       // v1.10: a dive fork has a ring on the water instead (the water layer), no sign.
       if (junction.dive) continue;
+      // v1.11 (5-1): a firefly fork has only its grass and its fireflies (a fake one keeps Sakasa's lying sign).
+      if (junction.fireflies && !junction.fireflies.fake) continue;
       const at = Math.max(0, junction.at - SIGN_BEFORE);
       // On a raised line (2-2's silk 12 m up) the sign stands at the rail's height, not down on the ground.
       const railY = this.stage.network.getRail(junction.railId).frameAt(at).position.y;

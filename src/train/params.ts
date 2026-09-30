@@ -452,3 +452,56 @@ export const TUNNEL = {
   dim: 0.35,
   lightGlow: 60,
 } as const;
+
+/**
+ * v1.11 (5-1, PHASE9_CHAPTER5_6 第 4 部 §4.7): the night preset. The lights sum to 70% of the day's (hemisphere 0.9 +
+ * sun 1.2): a blue moonlight, never darker (第 1 部 §9). `windowGlow`: the cars' warm windows; `beamBoost`: the light's
+ * beam shows this much stronger at night.
+ */
+export const NIGHT = {
+  hemiSky: '#b8c6ff',
+  hemiGround: '#34406a',
+  hemi: 0.85,
+  moonColor: '#dfe7ff',
+  moon: 0.62,
+  windowGlow: 0.6,
+  beamBoost: 1.3,
+} as const;
+/**
+ * v1.11 (5-1): a hush stretch (つきの はらっぱ, gimmicks "hush"). The light button glows (press = off) from `glowBefore`
+ * m before it while the light is on; the sleepers hide after `startleAfter` s of light inside it (or a whistle), in
+ * `hideSeconds`. The fawn's rewind is `rewindBefore` m before it by default; after `mercyAfter` fawn fails in a row
+ * there the fawn crosses even with the light on.
+ */
+export const HUSH = { glowBefore: 70, startleAfter: 0.8, rewindBefore: 70, hideSeconds: 0.4, mercyAfter: 2 } as const;
+/** v1.11 (5-1): a dazzled fawn blinks `blink` s after the light goes off and hops off the rail in `hopOff` s. */
+export const GLARE = { blink: 0.2, hopOff: 0.6, toMiddle: 0.5, bump: 0.5 } as const;
+/**
+ * v1.11 (5-1): whistle-reversed stretches. A whistle brings a lure group onto the rail only when it is further than
+ * v²/(2×BRAKING) + v × `reaction` + `margin` m ahead; it comes in `hop` s and dances `dance` s (+`extend` per
+ * whistle, up to `danceMax`). Within `dangerDistance` m of a group on the rail the train stops (a soft fail). The
+ * "stopped" of "ばいばい" is below `stopSpeed` m/s; the default way back is `rewindBefore` m before the stretch; a group
+ * is 1–`countMax` little ones; after `mercyAfter` fails in a row there the groups dance in the bushes only.
+ */
+export const LURE = {
+  reaction: 2.0,
+  margin: 8,
+  hop: 0.8,
+  dance: 5,
+  extend: 1,
+  danceMax: 8,
+  dangerDistance: 8,
+  stopSpeed: 0.3,
+  rewindBefore: 60,
+  countMax: 4,
+  mercyAfter: 2,
+  nearBefore: 60,
+} as const;
+/**
+ * v1.11 (5-1): firefly forks (junctions[].fireflies): the whistle glows `callTo`–`callFrom` m before the fork; `count`
+ * fireflies fly up and line the first `trail` m of the true way in `fly` s. A fake fork lights the light button from
+ * `fakeGlow` m before it until the light has seen through it. The resting fireflies sit in the grass `grass` m before.
+ */
+export const FIREFLY_FORK = { callFrom: 100, callTo: 15, count: 24, trail: 80, fly: 1.2, fakeGlow: 80, grass: [10, 30], rest: 6 } as const;
+/** v1.11 (5-1): ambient fireflies round the camera (environment.fireflies defaults and the most there may be). */
+export const AMBIENT_FIREFLIES = { count: 160, radius: 60, max: 400 } as const;

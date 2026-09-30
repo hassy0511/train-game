@@ -1,0 +1,1 @@
+{ "_expect": "(a dark stretch) is over it", "_base": "0-1", "_edit": [{ "path": "gimmicks.3", "value": { "type": "fog", "railId": "main", "from": 300, "to": 340, "params": { "near": 4, "far": 32, "glow": true } } }] }

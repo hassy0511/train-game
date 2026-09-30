@@ -2,7 +2,7 @@ import type { Quaternion, Vector3 } from 'three';
 import type { RunSurface } from '../audio/run-sound';
 import type { RailNetwork } from '../rail/types';
 
-/** Stage JSON schema v1 (additions up to v1.10). See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
+/** Stage JSON schema v1 (additions up to v1.11). See docs/STAGE_SCHEMA.md (Japanese) for the authoring reference. */
 export type Vec3 = [number, number, number];
 
 /** `plow` (ゆきかき) is chapter 4's, given by 4-2 (3-2's third record waits for it); `magnetLight` is chapter 5's. */
@@ -43,6 +43,13 @@ export interface EnvironmentDef {
    * the moon comes up at `moon` (azimuth degrees from +Z towards +X, elevation degrees).
    */
   festival?: { bursts: Vec3[]; moon?: { azimuth: number; elevation: number } };
+  /**
+   * v1.11 (5-1): the moon in the night sky (a pale disc with a soft ring, no face): `azimuth` degrees from +Z towards
+   * +X, `elevation` degrees (5–80), `size` times the usual (0.5–3, default 1). It also sets where the moonlight comes from.
+   */
+  moon?: { azimuth: number; elevation: number; size?: number };
+  /** v1.11 (5-1): firefly motes floating round the camera: `count` (0–400) within `radius` m (default 60). */
+  fireflies?: { count: number; radius?: number };
 }
 
 /** v1.10 (4-1): falling snow: `count` flakes (0–2000) in a box `radius` m round the camera, falling `fall` m/s. */
@@ -251,6 +258,21 @@ export interface JunctionDef {
   diveSide?: 'left' | 'right';
   /** v1.10 (3-1): a bubble fork (see BubbleForkDef). */
   bubbles?: BubbleForkDef;
+  /** v1.11 (5-1): a firefly fork (see FireflyForkDef). */
+  fireflies?: FireflyForkDef;
+}
+
+/**
+ * v1.11 (5-1): a firefly fork (`junctions[].fireflies`). The true way is the side that is not `default`. The whistle
+ * glows while the train front is `callTo`–`callFrom` m before the fork; whistled, `count` fireflies fly up and line the
+ * true way (its arrow lights and it becomes the way taken). `fake`: Sakasa's pink lanterns on the false side (needs
+ * `signReversed`): the fireflies lose their way until the light has seen through it.
+ */
+export interface FireflyForkDef {
+  callFrom?: number;
+  callTo?: number;
+  count?: number;
+  fake?: boolean;
 }
 
 export interface StopRule {
@@ -311,6 +333,8 @@ export type PropDef = Placement & {
   traceLine?: string;
   /** v1.10 (4-3): its mark glows once junction `reveal` is seen through with the light (the false exit's swirl). */
   reveal?: string;
+  /** v1.11 (5-1): a sleeper in a hush stretch (a sleeping rabbit): it hides when the stretch is startled (looks only). */
+  sleeper?: boolean;
 };
 
 export type ReactsTo = 'whistle' | 'light' | 'none';
@@ -337,6 +361,11 @@ export type RecordDef = Placement & {
    * record while it can be taken (the ability is there, or none is needed).
    */
   hint?: string;
+  /**
+   * v1.11 (5-1): it sleeps in a hush stretch: while that stretch is startled (the light or the whistle woke it) it is
+   * hidden and cannot be found this try.
+   */
+  hush?: boolean;
 };
 
 /** v1.7 / v1.10: the countdown panel's picture, which also picks how a time-up looks. */
@@ -407,6 +436,8 @@ export interface HintDef {
   railId: string;
   at: number;
   text: string;
+  /** v1.11: not said when the player has this ability (a riddle about a record for a later ability). */
+  unless?: AbilityId;
 }
 
 /** Partner lines keyed by situation. Missing keys mean the partner stays quiet. */
@@ -549,7 +580,33 @@ export type MissionLines = Partial<
     | 'chaseCaughtAfter'
     | 'chaseTired'
     | 'chaseSafe'
-    | 'tunnelNear',
+    | 'tunnelNear'
+    // v1.11 (5-1 よるの もり)
+    | 'hushNear'
+    | 'hushLightOff'
+    | 'hushStartle'
+    | 'hushQuiet'
+    | 'glareFreeze'
+    | 'glareFreezeAfter'
+    | 'glareFree'
+    | 'glareMercy'
+    | 'glareBump'
+    | 'glareBumpAfter'
+    | 'lureMercy'
+    | 'reversedNear'
+    | 'reversedIn'
+    | 'lureCome'
+    | 'lureBye'
+    | 'lureBump'
+    | 'lureBumpAfter'
+    | 'reversedQuiet'
+    | 'fireflyNear'
+    | 'fireflyCall'
+    | 'fireflyAgain'
+    | 'fireflyFakeNear'
+    | 'fireflyConfused'
+    | 'fireflyConfusedLit'
+    | 'fakeRevealed',
     string
   >
 >;
@@ -632,7 +689,14 @@ export type CutsceneStep =
    * v1.10 (4-2): the sky, the light and the fog turn to `sky` ("evening") over `seconds` s and stay so for the rest
    * of the stage (the lanterns come on with it).
    */
-  | { sky: 'evening'; seconds?: number };
+  | { sky: 'evening'; seconds?: number }
+  /**
+   * v1.11 (PR2c): the look changes to the stage's own `environment` with these fields written over it (as a 6-2
+   * section's will), for the rest of the stage: the sky, the fog, the light, the ground, the stars, the moon, the
+   * fireflies and the sound around. `{}` goes back to the stage's own. `seconds`: through a short dusk-blue fade (0 = at
+   * once). Day ⇄ night.
+   */
+  | { environment: Partial<EnvironmentDef>; seconds?: number };
 
 export interface GimmickDef {
   type: string;
@@ -675,6 +739,33 @@ export interface PlowSpan {
   height: number;
   width: number;
   sign: boolean;
+}
+
+/**
+ * v1.11 (5-1): params of a "hush" gimmick (つきの はらっぱ, the stretch `from`–`to`): where everyone sleeps. The light
+ * button gets the moon mark from `glowBefore` m before it, and glows (press = off) while the light is on; `startleAfter`
+ * s of light inside it, or the whistle, startles the sleepers (not a fail). `rewind`: a fawn's fail goes back there
+ * (default `from` − HUSH.rewindBefore). `sign`: the moon-and-ZZZ sign 8 m before it (default true).
+ */
+export interface HushParams {
+  id: string;
+  glowBefore?: number;
+  startleAfter?: number;
+  rewind?: { railId: string; at: number };
+  sign?: boolean;
+  line?: string;
+}
+
+/**
+ * v1.11 (5-1): params of a "whistle-reversed" gimmick (たぬきの もり): the whistle sounds reversed and brings the lure
+ * groups in it dancing onto the rail. `rewind`: a lure fail goes back there (default `from` − LURE.rewindBefore).
+ * `sign`: the dancing-tanuki sign 10 m before it (default true).
+ */
+export interface WhistleReversedParams {
+  id: string;
+  rewind?: { railId: string; at: number };
+  sign?: boolean;
+  line?: string;
 }
 
 /** v1.7: params of a "slope" gimmick (the stretch `from`–`to` of `railId`, judged at the train front). */
@@ -854,6 +945,8 @@ export interface ResolvedProp {
   traceLine?: string;
   /** v1.10 (4-3): see PropDef.reveal. */
   reveal?: string;
+  /** v1.11 (5-1): see PropDef.sleeper. */
+  sleeper?: boolean;
 }
 
 /** A record with its placement resolved. */

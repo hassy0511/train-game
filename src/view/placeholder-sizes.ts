@@ -39,6 +39,17 @@ export const PLACEHOLDER_SIZES: Record<string, [number, number, number]> = {
   'dino-large-neck': [2, 5, 6],
   'dino-egg': [0.8, 0.8, 0.8],
   'footprint-slab': [3, 0.45, 2.4],
+  // v1.11 (5-1, ticket 0018): the night forest pieces of the PR2c mechanisms (drawn in code: night-placeholders.ts).
+  'sign-hush': [1.2, 2.2, 0.2],
+  'sign-whistle-reversed': [1.2, 2.2, 0.2],
+  'bunny-sleep': [0.5, 0.35, 0.7],
+  'bunny-family': [1.4, 0.6, 1.2],
+  fawn: [0.45, 1.2, 1.1],
+  'hedgehog-walk': [0.4, 0.35, 0.7],
+  'hedgehog-ball': [0.55, 0.55, 0.55],
+  tanuki: [0.6, 0.8, 0.6],
+  'fake-lantern': [0.5, 2.6, 0.5],
+  'firefly-grass': [1.4, 0.7, 1.0],
 };
 
 export function placeholderSize(model: string): [number, number, number] {

@@ -58,6 +58,14 @@ function isTurtle(actor: ResolvedActor): boolean {
 function isSnowman(actor: ResolvedActor): boolean {
   return actor.type === 'cat' && (actor.params as { look?: string }).look === 'snowman';
 }
+/** v1.11 (5-1): a "cat" with params.look "hedgehog" sniffs along the rail (it curls up and rolls aside when whistled). */
+function isHedgehog(actor: ResolvedActor): boolean {
+  return actor.type === 'cat' && (actor.params as { look?: string }).look === 'hedgehog';
+}
+/** v1.11 (5-1): a "dino-small" with params.look "fawn" is a fawn (it hops across; with the light on it stops to gaze). */
+function isFawn(actor: ResolvedActor): boolean {
+  return actor.type === 'dino-small' && (actor.params as { look?: string }).look === 'fawn';
+}
 /** v1.10 (3-2): a "dino-small" with params.look "duck" is a mother duck and her ducklings crossing. */
 function isDuck(actor: ResolvedActor): boolean {
   return actor.type === 'dino-small' && (actor.params as { look?: string }).look === 'duck';
@@ -181,6 +189,8 @@ export class ActorLayer {
   private readonly rollers = new Set<string>();
   /** v1.10 (4-1): ids of the figures cutscenes brought on (an ice mirror may show them). */
   private readonly spawned = new Set<string>();
+  /** v1.11 (5-1): figures that hop as they move (a fawn "ぴょこぴょこ"). */
+  private readonly hoppers = new Set<string>();
 
   constructor(
     private readonly models: ModelLibrary,
@@ -213,6 +223,14 @@ export class ActorLayer {
       if (isSeal(actor)) this.lookModels.set(actor.id, SEAL_MODELS);
       if (isTurtle(actor)) this.lookModels.set(actor.id, TURTLE_MODELS);
       if (isDuck(actor)) this.lookModels.set(actor.id, { sleep: 'duck-family', awake: 'duck-family' });
+      if (isHedgehog(actor)) {
+        this.lookModels.set(actor.id, { sleep: 'hedgehog-walk', awake: 'hedgehog-ball' });
+        this.rollers.add(actor.id);
+      }
+      if (isFawn(actor)) {
+        this.lookModels.set(actor.id, { sleep: 'fawn', awake: 'fawn' });
+        this.hoppers.add(actor.id);
+      }
       if (isSnowman(actor)) {
         this.lookModels.set(actor.id, { sleep: 'snowman', awake: 'snowman' });
         this.rollers.add(actor.id);
@@ -220,7 +238,8 @@ export class ActorLayer {
     }
     // Nuts and squirrels are drawn by the forest gimmicks, grasshoppers by the meadow ones and rocks by the volcano
     // ones (they move on their own).
-    const drawnElsewhere = new Set(['trigger', 'nut', 'squirrel', 'grasshopper', 'rock-roll', 'rock-drop', 'whale']);
+    // v1.11 (5-1): the little tanukis (lure groups) by the night layer (night.ts).
+    const drawnElsewhere = new Set(['trigger', 'nut', 'squirrel', 'grasshopper', 'rock-roll', 'rock-drop', 'whale', 'lure']);
     await Promise.all(
       actors
         .filter((actor) => !drawnElsewhere.has(actor.type))
@@ -331,7 +350,7 @@ export class ActorLayer {
   private async addCrossingGates(actors: ResolvedActor[]): Promise<void> {
     // A seabird basks on an open line (a sea cliff), not at a level crossing: no gate for it.
     const placements = actors
-      .filter((actor) => actor.type === 'cat' && !isSeabird(actor) && !isSeal(actor) && !isTurtle(actor) && !isSnowman(actor))
+      .filter((actor) => actor.type === 'cat' && !isSeabird(actor) && !isSeal(actor) && !isTurtle(actor) && !isSnowman(actor) && !isHedgehog(actor))
       .map((actor) => ({
         model: 'crossing-gate',
         position: actor.position.clone().add(new Vector3(-3, 0, 0).applyQuaternion(actor.quaternion)),
@@ -515,7 +534,7 @@ export class ActorLayer {
       to: to.clone(),
       elapsed: 0,
       seconds,
-      bob: this.objectModels.get(id) === 'amanojaku' || this.objectModels.get(id) === 'amanojaku-blush',
+      bob: this.objectModels.get(id) === 'amanojaku' || this.objectModels.get(id) === 'amanojaku-blush' || this.hoppers.has(id),
       roll: this.rollers.has(id) || (this.objectModels.get(id) ?? '').startsWith('snowman') || this.objectModels.get(id) === 'snow-wave',
     });
   }
@@ -702,6 +721,11 @@ export class ActorLayer {
       default:
         break;
     }
+  }
+
+  /** v1.11 (5-1): the figure drawn for `id` (an actor, or "record:<id>"), or null (the night layer hides a sleeper). */
+  figure(id: string): Object3D | null {
+    return this.objects.get(id) ?? null;
   }
 
   /** v1.10 (4-1): the figures a cutscene brought on that are on screen now (for an ice mirror's reflection). */

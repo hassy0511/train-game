@@ -20,7 +20,7 @@ import {
 import type { StageEvent } from '../../core/stage-events';
 import type { RailNetwork } from '../../rail/types';
 import type { StageData } from '../../stage/types';
-import { TRAIN } from '../../train/params';
+import { NIGHT, TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
 import type { CameraFx, SceneView } from '../SceneView';
 import { cameraTarget, makeCameraTarget, orbitAngle, orbitTarget, smoothCamera, type CameraMode, type OrbitCamera } from '../camera-rig';
@@ -31,6 +31,7 @@ import { VolcanoGimmicks } from './volcano-gimmicks';
 import { IceGimmicks } from './ice';
 import { PlowGimmicks } from './plow';
 import { VillageGimmicks } from './village';
+import { NightGimmicks } from './night';
 import { frameWave, SnowGimmicks } from './snow';
 import { iceZones, thinIceZones } from '../../gimmick/ice';
 import { slopeZones } from '../../gimmick/slope';
@@ -118,6 +119,8 @@ export class ThreeSceneView implements SceneView {
   private village: VillageGimmicks | null = null;
   /** v1.10 (4-3): tunnels, the snow wave and the false exit (null on a stage without them). */
   private snow: SnowGimmicks | null = null;
+  /** v1.11 (5-1): sleepers, tanukis, firefly forks, fake lanterns, the cars' windows at night (null without them). */
+  private night: NightGimmicks | null = null;
   /** v1.7: slope beds and rock bases, kept for rebuilding the track after a cut. */
   private trackLooks: TrackLooks | undefined;
   /** v1.7: props with a tag, each in its own group (a cut can drop them). */
@@ -254,11 +257,15 @@ export class ThreeSceneView implements SceneView {
     this.plow = new PlowGimmicks(stage, this.train);
     this.scene.add(this.plow.group);
     if (stage.file.props.some((p) => p.model === 'lantern' || p.trace) || stage.file.cutscenes && Object.values(stage.file.cutscenes).some((c) => c.some((st) => 'sky' in st))) {
-      this.village = new VillageGimmicks(this.scene, this.environment.sky);
+      this.village = new VillageGimmicks(this.scene, this.environment);
     }
     if (SnowGimmicks.wanted(stage)) {
-      this.snow = new SnowGimmicks(stage, this.scene);
+      this.snow = new SnowGimmicks(stage, this.scene, this.environment);
       this.scene.add(this.snow.group);
+    }
+    if (NightGimmicks.wanted(stage)) {
+      this.night = new NightGimmicks(stage, this.actors, this.cars);
+      this.scene.add(this.night.group);
     }
     // Tagged props stay separate so a cutscene can drop them (the old bridge's girders).
     for (const prop of stage.props) {
@@ -273,7 +280,8 @@ export class ThreeSceneView implements SceneView {
       this.models.load('train-proto'),
       this.models.load('car-proto'),
       this.models.load('partner'),
-      addProps(props, stage.props.filter((p) => !p.tag), this.models),
+      // v1.11 (5-1): sleepers each on their own (they hide by themselves: the night layer).
+      addProps(props, stage.props.filter((p) => !p.tag && !(p.sleeper && this.night)), this.models),
       ...this.taggedProps.map(({ prop, group }) => addProps(group, [prop], this.models)),
       addModelPlacements(bufferStops, rails.bufferStops, this.models),
       this.actors.init(stage.actors, stage.records),
@@ -286,7 +294,9 @@ export class ThreeSceneView implements SceneView {
       this.sea?.init(this.models),
       this.ice?.init(this.models),
       this.plow.init(this.models),
+      this.night?.init(this.models),
     ]);
+    this.lookChanged();
     // After the lights and the fog are all in (it dims them in a tunnel).
     await this.snow?.init(this.models);
     // The train, cars and partner only ever move as a whole (door bands, the light beam and the jump unit are
@@ -375,6 +385,7 @@ export class ThreeSceneView implements SceneView {
     this.plow?.onEvent(event);
     this.village?.onEvent(event);
     this.snow?.onEvent(event);
+    this.night?.onEvent(event);
     if (event.type === 'ability' && event.id === 'rocket') void this.volcano?.addRocketUnit(this.models);
     if (event.type === 'rocket') this.fovTarget = event.state === 'burn' && !this.calm ? ROCKET_FOV : 0;
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
@@ -537,6 +548,26 @@ export class ThreeSceneView implements SceneView {
     // Under water the view had kept the look above the surface to come back to: it takes the new one next frame.
     this.aboveWater = null;
     this.widenFar();
+    // An evening still turning stops: the new look wins.
+    this.village?.onLook();
+    this.lookChanged();
+  }
+
+  /** v1.11 (5-1): what follows the look's lighting: at night the cars' windows glow and the light's beam is stronger. */
+  private lookChanged(): void {
+    const night = this.environment.lighting === 'night';
+    this.night?.setNight(night);
+    this.lightBeam.traverse((o) => {
+      const m = (o as Mesh).material as MeshBasicMaterial | undefined;
+      if (!m || !(o as Mesh).isMesh) return;
+      const base = (o.userData.baseOpacity ??= m.opacity) as number;
+      m.opacity = Math.min(1, base * (night ? NIGHT.beamBoost : 1));
+    });
+  }
+
+  /** v1.11: the look's lighting now ("day", "evening", "night", "cave"; a test hook). */
+  get lighting(): string {
+    return this.environment.lighting;
   }
 
   setOrbit(orbit: OrbitCamera | null): void {
@@ -643,6 +674,7 @@ export class ThreeSceneView implements SceneView {
       this.plow.update(dt);
     }
     this.village?.update(dt);
+    this.night?.update(dt);
     this.updateFalling(dt);
     // A little wider view while the rocket burns (not a shake).
     const fov = this.fovBoost + (this.fovTarget - this.fovBoost) * Math.min(1, dt * 4);

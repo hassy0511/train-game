@@ -1,7 +1,7 @@
 /** Full-screen fade overlay (black, or white "cloud" in the sky stages). Resolves when the transition ends. */
-export function createFade(root: HTMLElement, color = '#000'): (toBlack: boolean, seconds: number) => Promise<void> {
+export function createFade(root: HTMLElement, color = '#000', id = 'fade'): (toBlack: boolean, seconds: number) => Promise<void> {
   const el = document.createElement('div');
-  el.id = 'fade';
+  el.id = id;
   el.className = 'fade';
   el.style.background = color;
   root.appendChild(el);

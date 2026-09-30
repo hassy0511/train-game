@@ -1,7 +1,11 @@
 import { Vector3 } from 'three';
 import type { Whistle } from '../actions/whistle';
 import { CatActor } from '../actors/cat';
-import { LargeDino, makeDino, MidDino, SmallDino, type Dino } from '../actors/dino';
+import { GlareDino, LargeDino, makeDino, MidDino, SmallDino, type Dino } from '../actors/dino';
+import type { LureGroup } from '../actors/lure';
+import { FireflyForks, type FireflyFork } from '../gimmick/fireflies';
+import { HushSystem } from '../gimmick/hush';
+import { ReversedWhistle } from '../gimmick/reversed-whistle';
 import { RollingNut, Squirrel } from '../actors/nut';
 import { Grasshopper } from '../actors/grasshopper';
 import { DroppingRock, ROCK_HIT_AFTER, RollingRock } from '../actors/rock';
@@ -42,9 +46,13 @@ import {
   DIVE,
   DOOR_REMIND_SECONDS,
   FALL,
+  FIREFLY_FORK,
+  GLARE,
+  HUSH,
   JUMP,
   LEVER_NOTCHES,
   LIGHT,
+  LURE,
   MIRROR,
   PASSENGER_SECONDS,
   RECORD,
@@ -201,7 +209,33 @@ type DefaultLine =
   | 'chaseCaughtAfter'
   | 'chaseTired'
   | 'chaseSafe'
-  | 'tunnelNear';
+  | 'tunnelNear'
+  // v1.11 (5-1 よるの もり)
+  | 'hushNear'
+  | 'hushLightOff'
+  | 'hushStartle'
+  | 'hushQuiet'
+  | 'glareFreeze'
+  | 'glareFreezeAfter'
+  | 'glareFree'
+  | 'glareMercy'
+  | 'glareBump'
+  | 'glareBumpAfter'
+  | 'lureMercy'
+  | 'reversedNear'
+  | 'reversedIn'
+  | 'lureCome'
+  | 'lureBye'
+  | 'lureBump'
+  | 'lureBumpAfter'
+  | 'reversedQuiet'
+  | 'fireflyNear'
+  | 'fireflyCall'
+  | 'fireflyAgain'
+  | 'fireflyFakeNear'
+  | 'fireflyConfused'
+  | 'fireflyConfusedLit'
+  | 'fakeRevealed';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -297,6 +331,32 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   chaseTired: 'もこもこ、つかれてきた みたい',
   chaseSafe: 'セーフ！',
   tunnelNear: 'トンネルだ！ ライトを つけよう',
+  // v1.11 (5-1 よるの もり, PHASE9_CHAPTER5_6 第 4 部 §4.8). Every one within 20 letters.
+  hushNear: 'つきの はらっぱ… みんな ねてる',
+  hushLightOff: 'ライトを けして、しーっ',
+  hushStartle: 'あっ、びっくりして かくれちゃった',
+  hushQuiet: 'しずかに とおれたね！',
+  glareFreeze: 'こじかさんが ライトに みとれてる！',
+  glareFreezeAfter: 'ライトを けすと わたれるよ',
+  glareFree: 'ぱちぱち… わたれた！ よかった〜',
+  glareMercy: 'こじかさん、こんどは わたれたね',
+  glareBump: 'ききっ… こじかさん、ぴょーん！',
+  glareBumpAfter: 'つきの ばしょでは ライトを けしてね',
+  lureMercy: 'たぬきさん、やぶで おどってる！',
+  reversedNear: 'たぬきの ふだ… さかさ きてき？',
+  reversedIn: 'ここは きてき がまんだよ',
+  lureCome: 'わわっ、よってきちゃった！ とまって！',
+  lureBye: 'ばいばい！ きてきは がまんだね',
+  lureBump: 'ききっ… たぬきさん、おどってた〜',
+  lureBumpAfter: 'たぬきの もりは きてき がまん',
+  reversedQuiet: 'しずかに とおれた！ えらい！',
+  fireflyNear: 'くさの なかに ちいさな ひかり…\nきてきで あいずを しよう！',
+  fireflyCall: 'ほたるが とんだ！ みちを おしえてる！',
+  fireflyAgain: 'きてきで ほたるに あいず！',
+  fireflyFakeNear: 'ピンクの ひかり…？ へんだね',
+  fireflyConfused: 'ほたるが まよってる！ ライトで みて！',
+  fireflyConfusedLit: 'ちかづくと わかるよ！',
+  fakeRevealed: 'にせものの ひかりだ！ サカサの かな',
 };
 
 /**
@@ -474,6 +534,24 @@ export class MissionRunner {
   private skip: CutsceneSkip | null = null;
   private lines: MissionLines = {};
   private readonly groundY: number | null;
+  /** v1.11 (5-1): hush stretches, whistle-reversed stretches with their tanukis, firefly forks, and the fawns. */
+  private readonly hush: HushSystem;
+  private readonly reversed: ReversedWhistle;
+  private readonly fireflies: FireflyForks;
+  private readonly fawns: GlareDino[];
+  /** v1.11 (5-1): night lines said this try, this mission and this stage run (by key). */
+  private readonly nightTry = new Set<string>();
+  private readonly nightMission = new Set<string>();
+  private readonly nightStage = new Set<string>();
+  /** v1.11 (5-1): fawn fails in a row per hush stretch (the mercy), fireflies gone ahead, forks gone wrong at. */
+  private readonly glareFails = new Map<string, number>();
+  private readonly fireflyAway = new Set<string>();
+  private readonly wrongForks = new Set<string>();
+  /** v1.11 (5-1): whistle-reversed stretches the train entered, and those whistled in, this try. */
+  private readonly reversedEntered = new Set<string>();
+  private readonly reversedCalled = new Set<string>();
+  /** v1.11 (5-1): times a fawn stopped to gaze at the light (only goes up; a test hook). */
+  glareFreezes = 0;
 
   constructor(
     private readonly stage: StageData,
@@ -503,7 +581,14 @@ export class MissionRunner {
     this.listenRocketAndSlopes();
     this.listenIce();
     this.cats = stage.actors.filter((a) => a.type === 'cat').map((a) => new CatActor(a, train));
-    this.dinos = stage.actors.map((a) => makeDino(a, train)).filter((d): d is Dino => d !== null);
+    const dinos = stage.actors.map((a) => makeDino(a, train)).filter((d): d is Dino => d !== null);
+    // v1.11 (5-1): fawns speak their own outcomes (step()).
+    this.fawns = dinos.filter((d): d is GlareDino => d instanceof GlareDino);
+    this.dinos = dinos.filter((d) => !(d instanceof GlareDino));
+    this.hush = new HushSystem(stage.file.gimmicks, train);
+    this.reversed = new ReversedWhistle(stage.file.gimmicks, stage.actors, train);
+    this.fireflies = new FireflyForks(stage.file.junctions, train);
+    this.listenNight();
     this.nuts = stage.actors.filter((a) => a.type === 'nut').map((a) => new RollingNut(a, train));
     this.squirrels = stage.actors.filter((a) => a.type === 'squirrel').map((a) => new Squirrel(a, train));
     this.hoppers = stage.actors
@@ -624,6 +709,240 @@ export class MissionRunner {
     }
   }
 
+  /**
+   * v1.11 (5-1): a night line: said once a try, a mission or a stage run (`scope`; `tag` keeps one per stretch or
+   * fork): a stretch's own line (`own`), else the mission's, else the default. `now` drops what is queued (only useful
+   * on time).
+   */
+  private sayNight(key: DefaultLine, scope: 'try' | 'mission' | 'stage', opts: { own?: string | null; now?: boolean; tag?: string } = {}): void {
+    const set = scope === 'try' ? this.nightTry : scope === 'mission' ? this.nightMission : this.nightStage;
+    const id = `${key}:${opts.tag ?? ''}`;
+    if (set.has(id)) return;
+    set.add(id);
+    const text = opts.own ?? this.lines[key] ?? DEFAULT_LINES[key];
+    const lines = text.split('\n');
+    if (opts.now) {
+      this.ports.sayNow(lines[0]);
+      for (const line of lines.slice(1)) this.ports.sayAsync(line);
+    } else for (const line of lines) this.ports.sayAsync(line);
+  }
+
+  /** v1.11 (5-1): the hush stretches' lines and the forks the train went wrong at. */
+  private listenNight(): void {
+    this.hush.events.on('near', (z) => {
+      if (this.phase !== 'driving') return;
+      this.events.post({ type: 'hush:near', id: z.id });
+      this.sayNight('hushNear', 'try', { own: z.line, tag: z.id });
+      if (this.lightOn) this.sayNight('hushLightOff', 'try', { tag: z.id });
+    });
+    this.hush.events.on('startle', (z) => {
+      this.events.post({ type: 'hush:startle', id: z.id, railId: z.railId, from: z.from, to: z.to });
+      if (this.phase === 'driving') this.sayNight('hushStartle', 'try', { now: true });
+    });
+    this.hush.events.on('quiet', (z) => {
+      this.events.post({ type: 'hush:quiet', id: z.id });
+      if (this.phase === 'driving') this.sayNight('hushQuiet', 'stage');
+    });
+    // Onto the false way of a firefly fork: remembered, so the partner asks for the whistle when it comes again.
+    this.train.events.on('railChanged', ({ railId }) => {
+      for (const f of this.fireflies.forks) if (f.junction[f.junction.default] === railId && railId !== f.railId) this.wrongForks.add(f.id);
+    });
+  }
+
+  /**
+   * v1.11 (5-1): per frame while driving: the hush stretches (the light's time), the fawns, the lure groups, the lines
+   * of the whistle-reversed stretches and the firefly forks. Returns true when the drive ended (a soft fail).
+   */
+  private updateNight(dt: number): boolean {
+    this.hush.update(dt, this.lightOn);
+    const front = this.train.frontS;
+    const rail = this.train.state.railId;
+    for (const z of this.hush.zones) if (z.railId === rail && front > z.to + 5) this.glareFails.delete(z.id);
+
+    for (const fawn of this.fawns) {
+      const zone = this.hush.zoneAt(fawn.railId, fawn.at);
+      fawn.lightOn = this.lightOn;
+      fawn.mercy = zone !== null && (this.glareFails.get(zone.id) ?? 0) >= HUSH.mercyAfter;
+      const o = fawn.step(dt);
+      if (!o) continue;
+      const id = fawn.actor.id;
+      const lateral = fawn.params.lateral;
+      const across = (to: number): Vector3 => this.lateralPosition(fawn.railId, fawn.at, -lateral + 2 * lateral * to);
+      switch (o.kind) {
+        case 'move':
+          this.events.post({ type: 'actor:state', id, state: 'cross', position: across(o.to), seconds: o.seconds });
+          break;
+        case 'freeze':
+          this.glareFreezes += 1;
+          this.events.post({ type: 'actor:state', id, state: 'freeze', position: across(0.5), seconds: 0.2 });
+          this.events.post({ type: 'glare:freeze', id });
+          this.sayNight('glareFreeze', 'try', { now: true });
+          this.sayNight('glareFreezeAfter', 'try');
+          break;
+        case 'blink':
+          this.events.post({ type: 'actor:state', id, state: 'blink' });
+          break;
+        case 'hop':
+          this.events.post({ type: 'actor:state', id, state: 'hop', position: across(1), seconds: o.seconds });
+          this.events.post({ type: 'glare:free', id });
+          this.sayNight('glareFree', 'try');
+          break;
+        case 'mercy':
+          this.sayNight('glareMercy', 'try');
+          break;
+        case 'danger': {
+          this.train.emergencyStop();
+          this.events.post({ type: 'actor:state', id, state: 'bump', position: across(1.6), seconds: GLARE.bump });
+          const rewind = zone?.rewind ?? { railId: fawn.railId, at: fawn.at - REWIND_DISTANCE };
+          if (zone) this.glareFails.set(zone.id, (this.glareFails.get(zone.id) ?? 0) + 1);
+          this.finishDrive({ kind: 'fail', reason: 'glare', soft: true, rewind });
+          return true;
+        }
+      }
+    }
+
+    for (const g of this.reversed.groups) {
+      const o = g.update(dt);
+      if (!o) continue;
+      const id = g.actor.id;
+      if (o === 'dance') this.events.post({ type: 'lure', id, state: 'dance' });
+      else if (o === 'idle') this.events.post({ type: 'lure', id, state: 'idle' });
+      else if (o === 'back') {
+        this.events.post({ type: 'lure', id, state: 'back', seconds: LURE.hop });
+        if (Math.abs(this.train.state.speed) < LURE.stopSpeed) {
+          this.events.post({ type: 'lure:bye', ids: [id] });
+          this.sayNight('lureBye', 'try');
+        }
+      } else if (o === 'danger') {
+        this.train.emergencyStop();
+        this.events.post({ type: 'lure', id, state: 'bump', seconds: 0.5 });
+        const zone = this.reversed.zoneAt(g.railId, g.at);
+        if (zone) this.reversed.failed(zone);
+        this.finishDrive({ kind: 'fail', reason: 'lure', soft: true, rewind: zone?.rewind ?? { railId: g.railId, at: g.at - REWIND_DISTANCE } });
+        return true;
+      }
+    }
+
+    for (const z of this.reversed.zones) {
+      if (z.railId !== rail) continue;
+      if (front >= z.from - LURE.nearBefore && front < z.from) this.sayNight('reversedNear', 'try', { own: z.line, tag: z.id });
+      if (front >= z.from && front <= z.to) {
+        this.reversedEntered.add(z.id);
+        this.sayNight('reversedIn', 'try', { tag: z.id });
+      }
+      if (front > z.to && this.reversedEntered.delete(z.id)) {
+        this.reversed.passed(z);
+        if (!this.reversedCalled.has(z.id)) this.sayNight('reversedQuiet', 'mission');
+      }
+    }
+
+    const fork = this.fireflies.callable;
+    if (fork) {
+      if (fork.fake) this.sayNight('fireflyFakeNear', 'mission');
+      else this.sayNight('fireflyNear', 'mission');
+      if (this.wrongForks.has(fork.id) && fork.state === 'sleep') this.sayNight('fireflyAgain', 'mission', { tag: fork.id });
+    }
+    for (const f of this.fireflies.forks) {
+      if (f.state !== 'home' || this.fireflyAway.has(f.id)) continue;
+      const d = this.fireflies.distance(f);
+      if ((d !== null && d < -20) || rail !== f.railId) {
+        this.fireflyAway.add(f.id);
+        this.events.post({ type: 'fireflies:away', junctionId: f.id });
+      }
+    }
+    return false;
+  }
+
+  /** v1.11 (5-1): a firefly fork's fireflies line its true way: its arrow lights and it becomes the way taken. */
+  private fireflyHome(f: FireflyFork): void {
+    this.train.preferJunction(f.id, f.trueSide);
+    if (this.train.announcedJunction?.id === f.id) this.ports.revealJunction(f.trueSide);
+    this.events.post({ type: 'fireflies:home', junctionId: f.id });
+  }
+
+  /** v1.11 (5-1): the true way a firefly fork's fireflies show now (for its arrows when they come), or null. */
+  revealedSide(junctionId: string): 'left' | 'right' | null {
+    const f = this.fireflies.forks.find((x) => x.id === junctionId);
+    return f && f.state === 'home' ? f.trueSide : null;
+  }
+
+  /** v1.11 (5-1): a reversed whistle brought lure groups: they come onto the rail (or hop in their bushes). */
+  private onReversedWhistle(came: LureGroup[], hopped: LureGroup[], mercy: boolean): void {
+    for (const g of came) this.events.post({ type: 'lure', id: g.actor.id, state: 'come', seconds: LURE.hop });
+    for (const g of hopped) this.events.post({ type: 'lure', id: g.actor.id, state: 'hop', seconds: mercy ? g.params.dance : LURE.hop * 2 });
+    if (came.length > 0) {
+      this.events.post({ type: 'lure:come', ids: came.map((g) => g.actor.id) });
+      this.sayNight('lureCome', 'try', { now: true });
+    } else if (mercy && hopped.length > 0) this.sayNight('lureMercy', 'try', { now: true });
+  }
+
+  // ---- v1.11 (5-1) test hooks and button marks ----
+
+  /** "" | near | in | startled: the hush stretch at the train front. */
+  get hushStatus(): string {
+    return this.hush.status;
+  }
+
+  get hushStartles(): number {
+    return this.hush.startles;
+  }
+
+  /** "kojika-1:wait,kojika-2:gone". */
+  get fawnStates(): string {
+    return this.fawns.map((f) => `${f.actor.id}:${f.shownState}`).join(',');
+  }
+
+  /** The train front is in a whistle-reversed stretch (the whistle sounds reversed). */
+  get whistleReversed(): boolean {
+    return this.reversed.current !== null;
+  }
+
+  /** "" | come | dance. */
+  get lureStatus(): string {
+    return this.reversed.status;
+  }
+
+  get lureCalls(): number {
+    return this.reversed.calls;
+  }
+
+  get lureDances(): number {
+    return this.reversed.dances;
+  }
+
+  /** "hotaru-1:home,hotaru-2:sleep". */
+  get fireflyStates(): string {
+    return this.fireflies.states;
+  }
+
+  get fireflyCalls(): number {
+    return this.fireflies.calls;
+  }
+
+  /** The hush mark on the light button (near or in a hush stretch; a hint only). */
+  get lightMark(): boolean {
+    return this.hush.mark;
+  }
+
+  /** The hush mark on the whistle button (a hush or a whistle-reversed stretch; a hint only: it still sounds). */
+  get whistleMark(): boolean {
+    return this.hush.mark || this.reversed.current !== null;
+  }
+
+  /** The light button glows "dim" (press = off): the light is on near or in a hush stretch. */
+  get lightOffHint(): boolean {
+    return this.phase === 'driving' && this.lightOn && this.hush.mark;
+  }
+
+  /** The lever's "とまる" glows: tanukis dance on the rail ahead of a moving train. */
+  get lureStopHint(): boolean {
+    if (this.phase !== 'driving' || Math.abs(this.train.state.speed) <= LURE.stopSpeed) return false;
+    return this.reversed.groups.some((g) => {
+      const d = g.onRail ? g.distance() : null;
+      return d !== null && d > 0;
+    });
+  }
+
   /** v1.10: water ahead, the dive button's hint started: the partner says so, the first time in a mission. */
   onDiveNear(): void {
     if (this.phase !== 'driving' || this.diveNearSaid) return;
@@ -703,6 +1022,12 @@ export class MissionRunner {
       if (!j || this.revealed.has(j.id)) continue;
       const d = this.train.distanceAhead(j.railId, j.at);
       if (d !== null && d > 0 && d <= 80) return true;
+    }
+    // v1.11 (5-1): a fake firefly fork, from FIREFLY_FORK.fakeGlow m before it until the light has seen through it.
+    for (const f of this.fireflies.forks) {
+      if (!f.fake || f.revealed || this.revealed.has(f.id)) continue;
+      const d = this.fireflies.distance(f);
+      if (d !== null && d > 0 && d <= FIREFLY_FORK.fakeGlow) return true;
     }
     // v1.10 (4-1): a mirror junction with lightHint, from MIRROR.hintDistance m before it until seen through.
     for (const j of this.mirrorHintJunctions()) {
@@ -1060,6 +1385,7 @@ export class MissionRunner {
       this.rocketGoSaid = false;
       this.slopeGlows.clear();
       this.zoneLines.clear();
+      this.nightMission.clear();
       await this.ports.card(`ミッション ${i + 1}\n${mission.title}`, 'スタート');
       if (this.lines.start) for (const line of this.lines.start.split('\n')) await this.ports.say(line, 'partner');
 
@@ -1116,6 +1442,8 @@ export class MissionRunner {
     const hints = this.currentMission?.hints ?? [];
     hints.forEach((h, i) => {
       if (this.hintsFired.has(i)) return;
+      // v1.11: a riddle about a record for a later ability is not said once the player has that ability.
+      if (h.unless && this.abilities.has(h.unless)) return;
       const d = this.train.distanceAhead(h.railId, h.at);
       if (d !== null && d <= 0 && d > -30) {
         this.hintsFired.add(i);
@@ -1132,6 +1460,7 @@ export class MissionRunner {
     this.updatePlowLines();
     this.updateTraces();
     this.updateRecords();
+    if (this.updateNight(dt)) return;
     if (this.checkDeadEnd() || this.checkSpur()) return;
     const outcome = this.stop?.update(dt) ?? null;
     if (outcome) {
@@ -1172,7 +1501,9 @@ export class MissionRunner {
         cat.flee();
         this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'flee', position: this.catFleePosition(cat), seconds: 0.6 });
         // v1.10 (4-3): a snowman on the rail is soft (it only wobbles).
-        const soft = (cat.actor.params as { look?: string }).look === 'snowman';
+        // v1.11 (5-1): so is the hedgehog (it curls up where it is).
+        const look = (cat.actor.params as { look?: string }).look;
+        const soft = look === 'snowman' || look === 'hedgehog';
         this.finishDrive({ kind: 'fail', reason: 'cat', soft, text: own.danger, after: own.after, rewind: { railId: cat.railId, at: cat.at - REWIND_DISTANCE } });
         return;
       }
@@ -1440,6 +1771,19 @@ export class MissionRunner {
    * riding, or whose leaf is ahead of the train again, go back to their leaf.
    */
   private resetActors(target?: { railId: string; at: number }): void {
+    // v1.11 (5-1): everyone asleep again, the tanukis in their bushes, the fireflies in the grass.
+    this.hush.reset();
+    this.reversed.reset();
+    for (const g of this.reversed.groups) this.events.post({ type: 'lure', id: g.actor.id, state: 'idle' });
+    this.fireflies.reset();
+    this.train.clearPreferred();
+    this.fireflyAway.clear();
+    this.reversedEntered.clear();
+    this.reversedCalled.clear();
+    for (const fawn of this.fawns) {
+      fawn.reset();
+      this.events.post({ type: 'actor:state', id: fawn.actor.id, state: 'wait', position: this.lateralPosition(fawn.railId, fawn.at, -fawn.params.lateral), seconds: 0 });
+    }
     for (const hopper of this.hoppers) {
       const behind = target !== undefined && hopper.state === 'done' && (hopper.railId !== target.railId || hopper.at <= target.at);
       if (behind) continue;
@@ -1515,6 +1859,11 @@ export class MissionRunner {
     if (this.squirrels.some((s) => s.inWhistleRange)) glow = true;
     if (this.whales.some((w) => w.callable)) glow = true;
     if (this.hopperFree && this.hoppers.some((h) => h.inWhistleRange)) glow = true;
+    // v1.11 (5-1): the hedgehog (cat glow) in reach, and a firefly fork in calling reach.
+    if (this.cats.some((c) => c.glows())) glow = true;
+    if (this.fireflies.glow) glow = true;
+    // Never in a whistle-reversed stretch (the hush mark says "しーっ" there instead).
+    if (this.reversed.current) glow = false;
     this.ports.whistleHint(glow);
   }
 
@@ -1675,6 +2024,14 @@ export class MissionRunner {
     this.train.chooseJunction(truth);
     this.ports.revealJunction(truth);
     this.events.post({ type: 'sign:reveal', junctionId: j.id });
+    if (j.fireflies?.fake) {
+      // v1.11 (5-1): Sakasa's pink lanterns go out ("ぽしゅん"); lost fireflies find the true way.
+      this.events.post({ type: 'fake:out', junctionId: j.id });
+      const home = this.fireflies.reveal(j.id);
+      if (home) this.fireflyHome(home);
+      this.sayNight('fakeRevealed', 'try', { tag: j.id });
+      return;
+    }
     if (this.lines.signRevealed) this.ports.sayAsync(this.lines.signRevealed);
   }
 
@@ -1688,6 +2045,8 @@ export class MissionRunner {
     for (const record of this.stage.records) {
       const def = record.def;
       if (this.found.has(def.id)) continue;
+      // v1.11 (5-1): a sleeper startled this try has hidden: not to be found (nor pointed out) now.
+      if (def.hush && record.onRail && this.hush.startledAt(record.onRail.railId, record.onRail.at)) continue;
       const d = this.recordDistance(record);
       if (d === null) continue;
       const takeable = def.requires === null || this.abilities.has(def.requires);
@@ -1790,6 +2149,27 @@ export class MissionRunner {
 
   private onWhistle(): void {
     if (this.phase !== 'driving') return;
+    // v1.11 (5-1): in a whistle-reversed stretch the tanukis come (decided before anything else there reacts).
+    const rev = this.reversed.onWhistle();
+    if (rev) {
+      this.reversedCalled.add(rev.zone.id);
+      this.onReversedWhistle(rev.came, rev.hopped, this.reversed.mercy(rev.zone));
+    }
+    // In a hush stretch the whistle startles the sleepers.
+    this.hush.onWhistle();
+    // A firefly fork in reach: its fireflies fly (to the true way, or lost over a fake fork not seen through yet).
+    const ff = this.fireflies.call();
+    if (ff) {
+      this.events.post({ type: 'fireflies:call', junctionId: ff.fork.id });
+      if (ff.state === 'home') {
+        this.fireflyHome(ff.fork);
+        this.sayNight('fireflyCall', 'mission', { now: true });
+        this.events.post({ type: 'partner:emote', kind: 'jump' });
+      } else {
+        this.events.post({ type: 'fireflies:lost', junctionId: ff.fork.id });
+        this.sayNight(this.lightOn ? 'fireflyConfusedLit' : 'fireflyConfused', 'try', { now: true });
+      }
+    }
     for (const whale of this.whales) {
       if (!whale.onWhistle()) continue;
       this.events.post({ type: 'whale', id: whale.actor.id, state: 'sing' });
@@ -1991,6 +2371,8 @@ export class MissionRunner {
       reason === 'crack' ||
       reason === 'plow' ||
       reason === 'snow' ||
+      reason === 'glare' ||
+      reason === 'lure' ||
       outcome.soft === true ||
       iceStation;
     if (!calm) this.ports.cameraFx(scary ? 1 : soft ? 0.3 : 0.5, soft ? 0 : 1);
@@ -2003,6 +2385,8 @@ export class MissionRunner {
     if (reason === 'dive') await this.ports.say(this.lines.diveBoingAfter ?? DEFAULT_LINES.diveBoingAfter, 'partner');
     if (reason === 'floater') await this.ports.say(this.lines.floatHitAfter ?? DEFAULT_LINES.floatHitAfter, 'partner');
     if (reason === 'plow') await this.ports.say(this.lines.plowBumpAfter ?? DEFAULT_LINES.plowBumpAfter, 'partner');
+    if (reason === 'glare') await this.ports.say(this.lines.glareBumpAfter ?? DEFAULT_LINES.glareBumpAfter, 'partner');
+    if (reason === 'lure') await this.ports.say(this.lines.lureBumpAfter ?? DEFAULT_LINES.lureBumpAfter, 'partner');
     if (reason === 'snow') {
       // v1.10 (4-3): the catch that tires the wave out says so ("もこもこ、つかれてきた みたい").
       const tired = (this.chase?.catches ?? 0) + 1 >= SNOW_WAVE.giveUpAfter;
@@ -2062,6 +2446,7 @@ export class MissionRunner {
     this.gapHints.clear();
     this.signLines.clear();
     this.revealed.clear();
+    this.nightTry.clear();
     this.events.post({ type: 'rewind', boarded: Object.fromEntries(this.boarded) });
     this.ports.resetLever();
     this.ports.autoCamera(null);
@@ -2205,6 +2590,8 @@ const FAIL_LINES: Partial<Record<FailReason, DefaultLine>> = {
   crack: 'crackFall',
   plow: 'plowBump',
   snow: 'chaseCaught',
+  glare: 'glareBump',
+  lure: 'lureBump',
 };
 const BRIDGE_LINES: Record<NonNullable<BridgeOutcome>['kind'], DefaultLine> = {
   near: 'butterflyNear',

@@ -1,0 +1,1 @@
+{ "_expect": "\"moon.elevation\" must be 5–80 degrees", "_base": "0-1", "_edit": [{ "path": "cutscenes.opening.2.environment.moon.elevation", "value": 2 }] }
