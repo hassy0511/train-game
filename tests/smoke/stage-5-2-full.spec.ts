@@ -27,7 +27,7 @@ import {
  * opening (the child winds a chick with the whistle); M1 the reverse-wound chick walking back (wound on the glow), the
  * block gap A over the ball pit (a jump), the wind-up car let be on purpose (a soft stop, back 80 m, then wound), the
  * gold screw, three chicks wound by one whistle; M2 gap B, the side track that needs the magnet light (its arrow grey,
- * "いまは まだ いけないみたい…"), the band let be (the train held softly behind it), wound, followed at "はやい" at the
+ * "じしゃくライトが あれば いけそう…"), the band let be (the train held softly behind it), wound, followed at "はやい" at the
  * band's pace with "ゆっくり" glowing, the glimpse of Sakasa with a block train; M3 the spinning fork let be (round the
  * loop, then it waits the good way and is stopped with the whistle), gap C at "はやい", the screw hill without the
  * rocket (a slip) and with it, the slide over the line below, the dark toy box (the light, the glowing marble), the
@@ -328,7 +328,7 @@ test('stage 5-2 full run: wind-up toys, the band, the spinning forks, the screw 
     'わわっ、くるまさん！',
     'ぶーん！ いって らっしゃい〜',
     '3ば いっぺんに くるりん！',
-    'いまは まだ いけないみたい…',
+    'じしゃくライトが あれば いけそう…',
     'みぎの ほうで なにか きらっ…',
     'がくたいさんが うしろあるき〜！',
     'がくたいさんを きてきで まきなおそう',
@@ -427,7 +427,7 @@ test('stage 5-2 with the magnet light: the block bridge on the shelf way (forgot
   const said = await lines();
   for (const line of ['つみきが たりない！ ひっぱろう！', 'つながった！', 'たなの うえに ねじまき！ ひっぱろう！']) expect(said, line).toContain(line);
   expect(said).not.toContain('みぎの ほうで なにか きらっ…');
-  expect(said).not.toContain('いまは まだ いけないみたい…');
+  expect(said).not.toContain('じしゃくライトが あれば いけそう…');
   expect((await toys(page)).fails.map((f) => f.reason)).toContain('magnet');
   expect(errors).toEqual([]);
 });

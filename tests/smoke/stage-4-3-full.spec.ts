@@ -433,6 +433,7 @@ test('stage 4-3 with the magnet light: sleigh-bell is pulled to the train', asyn
       rail: 'main',
       latest: 1822,
       shot: 'magnet-sleigh-bell.png',
+      waitHint: true,
     },
     OUT,
   );

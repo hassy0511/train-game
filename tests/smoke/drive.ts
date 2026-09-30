@@ -226,6 +226,8 @@ export interface MagnetRecordRun {
   rail: string;
   latest: number;
   shot: string;
+  /** Standing where it already glows (4-3): wait for the hint line before stepping to the magnet. */
+  waitHint?: boolean;
 }
 
 /**
@@ -264,7 +266,7 @@ export async function magnetRecordRun(page: Page, run: MagnetRecordRun, out: str
   await expect(page.locator('#light')).toHaveAttribute('data-steps', '3');
   await setNotch(page, run.notch ?? NORMAL);
   const result = await page.waitForFunction(
-    ([id, press, arrows, rail, latest]) => {
+    ([id, press, arrows, rail, latest, hint]) => {
       const app = document.getElementById('app');
       if (!app) return false;
       const d = app.dataset;
@@ -287,7 +289,8 @@ export async function magnetRecordRun(page: Page, run: MagnetRecordRun, out: str
       if (light && (moving || d.phase === 'stopped') && light.dataset.glow === '1' && ready('light', 0.5)) {
         const f = light.dataset.glowFor;
         const want = f === 'magnet' ? 'magnet' : f === 'light' ? 'light' : null;
-        if (want ? light.dataset.light !== want : light.dataset.light === 'light') tap(light, 'light');
+        const heard = !hint || ((window as unknown as { __lines?: string[] }).__lines ?? []).includes(hint as string);
+        if ((want !== 'magnet' || heard) && (want ? light.dataset.light !== want : light.dataset.light === 'light')) tap(light, 'light');
       }
       for (const a of arrows as { rail: string; at: number; side: string }[]) {
         const key = `${a.rail}:${a.at}`;
@@ -302,7 +305,7 @@ export async function magnetRecordRun(page: Page, run: MagnetRecordRun, out: str
       }
       return false;
     },
-    [run.record, run.press ?? [], run.arrows ?? [], run.rail, run.latest] as const,
+    [run.record, run.press ?? [], run.arrows ?? [], run.rail, run.latest, run.waitHint ? run.hint : ''] as const,
     { timeout: 600_000, polling: 'raf' },
   );
   expect(await result.jsonValue()).toBe('caught');

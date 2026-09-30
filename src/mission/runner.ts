@@ -765,7 +765,8 @@ export class MissionRunner {
     const m = this.magnet;
     if (!m) return;
     m.events.on('near', ({ target }) => {
-      if (this.phase !== 'driving') return;
+      // v1.11 (PR6b): also standing at the station a mission starts from (4-3's bell glows at once there).
+      if (this.phase !== 'driving' && this.phase !== 'stopped') return;
       let text = target.line;
       if (text) {
         if (this.magnetLines.has(target.id)) return;
@@ -775,8 +776,12 @@ export class MissionRunner {
         this.magnetNearSaid = true;
         text = this.lines.magnetNear ?? DEFAULT_LINES.magnetNear;
       }
-      // The first half of the glow (from MAGNET.hintAhead m to half way to where the pull ends).
-      this.magnetWaiting.set(target.id, { text, railId: target.railId, at: target.at, until: (MAGNET.hintAhead + target.minAhead) / 2 });
+      // The first half of the glow (from MAGNET.hintAhead m to half way to where the pull ends). v1.11 (PR6b): a glow
+      // that starts nearer (the train standing at a station 40 m before it, 4-3) keeps its line for the next 10 m.
+      const d = this.train.routeDistance(target.railId, target.at);
+      const half = (MAGNET.hintAhead + target.minAhead) / 2;
+      const until = d !== null && d < half + 10 ? Math.max(target.minAhead, d - 10) : half;
+      this.magnetWaiting.set(target.id, { text, railId: target.railId, at: target.at, until });
     });
     m.events.on('caught', ({ target }) => {
       // A record is found when it arrives (also in a fail's fade or a cutscene: the flight got there).
