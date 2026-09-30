@@ -2,13 +2,11 @@ import {
   AdditiveBlending,
   BoxGeometry,
   BufferGeometry,
-  CanvasTexture,
   CircleGeometry,
   Color,
   ConeGeometry,
   CylinderGeometry,
   Float32BufferAttribute,
-  DoubleSide,
   Group,
   IcosahedronGeometry,
   Mesh,
@@ -437,26 +435,33 @@ function moonMeadow(): Group {
 }
 
 let treeHalo: MeshBasicMaterial | null = null;
-/** The soft firefly light round the great tree's crown: seen from far off, through the fog. */
+/**
+ * The soft firefly light round the great tree's crown, seen from far off through the fog: a ball drawn brightest where
+ * it faces the camera and fading to nothing at its rim (so it has no edge from any side, and works instanced).
+ */
 function haloMaterial(): MeshBasicMaterial {
   if (treeHalo) return treeHalo;
-  let map: CanvasTexture | null = null;
-  if (typeof document !== 'undefined') {
-    const c = document.createElement('canvas');
-    c.width = c.height = 64;
-    const g = c.getContext('2d');
-    if (g) {
-      const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-      grad.addColorStop(0, 'rgba(216,255,122,0.9)');
-      grad.addColorStop(0.5, 'rgba(216,255,122,0.25)');
-      grad.addColorStop(1, 'rgba(216,255,122,0)');
-      g.fillStyle = grad;
-      g.fillRect(0, 0, 64, 64);
-      map = new CanvasTexture(c);
-    }
-  }
-  treeHalo = new MeshBasicMaterial({ color: '#ffffff', map, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false, side: DoubleSide, opacity: 0.55 });
-  return treeHalo;
+  const m = new MeshBasicMaterial({ color: FIREFLY, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vHaloN;\nvarying vec3 vHaloV;')
+      .replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
+        vec3 haloN = normal;
+        #ifdef USE_INSTANCING
+          haloN = mat3(instanceMatrix) * haloN;
+        #endif
+        vHaloN = normalize(mat3(modelViewMatrix) * haloN);
+        vHaloV = -mvPosition.xyz;`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vHaloN;\nvarying vec3 vHaloV;')
+      .replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.rgb *= 0.28 * pow(max(0.0, dot(normalize(vHaloN), normalize(vHaloV))), 2.5);');
+  };
+  m.customProgramCacheKey = () => 'great-tree-halo';
+  treeHalo = m;
+  return m;
 }
 
 /**
@@ -495,12 +500,11 @@ function greatTree(): Group {
   const lampMesh = new Mesh(merge(lamps), glowMaterial());
   lampMesh.name = 'great-tree-lanterns';
   g.add(lampMesh);
-  const halo = new Mesh(new PlaneGeometry(70, 50), haloMaterial());
+  const halo = new Mesh(new IcosahedronGeometry(1, 2), haloMaterial());
   halo.name = 'great-tree-halo';
-  halo.position.set(0, 50, 0);
-  const halo2 = halo.clone();
-  halo2.rotation.y = Math.PI / 2;
-  g.add(halo, halo2);
+  halo.scale.set(34, 24, 34);
+  halo.position.set(0, 48, 0);
+  g.add(halo);
   return g;
 }
 

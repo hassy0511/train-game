@@ -400,21 +400,23 @@ const CUTSCENES = {
   ending: [
     // From behind the square's station on the right, up at the great tree: the fireflies gather round it.
     { camera: 'fixed', at: ENDING_EYE, lookAt: [GREAT_TREE.x, 35, GREAT_TREE.z], reach: 1.5 },
-    { spawn: 'swarm', model: 'firefly-swarm-big', onRail: on(3210, -6, 22) },
+    { spawn: 'swarm', model: 'firefly-swarm-big', onRail: on(3210, 0, 22) },
     { say: 'わあ… ほたるが いっぱい！', emote: 'cheer' },
-    // Sakasa in the roots' shadow on the deck, its lantern out; the fireflies flow down and light it up.
-    { spawn: 'sakasa', model: 'amanojaku-lantern-off', onRail: on(3190, -14, 0), rotationY: 0 },
-    { move: 'swarm', onRail: on(3190, -14, -4), seconds: 2 },
+    // Sakasa in the roots' shadow on the deck past the train (seen beside the tree), its lantern out; the fireflies
+    // flow down and light it up.
+    { spawn: 'sakasa', model: 'amanojaku-lantern-off', onRail: on(3204, -9, 0), rotationY: face(3204, -9, 3140, 4) },
+    { move: 'swarm', onRail: on(3204, -9, -4), seconds: 2 },
     { say: 'あっ、サカサ！', emote: 'jump' },
     { say: 'こ、こんにちは〜！', who: 'amanojaku' },
     // Off it runs; halfway it turns round and looks back; then away.
-    { move: 'sakasa', onRail: on(3200, -32, 0), seconds: 1.2 },
+    { move: 'sakasa', onRail: on(3208, -26, 0), seconds: 1.2 },
     { remove: 'sakasa' },
-    { spawn: 'sakasa', model: 'amanojaku-lantern-off', onRail: on(3200, -32, 0), rotationY: 180 },
+    { spawn: 'sakasa', model: 'amanojaku-lantern-off', onRail: on(3208, -26, 0), rotationY: face(3208, -26, 3140, 4) },
     { wait: 1.2 },
     { remove: 'sakasa' },
-    { spawn: 'sakasa', model: 'amanojaku-lantern-off', onRail: on(3200, -32, 0), rotationY: 0 },
-    { move: 'sakasa', onRail: on(3208, -62, 0), seconds: 1.5 },
+    { spawn: 'sakasa', model: 'amanojaku-lantern-off', onRail: on(3208, -26, 0), rotationY: face(3208, -26, 3209, -45) },
+    // Down off the deck's far side, into the roots' shadow.
+    { move: 'sakasa', onRail: on(3209, -45, -8), seconds: 1.5 },
     { remove: 'sakasa' },
     { say: 'いま、こっちを みてた', emote: 'tilt' },
     { say: 'なにか いいたそう だったね' },
@@ -471,7 +473,7 @@ onRail('bell-branch', 'main', 2600, { lateral: 11, height: 9.8, rotationY: 90 })
 onRail('night-tree-b', 'main', 2600, { lateral: 15.5, scale: 1.1, r: 4 });
 world('great-tree', GREAT_TREE.x, GREAT_TREE.z, { y: HIROBA_Y + GROUND_Y, rotationY: 120, r: 26 });
 // The square's deck left of the station and on past it (main 3080–3210).
-for (const at of [3100, 3140, 3180]) onRail('plaza-deck', 'main', at, { lateral: -18, height: -0.9, r: 0 });
+for (const at of [3090, 3130, 3170, 3209]) onRail('plaza-deck', 'main', at, { lateral: -18, height: -0.9, r: 0 });
 placed.push({ ...(() => { const q = main.point(3145, -18); return { x: q.x, z: q.z }; })(), r: 70 });
 // Lanterns on each platform (2), the stump by the stump station, the log bridge's broken ends and its brook.
 for (const st of STATIONS) {

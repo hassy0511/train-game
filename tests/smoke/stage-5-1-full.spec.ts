@@ -310,7 +310,6 @@ test('stage 5-1 full run: the light on and off, the hush, the tanukis, the firef
   await expect(page.locator('#reward-records .reward-record')).toHaveCount(3);
 
   const saved = await progress(page);
-  expect(saved.cleared).toContain('5-1');
   expect(saved.records).toEqual(expect.arrayContaining(['moon-bunnies', 'pond-moonstone']));
   expect(saved.records).not.toContain('lantern-bell');
   const b = await budget(page);
@@ -327,6 +326,7 @@ test('stage 5-1 full run: the light on and off, the hush, the tanukis, the firef
   await expect(map).toBeVisible({ timeout: 30_000 });
   await expect(map).toHaveAttribute('data-page', '3', { timeout: 20_000 });
   await expect(page.locator('.map-island[data-island="5-1"]')).toHaveClass(/is-cleared/, { timeout: 20_000 });
+  expect((await progress(page)).cleared).toContain('5-1');
   await page.waitForTimeout(1200);
   await page.screenshot({ path: resolve(OUT, '5-1-16-map-page3.png') });
 

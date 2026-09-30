@@ -210,9 +210,10 @@
     { "model": "bell-branch", "onRail": { "railId": "main", "at": 2600, "lateral": 11, "heightFromRail": 9.8 }, "rotationY": 90 },
     { "model": "night-tree-b", "onRail": { "railId": "main", "at": 2600, "lateral": 15.5, "heightFromRail": -0.6 }, "scale": 1.1 },
     { "model": "great-tree", "position": [-906.9, 14.8, 2820.7], "rotationY": 120 },
-    { "model": "plaza-deck", "onRail": { "railId": "main", "at": 3100, "lateral": -18, "heightFromRail": -0.9 } },
-    { "model": "plaza-deck", "onRail": { "railId": "main", "at": 3140, "lateral": -18, "heightFromRail": -0.9 } },
-    { "model": "plaza-deck", "onRail": { "railId": "main", "at": 3180, "lateral": -18, "heightFromRail": -0.9 } },
+    { "model": "plaza-deck", "onRail": { "railId": "main", "at": 3090, "lateral": -18, "heightFromRail": -0.9 } },
+    { "model": "plaza-deck", "onRail": { "railId": "main", "at": 3130, "lateral": -18, "heightFromRail": -0.9 } },
+    { "model": "plaza-deck", "onRail": { "railId": "main", "at": 3170, "lateral": -18, "heightFromRail": -0.9 } },
+    { "model": "plaza-deck", "onRail": { "railId": "main", "at": 3209, "lateral": -18, "heightFromRail": -0.9 } },
     { "model": "lantern-post", "onRail": { "railId": "main", "at": 13, "lateral": -7.2, "heightFromRail": -0.6 } },
     { "model": "lantern-post", "onRail": { "railId": "main", "at": 37, "lateral": -7.2, "heightFromRail": -0.6 } },
     { "model": "lantern-post", "onRail": { "railId": "main", "at": 958, "lateral": -7.2, "heightFromRail": -0.6 } },
@@ -1036,34 +1037,34 @@
     ],
     "ending": [
       { "camera": "fixed", "at": [-774.6, 21.4, 2729.7], "lookAt": [-906.9, 35, 2820.7], "reach": 1.5 },
-      { "spawn": "swarm", "model": "firefly-swarm-big", "onRail": { "railId": "main", "at": 3210, "lateral": -6, "heightFromRail": 22 } },
+      { "spawn": "swarm", "model": "firefly-swarm-big", "onRail": { "railId": "main", "at": 3210, "lateral": 0, "heightFromRail": 22 } },
       { "say": "わあ… ほたるが いっぱい！", "emote": "cheer" },
       {
         "spawn": "sakasa",
         "model": "amanojaku-lantern-off",
-        "onRail": { "railId": "main", "at": 3190, "lateral": -14, "heightFromRail": 0 },
-        "rotationY": 0
+        "onRail": { "railId": "main", "at": 3204, "lateral": -9, "heightFromRail": 0 },
+        "rotationY": 191
       },
-      { "move": "swarm", "onRail": { "railId": "main", "at": 3190, "lateral": -14, "heightFromRail": -4 }, "seconds": 2 },
+      { "move": "swarm", "onRail": { "railId": "main", "at": 3204, "lateral": -9, "heightFromRail": -4 }, "seconds": 2 },
       { "say": "あっ、サカサ！", "emote": "jump" },
       { "say": "こ、こんにちは〜！", "who": "amanojaku" },
-      { "move": "sakasa", "onRail": { "railId": "main", "at": 3200, "lateral": -32, "heightFromRail": 0 }, "seconds": 1.2 },
+      { "move": "sakasa", "onRail": { "railId": "main", "at": 3208, "lateral": -26, "heightFromRail": 0 }, "seconds": 1.2 },
       { "remove": "sakasa" },
       {
         "spawn": "sakasa",
         "model": "amanojaku-lantern-off",
-        "onRail": { "railId": "main", "at": 3200, "lateral": -32, "heightFromRail": 0 },
-        "rotationY": 180
+        "onRail": { "railId": "main", "at": 3208, "lateral": -26, "heightFromRail": 0 },
+        "rotationY": 204
       },
       { "wait": 1.2 },
       { "remove": "sakasa" },
       {
         "spawn": "sakasa",
         "model": "amanojaku-lantern-off",
-        "onRail": { "railId": "main", "at": 3200, "lateral": -32, "heightFromRail": 0 },
-        "rotationY": 0
+        "onRail": { "railId": "main", "at": 3208, "lateral": -26, "heightFromRail": 0 },
+        "rotationY": 87
       },
-      { "move": "sakasa", "onRail": { "railId": "main", "at": 3208, "lateral": -62, "heightFromRail": 0 }, "seconds": 1.5 },
+      { "move": "sakasa", "onRail": { "railId": "main", "at": 3209, "lateral": -45, "heightFromRail": -8 }, "seconds": 1.5 },
       { "remove": "sakasa" },
       { "say": "いま、こっちを みてた", "emote": "tilt" },
       { "say": "なにか いいたそう だったね" },

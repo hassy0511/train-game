@@ -58,6 +58,10 @@ async function build(diorama: WorldDiorama | null, models: ModelLibrary): Promis
   if (diorama.rail) root.add(railRing(diorama.rail.radius));
   for (const item of diorama.items) {
     const model = (await models.load(item.model)).clone(true);
+    // A glow meant for the night sky (additive) would print as a dark blot on the picture's transparent background.
+    model.traverse((o) => {
+      if (o.name === 'great-tree-halo') o.visible = false;
+    });
     const scale = item.scale ?? 1;
     const rot = MathUtils.degToRad(item.rotY ?? 0);
     model.scale.setScalar(scale);
