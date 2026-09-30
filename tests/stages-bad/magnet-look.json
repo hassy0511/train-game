@@ -1,0 +1,1 @@
+{"_expect": "params.look for kind \"gate\"", "_base": "0-4", "_edit": [{"path": "gimmicks.2.params.look", "value": "star"}]}

@@ -21,6 +21,7 @@ import {
   waitDriving,
   waitFront,
   waitRewound,
+  magnetRecordRun,
 } from './drive';
 
 /**
@@ -412,4 +413,28 @@ test('4-3 models on the model page', async ({ page }) => {
   await page.waitForTimeout(1500);
   await page.screenshot({ path: resolve(OUT, '4-3-models-b.png') });
   expect(errors).toEqual([]);
+});
+
+// v1.11 (PR6b, PHASE9_CHAPTER5_6 第 2 部 M20): with the magnet light (5-3) a child comes back for the sleigh bells in the snow (M3 standing at とうげえき: 40 m off, green at once).
+test('stage 4-3 with the magnet light: sleigh-bell is pulled to the train', async ({ page }) => {
+  test.setTimeout(900_000);
+  await magnetRecordRun(
+    page,
+    {
+      stage: '4-3',
+      mission: 2,
+      title: 'ゆきの なみ',
+      record: 'sleigh-bell',
+      hint: 'ゆきの なかに すず！ ひっぱろう！',
+      cleared: ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', '3-1', '3-2', '3-3', '4-1', '4-2', '4-3', '5-1', '5-2'],
+      notch: 1,
+      press: [],
+      arrows: [],
+      rail: 'main',
+      latest: 1822,
+      shot: 'magnet-sleigh-bell.png',
+      waitHint: true,
+    },
+    OUT,
+  );
 });

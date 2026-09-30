@@ -14,6 +14,12 @@ export interface MapIsland {
   needsLater: boolean;
   /** The saved mission to go on from on this island (0-based, at least 1): a tap asks "つづきから" or "はじめから". */
   resumeMission?: number;
+  /**
+   * v1.11 (PHASE9_CHAPTER5_6 §0.4, 第 1 部 §1.2): a record still missing here needs an ability the stage does not give
+   * at its start (a later stage's, or one learned part way through it), and the child has it now: come back for it.
+   * Its badge glows softly.
+   */
+  takeable?: boolean;
 }
 
 /**
@@ -26,9 +32,16 @@ export interface MapFinale {
   link?: string;
   /** Islands in order: a golden light runs round them once and each one hops as it passes. */
   ring?: string[];
-  /** Islands in order along one road: the light runs along it once (water), or they twinkle in turn (aurora). */
+  /**
+   * Islands in order along one road: the light runs along it once (water), they twinkle in turn (aurora), or
+   * fireflies rise from each in turn and gather along the rails (firefly).
+   */
   path?: string[];
-  light?: 'gold' | 'water' | 'aurora';
+  light?: 'gold' | 'water' | 'aurora' | 'firefly';
+  /** v1.11 (firefly): where the one big light the fireflies gather into flies to (an island or "teaser:<chapter>"). */
+  target?: string;
+  /** v1.11 (firefly): the big light has landed (its sound). */
+  onLand?: () => void;
   /** Islands that open with this end: they stay asleep (grey) until the light reaches them. */
   wake?: string[];
   /** Islands the powder snow falls on when the water light arrives (the next chapter's). */
@@ -96,6 +109,15 @@ const SNOW_SECONDS = 0.8;
 const DUSK_SECONDS = 1;
 const TWINKLE_STEP_SECONDS = 0.35;
 const DAWN_SECONDS = 0.5;
+/**
+ * v1.11 chapter 5's end (fireflies, PHASE9_CHAPTER5_6 第 1 部 §4.2): night falls, fireflies rise from each island of
+ * the path in turn (six each, gathering along the rails), one big light flies to the target, the night lifts.
+ */
+const NIGHT_SECONDS = 0.6;
+const FIREFLY_STEP_SECONDS = 0.45;
+const FIREFLIES_PER_ISLAND = 6;
+const BIG_LIGHT_SECONDS = 0.8;
+const MAP_STARS = 12;
 /** A rail through the gate: a breath at the gate before the page turns. */
 const GATE_REST_SECONDS = 0.3;
 const TURN_SECONDS = 0.5;
@@ -441,7 +463,7 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
         btn.appendChild(label);
         if (state.recordsTotal > 0) {
           const badge = document.createElement('span');
-          badge.className = 'map-badge';
+          badge.className = state.takeable ? 'map-badge is-takeable' : 'map-badge';
           badge.textContent = `きろく ${state.recordsFound}/${state.recordsTotal}${state.needsLater ? ' ？' : ''}`;
           btn.appendChild(badge);
         }
@@ -645,11 +667,16 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
 
     // Hands off the map (and no way out) until it is all shown: the finale and its card, then the rails that wait.
     el.classList.add('is-busy');
+    // v1.11: an end whose big light lands on the "?" island leaves it (and its dotted line) there to land on.
+    const teaserIsTarget = !!teaser && finale?.target === teaser.id;
     if (finale) {
       el.dataset.finale = 'playing';
+      el.dataset.light = finale.light ?? 'gold';
       el.classList.add('is-finale-playing');
-      teaserEl?.classList.add('is-waiting');
-      teaserLink?.classList.add('is-waiting');
+      if (!teaserIsTarget) {
+        teaserEl?.classList.add('is-waiting');
+        teaserLink?.classList.add('is-waiting');
+      }
     } else el.dataset.growing = '1';
     if (close) close.hidden = true;
     const trail: string[] = [];
@@ -672,6 +699,94 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
       link.classList.remove('is-lit');
       void link.getBoundingClientRect();
       link.classList.add('is-lit');
+    };
+
+    /**
+     * v1.11 chapter 5's end: night (the sky a deeper blue-violet, never darker than 70 %, a dozen twinkling stars);
+     * each island of the path in turn gets a warm ring of light ("ぽわん") and six yellow-green fireflies rise from
+     * it; they drift along the rail to the next island and the swarm grows (6, 12, 18); at the last island they
+     * become one big light that flies to the target, which glows warm; the night lifts. With calm motion no dots
+     * fly: the islands glow in turn, the target glows, the night comes and goes at once.
+     */
+    const fireflies = async (path: string[]): Promise<void> => {
+      const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+      const pageEl = pageEls.get(current);
+      el.classList.add('is-night');
+      const stars = document.createElement('div');
+      stars.className = 'map-stars';
+      for (let i = 0; i < MAP_STARS; i++) {
+        const star = document.createElement('span');
+        star.className = 'map-star';
+        star.style.left = `${6 + ((i * 37) % 88)}%`;
+        star.style.top = `${4 + ((i * 23) % 30)}%`;
+        star.style.animationDelay = `${(i % 5) * 0.3}s`;
+        stars.appendChild(star);
+      }
+      el.insertBefore(stars, header);
+      if (!calm) await sleep(NIGHT_SECONDS);
+      const swarm: HTMLElement[] = [];
+      const place = (dot: HTMLElement, p: { x: number; y: number }, spread: number, k: number): void => {
+        dot.style.left = `${p.x + Math.cos(k * 2.4) * spread}%`;
+        dot.style.top = `${p.y - 6 + Math.sin(k * 2.4) * spread * 1.4}%`;
+      };
+      for (let i = 0; i < path.length; i++) {
+        const id = path[i];
+        restart(islandEls.get(id), 'is-glow');
+        reach(id);
+        finale?.onHop?.(i);
+        const p = at.get(id);
+        if (!calm && p && pageEl) {
+          for (let k = 0; k < FIREFLIES_PER_ISLAND; k++) {
+            const dot = document.createElement('span');
+            dot.className = 'map-firefly';
+            dot.style.animationDelay = `${(k % 3) * 0.2}s`;
+            place(dot, p, 0.5, k);
+            pageEl.appendChild(dot);
+            swarm.push(dot);
+          }
+          void pageEl.offsetWidth;
+          swarm.forEach((dot, k) => place(dot, p, 2.2 + (k % 3), k + i));
+        }
+        if (i === path.length - 1) break;
+        lightLink(path[i], path[i + 1], false);
+        linkEls.get(linkKey(path[i], path[i + 1]))?.classList.add('is-firefly');
+        await sleep(FIREFLY_STEP_SECONDS / 2);
+        const q = at.get(path[i + 1]);
+        if (!calm && q) swarm.forEach((dot, k) => place(dot, q, 2 + (k % 3), k));
+        await sleep(FIREFLY_STEP_SECONDS / 2);
+      }
+      await sleep(FIREFLY_STEP_SECONDS);
+      // They gather into one big light over the last island and fly to the target.
+      const last = at.get(path[path.length - 1]);
+      const target = finale?.target;
+      const to = target ? at.get(target) : undefined;
+      if (last && to && pageEl) {
+        if (!calm) {
+          swarm.forEach((dot) => place(dot, last, 0.3, 0));
+          await sleep(0.35);
+          const big = document.createElement('span');
+          big.className = 'map-bigfly';
+          big.style.left = `${last.x}%`;
+          big.style.top = `${last.y - 6}%`;
+          pageEl.appendChild(big);
+          swarm.forEach((dot) => dot.remove());
+          swarm.length = 0;
+          void big.offsetWidth;
+          big.style.left = `${to.x}%`;
+          big.style.top = `${to.y}%`;
+          await sleep(BIG_LIGHT_SECONDS);
+          big.remove();
+        }
+        const targetEl = target?.startsWith('teaser:') ? teaserEl : islandEls.get(target ?? '');
+        targetEl?.classList.add('is-lit');
+        if (target) reach(target);
+        finale?.onLand?.();
+        await sleep(RING_REST_SECONDS);
+      }
+      swarm.forEach((dot) => dot.remove());
+      el.classList.remove('is-night');
+      if (!calm) await sleep(DAWN_SECONDS);
+      stars.remove();
     };
 
     void (async () => {
@@ -755,6 +870,8 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
           el.classList.remove('is-dusk');
           await sleep(DAWN_SECONDS);
           band.remove();
+        } else if (light === 'firefly' && path.length > 0) {
+          await fireflies(path);
         }
         await finale.onShown();
         el.classList.remove('is-finale-playing');
@@ -786,11 +903,13 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
       el.classList.remove('is-busy');
       if (finale) el.dataset.finale = 'done';
       delete el.dataset.growing;
-      for (const t of [teaserEl, teaserLink]) {
+      for (const t of teaserIsTarget ? [] : [teaserEl, teaserLink]) {
         if (!t) continue;
         t.classList.remove('is-waiting');
         t.classList.add('is-appear');
       }
+      // The "?" island the big light landed on hops: that is where the story goes next.
+      if (teaserIsTarget) teaserEl?.classList.add('is-next');
       markNext(false);
       show();
       if (close) close.hidden = false;

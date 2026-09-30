@@ -9,8 +9,20 @@ import { reversedZones } from '../gimmick/reversed-whistle';
 import { FIREFLY_FORK } from '../train/params';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
-import type { Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
-import { validateIceLayout, validateNightLayout, validatePlowLayout, validateSnowLayout, validateStageFile, validateStageLayout, validateToyLayout, validateWaterLayout } from './validate';
+import type { AbilityId, Placement, PropDef, RecordDef, ResolvedActor, ResolvedProp, ResolvedRecord, ResolvedStation, StageData, StageFile, Vec3 } from './types';
+import { ironDrawsProp, ironPropsFor, magnetTargets } from '../gimmick/magnet-layout';
+import {
+  validateIceLayout,
+  validateMagnetLayout,
+  validateMirrorWorld,
+  validateNightLayout,
+  validatePlowLayout,
+  validateSnowLayout,
+  validateStageFile,
+  validateStageLayout,
+  validateToyLayout,
+  validateWaterLayout,
+} from './validate';
 import { computeWaterSpans, diveForkSide } from './water';
 
 // One chunk per stage file; stages load lazily.
@@ -37,10 +49,11 @@ export async function loadAllRecords(): Promise<{ stageId: string; stageTitle: s
 /** Title and required stages of a stage, without building it. */
 export async function peekStage(
   id: string,
-): Promise<(Pick<StageFile, 'id' | 'title' | 'unlock' | 'unlocks' | 'records'> & { missionCount: number }) | null> {
+): Promise<(Pick<StageFile, 'id' | 'title' | 'unlock' | 'unlocks' | 'records'> & { missionCount: number; openingUnlocks: AbilityId[] }) | null> {
   const load = stageModules[`../stages/${id}.json`];
   if (!load) return null;
   const file = ((await load()) as { default: StageFile }).default;
+  const opening = (file.opening && file.cutscenes?.[file.opening]) || [];
   return {
     id: file.id,
     title: file.title,
@@ -48,6 +61,8 @@ export async function peekStage(
     unlocks: file.unlocks,
     records: file.records,
     missionCount: file.missions.length,
+    // v1.11: the abilities the stage gives in its opening (so the child has them from its start: the map's badges).
+    openingUnlocks: opening.flatMap((st) => ('unlock' in st ? [st.unlock] : [])),
   };
 }
 
@@ -83,9 +98,21 @@ export function prepareStage(raw: unknown): StageData {
   validateNightLayout(file, network);
   // v1.11 (5-2): walking toys, the band's way, spinning forks and the whistle's windows.
   validateToyLayout(file, network);
+  // v1.11 (PR5): the magnet light's iron targets (a turn's fork shows no arrows), and the iron odds and ends by the line.
+  const magnets = magnetTargets(file, network);
+  validateMagnetLayout(file, network, magnets);
+  for (const t of magnets) {
+    const j = t.kind === 'turn' ? file.junctions.find((x) => x.id === t.junction) : undefined;
+    if (j) j.turn = t.id;
+  }
+  const ironProps = ironPropsFor(file, network, magnets);
+  // v1.11 (5-3): the mirror world, phantoms and glass; glass has no base under it.
+  validateMirrorWorld(file, network);
+  addGlassSkips(file);
   const groundY = file.environment.ground?.y ?? null;
 
-  const props: ResolvedProp[] = [...file.props, ...autoSigns(file)].map((p) => {
+  // v1.11 (PR5): a can, a bucket or a whole sign with `iron` is drawn by the iron layer (it flies or stretches).
+  const props: ResolvedProp[] = [...file.props.filter((p) => !ironDrawsProp(p)), ...autoSigns(file)].map((p) => {
     const t = resolvePlacement(p, network, groundY);
     return {
       model: p.model,
@@ -128,7 +155,7 @@ export function prepareStage(raw: unknown): StageData {
     return { def, position: t.position, quaternion: t.quaternion, onRail: 'onRail' in def ? { ...def.onRail } : undefined };
   });
 
-  return { file, network, props, actors, stations, records };
+  return { file, network, props, actors, stations, records, magnets, ironProps };
 }
 
 /**
@@ -144,6 +171,14 @@ function addBridgeGaps(file: StageFile): void {
     const rewindAt = Number((g.params as { rewindAt?: number } | undefined)?.rewindAt ?? butterflyAt - 60);
     rail.gaps = [...(rail.gaps ?? []), { from: g.from, to: g.to, pit: false, bridge: index, rewind: { railId: g.railId, at: rewindAt } }];
   });
+}
+
+/** v1.11 (5-3): a glass stretch floats: the rail's base (rock, blocks…) leaves it out. */
+function addGlassSkips(file: StageFile): void {
+  for (const r of file.rails) {
+    if (!r.glass?.length || !r.base) continue;
+    for (const b of Array.isArray(r.base) ? r.base : [r.base]) b.skip = [...(b.skip ?? []), ...r.glass.map((k) => ({ from: k.from, to: k.to }))];
+  }
 }
 
 /** Signs a slope or a rocket rest stretch puts up by itself at its start (v1.7): on the left, facing the train. */

@@ -20,7 +20,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SPECS = 'tests/smoke';
 const FULL_RUN = /^stage-(\d+-\d+)-full\.spec\.ts$/;
 /** Quick specs that run several drives (weights for the shards; a stage's full run weighs 10). */
-const SLOW_QUICK = { 'night.spec.ts': 4, 'toy.spec.ts': 3 };
+const SLOW_QUICK = { 'night.spec.ts': 4, 'toy.spec.ts': 3, 'magnet.spec.ts': 3, 'mirror-world.spec.ts': 4 };
 
 const allSpecs = () =>
   readdirSync(resolve(root, SPECS))

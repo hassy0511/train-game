@@ -1,0 +1,1 @@
+{"_expect": "a record needing the magnet light is placed with onRail", "_base": "0-4", "_edit": [{"path": "records.0.onRail", "delete": true}, {"path": "records.0.position", "value": [0, 0, 100]}]}

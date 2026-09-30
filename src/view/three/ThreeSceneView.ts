@@ -33,6 +33,9 @@ import { PlowGimmicks } from './plow';
 import { VillageGimmicks } from './village';
 import { NightGimmicks } from './night';
 import { ToyGimmicks } from './toy';
+import { MagnetGimmicks } from './magnet';
+import { IronPropsView } from './iron-props';
+import { MirrorWorldGimmicks, trainFrontOf } from './mirror-world';
 import { frameWave, SnowGimmicks } from './snow';
 import { iceZones, thinIceZones } from '../../gimmick/ice';
 import { slopeZones } from '../../gimmick/slope';
@@ -124,6 +127,11 @@ export class ThreeSceneView implements SceneView {
   private night: NightGimmicks | null = null;
   /** v1.11 (5-2): the toy band, the spinning forks' flags, the wound decorations, the slide, the ball pit's balls. */
   private toy: ToyGimmicks | null = null;
+  /** v1.11 (PR5): the magnet light's targets, rings and flights, and the iron odds and ends (null without them). */
+  private magnet: MagnetGimmicks | null = null;
+  private iron: IronPropsView | null = null;
+  /** v1.11 (5-3): the mirror gates, the phantoms, the glass stretches and the letter signs (null without them). */
+  private mirrorWorld: MirrorWorldGimmicks | null = null;
   /** v1.7: slope beds and rock bases, kept for rebuilding the track after a cut. */
   private trackLooks: TrackLooks | undefined;
   /** v1.7: props with a tag, each in its own group (a cut can drop them). */
@@ -178,7 +186,8 @@ export class ThreeSceneView implements SceneView {
         ? [{ railId: g.railId, from: g.from, to: g.to }]
         : [],
     );
-    this.boughSkips = [...boughSkips, ...MeadowGimmicks.trackSkips(stage)];
+    // v1.11: a magnet gap's piece (PR5), the phantom rails and the glass stretches (5-3) are drawn by their own layers.
+    this.boughSkips = [...boughSkips, ...MeadowGimmicks.trackSkips(stage), ...MagnetGimmicks.trackSkips(stage), ...MirrorWorldGimmicks.trackSkips(stage)];
     this.railLooks = Object.fromEntries(stage.file.rails.flatMap((r) => (r.look && r.look !== 'rail' ? [[r.id, r.look]] : [])));
     const bases = new Map<string, RailBaseDef[]>();
     for (const r of stage.file.rails) if (r.base) bases.set(r.id, Array.isArray(r.base) ? r.base : [r.base]);
@@ -250,7 +259,7 @@ export class ThreeSceneView implements SceneView {
       this.scene.add(this.harbour.group);
     }
     const g = stage.file.gimmicks;
-    const icy = g.some((x) => ['ice-sheet', 'thin-ice', 'mirror'].includes(x.type)) || !!stage.file.environment.snow;
+    const icy = g.some((x) => ['ice-sheet', 'thin-ice', 'mirror', 'mirror-flip'].includes(x.type)) || !!stage.file.environment.snow;
     const birds = stage.file.actors.some((a) => (a.params as { look?: string } | undefined)?.look === 'snowbird');
     if (icy || birds) {
       this.ice = new IceGimmicks(stage, this.train);
@@ -274,6 +283,25 @@ export class ThreeSceneView implements SceneView {
       this.toy = new ToyGimmicks(stage, this.train);
       this.scene.add(this.toy.group);
     }
+    // v1.11 (PR5): the magnet light's targets (a gap's piece is built like the track round it) and the odds and ends.
+    if (MagnetGimmicks.wanted(stage)) {
+      this.magnet = new MagnetGimmicks(stage, this.train, this.actors, this.lightBeam, (railId, from, to) => {
+        const rail = network.rails.get(railId);
+        return rail ? buildTrack(rail, from, to, this.railLooks[railId] ?? 'rail', this.trackLooks) : null;
+      });
+      this.scene.add(this.magnet.group);
+    }
+    if (IronPropsView.wanted(stage)) {
+      this.iron = new IronPropsView(stage, this.train);
+      this.scene.add(this.iron.group);
+    }
+    if (MirrorWorldGimmicks.wanted(stage)) {
+      this.mirrorWorld = new MirrorWorldGimmicks(stage);
+      this.scene.add(this.mirrorWorld.group);
+    }
+    // v1.11 (5-3): a false way ends in a lavender cushion (the mirror world's), not a buffer stop.
+    const cushionEnds = MirrorWorldGimmicks.cushionRails(stage).map((id) => network.getRail(id).frameAt(network.getRail(id).length).position);
+    const bufferStopsShown = rails.bufferStops.filter((b) => !cushionEnds.some((p) => p.distanceTo(b.position) < 0.5));
     // Tagged props stay separate so a cutscene can drop them (the old bridge's girders).
     for (const prop of stage.props) {
       if (!prop.tag) continue;
@@ -291,7 +319,7 @@ export class ThreeSceneView implements SceneView {
       // v1.11 (5-2): the reverse-wound decorations too (the toy layer turns them round).
       addProps(props, stage.props.filter((p) => !p.tag && !(p.sleeper && this.night) && !(p.windup && this.toy)), this.models),
       ...this.taggedProps.map(({ prop, group }) => addProps(group, [prop], this.models)),
-      addModelPlacements(bufferStops, rails.bufferStops, this.models),
+      addModelPlacements(bufferStops, bufferStopsShown, this.models),
       this.actors.init(stage.actors, stage.records),
       this.signs.init(),
       this.flocks.init(this.models),
@@ -304,10 +332,13 @@ export class ThreeSceneView implements SceneView {
       this.plow.init(this.models),
       this.night?.init(this.models),
       this.toy?.init(this.models),
+      this.mirrorWorld?.init(this.models),
     ]);
     this.lookChanged();
     // After the lights and the fog are all in (it dims them in a tunnel).
     await this.snow?.init(this.models);
+    // v1.11 (PR5): after the actors (a record's own figure is what the magnet fetches).
+    await this.magnet?.init(this.models);
     // The train, cars and partner only ever move as a whole (door bands, the light beam and the jump unit are
     // objects of their own), so each draws baked, in one call.
     const trainInstance = (bakeModel(trainModel) ?? trainModel).clone(true);
@@ -381,6 +412,10 @@ export class ThreeSceneView implements SceneView {
     if (event.type === 'door') this.setDoor(event.open, event.stationId);
     if (event.type === 'dome') this.water?.setDome(event.on, event.instant);
     if (event.type === 'light') this.lightBeam.visible = event.on;
+    // v1.11 (PR5): the magnet step keeps a thin green beam (MagnetGimmicks tints it).
+    if (event.type === 'light:mode') this.lightBeam.visible = event.mode !== 'off';
+    this.magnet?.onEvent(event);
+    this.iron?.onEvent(event);
     this.sky3?.onStageEvent(event);
     this.forest?.onEvent(event);
     this.meadow?.onEvent(event);
@@ -396,6 +431,7 @@ export class ThreeSceneView implements SceneView {
     this.snow?.onEvent(event);
     this.night?.onEvent(event);
     this.toy?.onEvent(event);
+    this.mirrorWorld?.onEvent(event);
     if (event.type === 'ability' && event.id === 'rocket') void this.volcano?.addRocketUnit(this.models);
     if (event.type === 'rocket') this.fovTarget = event.state === 'burn' && !this.calm ? ROCKET_FOV : 0;
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
@@ -687,6 +723,13 @@ export class ThreeSceneView implements SceneView {
     this.village?.update(dt);
     this.night?.update(dt);
     this.toy?.update(dt);
+    if (this.magnet) {
+      this.magnet.trainSpeed = pose.speed;
+      this.magnet.cabView = cab;
+      this.magnet.update(dt);
+    }
+    this.iron?.update(dt);
+    this.mirrorWorld?.update(dt, trainFrontOf(pose));
     this.updateFalling(dt);
     // A little wider view while the rocket burns (not a shake).
     const fov = this.fovBoost + (this.fovTarget - this.fovBoost) * Math.min(1, dt * 4);
@@ -711,7 +754,11 @@ export class ThreeSceneView implements SceneView {
     this.harbour?.update(dt, this.cameraPosition);
     this.renderer.render(this.scene, this.camera);
     // v1.10 (4-1): what the nearest ice mirror shows, drawn into its window.
+    // v1.11 (5-3): figures brought on "only" for the mirror are drawn there alone (hidden in the main pass).
+    const onlyInMirror = this.actors?.mirrorOnlyFigures() ?? [];
+    for (const o of onlyInMirror) o.visible = true;
     this.ice?.renderReflection(this.renderer, this.scene, this.camera, [this.train, ...this.cars], this.actors?.cutsceneFigures() ?? []);
+    for (const o of onlyInMirror) o.visible = false;
   }
 
   /** v1.10 (4-1): the ice mirror reflecting now (its gimmicks[] index), or −1 (test hook). */

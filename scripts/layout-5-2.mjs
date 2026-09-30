@@ -131,6 +131,23 @@ const GIMMICKS = [
   { type: 'camera', railId: 'main', from: 2490, to: 2590, params: { mode: 'chase' } },
   { type: 'camera', railId: 'kuru-wa2', from: 10, to: 207, params: { mode: 'top' } },
   { type: 'flock', params: { model: 'toy-plane', count: 8, center: at(1745, -45, 17), radius: 45, speed: 0.08 } },
+  // v1.11 (PR6b, 第 5 部 §5.4): the side track's block bridge, pulled into place with the magnet light (its loose blocks
+  // 8 m to the right). Bumped without it, the train goes back to main 1230, before the fork (§0.9 の 6).
+  {
+    type: 'magnet',
+    railId: 'tana',
+    from: 80,
+    to: 90,
+    params: {
+      id: 'tsumiki-hashi',
+      kind: 'bridge',
+      look: 'toy-blocks',
+      piece: { lateral: 8, height: 0, rotationY: -40 },
+      line: 'つみきが たりない！ ひっぱろう！',
+      done: 'つながった！',
+      rewind: { railId: 'main', at: 1230 },
+    },
+  },
 ];
 
 const toy = (id, s, look, params) => ({ id, type: 'cat', reactsTo: 'whistle', onRail: { railId: 'main', at: s, heightFromRail: 0 }, params: { look, ...params } });
@@ -213,6 +230,8 @@ const RECORDS = [
     note: 'たなの うえから ひっぱった ねじまき',
     requires: 'magnetLight',
     model: 'tin-key',
+    // v1.11 (PR6b): fetched with the magnet light (5-3 on): its hint.
+    hint: 'たなの うえに ねじまき！ ひっぱろう！',
     onRail: { railId: 'tana', at: 150, lateral: -7, heightFromRail: 6 },
   },
 ];
@@ -485,9 +504,8 @@ for (let i = 0; i < 8; i++) {
   const side = i % 2 ? 1 : -1;
   addOnRail(i % 3 ? 'windup-chick-back' : 'windup-car-back', 'main', s, { lateral: side * 4.2, height: -0.8, rotationY: side > 0 ? -90 : 90, windup: true });
 }
-// The side track's shelf (the tin key waits on top) and the heap of loose blocks (the bridge comes with PR6).
+// The side track's shelf (the tin key waits on top). Its block bridge's loose blocks are the magnet target's (PR6b).
 addOnRail('toy-shelf', 'tana', 150, { lateral: -7, height: -RAIL_Y, rotationY: 90 });
-addOnRail('toy-blocks-loose', 'tana', 85, { lateral: 9, height: -RAIL_Y });
 
 // ---------------------------------------------------------------------------------------------------------------
 // Checks (§5.7)

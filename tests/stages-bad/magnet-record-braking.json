@@ -1,0 +1,1 @@
+{"_expect": "at least 30 m of its glow must be outside a station's braking", "_base": "0-4", "_edit": [{"path": "records.0.onRail.railId", "value": "main"}, {"path": "records.0.onRail.at", "value": 1360}, {"path": "records.0.onRail.lateral", "value": 8}]}

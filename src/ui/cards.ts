@@ -6,7 +6,7 @@ const BADGE = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
   <circle cx="60" cy="60" r="9" fill="#ffd166" stroke="#2b3a4a" stroke-width="3"/>
 </svg>`;
 
-export type CardIcon = 'badge' | 'ring' | 'wave' | 'snow' | 'drawing';
+export type CardIcon = 'badge' | 'ring' | 'wave' | 'snow' | 'drawing' | 'firefly';
 
 /**
  * v1.10 (3-2): a crayon drawing of the Wonder train on drawing paper (the boat's sail): three round cars with windows
@@ -48,6 +48,22 @@ const SWIRL = `<svg class="card-swirl" viewBox="0 0 64 64" aria-hidden="true">
   <path d="M32 32c0-3 4-3 4 0 0 5-8 5-8 0 0-7 12-7 12 0 0 9-16 9-16 0 0-11 20-11 20 0 0 13-24 13-24 0" fill="none" stroke="#e8579f" stroke-width="3.5" stroke-linecap="round"/>
 </svg>`;
 
+/**
+ * v1.11 (5-3): the little crayon drawing in the mirror of a "reflect" card: the Wonder train with Sakasa's swirly hat in
+ * a window (she wants to ride: said for a child who cannot read the letters yet). No face on the train.
+ */
+const RIDE = (() => {
+  const crayon = (d: string, color: string, width = 3): string =>
+    `<path d="${d}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>`;
+  const body = crayon('M10 52 q-2 -20 6 -24 l58 -1 q8 3 6 25 z', '#e9573f');
+  const win = crayon('M22 34 h14 v10 h-14 z M48 34 h14 v10 h-14 z', '#2b3a4a', 2.2);
+  const wheels = crayon('M26 58 a5 5 0 1 0 0.1 0 M64 58 a5 5 0 1 0 0.1 0', '#2b3a4a', 2.4);
+  // Sakasa's hat in the first window: a purple cone with a pink swirl.
+  const hat = crayon('M24 34 l5 -12 l5 12', '#7d4bb3', 2.6) + crayon('M29 27 c0-1.5 2-1.5 2 0 0 2.5-4 2.5-4 0', '#e8579f', 1.8);
+  const rail = crayon('M4 66 q44 3 86 -1', '#8a6a48', 2.2);
+  return `<svg class="reflect-ride" viewBox="0 0 94 72" aria-hidden="true">${body}${win}${hat}${wheels}${rail}</svg>`;
+})();
+
 /** Chapter 4's end (ice and snow): a snow crystal. */
 const SNOW = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
   <circle cx="60" cy="60" r="54" fill="#6f9fe0" stroke="#ffd166" stroke-width="6"/>
@@ -62,6 +78,30 @@ const SNOW = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
       .join('')}
   </g>
   <circle cx="60" cy="60" r="8" fill="#fff"/>
+</svg>`;
+
+/**
+ * v1.11 chapter 5's end: three soft yellow-green lights with little wings over a night blue (PHASE9_CHAPTER5_6 第 1 部
+ * §1.3; fireflies, no face).
+ */
+const FIREFLY = `<svg class="card-icon" viewBox="0 0 120 120" aria-hidden="true">
+  <circle cx="60" cy="60" r="54" fill="#34407a" stroke="#ffd166" stroke-width="6"/>
+  ${[
+    [42, 48, 1],
+    [78, 40, 0.8],
+    [62, 80, 1.1],
+  ]
+    .map(
+      ([x, y, k]) => `<g transform="translate(${x} ${y}) scale(${k})">
+    <circle r="15" fill="#e8ff9a" opacity="0.28"/>
+    <ellipse cx="-6" cy="-7" rx="6" ry="3.5" fill="#fff" opacity="0.75" transform="rotate(-30 -6 -7)"/>
+    <ellipse cx="6" cy="-7" rx="6" ry="3.5" fill="#fff" opacity="0.75" transform="rotate(30 6 -7)"/>
+    <circle r="7" fill="#d9ff66"/>
+    <circle r="3.5" fill="#fffbe0"/>
+  </g>`,
+    )
+    .join('')}
+  <circle cx="30" cy="84" r="1.8" fill="#fff"/><circle cx="92" cy="72" r="1.6" fill="#fff"/><circle cx="84" cy="94" r="1.4" fill="#fff"/>
 </svg>`;
 
 /** Chapter 2's end: six islands joined by rail into a ring. */
@@ -159,22 +199,29 @@ export function showCard(
   icon?: CardIcon,
   guardSeconds = 0,
   rewards?: CardRewards,
-  options: { mirror?: boolean } = {},
+  options: { mirror?: boolean | 'reflect'; notes?: 1 | 2 } = {},
 ): Promise<void> {
   return new Promise((resolve) => {
     const el = document.createElement('div');
     el.className = 'overlay card';
     el.id = 'card';
-    if (options.mirror) {
+    const reflect = options.mirror === 'reflect';
+    if (reflect) {
+      // v1.11 (5-3): the mirror-written notes held up to a mirror, which shows them in plain letters ("のせて"): the notes
+      // move up to it (0.4 s), a sparkle runs over the glass (0.6 s), the words come out in it. The button after 0.9 s.
+      el.classList.add('is-reflect');
+      el.setAttribute('aria-label', 'かがみに うつった てがみ');
+      guardSeconds = Math.max(guardSeconds, 0.9);
+    } else if (options.mirror) {
       // v1.10 (3-1): a small note on paper, written mirror-wise (a child cannot read it; the swirl says who wrote it).
       el.classList.add('is-mirror');
       el.insertAdjacentHTML('beforeend', SWIRL);
     }
     // v1.10 (3-2): a crayon drawing on drawing paper.
     if (icon === 'drawing') el.classList.add('is-drawing');
-    if (icon) el.insertAdjacentHTML('beforeend', { badge: BADGE, ring: RING, wave: WAVE, snow: SNOW, drawing: DRAWING }[icon]);
+    if (icon) el.insertAdjacentHTML('beforeend', { badge: BADGE, ring: RING, wave: WAVE, snow: SNOW, drawing: DRAWING, firefly: FIREFLY }[icon]);
     const h = document.createElement('h1');
-    if (options.mirror) h.setAttribute('aria-label', 'ぐるぐる もようの てがみ');
+    if (options.mirror && !reflect) h.setAttribute('aria-label', 'ぐるぐる もようの てがみ');
     const lines = title.split('\n');
     lines.forEach((line, i) => {
       if (i > 0) h.appendChild(document.createElement('br'));
@@ -199,7 +246,33 @@ export function showCard(
       el.remove();
       resolve();
     });
-    el.append(h, ...(rewards ? [rewardsRow(rewards)] : []), btn);
+    if (reflect) {
+      // The notes (mirror-written, a swirl each) on the left, the mirror on the right with the plain words in it.
+      const scene = document.createElement('div');
+      scene.className = 'reflect-scene';
+      const notes = document.createElement('div');
+      notes.className = 'reflect-notes';
+      for (let k = 0; k < (options.notes ?? 1); k++) {
+        const note = document.createElement('div');
+        note.className = 'reflect-note';
+        note.style.setProperty('--k', String(k));
+        const words = document.createElement('span');
+        words.className = 'reflect-note-words';
+        words.textContent = lines.join(' ');
+        note.append(words);
+        note.insertAdjacentHTML('beforeend', SWIRL);
+        notes.appendChild(note);
+      }
+      const mirror = document.createElement('div');
+      mirror.className = 'reflect-mirror';
+      const glass = document.createElement('div');
+      glass.className = 'reflect-glass';
+      glass.append(h);
+      glass.insertAdjacentHTML('beforeend', `${RIDE}<i class="reflect-sparkle"></i>`);
+      mirror.appendChild(glass);
+      scene.append(notes, mirror);
+      el.append(scene, btn);
+    } else el.append(h, ...(rewards ? [rewardsRow(rewards)] : []), btn);
     root.appendChild(el);
   });
 }

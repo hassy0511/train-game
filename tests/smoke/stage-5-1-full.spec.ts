@@ -18,6 +18,7 @@ import {
   tapUntil,
   waitDriving,
   waitFront,
+  magnetRecordRun,
 } from './drive';
 
 /**
@@ -407,4 +408,27 @@ test('5-1 models on the model page', async ({ page }) => {
   await page.waitForTimeout(1500);
   await page.screenshot({ path: resolve(OUT, '5-1-models-b.png') });
   expect(errors).toEqual([]);
+});
+
+// v1.11 (PR6b, PHASE9_CHAPTER5_6 第 2 部 M20): with the magnet light (5-3) a child comes back for the lantern bell on the high branch (M3: the fireflies whistled, the light for the pink lanterns).
+test('stage 5-1 with the magnet light: lantern-bell is pulled to the train', async ({ page }) => {
+  test.setTimeout(900_000);
+  await magnetRecordRun(
+    page,
+    {
+      stage: '5-1',
+      mission: 2,
+      title: 'ほたるのみち',
+      record: 'lantern-bell',
+      hint: 'えだの うえに すず！ ひっぱろう！',
+      riddle: 'たかい えだで なにか ちりん…',
+      cleared: ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', '3-1', '3-2', '3-3', '4-1', '4-2', '4-3', '5-1', '5-2'],
+      press: ['whistle'],
+      arrows: [],
+      rail: 'main',
+      latest: 2587,
+      shot: 'magnet-lantern-bell.png',
+    },
+    OUT,
+  );
 });

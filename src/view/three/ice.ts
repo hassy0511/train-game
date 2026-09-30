@@ -44,10 +44,11 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { StageEvent } from '../../core/stage-events';
 import { thinIceZones, type ThinIceZone } from '../../gimmick/ice';
 import { activeMirror, inFront, MIRROR_PLINTH, mirrorDefs, type MirrorDef } from '../../gimmick/mirror';
+import { flipSections, gateMirrors } from '../../gimmick/mirror-flip';
 import type { RailNetwork } from '../../rail/types';
 import type { StageData } from '../../stage/types';
 import { areaOutline, holeArea } from '../../stage/water';
-import { MIRROR, ROCK_ROLL, THIN_ICE, TRAIN } from '../../train/params';
+import { MIRROR, MIRROR_WORLD, ROCK_ROLL, THIN_ICE, TRAIN } from '../../train/params';
 import type { ModelLibrary } from './models';
 import { buildTrack } from './rail-mesh';
 
@@ -221,8 +222,14 @@ interface MirrorVisual {
   def: MirrorDef;
   /** Its glass's plane (a little in front of the frame) and the reflection across it. */
   reflect: Matrix4;
-  /** Seen from afar (not reflecting): a plain icy glass. */
-  far: Mesh;
+  /** Seen from afar (not reflecting): a plain icy glass (none for a mirror-flip gate: the mirror world draws it). */
+  far: Mesh | null;
+  /**
+   * v1.11 (5-3): a framed mirror stands in a group that turns round about its foot (turned away: by turnFrom degrees).
+   * `turning`: its angle now and where it is going, degrees about +Y.
+   */
+  pivot: Group | null;
+  turning: { from: number; to: number; t: number; seconds: number } | null;
   mask: Mesh;
   backdrop: Mesh;
   /** Drawn in the mirror pass, over the reflection: the pale blue glass and its sparkling band. */
@@ -302,16 +309,29 @@ export class IceGimmicks {
   private readonly q = new Quaternion();
   private readonly s = new Vector3();
 
+  /** v1.11 (5-3): the phantom rails not seen through yet: never in a mirror, and the train on one is not either. */
+  private readonly phantomRails = new Map<string, string>();
+  private readonly solidPhantoms = new Set<string>();
+
   constructor(
     private readonly stage: StageData,
     private readonly train: Object3D,
   ) {
     this.group.name = 'ice-gimmicks';
     const file = stage.file;
+    for (const j of file.junctions) {
+      const way = j[j.default];
+      if (j.phantom && way) {
+        this.phantomRails.set(way, j.id);
+        this.solidPhantoms.add(j.id);
+      }
+    }
     for (const g of file.gimmicks) if (g.type === 'ice-sheet') this.addSheet(g.params ?? {});
     for (const z of thinIceZones(file.gimmicks)) this.addThin(z);
     if (this.thin.length > 0) this.addFloes();
     for (const m of mirrorDefs(file.gimmicks)) this.addMirror(m);
+    // v1.11 (5-3): the mirror-flip gates are mirrors across the rail (the train runs into its own reflection).
+    for (const m of gateMirrors(flipSections(file.gimmicks), stage.network)) this.addMirror(m);
     this.addSparkles();
   }
 
@@ -533,36 +553,58 @@ export class IceGimmicks {
       g.applyMatrix4(new Matrix4().compose(new Vector3(x, y, z).applyQuaternion(turn).add(base), turn, new Vector3(1, 1, 1)));
       return g;
     };
-    const B = 1.2;
-    const frame = [
-      place(paint(new BoxGeometry(W + 2 * B, B, 2.2), MIRROR_FRAME), 0, MIRROR_PLINTH + H + B / 2, -0.9),
-      place(paint(new BoxGeometry(B, H, 2.2), MIRROR_FRAME), -(W + B) / 2, MIRROR_PLINTH + H / 2, -0.9),
-      place(paint(new BoxGeometry(B, H, 2.2), MIRROR_FRAME), (W + B) / 2, MIRROR_PLINTH + H / 2, -0.9),
-      place(paint(new BoxGeometry(W + 2 * B + 1.6, MIRROR_PLINTH, 3.4), RIM_COLOR), 0, MIRROR_PLINTH / 2, -0.6),
-      place(paint(new BoxGeometry(W, H, 1.6), MIRROR_FRAME_DEEP), 0, MIRROR_PLINTH + H / 2, -1.0),
-    ];
-    const frameMesh = new Mesh(mergeAll(frame) ?? new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, emissive: new Color('#5E7C8C') }));
-    frameMesh.name = `mirror-frame:${def.index}`;
-    this.group.add(frameMesh);
-    const glassAt = new Vector3(0, MIRROR_PLINTH + H / 2, 0.05).applyQuaternion(turn).add(base);
+    // v1.11 (5-3): a gate's glass starts at the rail; a framed mirror stands on two feet.
+    const plinth = def.look === 'gate' ? 0 : MIRROR_PLINTH;
+    let pivot: Group | null = null;
+    if (def.look === 'ice') {
+      const B = 1.2;
+      const frame = [
+        place(paint(new BoxGeometry(W + 2 * B, B, 2.2), MIRROR_FRAME), 0, MIRROR_PLINTH + H + B / 2, -0.9),
+        place(paint(new BoxGeometry(B, H, 2.2), MIRROR_FRAME), -(W + B) / 2, MIRROR_PLINTH + H / 2, -0.9),
+        place(paint(new BoxGeometry(B, H, 2.2), MIRROR_FRAME), (W + B) / 2, MIRROR_PLINTH + H / 2, -0.9),
+        place(paint(new BoxGeometry(W + 2 * B + 1.6, MIRROR_PLINTH, 3.4), RIM_COLOR), 0, MIRROR_PLINTH / 2, -0.6),
+        place(paint(new BoxGeometry(W, H, 1.6), MIRROR_FRAME_DEEP), 0, MIRROR_PLINTH + H / 2, -1.0),
+      ];
+      const frameMesh = new Mesh(mergeAll(frame) ?? new BufferGeometry(), new MeshLambertMaterial({ vertexColors: true, emissive: new Color('#5E7C8C') }));
+      frameMesh.name = `mirror-frame:${def.index}`;
+      this.group.add(frameMesh);
+    } else if (def.look === 'frame') {
+      // v1.11 (5-3): silver and lavender, turning round about its foot (its iron back while turned away).
+      pivot = new Group();
+      pivot.name = `mirror-pivot:${def.index}`;
+      pivot.position.copy(base);
+      pivot.rotation.y = MathUtilsDeg(def.rotationY + (def.facing ? 0 : def.turnFrom));
+      const frameMesh = new Mesh(framedMirrorGeometry(W, H, def.back), new MeshLambertMaterial({ vertexColors: true, emissive: new Color('#4E4A66') }));
+      frameMesh.name = `mirror-frame:${def.index}`;
+      pivot.add(frameMesh);
+      this.group.add(pivot);
+    }
+    const glassAt = new Vector3(0, plinth + H / 2, 0.05).applyQuaternion(turn).add(base);
     const glass = (): PlaneGeometry => {
       const g = new PlaneGeometry(W, H);
       g.applyMatrix4(new Matrix4().compose(glassAt, turn, new Vector3(1, 1, 1)));
       return g;
     };
-    // From afar: sky over snow in a pale sheen (vertex colours top to bottom).
-    const farGeometry = glass();
-    const pos = farGeometry.getAttribute('position');
-    const cols = new Float32Array(pos.count * 3);
-    for (let i = 0; i < pos.count; i++) {
-      const k = (pos.getY(i) - (glassAt.y - H / 2)) / H;
-      const c = new Color(MIRROR_BOTTOM).lerp(new Color(MIRROR_TOP), k);
-      cols.set([c.r, c.g, c.b], i * 3);
+    // From afar: sky over snow in a pale sheen (vertex colours top to bottom); 5-3's framed ones lavender over white.
+    let far: Mesh | null = null;
+    if (def.look !== 'gate') {
+      const farGeometry = new PlaneGeometry(W, H);
+      if (pivot) farGeometry.translate(0, plinth + H / 2, 0.05);
+      else farGeometry.applyMatrix4(new Matrix4().compose(glassAt, turn, new Vector3(1, 1, 1)));
+      const pos = farGeometry.getAttribute('position');
+      const cols = new Float32Array(pos.count * 3);
+      const bottom = def.look === 'frame' ? FRAME_GLASS_BOTTOM : MIRROR_BOTTOM;
+      const top = def.look === 'frame' ? FRAME_GLASS_TOP : MIRROR_TOP;
+      for (let i = 0; i < pos.count; i++) {
+        const k = (pos.getY(i) - (pivot ? plinth : glassAt.y - H / 2)) / H;
+        const c = new Color(bottom).lerp(new Color(top), k);
+        cols.set([c.r, c.g, c.b], i * 3);
+      }
+      farGeometry.setAttribute('color', new Float32BufferAttribute(cols, 3));
+      far = new Mesh(farGeometry, new MeshBasicMaterial({ vertexColors: true }));
+      far.name = `mirror-glass:${def.index}`;
+      (pivot ?? this.group).add(far);
     }
-    farGeometry.setAttribute('color', new Float32BufferAttribute(cols, 3));
-    const far = new Mesh(farGeometry, new MeshBasicMaterial({ vertexColors: true }));
-    far.name = `mirror-glass:${def.index}`;
-    this.group.add(far);
     // The stencil window: where the glass is seen, mark 1 (nothing drawn)...
     const mask = new Mesh(
       glass(),
@@ -584,7 +626,11 @@ export class IceGimmicks {
     const backdrop = new Mesh(
       glass(),
       new ShaderMaterial({
-        uniforms: { topColor: { value: new Color(MIRROR_TOP) }, bottomColor: { value: new Color(MIRROR_BOTTOM) } },
+        // v1.11 (5-3): a framed mirror or a gate shows the stage's own sky behind the reflection (4-1's: icy blue).
+        uniforms: {
+          topColor: { value: new Color(def.look === 'ice' ? MIRROR_TOP : this.stage.file.environment.sky.top) },
+          bottomColor: { value: new Color(def.look === 'ice' ? MIRROR_BOTTOM : this.stage.file.environment.sky.bottom) },
+        },
         vertexShader: backdropVertex,
         fragmentShader: backdropFragment,
         transparent: true,
@@ -617,7 +663,7 @@ export class IceGimmicks {
     tint.renderOrder = 950;
     tint.layers.set(REFLECT_LAYER);
     this.group.add(tint);
-    this.mirrors.push({ def, reflect: reflection(def.normal, glassAt), far, mask, backdrop, tint, tintMaterial, ghosts: null });
+    this.mirrors.push({ def, reflect: reflection(def.normal, glassAt), far, pivot, turning: null, mask, backdrop, tint, tintMaterial, ghosts: null });
   }
 
   /**
@@ -631,6 +677,8 @@ export class IceGimmicks {
     const def = mv.def;
     const parts: BufferGeometry[] = [];
     for (const rail of network.rails.values()) {
+      // v1.11 (5-3): a phantom rail is never in a mirror (the false way stops short in it).
+      if (this.phantomRails.has(rail.id)) continue;
       let from: number | null = null;
       const flush = (to: number): void => {
         if (from === null) return;
@@ -653,7 +701,9 @@ export class IceGimmicks {
       const ground = new PlaneGeometry(2 * r, 2 * r);
       ground.rotateX(-Math.PI / 2);
       ground.translate(centre.x, (this.stage.file.environment.ground?.y ?? 0) + 0.02, centre.z);
-      const mesh = new Mesh(ground, stencilled(new MeshLambertMaterial({ color: GHOST_GROUND, emissive: new Color(GHOST_GROUND).multiplyScalar(0.3) })));
+      // v1.11 (5-3): a framed mirror (or a gate) shows the stage's own ground.
+      const color = def.look === 'ice' ? GHOST_GROUND : (this.stage.file.environment.ground?.color ?? GHOST_GROUND);
+      const mesh = new Mesh(ground, stencilled(new MeshLambertMaterial({ color, emissive: new Color(color).multiplyScalar(0.3) })));
       mesh.name = 'ghost-ground';
       group.add(mesh);
     }
@@ -709,6 +759,22 @@ export class IceGimmicks {
         if (mv) this.revealWave.set(mv.def.index, 1);
         break;
       }
+      case 'phantom':
+        // v1.11 (5-3): a false way seen through: the train on it may show in a mirror again.
+        if (this.phantomRails.size > 0 && [...this.phantomRails.values()].includes(e.id)) {
+          if (e.state === 'solid') this.solidPhantoms.add(e.id);
+          else this.solidPhantoms.delete(e.id);
+        }
+        break;
+      case 'flip:gate': {
+        // v1.11 (5-3): an opened whistle gate reflects from now on (shut, it is frosted glass).
+        const mv = this.mirrors.find((m) => m.def.id === `${e.id}:in`);
+        if (mv && e.state === 'open') mv.def.facing = true;
+        break;
+      }
+      case 'mirror:turn':
+        this.turnMirror(e.id, e.face, e.instant ? 0 : e.seconds);
+        break;
       case 'rewind':
         this.crackT = -1;
         if (this.seal) this.seal.visible = false;
@@ -983,14 +1049,14 @@ export class IceGimmicks {
     const next = def ? (this.mirrors.find((m) => m.def === def) ?? null) : null;
     if (next !== this.active) {
       if (this.active) {
-        this.active.far.visible = true;
+        if (this.active.far) this.active.far.visible = true;
         this.active.mask.visible = false;
         this.active.backdrop.visible = false;
         if (this.active.ghosts) this.active.ghosts.visible = false;
       }
       this.active = next;
       if (next) {
-        next.far.visible = false;
+        if (next.far) next.far.visible = false;
         next.mask.visible = true;
         next.backdrop.visible = true;
         if (!next.ghosts) {
@@ -1001,6 +1067,18 @@ export class IceGimmicks {
       }
     }
     for (const mv of this.mirrors) {
+      const turning = mv.turning;
+      if (turning && mv.pivot) {
+        // v1.11 (5-3) "くるっ": an eased half turn; facing the train again only once it is round.
+        turning.t = Math.min(turning.seconds, turning.t + dt);
+        const k = turning.seconds > 0 ? turning.t / turning.seconds : 1;
+        const e = k * k * (3 - 2 * k);
+        mv.pivot.rotation.y = MathUtilsDeg(turning.from + (turning.to - turning.from) * e);
+        if (k >= 1) {
+          mv.turning = null;
+          if (turning.to === mv.def.rotationY) mv.def.facing = true;
+        }
+      }
       mv.tintMaterial.uniforms.time.value = this.time;
       const w = this.revealWave.get(mv.def.index) ?? 0;
       if (w > 0) this.revealWave.set(mv.def.index, Math.max(0, w - dt / 1.6));
@@ -1021,7 +1099,9 @@ export class IceGimmicks {
     const mv = this.active;
     if (!mv) return false;
     const dynamic: Object3D[] = [];
-    if (mv.def.reflectTrain) dynamic.push(...cars);
+    // v1.11 (5-3): on a phantom rail not seen through the train is not in the mirror either (its rail is not there).
+    const phantom = this.phantomRails.get(this.trainRail);
+    if (mv.def.reflectTrain && !(phantom !== undefined && this.solidPhantoms.has(phantom))) dynamic.push(...cars);
     if (mv.def.reflectCutscene) dynamic.push(...figures);
     // The star where the lamp's reflection is (bigger just after "きらーん").
     const star = this.ensureStar();
@@ -1105,6 +1185,28 @@ export class IceGimmicks {
     return this.star;
   }
 
+  /**
+   * v1.11 (5-3): mirror `id` turns to face the train ("front") or its back to it ("back") over `seconds` s (0: at once).
+   * Turned away it stops reflecting at once; turned round it reflects once it faces the train.
+   */
+  private turnMirror(id: string, face: 'front' | 'back', seconds: number): void {
+    const mv = this.mirrors.find((m) => m.def.id === id);
+    if (!mv) return;
+    const to = mv.def.rotationY + (face === 'front' ? 0 : mv.def.turnFrom);
+    if (face === 'back') mv.def.facing = false;
+    if (!mv.pivot) {
+      mv.def.facing = face === 'front';
+      return;
+    }
+    const from = mv.turning ? mv.turning.from + (mv.turning.to - mv.turning.from) * (mv.turning.t / Math.max(1e-6, mv.turning.seconds)) : (mv.pivot.rotation.y * 180) / Math.PI;
+    mv.turning = { from, to, t: 0, seconds };
+    if (seconds <= 0) {
+      mv.pivot.rotation.y = MathUtilsDeg(to);
+      mv.turning = null;
+      mv.def.facing = face === 'front';
+    }
+  }
+
   /** The mirror reflecting now (test hook): its gimmicks[] index, or −1. */
   get activeIndex(): number {
     return this.active?.def.index ?? -1;
@@ -1166,4 +1268,72 @@ function trueSign(side: 'left' | 'right'): Group {
   head.position.set(dir * 0.3, 2.9, 0.08);
   g.add(post, board, shaft, head);
   return g;
+}
+
+/** Degrees to radians. */
+function MathUtilsDeg(deg: number): number {
+  return (deg * Math.PI) / 180;
+}
+
+/** v1.11 (5-3): a framed mirror's glass from afar: pale lavender over white. */
+const FRAME_GLASS_TOP = '#CFC6F2';
+const FRAME_GLASS_BOTTOM = '#F6F2FE';
+const FRAME_SILVER = '#D9D6EA';
+const FRAME_LAVENDER = '#B9A8EC';
+const IRON_BACK = '#7A8CA3';
+const SWIRL_PINK = '#E75BA0';
+
+/**
+ * v1.11 (5-3): a framed mirror ("mirror-frame", ticket 0020), in its own space (foot at the origin, the glass facing +Z
+ * at z 0.05): a silver frame 0.6 m thick with a lavender rim, standing on two feet MIRROR_PLINTH m high, and its back an
+ * iron plate (with Sakasa's pink swirl, `back` "swirl"). No face-like shapes. About 250 triangles.
+ */
+export function framedMirrorGeometry(W: number, H: number, back: 'swirl' | 'plain'): BufferGeometry {
+  const P = MIRROR_PLINTH;
+  const T = 0.6;
+  const at = (g: BufferGeometry, x: number, y: number, z: number): BufferGeometry => g.translate(x, y, z);
+  const parts = [
+    at(paint(new BoxGeometry(W + 2 * T, T, 0.5), FRAME_SILVER), 0, P + H + T / 2, -0.2),
+    at(paint(new BoxGeometry(W + 2 * T, T, 0.5), FRAME_SILVER), 0, P - T / 2, -0.2),
+    at(paint(new BoxGeometry(T, H, 0.5), FRAME_SILVER), -(W + T) / 2, P + H / 2, -0.2),
+    at(paint(new BoxGeometry(T, H, 0.5), FRAME_SILVER), (W + T) / 2, P + H / 2, -0.2),
+    // The lavender rim just inside the frame.
+    at(paint(new BoxGeometry(W + 0.2, 0.18, 0.2), FRAME_LAVENDER), 0, P + H - 0.05, 0.02),
+    at(paint(new BoxGeometry(W + 0.2, 0.18, 0.2), FRAME_LAVENDER), 0, P + 0.05, 0.02),
+    at(paint(new BoxGeometry(0.18, H, 0.2), FRAME_LAVENDER), -W / 2 + 0.05, P + H / 2, 0.02),
+    at(paint(new BoxGeometry(0.18, H, 0.2), FRAME_LAVENDER), W / 2 - 0.05, P + H / 2, 0.02),
+    // Two feet, each on a round-ish pad.
+    at(paint(new BoxGeometry(0.5, P, 0.5), FRAME_SILVER), -W / 3, P / 2, -0.2),
+    at(paint(new BoxGeometry(0.5, P, 0.5), FRAME_SILVER), W / 3, P / 2, -0.2),
+    at(paint(new BoxGeometry(1.4, 0.2, 1.6), FRAME_LAVENDER), -W / 3, 0.1, -0.2),
+    at(paint(new BoxGeometry(1.4, 0.2, 1.6), FRAME_LAVENDER), W / 3, 0.1, -0.2),
+    // The iron back.
+    at(paint(new BoxGeometry(W, H, 0.2), IRON_BACK), 0, P + H / 2, -0.4),
+  ];
+  if (back === 'swirl') {
+    // Sakasa's pink swirl on the back (facing −Z): a flat spiral of little quads.
+    const pts: number[] = [];
+    const r = Math.min(W, H) * 0.32;
+    const n = 30;
+    const w = r * 0.12;
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * 2.3 * Math.PI * 2;
+      const a1 = ((i + 1) / n) * 2.3 * Math.PI * 2;
+      const r0 = (r * (i + 1)) / n;
+      const r1 = (r * (i + 2)) / n;
+      const p = (a: number, rr: number): [number, number] => [Math.cos(a) * rr, P + H / 2 + Math.sin(a) * rr];
+      const [x0, y0] = p(a0, r0 - w / 2);
+      const [x1, y1] = p(a0, r0 + w / 2);
+      const [x2, y2] = p(a1, r1 + w / 2);
+      const [x3, y3] = p(a1, r1 - w / 2);
+      const z = -0.52;
+      // Wound to face −Z.
+      pts.push(x0, y0, z, x2, y2, z, x1, y1, z, x0, y0, z, x3, y3, z, x2, y2, z);
+    }
+    const g = new BufferGeometry();
+    g.setAttribute('position', new Float32BufferAttribute(pts, 3));
+    g.computeVertexNormals();
+    parts.push(paint(g, SWIRL_PINK));
+  }
+  return mergeAll(parts) ?? new BufferGeometry();
 }

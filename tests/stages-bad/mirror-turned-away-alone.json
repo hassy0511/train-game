@@ -1,0 +1,1 @@
+{ "_expect": "a turned-away mirror needs exactly one magnet \"turn\" target naming it", "_base": "0-3", "_edit": [{ "path": "gimmicks.0.params.facing", "value": false }] }

@@ -2,6 +2,10 @@ import {
   Box3,
   BufferGeometry,
   Color,
+  DoubleSide,
+  MeshBasicMaterial,
+  Shape,
+  ShapeGeometry,
   Float32BufferAttribute,
   Group,
   Material,
@@ -21,6 +25,53 @@ import type { Emote, MissionDef, ResolvedActor, ResolvedRecord, ResolvedStation 
 import { NECK_DOWN, NECK_UP } from './abilities';
 import { bakeModel, bakeTogether } from './bake';
 import type { ModelLibrary } from './models';
+
+/** v1.11 (5-3): the waving sway's axis (the figure's forward) and a scratch quaternion. */
+const WAVE_AXIS = new Vector3(0, 0, 1);
+const WAVE_TILT = new Quaternion();
+
+/**
+ * v1.11 (5-3): cutscene fx "hearts": 24 little pink hearts and gold stars on a loose ring round a figure (0.6–2.2 m up),
+ * one mesh (one draw call) that turns slowly. A child of the figure, so a mirror-only figure has them in the mirror only.
+ */
+function heartsMesh(): Mesh {
+  const heart = new Shape();
+  heart.moveTo(0, -0.5);
+  heart.bezierCurveTo(-0.15, -0.3, -0.5, -0.1, -0.5, 0.15);
+  heart.bezierCurveTo(-0.5, 0.45, -0.1, 0.5, 0, 0.25);
+  heart.bezierCurveTo(0.1, 0.5, 0.5, 0.45, 0.5, 0.15);
+  heart.bezierCurveTo(0.5, -0.1, 0.15, -0.3, 0, -0.5);
+  const star = new Shape();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + Math.PI / 2;
+    const r = i % 2 === 0 ? 0.5 : 0.22;
+    if (i === 0) star.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else star.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  star.closePath();
+  const parts: BufferGeometry[] = [];
+  for (let i = 0; i < 24; i++) {
+    const isHeart = i % 5 !== 2 && i % 5 !== 4;
+    const g = new ShapeGeometry(isHeart ? heart : star, 4);
+    const size = 0.16 + ((i * 7) % 5) * 0.025;
+    const a = (i / 24) * Math.PI * 2;
+    const r = 0.8 + ((i * 3) % 4) * 0.14;
+    g.scale(size, size, size);
+    g.rotateY(-a);
+    g.translate(Math.cos(a) * r, 0.6 + ((i * 11) % 9) * 0.2, Math.sin(a) * r);
+    const color = new Color(isHeart ? (i % 2 ? '#E8579F' : '#FF8FC0') : '#FFD66B');
+    const n = g.getAttribute('position').count;
+    const colors = new Float32Array(n * 3);
+    for (let k = 0; k < n; k++) color.toArray(colors, k * 3);
+    g.setAttribute('color', new Float32BufferAttribute(colors, 3));
+    g.deleteAttribute('uv');
+    g.deleteAttribute('normal');
+    parts.push(g);
+  }
+  const mesh = new Mesh(mergeGeometries(parts) ?? new BufferGeometry(), new MeshBasicMaterial({ vertexColors: true, side: DoubleSide }));
+  mesh.name = 'hearts';
+  return mesh;
+}
 import { addModelPlacements, placementMatrix, type ModelPlacement } from './props';
 
 const ACTOR_MODELS: Record<string, string> = {
@@ -194,6 +245,12 @@ export class ActorLayer {
   private readonly records = new Map<string, ResolvedRecord>();
   /** v1.10 (4-3): figures that roll as they move (a snowman rolling aside), turning about their own side axis. */
   private readonly rollers = new Set<string>();
+  /** v1.11 (5-3): figures swaying as they wave (±0.1 rad, 1.5 times a second, the whole cutscene). */
+  private readonly wavers = new Map<string, { object: Object3D; base: Quaternion; t: number }>();
+  /** v1.11 (5-3): figures seen only in a mirror ("only"), or never in one ("hide"). */
+  private readonly mirrorModes = new Map<string, 'only' | 'hide'>();
+  /** v1.11 (5-3): fx "hearts" round a figure (by its id), and their time. */
+  private readonly hearts = new Map<string, { mesh: Mesh; t: number }>();
   /** v1.10 (4-1): ids of the figures cutscenes brought on (an ice mirror may show them). */
   private readonly spawned = new Set<string>();
   /** v1.11 (5-1): figures that hop as they move (a fawn "ぴょこぴょこ"). */
@@ -650,10 +707,18 @@ export class ActorLayer {
         break;
       case 'actor:spawn': {
         this.spawned.add(event.id);
+        // v1.11 (5-3): seen only in a mirror, or never in one.
+        if (event.mirror) this.mirrorModes.set(event.id, event.mirror);
+        else this.mirrorModes.delete(event.id);
         const placing = this.place(event.id, event.model, event.position, event.quaternion);
         this.pendingSpawns.set(event.id, placing);
         await placing;
         if (this.pendingSpawns.get(event.id) === placing) this.pendingSpawns.delete(event.id);
+        const placed = this.objects.get(event.id);
+        if (placed && this.mirrorModes.get(event.id) === 'only') placed.visible = false;
+        // v1.11 (5-3): the mirror Sakasa waving sways from side to side ("amanojaku-wave").
+        if (placed && event.model === 'amanojaku-wave') this.wavers.set(event.id, { object: placed, base: placed.quaternion.clone(), t: 0 });
+        else this.wavers.delete(event.id);
         break;
       }
       case 'actor:move': {
@@ -694,7 +759,21 @@ export class ActorLayer {
         if (record) this.makeSparkles(record.position.clone().add(new Vector3(0, 0.5, 0)));
         break;
       }
+      case 'hearts': {
+        // v1.11 (5-3): hearts and stars round the figure (it may still be loading).
+        const pending = this.pendingSpawns.get(event.id);
+        if (pending) await pending;
+        const object = this.objects.get(event.id);
+        if (!object || this.hearts.has(event.id)) break;
+        const mesh = heartsMesh();
+        object.add(mesh);
+        this.hearts.set(event.id, { mesh, t: 0 });
+        break;
+      }
       case 'actor:remove':
+        this.mirrorModes.delete(event.id);
+        this.hearts.delete(event.id);
+        this.wavers.delete(event.id);
         this.bumpGeneration(event.id);
         this.pendingSpawns.delete(event.id);
         this.objects.get(event.id)?.removeFromParent();
@@ -750,17 +829,41 @@ export class ActorLayer {
     return this.objects.get(id) ?? null;
   }
 
-  /** v1.10 (4-1): the figures a cutscene brought on that are on screen now (for an ice mirror's reflection). */
+  /**
+   * v1.10 (4-1): the figures a cutscene brought on that are on screen now (for an ice mirror's reflection). v1.11 (5-3):
+   * not the ones brought on "hide" (never in a mirror); the "only" ones are (see mirrorOnlyFigures).
+   */
   cutsceneFigures(): Object3D[] {
     const out: Object3D[] = [];
     for (const id of this.spawned) {
       const o = this.objects.get(id);
-      if (o) out.push(o);
+      if (o && this.mirrorModes.get(id) !== 'hide') out.push(o);
+    }
+    return out;
+  }
+
+  /** v1.11 (5-3): the figures seen only in a mirror (hidden in the main pass; the scene shows them for the mirror's). */
+  mirrorOnlyFigures(): Object3D[] {
+    const out: Object3D[] = [];
+    for (const [id, mode] of this.mirrorModes) {
+      const o = this.objects.get(id);
+      if (o && mode === 'only') out.push(o);
     }
     return out;
   }
 
   update(dt: number): void {
+    for (const h of this.hearts.values()) {
+      // They swell in, turn slowly and bob a little.
+      h.t += dt;
+      h.mesh.rotation.y = h.t * 0.5;
+      h.mesh.position.y = Math.sin(h.t * 2.2) * 0.08;
+      h.mesh.scale.setScalar(Math.min(1, h.t / 0.4));
+    }
+    for (const w of this.wavers.values()) {
+      w.t += dt;
+      w.object.quaternion.copy(w.base).multiply(WAVE_TILT.setFromAxisAngle(WAVE_AXIS, Math.sin(w.t * Math.PI * 2 * 1.5) * 0.1));
+    }
     for (let index = this.moving.length - 1; index >= 0; index -= 1) {
       const move = this.moving[index];
       if (move.delay > 0) {

@@ -322,9 +322,11 @@ const RECORDS = [
   {
     id: 'sleigh-bell',
     name: 'ゆきに うまった すず',
-    note: 'ゆきの なかで ちりん… ひっぱれたら？',
+    note: 'ゆきの なかで ちりん。ひっぱりだした',
     requires: 'magnetLight',
     model: 'sleigh-bell',
+    // v1.11 (PR6b, PHASE9_CHAPTER5_6 第 2 部 M7.2): fetched with the magnet light now: its hint, the note as the answer.
+    hint: 'ゆきの なかに すず！ ひっぱろう！',
     onRail: { railId: 'main', at: 1830, lateral: -10, heightFromRail: -0.4 },
   },
 ];

@@ -1,0 +1,1 @@
+{"_expect": "press \"magnet\" target \"nobody\" must be a figure brought on", "_base": "0-4", "_edit": [{"path": "cutscenes.opening.3.target", "value": "nobody"}]}

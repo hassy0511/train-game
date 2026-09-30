@@ -1,0 +1,1 @@
+{"_expect": "params.kind must be one of", "_base": "0-4", "_edit": [{"path": "gimmicks.0.params.kind", "value": "lift"}]}

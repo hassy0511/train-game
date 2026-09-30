@@ -1,0 +1,1 @@
+{ "_expect": "must be 150–400 m long", "_base": "0-3", "_edit": [{ "path": "gimmicks.6.to", "value": 360 }] }

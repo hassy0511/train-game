@@ -1,0 +1,1 @@
+{"_expect": "a press \"magnet\" takes no fx", "_base": "0-4", "_edit": [{"path": "cutscenes.opening.3.fx", "value": "beacon"}]}
