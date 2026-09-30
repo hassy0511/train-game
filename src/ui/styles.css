@@ -3519,3 +3519,201 @@ body {
     box-shadow: 0 0 0 14px rgba(143, 164, 232, 0), 0 4px 10px rgba(0, 0, 0, 0.3);
   }
 }
+
+/* ---- v1.11 (5-3) the mirror world (PHASE9_CHAPTER5_6 第 6 部 §4.1.4) ---- */
+
+/* "かがみの なか": only the 3D view's box turns round left to right (no draw cost). The controls, the arrows, the
+   gauges, the bubbles and the cards are outside it (#ui) and never flip: the thumbs find everything where it was. */
+#view.is-flipped {
+  transform: scaleX(-1);
+}
+
+/* The shimmer the view turns round behind (0.35 s): lavender white with sparkling dots. */
+.mirror-fade {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 30%, #fff 0 3px, transparent 4px),
+    radial-gradient(circle at 72% 22%, #fff 0 4px, transparent 5px),
+    radial-gradient(circle at 40% 68%, #fff 0 3px, transparent 4px),
+    radial-gradient(circle at 84% 74%, #fff 0 3px, transparent 4px),
+    radial-gradient(circle at 58% 44%, #ffffff 0 5px, transparent 6px),
+    #f6f0ff;
+}
+
+#ui > .mirror-fade {
+  pointer-events: none;
+}
+
+.mirror-fade.is-on {
+  animation: mirror-shimmer 0.35s ease-in-out;
+}
+
+@keyframes mirror-shimmer {
+  0% {
+    opacity: 0;
+  }
+  45%,
+  55% {
+    opacity: 0.96;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* A plain soft white, shorter (the view still turns round). */
+  .mirror-fade {
+    background: #fbf9ff;
+  }
+  .mirror-fade.is-on {
+    animation-duration: 0.15s;
+  }
+}
+
+/* v1.11 (5-3): card mirror "reflect": Sakasa's mirror-written notes held up to a silver mirror, which shows the words
+   in plain letters (and a little crayon drawing of her riding the train). */
+.card.is-reflect .reflect-scene {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+}
+
+.reflect-notes {
+  position: relative;
+  width: 210px;
+  height: 170px;
+  animation: reflect-notes-in 0.4s ease-out both;
+}
+
+.reflect-note {
+  position: absolute;
+  left: calc(var(--k) * 26px);
+  top: calc(var(--k) * 22px);
+  width: 170px;
+  height: 116px;
+  border-radius: 8px;
+  background: #fff8e6;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.3);
+  transform: rotate(calc(-4deg + var(--k) * 7deg));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reflect-note-words {
+  color: #5a4a3a;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  transform: scaleX(-1);
+}
+
+.reflect-note .card-swirl {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  width: 34px;
+  height: 34px;
+}
+
+@keyframes reflect-notes-in {
+  from {
+    transform: translateX(-40px);
+  }
+  to {
+    transform: translateX(10px);
+  }
+}
+
+.reflect-mirror {
+  padding: 14px;
+  border-radius: 20px;
+  background: linear-gradient(#e8e6f4, #d9d6ea);
+  border: 6px solid #b9a8ec;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.reflect-glass {
+  position: relative;
+  overflow: hidden;
+  width: 280px;
+  min-height: 200px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #eaf4ff, #f6f0ff);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.card.is-reflect .reflect-glass h1 {
+  margin: 0;
+  color: #5a4a3a;
+  font-size: 58px;
+  letter-spacing: 0.12em;
+  animation: reflect-words 0.3s ease-out 0.7s both;
+}
+
+.reflect-ride {
+  width: 110px;
+  height: 84px;
+  animation: reflect-words 0.3s ease-out 0.8s both;
+}
+
+@keyframes reflect-words {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+.reflect-sparkle {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.95) 48%, transparent 66%);
+  transform: translateX(-120%);
+  animation: reflect-sparkle 0.6s ease-in-out 0.4s both;
+}
+
+@keyframes reflect-sparkle {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+@media (max-height: 500px) {
+  .reflect-notes {
+    width: 150px;
+    height: 120px;
+  }
+  .reflect-note {
+    width: 120px;
+    height: 84px;
+  }
+  .reflect-note-words {
+    font-size: 28px;
+  }
+  .reflect-glass {
+    width: 200px;
+    min-height: 140px;
+  }
+  .card.is-reflect .reflect-glass h1 {
+    font-size: 42px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reflect-notes,
+  .reflect-sparkle,
+  .card.is-reflect .reflect-glass h1,
+  .reflect-ride {
+    animation-duration: 0.01s;
+  }
+}

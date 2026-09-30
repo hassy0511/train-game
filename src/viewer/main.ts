@@ -28,6 +28,7 @@ import { buildSnowPlaceholder } from '../view/three/snow-placeholders';
 import { ModelLibrary } from '../view/three/models';
 import { buildMeadowPlaceholder } from '../view/three/meadow-placeholders';
 import { buildNightPlaceholder } from '../view/three/night-placeholders';
+import { buildMirrorPlaceholder } from '../view/three/mirror-placeholders';
 import { buildRecordPlaceholder } from '../view/three/record-placeholders';
 import { buildSeaPlaceholder } from '../view/three/sea-placeholders';
 import { buildRiverPlaceholder } from '../view/three/river-placeholders';
@@ -94,9 +95,13 @@ const drawn = (name: string): Group | null =>
   buildVillagePlaceholder(name) ??
   buildSnowPlaceholder(name) ??
   buildNightPlaceholder(name) ??
+  buildMirrorPlaceholder(name) ??
   buildRecordPlaceholder(name);
-/** Stand-ins made from a built model (4-3's blushing Sakasa: the built one with pink cheeks), as the game makes them. */
-const COMPOSED = new Set(['amanojaku-blush', 'amanojaku-lantern', 'amanojaku-lantern-off']);
+/**
+ * Stand-ins made from a built model (4-3's blushing Sakasa: the built one with pink cheeks; 5-3's waving and shy mirror
+ * Sakasa, posed), as the game makes them.
+ */
+const COMPOSED = new Set(['amanojaku-blush', 'amanojaku-lantern', 'amanojaku-lantern-off', 'amanojaku-wave', 'amanojaku-shy']);
 const library = new ModelLibrary();
 const pending = manifest._pending.models.filter((n) => !built.has(n) && (COMPOSED.has(n) || drawn(n) !== null));
 const load = async (name: string): Promise<Group> =>

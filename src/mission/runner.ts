@@ -249,7 +249,12 @@ type DefaultLine =
   | 'paradeFollow'
   | 'paradeMatch'
   | 'paradeWait'
-  | 'paradeBye';
+  | 'paradeBye'
+  // v1.11 (5-3 かがみの せかい)
+  | MirrorWorldLine;
+
+/** v1.11 (5-3): the mirror world's lines (PHASE9_CHAPTER5_6 第 6 部 §4.8). */
+export type MirrorWorldLine = 'flipIn' | 'flipOut' | 'mirrorGateNear' | 'mirrorGateOpen' | 'mirrorGateBump' | 'mirrorGateAfter';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -381,6 +386,13 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   paradeMatch: 'ぴったり！ パレードの なかまだ！',
   paradeWait: 'がくたいさんが まってるよ！',
   paradeBye: 'ありがとう〜 がくたいさん！',
+  // v1.11 (5-3 かがみの せかい, PHASE9_CHAPTER5_6 第 6 部 §4.8). Every one within 20 letters.
+  flipIn: 'かがみの なかに はいった！',
+  flipOut: 'もどって きた！',
+  mirrorGateNear: 'かがみの もん！ きてきで あいずだ！',
+  mirrorGateOpen: 'かがみが ぷるん！ はいれる！',
+  mirrorGateBump: 'ぽよん！ かがみが かたい〜',
+  mirrorGateAfter: 'きてきで あいず しよう！',
 };
 
 /**
@@ -768,6 +780,32 @@ export class MissionRunner {
       this.ports.sayNow(lines[0]);
       for (const line of lines.slice(1)) this.ports.sayAsync(line);
     } else for (const line of lines) this.ports.sayAsync(line);
+  }
+
+  /**
+   * v1.11 (5-3): a line of the mirror world (the caller wires the mirror-flip system's events here): the first time in
+   * a mission into and out of "かがみの なか" (flipIn, flipOut; the stretch's own `line` / `lineOut` wins, null says
+   * nothing), the whistle gate once a try (near, open, the bounce and what to do). Only while driving.
+   */
+  sayMirrorWorld(key: MirrorWorldLine, opts: { own?: string | null; tag?: string } = {}): void {
+    if (this.phase !== 'driving' || opts.own === null) return;
+    const scope = key === 'flipIn' || key === 'flipOut' ? 'mission' : 'try';
+    const now = key !== 'mirrorGateAfter' && key !== 'flipOut';
+    this.sayNight(key, scope, { own: opts.own, tag: opts.tag, now });
+  }
+
+  /**
+   * v1.11 (5-3): the hook for the magnet light's "turn" target (PR5/PR6b): the pull turned the mirror of fork
+   * `junctionId` round, so the fork is seen through at once (its phantom pops, the true way is taken, the true side
+   * lights up). No "signRevealed" line: the target's own `done` says it.
+   */
+  revealTurn(junctionId: string): void {
+    const j = this.stage.file.junctions.find((x) => x.id === junctionId);
+    if (!j || this.revealed.has(j.id)) return;
+    this.revealed.add(j.id);
+    const truth: JunctionSide = j.default === 'left' ? 'right' : 'left';
+    this.train.preferJunction(j.id, truth);
+    this.events.post({ type: 'sign:reveal', junctionId: j.id });
   }
 
   /** v1.11 (5-1): the hush stretches' lines and the forks the train went wrong at. */
@@ -1201,7 +1239,8 @@ export class MissionRunner {
     if (this.tunnel?.lightHint(false)) return true;
     for (const id of this.wrongTurns) {
       const j = this.stage.file.junctions.find((x) => x.id === id);
-      if (!j || this.revealed.has(j.id)) continue;
+      // v1.11 (5-3): only the magnet helps at a turned-away mirror's fork: no yellow glow there.
+      if (!j || j.turn || this.revealed.has(j.id)) continue;
       const d = this.train.distanceAhead(j.railId, j.at);
       if (d !== null && d > 0 && d <= 80) return true;
     }
@@ -1223,7 +1262,7 @@ export class MissionRunner {
   /** v1.10 (4-1): the junctions of mirrors that light the light button (lightHint). */
   private mirrorHintJunctions(): JunctionDef[] {
     const ids = (this.mirrors?.mirrors ?? []).filter((m) => m.lightHint && m.junction).map((m) => m.junction);
-    return this.stage.file.junctions.filter((j) => ids.includes(j.id));
+    return this.stage.file.junctions.filter((j) => ids.includes(j.id) && !j.turn);
   }
 
   /**
@@ -2219,7 +2258,8 @@ export class MissionRunner {
   /** Reversed signs: a line when one comes up; with the light on, the true way lights up and becomes the default. */
   private updateJunctionSigns(): void {
     const j = this.junctionAhead(80);
-    if (!j || !j.signReversed || this.revealed.has(j.id)) return;
+    // v1.11 (5-3): a turned-away mirror's fork: the light alone does not see through it (revealTurn does).
+    if (!j || !j.signReversed || j.turn || this.revealed.has(j.id)) return;
     if (!this.signLines.has(j.id)) {
       this.signLines.add(j.id);
       if (this.lines.signNear && !this.lightOn) this.ports.sayAsync(this.lines.signNear);

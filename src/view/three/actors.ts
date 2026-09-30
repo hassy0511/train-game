@@ -21,6 +21,10 @@ import type { Emote, MissionDef, ResolvedActor, ResolvedRecord, ResolvedStation 
 import { NECK_DOWN, NECK_UP } from './abilities';
 import { bakeModel, bakeTogether } from './bake';
 import type { ModelLibrary } from './models';
+
+/** v1.11 (5-3): the waving sway's axis (the figure's forward) and a scratch quaternion. */
+const WAVE_AXIS = new Vector3(0, 0, 1);
+const WAVE_TILT = new Quaternion();
 import { addModelPlacements, placementMatrix, type ModelPlacement } from './props';
 
 const ACTOR_MODELS: Record<string, string> = {
@@ -194,6 +198,10 @@ export class ActorLayer {
   private readonly records = new Map<string, ResolvedRecord>();
   /** v1.10 (4-3): figures that roll as they move (a snowman rolling aside), turning about their own side axis. */
   private readonly rollers = new Set<string>();
+  /** v1.11 (5-3): figures swaying as they wave (±0.1 rad, 1.5 times a second, the whole cutscene). */
+  private readonly wavers = new Map<string, { object: Object3D; base: Quaternion; t: number }>();
+  /** v1.11 (5-3): figures seen only in a mirror ("only"), or never in one ("hide"). */
+  private readonly mirrorModes = new Map<string, 'only' | 'hide'>();
   /** v1.10 (4-1): ids of the figures cutscenes brought on (an ice mirror may show them). */
   private readonly spawned = new Set<string>();
   /** v1.11 (5-1): figures that hop as they move (a fawn "ぴょこぴょこ"). */
@@ -650,10 +658,18 @@ export class ActorLayer {
         break;
       case 'actor:spawn': {
         this.spawned.add(event.id);
+        // v1.11 (5-3): seen only in a mirror, or never in one.
+        if (event.mirror) this.mirrorModes.set(event.id, event.mirror);
+        else this.mirrorModes.delete(event.id);
         const placing = this.place(event.id, event.model, event.position, event.quaternion);
         this.pendingSpawns.set(event.id, placing);
         await placing;
         if (this.pendingSpawns.get(event.id) === placing) this.pendingSpawns.delete(event.id);
+        const placed = this.objects.get(event.id);
+        if (placed && this.mirrorModes.get(event.id) === 'only') placed.visible = false;
+        // v1.11 (5-3): the mirror Sakasa waving sways from side to side ("amanojaku-wave").
+        if (placed && event.model === 'amanojaku-wave') this.wavers.set(event.id, { object: placed, base: placed.quaternion.clone(), t: 0 });
+        else this.wavers.delete(event.id);
         break;
       }
       case 'actor:move': {
@@ -695,6 +711,8 @@ export class ActorLayer {
         break;
       }
       case 'actor:remove':
+        this.mirrorModes.delete(event.id);
+        this.wavers.delete(event.id);
         this.bumpGeneration(event.id);
         this.pendingSpawns.delete(event.id);
         this.objects.get(event.id)?.removeFromParent();
@@ -750,17 +768,34 @@ export class ActorLayer {
     return this.objects.get(id) ?? null;
   }
 
-  /** v1.10 (4-1): the figures a cutscene brought on that are on screen now (for an ice mirror's reflection). */
+  /**
+   * v1.10 (4-1): the figures a cutscene brought on that are on screen now (for an ice mirror's reflection). v1.11 (5-3):
+   * not the ones brought on "hide" (never in a mirror); the "only" ones are (see mirrorOnlyFigures).
+   */
   cutsceneFigures(): Object3D[] {
     const out: Object3D[] = [];
     for (const id of this.spawned) {
       const o = this.objects.get(id);
-      if (o) out.push(o);
+      if (o && this.mirrorModes.get(id) !== 'hide') out.push(o);
+    }
+    return out;
+  }
+
+  /** v1.11 (5-3): the figures seen only in a mirror (hidden in the main pass; the scene shows them for the mirror's). */
+  mirrorOnlyFigures(): Object3D[] {
+    const out: Object3D[] = [];
+    for (const [id, mode] of this.mirrorModes) {
+      const o = this.objects.get(id);
+      if (o && mode === 'only') out.push(o);
     }
     return out;
   }
 
   update(dt: number): void {
+    for (const w of this.wavers.values()) {
+      w.t += dt;
+      w.object.quaternion.copy(w.base).multiply(WAVE_TILT.setFromAxisAngle(WAVE_AXIS, Math.sin(w.t * Math.PI * 2 * 1.5) * 0.1));
+    }
     for (let index = this.moving.length - 1; index >= 0; index -= 1) {
       const move = this.moving[index];
       if (move.delay > 0) {

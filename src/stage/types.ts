@@ -196,6 +196,19 @@ export interface GapDef {
   bridge?: number;
   /** v1.10 (4-2): said after falling here, instead of fellShort / fellNoJump (e.g. "ジャンプだいは きてきで でるよ"). */
   line?: string;
+  /**
+   * v1.11 (5-3): a false bridge over it (Sakasa's pink phantom): drawn over the gap but never reflected (a mirror shows
+   * the cut). It pops ("ぽわん") in the light within LIGHT.revealDistance m, at a jump from within
+   * MIRROR_WORLD.phantomTakeoff m, or when the train falls through it; back after a rewind. Needs `pit: false`, a `hint`
+   * and a mirror facing it within its reflectRadius.
+   */
+  phantom?: boolean;
+}
+
+/** v1.11 (5-3): a stretch of a rail drawn as glass: see-through directly, plain rails in mirrors (looks only). */
+export interface GlassDef {
+  from: number;
+  to: number;
 }
 
 export interface RailDef {
@@ -217,6 +230,11 @@ export interface RailDef {
    * fail: no dip, the partner says "spurBack").
    */
   spur?: { back: { railId: string; at: number } };
+  /**
+   * v1.11 (5-3): stretches drawn as glass (see-through, plain rails in a mirror). The loader leaves the rail's base out
+   * under them. Its first ride in a mission goes "しゃららん".
+   */
+  glass?: GlassDef[];
   end: RailEndDef;
 }
 
@@ -264,6 +282,19 @@ export interface JunctionDef {
   fireflies?: FireflyForkDef;
   /** v1.11 (5-2): a spinning fork, "くるくる ポイント" (see SpinDef). No arrows show for it. */
   spin?: SpinDef;
+  /**
+   * v1.11 (5-3): a phantom fork: its default way (a dead end, `signReversed`) is Sakasa's pink phantom rail, never
+   * reflected in a mirror. No sign stands at it (the mirror is the sign). Seen through (the light within
+   * LIGHT.revealDistance m, as a reversed sign) the phantom pops ("ぽわん").
+   */
+  phantom?: boolean;
+  /**
+   * v1.11 (5-3, set by the loader from a magnet "turn" target, never written): the target whose pull turns the mirror
+   * that shows this fork's true way. No arrows show for it, the light alone does not see through it, and the light
+   * button's yellow glow after a wrong turn stays off (only the magnet helps there). (The loader fills it in with the
+   * magnet light, PR5/PR6b.)
+   */
+  turn?: string;
 }
 
 /**
@@ -667,7 +698,14 @@ export type MissionLines = Partial<
     | 'paradeFollow'
     | 'paradeMatch'
     | 'paradeWait'
-    | 'paradeBye',
+    | 'paradeBye'
+    // v1.11 (5-3 かがみの せかい)
+    | 'flipIn'
+    | 'flipOut'
+    | 'mirrorGateNear'
+    | 'mirrorGateOpen'
+    | 'mirrorGateBump'
+    | 'mirrorGateAfter',
     string
   >
 >;
@@ -698,6 +736,11 @@ export type CutsceneStep =
       onRail: { railId: string; at: number; lateral?: number; heightFromRail?: number };
       /** v1.6: turn it about the vertical (degrees; 180 faces back along the rail, towards the train). */
       rotationY?: number;
+      /**
+       * v1.11 (5-3): "only" = drawn only in the reflection of a mirror that shows cutscene figures (not seen directly);
+       * "hide" = never reflected. The mirror Sakasa ("only") beside Sakasa herself ("hide"), turned the other way.
+       */
+      mirror?: 'only' | 'hide';
     }
   | {
       move: string;
@@ -717,7 +760,19 @@ export type CutsceneStep =
    * v1.10 `mirror`: a note on paper, its title written mirror-wise (3-1's "のせて"). v1.10 (3-2) icon "drawing": a
    * crayon picture of the train on drawing paper.
    */
-  | { card: { title: string; button: string; icon?: 'badge' | 'drawing'; mirror?: boolean } }
+  | {
+      card: {
+        title: string;
+        button: string;
+        icon?: 'badge' | 'drawing';
+        /**
+         * v1.11 (5-3) "reflect": `notes` (1 or 2) mirror-written notes on the left move to a silver-framed mirror on the
+         * right, which shows `title` in plain letters ("のせて"), with a little drawing of Sakasa riding the train.
+         */
+        mirror?: boolean | 'reflect';
+        notes?: 1 | 2;
+      };
+    }
   | { emote: Emote }
   /** Switch the camera for the rest of the cutscene (restored afterwards). */
   | { camera: 'cab' | 'chase' | 'side' | 'top' }
@@ -735,6 +790,12 @@ export type CutsceneStep =
   | { fx: 'pop'; id?: string }
   /** v1.10 (3-3): the festival (the moon rises, glowing balls come up from the sea, the lanterns brighten), 2.5 s. */
   | { fx: 'festival' }
+  /**
+   * v1.11 (5-3): mirror `mirror` (a "mirror" gimmick's params.id) turns round in MIRROR_WORLD.fxTurnSeconds s: "back"
+   * turns its iron back to the train (it stops reflecting; Sakasa turning the big mirror over, never breaking it),
+   * "front" turns it to face the train again. It stays so (a fast-forward does it at once).
+   */
+  | { fx: 'mirrorTurn'; mirror: string; to?: 'back' | 'front' }
   /**
    * v1.10 (3-3): the child presses one button during the cutscene (it alone glows; the partner says `say` again every
    * DOOR_REMIND_SECONDS). `fx` "beacon": the press lights the lighthouse. v1.11 (5-2) `fx` "windup": the press winds
@@ -909,7 +970,38 @@ export interface MirrorParams {
   lightHint?: boolean;
   /** What shows in it: "train" (default) and "cutscene" (the figures a cutscene brings on). */
   reflect?: ('train' | 'cutscene')[];
+  /** v1.11 (5-3): its name for cutscenes (fx "mirrorTurn"), a magnet "turn" target and the tests (one per stage). */
+  id?: string;
+  /** v1.11 (5-3): "frame" = a silver and lavender frame on two feet (4-1's "ice" look is the default). */
+  look?: 'ice' | 'frame';
+  /** v1.11 (5-3): false = turned away (its iron back to the train): no reflection, no flash, until turned round. */
+  facing?: boolean;
+  /** v1.11 (5-3): how far it is turned away while not facing (degrees, 30–180; default 180). */
+  turnFrom?: number;
+  /** v1.11 (5-3): its back: an iron plate with Sakasa's pink swirl ("swirl", default) or a plain one ("plain"). */
+  back?: 'swirl' | 'plain';
 }
+
+/**
+ * v1.11 (5-3): params of a "mirror-flip" gimmick (railId, from, to): "かがみの なか". Between the entry gate (a mirror
+ * across the rail at `from`) and the exit gate (at `to`) the 3D view is mirrored left to right (CSS on its box; the
+ * controls never flip). Nothing to choose and nothing to fail at inside (checked at load).
+ */
+export interface MirrorFlipParams {
+  /** Its name (one per stage). */
+  id: string;
+  /** "open" (default): the entry gate ripples open by itself. "whistle": shut until the whistle's signal. */
+  gate?: 'open' | 'whistle';
+  /** What the partner says going in / coming out (the mission's flipIn / flipOut); null says nothing. */
+  line?: string | null;
+  lineOut?: string | null;
+  /** The gates' inner width and height (m; default 14 and 10). */
+  width?: number;
+  height?: number;
+}
+
+/** v1.11 (5-3): params of a "letter-sign" gimmick: a board with up to 8 kana on it, written mirror-wise when `mirror`. */
+export type LetterSignParams = Placement & { text: string; mirror?: boolean };
 
 /**
  * v1.10 (3-1): params of a "whale" actor (placed with onRail beside the rail, under water; reactsTo "whistle"). It

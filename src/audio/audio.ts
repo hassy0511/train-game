@@ -1232,6 +1232,81 @@ export class AudioEngine {
     this.ping(420, 0.78, 0.1, 'sine', 0.09, 760, 0.004, o);
   }
 
+  // ---- v1.11 (5-3 かがみの せかい, PHASE9_CHAPTER5_6 第 6 部 §10). No creaks, no breaking glass, no low hum. ------
+
+  /** Through a mirror gate: "しゃらん… ぷるん" (a gliding sine down, three bells, a soft sparkle of noise). */
+  playMirrorGate(): void {
+    const o = this.out(0.35, 1.3);
+    this.ping(1320, 0, 0.3, 'sine', 0.03, 660, 0.01, o);
+    [1319, 1661, 1976].forEach((f, i) => this.bell(f, 0.03 + i * 0.05, 0.02 * 3, 0.5));
+    this.hiss({ seconds: 0.25, gain: 0.015 * 2, attack: 0.03, filter: 'bandpass', freq: 3000, q: 1.2, dest: o });
+  }
+
+  /** The whistle opens a mirror gate: the glass wobbles like water, "ぽわわん" (a wavering sine and a bell). */
+  playMirrorRipple(): void {
+    const ctx = this.ctx;
+    const o = this.out(0.3, 1.4);
+    if (!ctx || !o) return;
+    const at = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const lfo = ctx.createOscillator();
+    const depth = ctx.createGain();
+    const g = ctx.createGain();
+    osc.frequency.value = 440;
+    lfo.frequency.value = 6;
+    depth.gain.value = 20;
+    lfo.connect(depth);
+    depth.connect(osc.frequency);
+    g.gain.value = 0.0001;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.09, at + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.6);
+    osc.connect(g);
+    g.connect(o);
+    osc.start(at);
+    lfo.start(at);
+    osc.stop(at + 0.65);
+    lfo.stop(at + 0.65);
+    this.bell(1976, 0.1, 0.06, 0.6);
+  }
+
+  /** Into a shut mirror gate: "ぽよん… ちん" (the usual soft boing and a small high ting). */
+  playMirrorBump(): void {
+    this.playBoing();
+    this.ping(2640, 0.3, 0.05, 'triangle', 0.02 * 2, 2640, 0.002, this.out(0.3));
+  }
+
+  /** A phantom pops into pink bubbles: "ぽわん" and four little pops, higher than the map's bubbles. */
+  playPhantomPop(): void {
+    const o = this.out(0.3, 1.5);
+    this.ping(600, 0, 0.15, 'sine', 0.03 * 3, 900, 0.004, o);
+    [780, 1050, 900, 1200].forEach((f, i) => this.ping(f * 1.5, 0.12 + i * 0.06, 0.06, 'sine', 0.035, f * 2.1, 0.003, o));
+  }
+
+  /** On a glass stretch (the first time in a mission): "しゃららん" (three high bells up). */
+  playGlassOn(): void {
+    [2093, 2637, 3136].forEach((f, i) => this.bell(f, i * 0.06, 0.02 * 3, 0.6));
+    this.hiss({ delay: 0.05, seconds: 0.5, gain: 0.012, attack: 0.05, filter: 'highpass', freq: 7500, dest: this.out(0.4) });
+  }
+
+  /**
+   * A mirror turns round: "くるっ" (three quick wooden taps), then "きらーん" when it turns to face the train (`flash`),
+   * else a soft wooden "ぱたん".
+   */
+  playMirrorTurn(flash: boolean): void {
+    const o = this.out(0.2, 1.3);
+    [0, 0.05, 0.1].forEach((d) => this.knock(900, d, 0.08, o));
+    if (flash) this.playMirror();
+    else this.knock(400, 0.3, 0.12, o);
+  }
+
+  /** The card's notes show in the mirror: "しゃらーん" (a broken G major chord of bells over a soft pad). */
+  playLetterReflect(): void {
+    [784, 988, 1175, 1568].forEach((f, i) => this.bell(f, 0.4 + i * 0.1, 0.025 * 2.4, 0.8));
+    const o = this.out(0.4);
+    for (const f of [392, 494, 587]) this.ping(f, 0.4, 0.8, 'triangle', 0.015 * 1.6, f, 0.12, o);
+  }
+
   /** v1.10: a press that only bobs the train (stopped, on the water, on the sea floor): "ぷくぷく", three small bubbles. */
   playBubbles(): void {
     const o = this.out(0.25, 2);
