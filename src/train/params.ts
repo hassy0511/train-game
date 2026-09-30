@@ -455,8 +455,8 @@ export const TUNNEL = {
 
 /**
  * v1.11 (5-1, PHASE9_CHAPTER5_6 第 4 部 §4.7): the night preset. The lights sum to 70% of the day's (hemisphere 0.9 +
- * sun 1.2): a blue moonlight, never darker (第 1 部 §9). `windowGlow`: the cars' warm windows; `beamBoost`: the light's
- * beam shows this much stronger at night.
+ * sun 1.2): a blue moonlight, never darker (第 1 部 §9). `windowGlow`: the cars' warm windows. (The light's
+ * beam is not made stronger at night: it fades out along its length instead, 2026-09-30.)
  */
 export const NIGHT = {
   hemiSky: '#b8c6ff',
@@ -465,7 +465,6 @@ export const NIGHT = {
   moonColor: '#dfe7ff',
   moon: 0.62,
   windowGlow: 0.6,
-  beamBoost: 1.3,
 } as const;
 /**
  * v1.11 (5-1): a hush stretch (つきの はらっぱ, gimmicks "hush"). The light button glows (press = off) from `glowBefore`

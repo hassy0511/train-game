@@ -2643,7 +2643,7 @@ class Train { teleport(railId: string, at: number): void }
 2. **せんろの はりねずみ**（main 1090、`cat` の `look: "hedgehog"`、`glow: true`）: 線路の 上を くんくん かいで あるいて いる（ねては いない）。1030 で「はりねずみさん、どいて〜！ きてき！」。**きてきが 光る**（`glow`）。鳴らすと くるんと まるまって 右へ ころころ → ぽてっと 立つ「ころころ〜 よけて くれた！」。ここは **ふつうの 森**（きてきは ふつうに きく）。
 3. **もりの いけ**（水の 上の 線路 main 1230–1350）: 1150 から もぐるの ボタンが 光る「いけだ！ もぐるを おして！」（R1 で もぐるは 自分の ボタン）。**はすの はっぱ** 2 まい（1270・1315、`lily`）を もぐって くぐる（1210「はすの はっぱ！ もぐって くぐろう」）。1 まいめの 下を もぐると いけの そこで **記録② いけの そこの つきいし**（1295）。うしろからの カメラ 1240–1340。
 4. **たぬきの ふだ**（`sign-whistle-reversed` 1470 左。おどる たぬきの かげと 月と ZZZ の「しーっ」）: 1420 で「たぬきの ふだ… さかさ きてき？」。ライトを つければ ふだの ぐるぐるが 光る（`trace`、なくても よい）。
-5. **さかさ きてきの 森**（`whistle-reversed` main 1480–1680、ひらけた 月あかりの 森）: 1480 で「ここは きてき がまんだよ」。きてきの ボタンの すみに「しーっ」の しるし（月と ZZZ。ライトの しーっ と 同じ 絵）（`data-mark="hush"`。ヒント だけ。押せば 鳴る）。やぶの 中で こだぬき A（1560 左、3 びき）・B（1640 右、2 ひき）が ちょこんと こちらを 見て いる。
+5. **さかさ きてきの 森**（`whistle-reversed` main 1480–1680、ひらけた 月あかりの 森）: 1480 で「ここは きてき がまんだよ」。きてきの ボタンの すみに「しーっ」の しるし（月と ZZZ。ライトの しーっ と 同じ 絵）（`data-mark="hush"`。ヒント だけ。押せば 鳴る）。やぶの 中で こだぬき A（1540 左、3 びき）・B（1640 右、2 ひき）が ちょこんと こちらを 見て いる。
    - 鳴らさない: そのまま 通る。1685 で「しずかに とおれた！ えらい！」
    - 鳴らした: 音が さかさに「…っぴー」と ふくらんで ぷつっ。とまれる きょりの こだぬきが ぴょこぴょこ 線路に よってきて、くるくる おどる（5 秒）。「わわっ、よってきちゃった！ とまって！」、レバーの「とまる」が 光る。とまって まつと こだぬきは やぶへ かえり「ばいばい！ きてきは がまんだね」→ また 走れる（しっぱい なし）。とまらずに 8 m まで 近づくと「ききっ」→ §14
 6. きりかぶえき（右、大きな きりかぶの よこ）に 停車。2 人 のる「わたしたちも のせて！」「どうぞ！ しーっ だよ」→「きてき がまん、できたね！」
@@ -2689,7 +2689,7 @@ class Train { teleport(railId: string, at: number): void }
 - **光**: 半球光（空 `#b8c6ff`・地面 `#34406a`・0.85）＋ 月の 平行光（`#dfe7ff`・0.62、`moon` の 向きから）。合計 1.47 ＝ 昼（0.9 ＋ 1.2 ＝ 2.1）の **70%**（第 1 部 §9「5-1 の 夜は 明るさ 70% より 暗く しない」）。色が 青い ので 夜に 見える。
 - **月**（`environment.moon`）: 空に うすい 黄色の 円板（`fog: false`、描く 回数 1）と まわりの ぼんやりした 光の 輪。顔は 描かない。`azimuth`・`elevation`（度。3-3 の `festival.moon` と 同じ 決まり）・`size`（倍）。値は 絵を 見て 合わせる（スタートから 北を 見て 右上に 見える 所）。
 - **ほたるの つぶ**（`environment.fireflies`）: カメラの まわり `radius` m に `count` この 黄みどりの 点（`#d8ff7a`、`Points` 1 つ、加算、`fog: false`）。1 つずつ ゆっくり ふわふわ・ぽわっと 明るく なって きえる（シェーダの 時間で。描く 回数 1）。0〜400。
-- **電車の 夜の すがた**: 客車の まどが あたたかく 光る（`#ffd88a`、emissive 0.6）。ライトの 光の すじ（`buildLightBeam`）は 夜だけ 1.3 倍 こく。コードの 値 `NIGHT`（§4.7）。
+- **電車の 夜の すがた**: 客車の まどが あたたかく 光る（`#ffd88a`、emissive 0.6）。ライトの 光の すじ（`buildLightBeam`）は 夜も こく しない（1.0 倍）。夜は すじが 先へ いくほど うすれて きえ、上がわも うすい（暗い 空に 明るい 三角が 出ない。2026-09-30 まとめ役。はじめの 案は 1.3 倍）。地面の 光の わは そのまま。コードの 値 `NIGHT`（§4.7）。
 - 駅は `lantern-post`（3-3 の 形）を ホームに 2 本ずつ（`props`）。
 - タイトル画面の 3D（つづきが 5-1 の とき）も 夜。
 
@@ -2728,7 +2728,7 @@ class Train { teleport(railId: string, at: number): void }
   "params": { "id": "sakasa-kiteki", "sign": true, "line": "たぬきの ふだ… さかさ きてき？",
               "rewind": { "railId": "main", "at": 1420 } } }
 
-{ "id": "tanuki-a", "type": "lure", "reactsTo": "whistle", "onRail": { "railId": "main", "at": 1560, "lateral": -6 },
+{ "id": "tanuki-a", "type": "lure", "reactsTo": "whistle", "onRail": { "railId": "main", "at": 1540, "lateral": -6 },
   "params": { "look": "tanuki", "count": 3 } }
 { "id": "tanuki-b", "type": "lure", "reactsTo": "whistle", "onRail": { "railId": "main", "at": 1640, "lateral": 6 },
   "params": { "look": "tanuki", "count": 2 } }
@@ -2786,7 +2786,7 @@ class Train { teleport(railId: string, at: number): void }
 ```ts
 /** v1.11 (5-1): the night preset. Lights sum to 70% of the day's (hemisphere 0.9 + sun 1.2). */
 export const NIGHT = { hemiSky: '#b8c6ff', hemiGround: '#34406a', hemi: 0.85, moonColor: '#dfe7ff', moon: 0.62,
-  windowGlow: 0.6, beamBoost: 1.3 } as const;
+  windowGlow: 0.6 } as const;
 /**
  * v1.11 (5-1): a hush stretch (つきの はらっぱ). The light button glows (press = off) from `glowBefore` m before it while
  * the light is on; sleepers hide after `startleAfter` s of light inside it (or a whistle). The fawn's rewind is
@@ -2878,7 +2878,7 @@ export const AMBIENT_FIREFLIES = { count: 160, radius: 60, max: 400 } as const;
               kurai1 ╲  ほたる① 2180
                     [きりかぶえき main 1990]
                       ╲
-   さかさ きてき 1480–1680（こだぬき A 1560 左・B 1640 右、ふだ 1470）
+   さかさ きてき 1480–1680（こだぬき A 1540 左・B 1640 右、ふだ 1470）
                 ╲ もりの いけ 1230–1350（はすの はっぱ 1270・1315、つきいし 1295）
                   │ はりねずみ 1090
                 [つきみえき main 990]
@@ -2901,7 +2901,7 @@ export const AMBIENT_FIREFLIES = { count: 160, radius: 60, max: 400 } as const;
 | 1100–1230 | 右カーブ R248・30° | −30° | (−247.2, 1172.7) | |
 | 1230–1400 | 直線 | −30° | (−332.2, 1319.9) | **もりの いけ 1230–1350**（水の 上）。はすの はっぱ 1270・1315、**記録② 1295**（いけの そこ） |
 | 1400–1480 | 右カーブ R153・30° | −60° | (−388.2, 1375.8) | たぬきの ふだ 1470（左） |
-| 1480–1700 | 直線 | −60° | (−578.7, 1485.8) | **さかさ きてき 1480–1680**。こだぬき A 1560（左 6、3 びき）・B 1640（右 6、2 ひき） |
+| 1480–1700 | 直線 | −60° | (−578.7, 1485.8) | **さかさ きてき 1480–1680**。こだぬき A 1540（左 6、3 びき）・B 1640（右 6、2 ひき） |
 | 1700–1900 | 左カーブ R191・60° | 0° | (−674.2, 1651.2) | |
 | 1900–2250 | 直線（北） | 0° | (−674.2, 2001.2) | **きりかぶえき 1990**（右）。くらい もり C 2080–。**ほたる① 2180**（右 ＝ `kurai1`） |
 | 2250–2300 | 左カーブ R95.5・30° | +30° | (−661.4, 2049.0) | |
@@ -2938,7 +2938,7 @@ export const AMBIENT_FIREFLIES = { count: 160, radius: 60, max: 400 } as const;
 - **くらい 森**: 木を 線路から 6 m まで 近づけて 密に。青く 光る きのこ `glow-mushroom` を 線路の 両がわ 20 m おき（A に 18 こ・B に 16 こ・C に 38 こ、線路から 4〜9 m。まとめて 描く ので 描く 回数は 1 回の まま）。いきどまりの おくに `firefly-wait`（しげみの まえで まつ ほたる 6 こ、あたたかい 黄みどり）。
 - **木**: `night-tree-a` / `night-tree-b` 約 420 本（線路から 6 m 以上、ホーム側は 14 m 以上、はらっぱと いけの まわりは あける）。`mulberry32` の 種で ならべる（いまの スクリプトと 同じ）。
 - **おおきな き** `great-tree`（高さ 70 m）: (−910.5, 0, 2818.2)、`rotationY` 120（ひろばを 向く）。てっぺんの まわりに ほたるの ぼんやりした 光（`fog: false` の 光の 板。遠くからも 見える 目印）。ひろば `plaza-deck`（木の デッキ）を main 3080–3210 の 左に。
-- **こだぬきの やぶ** `night-bush`: 1560 左・1640 右に 大きめ 2 こずつ。
+- **こだぬきの やぶ** `night-bush`: 1540 左・1640 右に 大きめ 2 こずつ。
 - **そのほか**: `lantern-post` 各駅 2 本、`big-stump`（きりかぶえき）、`log-bridge-end` ×2（まるきばしの 両はし）、`sign-hush`・`sign-whistle-reversed`（自動）、`birdhouse-upside`（300 左 6、`trace: true`、`traceLine`「さかさまの すばこ… サカサかな？」）、`bell-branch`（記録③の 枝、2600 右 10・上 9.8）
 - `flock` は なし（夜の 鳥は 出さない）。
 
@@ -2974,14 +2974,15 @@ export const AMBIENT_FIREFLIES = { count: 160, radius: 60, max: 400 } as const;
 → ライトの 段なら ボタンは 400 から ずっと 光って いる ので、びゅーんでも 光って から 12.9 秒 ある。ふつうなら 28 秒。検査 `startDistance − 22 × crossSeconds ≥ dangerDistance + 20`: ① 100 − 66 ＝ 34 ≥ 32、② 90 − 55 ＝ 35 ≥ 32。こじか ②（main 2780、`startDistance` 90 ＝ 2690、`crossSeconds` 2.5、`dangerDistance` 12 ＝ 2768）も 同じ 計算で、けして いれば びゅーんで のこり 23 m、ついて いれば とまって から 3.8 秒（光り はじめ 2610 から 10.3 秒）。
 
 ### 6.2 こだぬき（とまれる きょり ＝ v² ÷ 6 ＋ 2v ＋ 8）
-| 速さ | とまれる きょり | A（1560）が 線路に 出るのは 先頭が | B（1640）が 線路に 出るのは 先頭が |
+| 速さ | とまれる きょり | A（1540）が 線路に 出るのは 先頭が | B（1640）が 線路に 出るのは 先頭が |
 |---|---|---|---|
-| とまって いる 0 | 8 m | 1552 より 手前 | 1632 より 手前 |
-| ゆっくり 5 | 22.2 m | 1537.8 より 手前 | 1617.8 より 手前 |
-| ふつう 10 | 44.7 m | 1515.3 より 手前 | 1595.3 より 手前 |
-| はやい 15 | 75.5 m | 1484.5 より 手前 | 1564.5 より 手前 |
+| とまって いる 0 | 8 m | 1532 より 手前 | 1632 より 手前 |
+| ゆっくり 5 | 22.2 m | 1517.8 より 手前 | 1617.8 より 手前 |
+| ふつう 10 | 44.7 m | 1495.3 より 手前 | 1595.3 より 手前 |
+| はやい 15 | 75.5 m | 1464.5 より 手前（区間の 外なので 出ない） | 1564.5 より 手前 |
 | びゅーん 22 | 132.7 m | 出ない（区間の 入り口 1480 でも 80 m） | 1507.3 より 手前 |
 → 線路に 出た むれは、2 秒 おくれて レバーを「とまる」に しても かならず 手前で とまれる。近すぎる むれは 出て こない（「鳴らしたら いきなり ききっ」は おきない）。おどりは 5 秒、とまって から まつのは 長くて 約 5 秒。
+- **A を 1540 に した わけ**（2026-09-30 まとめ役。はじめは 1560）: 線路に 出て おどる むれに 電車が とどくのは、よってくる 0.8 秒 ＋ おどり 5 秒 の あいだに 先頭が 着く とき だけ（ふつう 10 m/s なら 鳴らした 所から 約 66 m 以内）。1560 だと 入り口（1480〜1495）で ふつうで 鳴らしても おどりが おわって から 着く ので「とまらずに 近づくと ききっ」が おきない。1540 なら 入り口 ＋ 0〜15 m で ふつうで 鳴らすと A が 出て（44.7 m より 遠い）、とまらなければ `lure` の やわらかい しっぱいに なる。B（1640）は 遠い ので おどって いる あいだに 電車は 着かない。はやい（15 m/s）では A は 出ない（75.5 m より 近い）。おどりの 長さ（5 秒）と ほかの きまりは そのまま。
 
 ### 6.3 ほたるの 分かれ道
 | 分かれ道 | よべる 所（きてきが 光る） | ライトで 7 m/s | ライトで びゅーん 15.4 m/s | 矢印（60 m 手前）・ロック（5 m 手前） |
@@ -3094,7 +3095,7 @@ main 2600・右 10・上 9 → はなれ 13.45 m → 光る 所 2520–2586.6、
     { "id": "harinezumi", "type": "cat", "reactsTo": "whistle", "onRail": { "railId": "main", "at": 1090, "heightFromRail": 0 },
       "params": { "look": "hedgehog", "glow": true, "wakeDistance": 60, "dangerDistance": 8, "fleeLateral": 5, "fleeSeconds": 1.6,
                   "say": "はりねずみさん、どいて〜！ きてき！", "woke": "ころころ〜 よけて くれた！" } },
-    { "id": "tanuki-a", "type": "lure", "reactsTo": "whistle", "onRail": { "railId": "main", "at": 1560, "lateral": -6 },
+    { "id": "tanuki-a", "type": "lure", "reactsTo": "whistle", "onRail": { "railId": "main", "at": 1540, "lateral": -6 },
       "params": { "look": "tanuki", "count": 3 } },
     { "id": "tanuki-b", "type": "lure", "reactsTo": "whistle", "onRail": { "railId": "main", "at": 1640, "lateral": 6 },
       "params": { "look": "tanuki", "count": 2 } },
@@ -3390,7 +3391,7 @@ main 2600・右 10・上 9 → はなれ 13.45 m → 光る 所 2520–2586.6、
 - `src/ui/ability-buttons.ts`・`src/ui/whistle-button.ts`: `setMark()`（月の しるし SVG を ライトと きてきの 両方で 使う。ピンクの ぐるぐるは 5-1 では 使わない）。`src/ui/styles.css`: しるしの 位置（丸の 右上、24 px）、左利きの 配置でも 同じ
 - `src/view/three/environment.ts`: `night`（光・月・ほたるの つぶ）
 - `src/view/three/night.ts`（新）: うさぎが かくれる、こじか、こだぬき、はりねずみ、分かれ道の ほたる（`Points` 1 つ）、にせの ちょうちんが きえる、おおきな きの 光、客車の まどの 光。`ThreeSceneView.ts` から よぶ
-- `src/view/three/abilities.ts`: 夜は ライトの すじを `NIGHT.beamBoost` 倍
+- `src/view/three/abilities.ts`: 夜は ライトの すじを 先で うすれる 形に（こく しない）
 - `src/view/three/night-placeholders.ts`（新）＋ `models.ts` の 仮の 形の 列に 1 行。`src/view/placeholder-sizes.ts` に 大きさ
 - `src/audio/audio.ts`・`catalog.ts`: §10 の 9 つ
 - `src/core/stage-events.ts`: §4.10 の できごと、`fail.reason` の `glare`・`lure`

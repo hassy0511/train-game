@@ -20,7 +20,7 @@ import {
 import type { StageEvent } from '../../core/stage-events';
 import type { RailNetwork } from '../../rail/types';
 import type { StageData } from '../../stage/types';
-import { NIGHT, TRAIN } from '../../train/params';
+import { TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
 import type { CameraFx, SceneView } from '../SceneView';
 import { cameraTarget, makeCameraTarget, orbitAngle, orbitTarget, smoothCamera, type CameraMode, type OrbitCamera } from '../camera-rig';
@@ -553,16 +553,17 @@ export class ThreeSceneView implements SceneView {
     this.lookChanged();
   }
 
-  /** v1.11 (5-1): what follows the look's lighting: at night the cars' windows glow and the light's beam is stronger. */
+  /**
+   * v1.11 (5-1): what follows the look's lighting: at night the cars' windows glow, and the light's beam fades out
+   * along its length (no bright wedge against the dark sky; by day it is drawn as it always was).
+   */
   private lookChanged(): void {
     const night = this.environment.lighting === 'night';
     this.night?.setNight(night);
-    this.lightBeam.traverse((o) => {
-      const m = (o as Mesh).material as MeshBasicMaterial | undefined;
-      if (!m || !(o as Mesh).isMesh) return;
-      const base = (o.userData.baseOpacity ??= m.opacity) as number;
-      m.opacity = Math.min(1, base * (night ? NIGHT.beamBoost : 1));
-    });
+    const day = this.lightBeam.getObjectByName('light-beam-day');
+    const dark = this.lightBeam.getObjectByName('light-beam-night');
+    if (day) day.visible = !night;
+    if (dark) dark.visible = night;
   }
 
   /** v1.11: the look's lighting now ("day", "evening", "night", "cave"; a test hook). */

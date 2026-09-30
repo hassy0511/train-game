@@ -219,7 +219,9 @@ export function buildLightBeam(): Object3D {
     cone,
     new MeshBasicMaterial({ color: '#fff3b0', transparent: true, opacity: 0.05, blending: AdditiveBlending, depthWrite: false, side: DoubleSide }),
   );
+  beam.name = 'light-beam-day';
   beam.position.set(0, 3.3, 6.3);
+  group.add(beam, buildNightBeam(length));
   const pool = new Mesh(
     new CircleGeometry(1, 32),
     new MeshBasicMaterial({ color: '#fff0a0', transparent: true, opacity: 0.35, blending: AdditiveBlending, depthWrite: false }),
@@ -227,9 +229,36 @@ export function buildLightBeam(): Object3D {
   pool.rotation.x = -Math.PI / 2;
   pool.scale.set(4.5, 14, 1);
   pool.position.set(0, 0.25, 26);
-  group.add(beam, pool);
+  group.add(pool);
   group.visible = false;
   return group;
+}
+
+/**
+ * v1.11 (5-1): the beam as it is drawn at night: the same cone, but fading out along its length (gone by its far end)
+ * and fainter on its upper side, so against a dark sky it never draws a bright wedge above the horizon. Colours by
+ * vertex (additive: dark = nothing). Hidden by day (the day's beam is kept exactly as it was).
+ */
+function buildNightBeam(length: number): Mesh {
+  const cone = new ConeGeometry(6, length, 24, 10, true);
+  cone.translate(0, -length / 2, 0);
+  const pos = cone.getAttribute('position');
+  const colors = new Float32Array(pos.count * 3);
+  const base = new Color('#fff3b0').multiplyScalar(0.05);
+  for (let i = 0; i < pos.count; i++) {
+    // Before turning: −y runs from the apex (0) to the far end (−length); +z is the cone's upper side once turned.
+    const t = Math.min(1, -pos.getY(i) / length);
+    const upper = pos.getZ(i) > 0 ? Math.max(0.15, 1 - pos.getZ(i) / 3) : 1;
+    const k = (1 - t) ** 2 * upper;
+    colors.set([base.r * k, base.g * k, base.b * k], i * 3);
+  }
+  cone.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  cone.rotateX(-Math.PI / 2 + 0.08);
+  const beam = new Mesh(cone, new MeshBasicMaterial({ vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, side: DoubleSide }));
+  beam.name = 'light-beam-night';
+  beam.position.set(0, 3.3, 6.3);
+  beam.visible = false;
+  return beam;
 }
 
 /** The jump device on the lead car's roof (shown once the jump is learned). */

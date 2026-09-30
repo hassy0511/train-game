@@ -63,7 +63,7 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
 ### 見た目の 環境（`EnvironmentState`、2026-09-30 PHASE9 PR2b）
 - `src/view/three/environment-state.ts`。ステージ JSON の `environment` から 画面の「見た目の 環境」を 作る 入れもの。`ThreeSceneView.applyEnvironment(env)`（中で `EnvironmentState.apply(env)`）で **何度でも** かえられる（6-2 の 区画ごとの 見た目、5-1 の 昼 ⇄ 夜。PHASE9_CHAPTER5_6 第 3 部 B6.1）。一つ一つの 部品の 作り方は `environment.ts`
 - 中身: 背景の 色・空の ドーム・霧・カメラの 遠い 面（霧の far ＋ 40 m、最大 600 m。空の ドームも その 内がわに ちぢめる）・光（半球光と 太陽）・地面（水の ある ステージは 池の 穴あき）・星・雲海・ふる 雪・**月**（`environment.moon`、空の ドームに のる 板 1 まい、顔なし）・**ほたるの つぶ**（`environment.fireflies`、`Points` 1 つ、カメラの まわりで シェーダが ふわふわ させる）（どちらも 2026-09-30 PR2c）。**あとから 来る もの の 席**: `landmark`（6-2）。いまは 何も 作らない
-- 夜（`lighting: "night"`、PR2c）: 半球光 `#b8c6ff`／`#34406a`・0.85 ＋ 月の 平行光 `#dfe7ff`・0.62（`moon` の 向きから）＝ 昼の 70%（`params.ts` の `NIGHT`）。夜は 客車の まどが 光り、ライトの すじが 1.3 倍（`night.ts`・`ThreeSceneView.lookChanged`）
+- 夜（`lighting: "night"`、PR2c）: 半球光 `#b8c6ff`／`#34406a`・0.85 ＋ 月の 平行光 `#dfe7ff`・0.62（`moon` の 向きから）＝ 昼の 70%（`params.ts` の `NIGHT`）。夜は 客車の まどが 光り、ライトの すじは 夜用の 先で うすれる 円すいに かわる（こく しない。`night.ts`・`abilities.ts` の `buildLightBeam`・`ThreeSceneView.lookChanged`）
 - ゲームの 中で かえる のは 寸劇の `{ "environment": { … }, "seconds" }`（STAGE_SCHEMA §18）: `main.ts` が ステージの `environment` に 書いた 欄を 上書きして `SceneView.applyEnvironment` を よぶ（夜空色の フェード `#look-fade` の うしろで。まわりの 音も かえる）。0-1 は 入りで 昼 → 夜、出で 夜 → 昼
 - きまり:
   - 空・霧・2 つの 光は ずっと 同じ もの（ほかの しかけ、たとえば 村の 夕方・雪の トンネル・かがみ が つかんで いる ので）。`apply` は 色や 強さを 入れなおす だけ
