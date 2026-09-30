@@ -1,5 +1,5 @@
 import type { Quaternion, Vector3 } from 'three';
-import type { AbilityId, Emote } from '../stage/types';
+import type { AbilityId, Emote, EnvironmentDef } from '../stage/types';
 import { Emitter } from './events';
 
 /** Things that happened in the game that the view (and audio) may want to show. */
@@ -47,7 +47,11 @@ export type StageEvent =
         // v1.10 (4-2): "ぽすっ" into a snow wall without the snowplow (soft: a snowy window, the wiper)
         | 'plow'
         // v1.10 (4-3): caught by the snow wave, "もふっ" (soft: wrapped in soft snow)
-        | 'snow';
+        | 'snow'
+        // v1.11 (5-1): a fawn gazing at the light stood on the rail, "ききっ… ぴょーん" (soft)
+        | 'glare'
+        // v1.11 (5-1): little tanukis dancing on the rail, "ききっ" (soft)
+        | 'lure';
     }
   /**
    * Back to a station after a failure (or a resume). `boarded`: passengers who already got on this run, per station
@@ -174,6 +178,39 @@ export type StageEvent =
   | { type: 'chase'; state: 'run' | 'caught' | 'safe' | 'off' }
   /** v1.10 (4-3): the train front went into a tunnel (`index` in gimmicks[]) or came out (null). */
   | { type: 'tunnel'; index: number | null }
+  /**
+   * v1.11 (PR2c): a cutscene changed the look: the stage's own environment with `env` written over it (`{}`: the stage's
+   * own again), through a short fade of `seconds` (0: at once, a fast-forward).
+   */
+  | { type: 'environment'; env: Partial<EnvironmentDef>; seconds: number }
+  /** v1.11 (5-1): the train front came near hush stretch `id` (the moon mark; its line). */
+  | { type: 'hush:near'; id: string }
+  /** v1.11 (5-1): the light or the whistle startled the sleepers of hush stretch `id` (`railId` `from`–`to`): they hide. */
+  | { type: 'hush:startle'; id: string; railId: string; from: number; to: number }
+  /** v1.11 (5-1): hush stretch `id` was passed without startling anyone. */
+  | { type: 'hush:quiet'; id: string }
+  /** v1.11 (5-1): fawn `id` stopped in the middle of the rail, gazing at the light; `free`: it hopped off again. */
+  | { type: 'glare:freeze'; id: string }
+  | { type: 'glare:free'; id: string }
+  /**
+   * v1.11 (5-1): lure group `id` (little tanukis): back in its bush ("idle"), hopping there ("hop", too near to come),
+   * coming onto the rail ("come", `seconds`), dancing there ("dance"), going back ("back"), or skipping off after the
+   * train stopped close by ("bump").
+   */
+  | { type: 'lure'; id: string; state: 'idle' | 'hop' | 'come' | 'dance' | 'back' | 'bump'; seconds?: number }
+  /** v1.11 (5-1): lure groups came onto the rail to dance (a reversed whistle), or went home with the train stopped. */
+  | { type: 'lure:come'; ids: string[] }
+  | { type: 'lure:bye'; ids: string[] }
+  /**
+   * v1.11 (5-1): the fireflies of fork `junctionId`: whistled up ("call"), lining the true way ("home"), lost over the
+   * fork (a fake one, "lost"), or drifting away up ahead after the train passed ("away").
+   */
+  | { type: 'fireflies:call'; junctionId: string }
+  | { type: 'fireflies:home'; junctionId: string }
+  | { type: 'fireflies:lost'; junctionId: string }
+  | { type: 'fireflies:away'; junctionId: string }
+  /** v1.11 (5-1): the light saw through fake fork `junctionId`: Sakasa's pink lanterns go out ("ぽしゅん"). */
+  | { type: 'fake:out'; junctionId: string }
   /** v1.7: a countdown started ("run"), got low, was beaten ("safe"), ran out ("up") or was put away ("off"). */
   | { type: 'countdown'; state: 'run' | 'low' | 'safe' | 'up' | 'off' };
 

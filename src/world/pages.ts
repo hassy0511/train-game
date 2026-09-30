@@ -56,17 +56,21 @@ export function laidLinks(world: WorldFile, cleared: string[]): string[] {
 }
 
 /**
- * The save's mapLinks of a child who has seen everything these clears open (あいことば version 2 carries no rails
- * and rebuilds them from the clears, docs/PHASE8_CHAPTER3_4.md 第 1 部 §5): every laid rail, and "finale:<id>" for
- * a done chapter whose end has no rail. A chapter's closing rail is left out while the chapter is not done (the
- * map draws it but does not save it then), so its finale still plays when the chapter is really done.
+ * The save's mapLinks of a child who has seen everything these clears open (あいことば versions 2 and 3 carry no
+ * rails and rebuild them from the clears, docs/PHASE8_CHAPTER3_4.md 第 1 部 §5): every laid rail, and
+ * "finale:<id>" for a done chapter whose end has no rail. A chapter's closing rail is left out while the chapter is
+ * not done (the map draws it but does not save it then), so its finale still plays when the chapter is really done.
+ * `maxPage`: only what was on the map when the code's version came out (docs/PHASE9_CHAPTER5_6.md 第 1 部 §7.3): a
+ * rail with an end on a later page, or the end of a chapter on a later page, is not seen yet, so a child typing in
+ * a version 2 code still watches the rail grow through the gate to page 3 once.
  */
-export function seenMapLinks(world: WorldFile, cleared: string[]): string[] {
+export function seenMapLinks(world: WorldFile, cleared: string[], maxPage = Infinity): string[] {
   const done = world.chapters.filter((c) => chapterDone(world, c, cleared));
   const waiting = new Set(world.chapters.filter((c) => c.finale?.link && !done.includes(c)).map((c) => c.finale?.link));
+  const within = (key: string): boolean => key.split('>').every((id) => (nodePage(world, id) ?? Infinity) <= maxPage);
   return [
-    ...laidLinks(world, cleared).filter((key) => !waiting.has(key)),
-    ...done.filter((c) => c.finale && !c.finale.link).map((c) => `finale:${c.id}`),
+    ...laidLinks(world, cleared).filter((key) => !waiting.has(key) && within(key)),
+    ...done.filter((c) => c.finale && !c.finale.link && c.page <= maxPage).map((c) => `finale:${c.id}`),
   ];
 }
 

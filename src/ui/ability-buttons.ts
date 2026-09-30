@@ -28,8 +28,13 @@ export interface PlowButton {
 export interface LightButton {
   show(): void;
   setOn(on: boolean): void;
-  /** Something ahead waits for the light (a butterfly, a reversed sign that fooled the train before). */
-  setGlow(on: boolean): void;
+  /**
+   * Something ahead waits for the light (a butterfly, a reversed sign that fooled the train before). v1.11 (5-1)
+   * `kind` (data-glow-for): "light" (yellow: the light helps here) or "dim" (the hush glow: pressing puts it out).
+   */
+  setGlow(on: boolean, kind?: 'light' | 'dim'): void;
+  /** v1.11 (5-1): the hush mark in the corner (a hint), or none. */
+  setMark(mark: 'hush' | null): void;
 }
 
 const JUMP_ICON = `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
@@ -156,6 +161,21 @@ export interface RocketButton {
   set(state: RocketButtonState): void;
 }
 
+/**
+ * v1.11 (5-1): the hush mark (a crescent moon and "ZZZ", no face) in the button's top right corner: "ここは しずかに".
+ * A hint only: the button works as always (PHASE9_0 §6). The light and the whistle share it.
+ */
+export const HUSH_MARK = `<span class="hush-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M11 3.5a8.5 8.5 0 1 0 8.2 10.8A7 7 0 0 1 11 3.5z" fill="#ffe27a"/><path d="M14.5 4.5h4l-4 4h4M18 10.5h3l-3 3h3" fill="none" stroke="#ffe27a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+
+/** Sets or clears the hush mark on a round button (data-mark). */
+export function markButton(button: HTMLElement, mark: 'hush' | null): void {
+  if (mark === null) {
+    if (button.dataset.mark !== undefined) delete button.dataset.mark;
+    return;
+  }
+  if (button.dataset.mark !== mark) button.dataset.mark = mark;
+}
+
 function roundButton(root: HTMLElement, id: string, label: string, icon: string, ring: string): HTMLButtonElement {
   const button = document.createElement('button');
   button.id = id;
@@ -258,6 +278,7 @@ export function createPlowButton(root: HTMLElement, onPress: () => void): PlowBu
 /** Light: a toggle. The face lights up while on. */
 export function createLightButton(root: HTMLElement, onToggle: () => void): LightButton {
   const button = roundButton(root, 'light', 'ライト', LIGHT_ICON, 'is-light');
+  button.querySelector('.face')?.insertAdjacentHTML('beforeend', HUSH_MARK);
   button.dataset.on = '0';
   button.addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -271,9 +292,14 @@ export function createLightButton(root: HTMLElement, onToggle: () => void): Ligh
       button.dataset.on = on ? '1' : '0';
       button.setAttribute('aria-pressed', on ? 'true' : 'false');
     },
-    setGlow(on): void {
+    setGlow(on, kind = 'light'): void {
       const v = on ? '1' : '0';
       if (button.dataset.glow !== v) button.dataset.glow = v;
+      const k = on ? kind : '';
+      if (button.dataset.glowFor !== k) button.dataset.glowFor = k;
+    },
+    setMark(mark): void {
+      markButton(button, mark);
     },
   };
 }

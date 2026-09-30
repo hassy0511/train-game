@@ -20,7 +20,7 @@ interface Measure {
   joints?: number;
 }
 
-const SONG_IDS = ['title', 'town', 'valley', 'forest', 'meadow', 'volcano', 'hurry', 'sky', 'umi', 'kawa', 'hoshimatsuri', 'koori', 'mura', 'yuki'];
+const SONG_IDS = ['title', 'town', 'valley', 'forest', 'meadow', 'volcano', 'hurry', 'sky', 'umi', 'kawa', 'hoshimatsuri', 'koori', 'mura', 'yuki', 'yoru'];
 
 test('sounds page: every effect plays, is heard and does not clip; the running sound on each track', async ({ page }) => {
   const errors: string[] = [];

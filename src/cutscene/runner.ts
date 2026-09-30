@@ -58,6 +58,9 @@ export class CutsceneSkip {
   }
 }
 
+/** v1.11: how long a look change (day ⇄ night) takes by default (s): the fade down and back up. */
+const ENVIRONMENT_SECONDS = 1.2;
+
 /** How long a cut stretch takes to fall into the sea (s), v1.7 style "fall". */
 const CUT_FALL_SECONDS = 1.8;
 
@@ -130,6 +133,11 @@ export async function runCutscene(
       await ports.unlock(step.unlock);
     } else if ('sky' in step) {
       events.post({ type: 'sky', sky: step.sky, seconds: step.seconds ?? 3 });
+    } else if ('environment' in step) {
+      // v1.11 (PR2c): day ⇄ night (the look changes behind a short fade).
+      const seconds = step.seconds ?? ENVIRONMENT_SECONDS;
+      events.post({ type: 'environment', env: step.environment, seconds });
+      if (seconds > 0) await race(ports.wait(seconds));
     }
   }
   // Skipped during the last step: nothing left to fast-forward, but the line or caption showing goes away.
@@ -138,7 +146,7 @@ export async function runCutscene(
 
 /**
  * Applies at once only what the steps leave behind (PHASE7_FINISH §4 item 3): cut rails, learned abilities, and the
- * figures they bring on or take off, each where it ends up, and v1.10 (4-2) the evening sky. Lines, waits, cards, captions, cameras and effects are
+ * figures they bring on or take off, each where it ends up, and v1.10 (4-2) the evening sky, v1.11 the look (day ⇄ night). Lines, waits, cards, captions, cameras and effects are
  * left out (the caller gives the usual camera back). Used for the cutscenes before a resumed mission, and for the
  * rest of one skipped with "▶▶".
  */
@@ -179,6 +187,8 @@ export function fastForwardCutscene(
       events.post({ type: 'festival', instant: true });
     } else if ('sky' in step) {
       events.post({ type: 'sky', sky: step.sky, seconds: 0 });
+    } else if ('environment' in step) {
+      events.post({ type: 'environment', env: step.environment, seconds: 0 });
     }
   }
   for (const spawn of spawned.values()) events.post(spawn);

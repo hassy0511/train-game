@@ -7,7 +7,7 @@ import { addToProgress, loadProgress, setResume, type Resume } from './core/prog
 import { ABILITY_NAMES, abilityInUse, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
 import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/loader';
-import type { AbilityId, GimmickDef, Vec3 } from './stage/types';
+import type { AbilityId, EnvironmentDef, GimmickDef, Vec3 } from './stage/types';
 import type { RunSurface } from './audio/run-sound';
 import {
   DOOR_REMIND_SECONDS,
@@ -324,6 +324,11 @@ async function boot(): Promise<void> {
   // v1.10 (4-3): tunnels (dark inside; the light button glows for them).
   const tunnels = new TunnelSystem(stage.file.gimmicks, train);
   const hasIce = iceZones(stage.file.gimmicks).length > 0 || thinIceZones(stage.file.gimmicks).length > 0;
+  // v1.11 (5-1): a stage with the night's mechanisms (their test hooks are written every frame).
+  const hasNight =
+    stage.file.gimmicks.some((g) => g.type === 'hush' || g.type === 'whistle-reversed') ||
+    stage.file.junctions.some((j) => j.fireflies) ||
+    stage.file.actors.some((a) => a.type === 'lure' || (a.params as { glare?: boolean } | undefined)?.glare === true);
   const whistle = new Whistle();
   const audio = new AudioEngine();
   // The island's quiet sound around the train (from the first tap on; under the title too). v1.10 (3-3): the sea's
@@ -397,7 +402,8 @@ async function boot(): Promise<void> {
       audio.unlock();
       if (pressWanted('whistle') === false) return;
       if (whistle.trigger()) {
-        audio.playWhistle();
+        // v1.11 (5-1): in a whistle-reversed stretch it sounds reversed ("…っぴー"; it still works: PHASE9_0 §6).
+        audio.playWhistle({ reversed: runner?.whistleReversed ?? false });
         // v1.10 (3-3): in the dark the glowing motes flash ("ちりりん").
         const fog = zoneAt(stage.file.gimmicks, 'fog', train.state.railId, train.frontS);
         if (fog && typeof fog.params?.color === 'string') audio.playGlimmer();
@@ -495,6 +501,34 @@ async function boot(): Promise<void> {
   /** What a fall fades to: black, a white cloud (1-3) or a green leaf (2-1). */
   const FALL_COLORS = { dark: '#000000', cloud: '#ffffff', leaf: '#d6efb4', water: '#cdeefe', snow: '#f2f7fc' } as const;
   const fade = createFade(uiEl, FALL_COLORS[stage.file.environment.fall ?? 'dark']);
+  /**
+   * v1.11 (PR2c): a cutscene changes the look (day ⇄ night): the stage's own environment with the step's fields written
+   * over it, behind a short dusk-blue fade (at once when fast-forwarded). The sound around follows it.
+   */
+  const lookFade = createFade(uiEl, '#1b2350', 'look-fade');
+  app.dataset.lighting = stage.file.environment.lighting;
+  const hasVolcanoProp = stage.file.props.some((p) => p.model === 'volcano');
+  const applyLook = (env: Partial<EnvironmentDef>): void => {
+    const look = { ...stage.file.environment, ...env };
+    view.applyEnvironment(look);
+    audio.setAmbience(look.ambience ?? null, hasVolcanoProp);
+    app.dataset.lighting = look.lighting;
+  };
+  let lookChanges = 0;
+  events.on('event', (e) => {
+    if (e.type !== 'environment') return;
+    lookChanges += 1;
+    app.dataset.lookChanges = String(lookChanges);
+    if (e.seconds <= 0) {
+      applyLook(e.env);
+      return;
+    }
+    void (async () => {
+      await lookFade(true, e.seconds * 0.45);
+      applyLook(e.env);
+      await lookFade(false, e.seconds * 0.45);
+    })();
+  });
   const doorButton = createDoorButton(actionButtons);
   const countdownPanel = createCountdownPanel(uiEl);
   // Speed lines at the screen edges while the rocket burns (CSS, shown by #app[data-burn="1"]).
@@ -806,6 +840,9 @@ async function boot(): Promise<void> {
     const ability = e.junction.needs;
     const side = e.default === 'left' ? 'right' : 'left';
     ui.junction.show({ ...e, needs: ability ? { side, ability, has: abilities.has(ability) } : undefined, bubbles: e.junction.bubbles });
+    // v1.11 (5-1): the fireflies already showed the true way (called before the arrows came): its arrow lights.
+    const shown = runner?.revealedSide(e.junction.id);
+    if (shown) ui.junction.reveal(shown);
   });
   train.events.on('junctionLocked', () => ui.junction.hide());
   train.events.on('junctionPassed', () => ui.junction.hide());
@@ -1005,13 +1042,15 @@ async function boot(): Promise<void> {
       lightButton.setGlow(cutscenePress.ability === 'light');
       ui.whistle.setGlow(cutscenePress.ability === 'whistle');
     } else if (runner) {
-      lightButton.setGlow(runner.lightHint);
+      // v1.11 (5-1): yellow for "the light helps here"; the hush glow ("dim", press = off) while it is on by sleepers.
+      lightButton.setGlow(runner.lightHint || runner.lightOffHint, runner.lightOffHint ? 'dim' : 'light');
       jumpButton.setHopper(runner.hopperId !== '');
       const hint = runner.phase === 'driving' ? runner.leverHintSpeed : null;
       // The notch the partner names (ゆっくり): judged on the plain notch speeds, so the light does not change it.
       const silk = hint === null ? null : (fastestNotchUnder(hint, 1) ?? fastestNotchUnder(hint, train.speedScale));
       // v1.10 (4-3): the snow wave close behind a slow train: "はやい" glows.
-      ui.lever.setHint(runner.chaseLeverHint ? FAST_NOTCH : runner.phase === 'driving' && iceNotch !== null ? iceNotch : silk);
+      // v1.11 (5-1): tanukis dancing on the rail ahead: "とまる" glows.
+      ui.lever.setHint(runner.chaseLeverHint ? FAST_NOTCH : runner.lureStopHint ? STOP_NOTCH : runner.phase === 'driving' && iceNotch !== null ? iceNotch : silk);
     } else if (hasIce) ui.lever.setHint(iceNotch);
 
     const pose = train.getPose();
@@ -1124,6 +1163,22 @@ async function boot(): Promise<void> {
       app.dataset.whales = runner.whaleStates;
       app.dataset.actors = runner.actorStates;
       app.dataset.bubbleRevealed = runner.bubbleRevealedId;
+      if (hasNight) {
+        // v1.11 (5-1) test hooks (PHASE9_CHAPTER5_6 第 4 部 §4.10). Counts only go up.
+        app.dataset.hush = runner.hushStatus;
+        app.dataset.hushStartles = String(runner.hushStartles);
+        app.dataset.fawns = runner.fawnStates;
+        app.dataset.glareFreezes = String(runner.glareFreezes);
+        app.dataset.reversed = runner.whistleReversed ? '1' : '0';
+        app.dataset.lure = runner.lureStatus;
+        app.dataset.lureCalls = String(runner.lureCalls);
+        app.dataset.lureDances = String(runner.lureDances);
+        app.dataset.fireflies = runner.fireflyStates;
+        app.dataset.fireflyCalls = String(runner.fireflyCalls);
+      }
+      // The hush mark (a moon and ZZZ): a hint only; both buttons work as always (PHASE9_0 §6).
+      lightButton.setMark(runner.lightMark ? 'hush' : null);
+      ui.whistle.setMark(runner.whistleMark ? 'hush' : null);
       // Under a card (a cutscene's own, or a learned ability's) it waits: the card is the child's tap.
       skipButton?.setVisible(clearedBefore && !paused && runner.canSkip && !cardUp());
     }
@@ -1217,7 +1272,12 @@ async function boot(): Promise<void> {
   /** v1.10 (3-2, 3-3): the duck family ("dino-small" look "duck") and sea turtles ("cat" look "turtle"). */
   const ducks = new Set(stage.file.actors.filter((a) => a.type === 'dino-small' && lookOf(a) === 'duck').map((a) => a.id));
   const turtles = new Set(stage.file.actors.filter((a) => a.type === 'cat' && lookOf(a) === 'turtle').map((a) => a.id));
+  /** v1.11 (5-1): fawns ("dino-small" look "fawn") and hedgehogs ("cat" look "hedgehog"): their own sounds. */
+  const fawns = new Set(stage.file.actors.filter((a) => a.type === 'dino-small' && lookOf(a) === 'fawn').map((a) => a.id));
+  const hedgehogs = new Set(stage.file.actors.filter((a) => a.type === 'cat' && lookOf(a) === 'hedgehog').map((a) => a.id));
   let lastFailReason: string | null = null;
+  let fails = 0;
+  const fakeOut = new Set<string>();
   /** v1.10 (3-1): jump pads that are a whale's back (it surfaces with a song and throws the train with its spout). */
   const whalePads = new Set(
     stage.file.gimmicks.flatMap((g, i) => (g.type === 'jump-pad' && (g.params as { look?: string } | undefined)?.look === 'whale' ? [i] : [])),
@@ -1398,7 +1458,22 @@ async function boot(): Promise<void> {
       app.dataset.rocks = [...rockStates].map(([id, state]) => `${id}:${state}`).join(',');
     }
     // v1.7 (2-3): rocks, seabirds and the falling bridge.
-    if (e.type === 'fail') lastFailReason = e.reason;
+    if (e.type === 'fail') {
+      lastFailReason = e.reason;
+      // Test hooks (v1.11): the last fail's reason, and how many fails so far (only goes up).
+      fails += 1;
+      app.dataset.failReason = e.reason;
+      app.dataset.fails = String(fails);
+    }
+    // v1.11 (5-1): the fake firefly forks the light has seen through this try (a test hook).
+    if (e.type === 'rewind' && fakeOut.size > 0) {
+      fakeOut.clear();
+      app.dataset.fakeOut = '';
+    }
+    if (e.type === 'fake:out') {
+      fakeOut.add(e.junctionId);
+      app.dataset.fakeOut = [...fakeOut].join(',');
+    }
     if (e.type === 'rock' && snowbirds.has(e.id)) {
       // v1.10 (4-1): little birds in a row: "ぴよぴよ" as they line up and set off, wings flapping when surprised.
       if (e.state === 'wobble' || e.state === 'roll') audio.playSnowbirds();
@@ -1428,6 +1503,15 @@ async function boot(): Promise<void> {
     // v1.10 (4-2): the ski jump folds down ("ばたん！"), the lanterns come on at dusk.
     if (e.type === 'pad' && e.visible && skiPads.has(e.index)) audio.playPadFlop();
     if (e.type === 'sky' && e.seconds > 0) audio.playLanterns();
+    // v1.11 (5-1): the night forest's small sounds.
+    if (e.type === 'hush:startle') audio.playHushStartle();
+    if (e.type === 'actor:state' && fawns.has(e.id) && e.state === 'blink') audio.playFawnBlink();
+    if (e.type === 'actor:state' && fawns.has(e.id) && (e.state === 'hop' || e.state === 'bump')) audio.playFawnHop();
+    if (e.type === 'actor:state' && hedgehogs.has(e.id) && (e.state === 'awake' || e.state === 'flee')) audio.playHedgehogRoll();
+    if (e.type === 'lure:come') audio.playLureCome();
+    if (e.type === 'lure' && e.state === 'dance') audio.playLureDance();
+    if (e.type === 'fireflies:call') audio.playFireflyWake();
+    if (e.type === 'fake:out') audio.playFakeOut();
     // Test hooks: the evening sky, the swirl marks shown by the light.
     if (e.type === 'sky') app.dataset.sky = e.sky;
     if (e.type === 'trace') app.dataset.trace = e.on ? '1' : '0';

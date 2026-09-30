@@ -1,5 +1,5 @@
 import type { ResolvedActor } from '../stage/types';
-import { TRAIN } from '../train/params';
+import { GLARE, TRAIN } from '../train/params';
 import type { Train } from '../train/train';
 
 /** What a dinosaur tells the mission runner this frame. */
@@ -206,8 +206,142 @@ export class LargeDino extends Dino {
   }
 }
 
+/** v1.11 (5-1): what a fawn tells the mission runner this frame. `to`: 0 = its own side, 0.5 = the middle, 1 = across. */
+export type FawnOutcome =
+  | { kind: 'move'; to: number; seconds: number }
+  | { kind: 'freeze' }
+  | { kind: 'blink' }
+  | { kind: 'hop'; seconds: number }
+  | { kind: 'mercy' }
+  | { kind: 'danger' }
+  | null;
+
+/** v1.11 (5-1): a fawn's state (the test hook shows wait, cross, freeze or gone). */
+export type FawnState = 'wait' | 'cross' | 'freeze' | 'blink' | 'hop' | 'gone' | 'stopped';
+
+/**
+ * v1.11 (5-1): a fawn ("dino-small" with params.look "fawn" and glare true; PHASE9_CHAPTER5_6 第 4 部 §4.3). It crosses
+ * like the young dinosaur, but with the light on it stops in the middle of the rail and gazes at it (ears up, eyes
+ * narrowed, smiling: never frozen with fright). The light off, it blinks (GLARE.blink s) and hops off (GLARE.hopOff s).
+ * Reached while it stands there: a soft fail ("glare"). `lightOn` (the light's own stage) and `mercy` (fails in a row
+ * at its hush stretch: it crosses anyway) are set by the runner every frame. Its place across the rail is `p` (0 = its
+ * own side, 1 = across), so a light switched on and off mid-crossing only changes where it is heading.
+ */
+export class GlareDino extends SmallDino {
+  lightOn = false;
+  mercy = false;
+  fawnState: FawnState = 'wait';
+  private p = 0;
+  private heading = 1;
+  private t = 0;
+  private mercySaid = false;
+
+  override reset(): void {
+    super.reset();
+    this.fawnState = 'wait';
+    this.p = 0;
+    this.heading = 1;
+    this.t = 0;
+    this.mercySaid = false;
+  }
+
+  /** Where it heads while crossing: the middle while the light holds it, else across. */
+  private target(): number {
+    return this.lightOn && !this.mercy && this.p < 0.5 ? 0.5 : 1;
+  }
+
+  /** The runner steps fawns with this (not update(): they speak their own outcomes). */
+  override update(): DinoOutcome {
+    return null;
+  }
+
+  step(dt: number): FawnOutcome {
+    const d = this.distance();
+    if (d === null) return null;
+    const cross = this.params.crossSeconds;
+    const near = d <= this.params.dangerDistance && d > -2;
+    switch (this.fawnState) {
+      case 'wait': {
+        if (d > this.params.startDistance || d <= 0) return null;
+        this.fawnState = 'cross';
+        this.state = 'crossing';
+        this.heading = this.target();
+        return { kind: 'move', to: this.heading, seconds: (this.heading - this.p) * cross };
+      }
+      case 'cross': {
+        const want = this.target();
+        if (want !== this.heading) {
+          this.heading = want;
+          return { kind: 'move', to: want, seconds: Math.max(0, want - this.p) * cross };
+        }
+        this.p = Math.min(this.heading, this.p + dt / cross);
+        if (this.heading === 0.5 && this.p >= 0.5) {
+          this.fawnState = 'freeze';
+          return { kind: 'freeze' };
+        }
+        if (this.p >= 1) {
+          this.fawnState = 'gone';
+          this.state = 'across';
+          return null;
+        }
+        if (near && this.p > 0.15) return this.bump();
+        if (this.mercy && this.lightOn && !this.mercySaid && this.p >= 0.5) {
+          this.mercySaid = true;
+          return { kind: 'mercy' };
+        }
+        return null;
+      }
+      case 'freeze': {
+        if (!this.lightOn || this.mercy) {
+          this.fawnState = 'blink';
+          this.t = 0;
+          return { kind: 'blink' };
+        }
+        return near ? this.bump() : null;
+      }
+      case 'blink': {
+        if (this.lightOn && !this.mercy) {
+          this.fawnState = 'freeze';
+          return { kind: 'freeze' };
+        }
+        this.t += dt;
+        if (this.t >= GLARE.blink) {
+          this.fawnState = 'hop';
+          this.t = 0;
+          return { kind: 'hop', seconds: GLARE.hopOff };
+        }
+        return near ? this.bump() : null;
+      }
+      case 'hop': {
+        this.t += dt;
+        if (this.t >= GLARE.hopOff) {
+          this.fawnState = 'gone';
+          this.state = 'across';
+          this.p = 1;
+        }
+        return null;
+      }
+      default:
+        return null;
+    }
+  }
+
+  private bump(): FawnOutcome {
+    this.fawnState = 'stopped';
+    this.state = 'stopped';
+    return { kind: 'danger' };
+  }
+
+  /** "wait", "cross", "freeze" (blinking counts) or "gone" (the test hook). */
+  get shownState(): string {
+    const s = this.fawnState;
+    return s === 'blink' ? 'freeze' : s === 'hop' || s === 'stopped' ? 'gone' : s;
+  }
+}
+
 export function makeDino(actor: ResolvedActor, train: Train): Dino | null {
   if (actor.type === 'dino-mid') return new MidDino(actor, train);
+  if (actor.type === 'dino-small' && (actor.params as { glare?: boolean }).glare === true) return new GlareDino(actor, train);
   if (actor.type === 'dino-small') return new SmallDino(actor, train);
   if (actor.type === 'dino-large') return new LargeDino(actor, train);
   return null;

@@ -170,6 +170,8 @@ export class Train {
 
   private pending: JunctionDef[] = [];
   private announced: JunctionDef | null = null;
+  /** v1.11 (5-1): ways chosen for junctions before their arrows show (preferJunction). */
+  private readonly preferred = new Map<string, JunctionSide>();
   private locked = false;
   private choice: JunctionSide | null = null;
   private ended = false;
@@ -601,6 +603,21 @@ export class Train {
   /** The junction the arrows are shown for (announced and not passed yet), or null. */
   get announcedJunction(): JunctionDef | null {
     return this.announced;
+  }
+
+  /**
+   * v1.11 (5-1): the way to take at junction `id` when it comes (a firefly fork's true way, called before its arrows
+   * show); null forgets it. The child can still tap the other arrow.
+   */
+  preferJunction(id: string, side: JunctionSide | null): void {
+    if (side === null) this.preferred.delete(id);
+    else this.preferred.set(id, side);
+    if (side !== null && this.announced?.id === id && !this.locked && this.announced[side] !== undefined) this.choice = side;
+  }
+
+  /** v1.11 (5-1): forget every preferred way (a rewind). */
+  clearPreferred(): void {
+    this.preferred.clear();
   }
 
   chooseJunction(side: JunctionSide): void {
@@ -1366,7 +1383,8 @@ export class Train {
     // v1.10: a dive fork shows no arrows (diving or not picks the way).
     if (!this.announced && !j.dive && st.s >= j.at - JUNCTION_ARROW_DISTANCE) {
       this.announced = j;
-      this.choice = null;
+      const preferred = this.preferred.get(j.id);
+      this.choice = preferred !== undefined && j[preferred] !== undefined ? preferred : null;
       this.locked = false;
       this.events.emit('junctionApproach', {
         junction: j,

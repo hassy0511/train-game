@@ -1,18 +1,24 @@
 import { RUN_SURFACES, type RunSurface } from '../audio/run-sound';
 import { SONGS } from '../audio/songs';
+import { fireflyForks } from '../gimmick/fireflies';
+import { hushZones } from '../gimmick/hush';
 import { iceZones, thinIceZones } from '../gimmick/ice';
 import { plowSpans } from '../gimmick/plow';
+import { reversedZones } from '../gimmick/reversed-whistle';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
 import { tunnelZones } from '../gimmick/tunnel';
 import type { RailNetwork } from '../rail/types';
 import {
+  AMBIENT_FIREFLIES,
   DIVE,
+  FIREFLY_FORK,
   FLOATER,
   FLOWER_BRIDGE,
   FRAGILE,
   GRASSHOPPER,
   LEVER_NOTCHES,
+  LURE,
   PLOW,
   RECORD,
   REWIND_DISTANCE,
@@ -133,8 +139,52 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
     // v1.10 (4-2): the sky turns to evening for the rest of the stage.
     if (st.sky !== 'evening') fail(`${where}: sky must be "evening"`);
     if (st.seconds !== undefined && !(isNumber(st.seconds) && st.seconds >= 0)) fail(`${where}: "seconds" must be >= 0`);
+  } else if ('environment' in st) {
+    // v1.11 (PR2c): the look changes (the stage's own with these fields written over it).
+    if (!isObject(st.environment)) fail(`${where}: "environment" must be an object (the fields to change; {} = the stage's own)`);
+    checkEnvironmentParts(st.environment, `${where} environment`, true);
+    if (st.seconds !== undefined && !(isNumber(st.seconds) && st.seconds >= 0)) fail(`${where}: "seconds" must be >= 0`);
   } else {
     fail(`${where}: unknown step`);
+  }
+}
+
+/**
+ * The parts of an environment that may be written on their own (v1.11: a cutscene's "environment" step writes only
+ * some of them; the stage's own environment is checked with them too): the sky, the fog, the light, the ground, the
+ * stars, v1.11 the moon and the fireflies, the sound around.
+ */
+function checkEnvironmentParts(env: Record<string, unknown>, where: string, step = false): void {
+  if (env.sky !== undefined && (!isObject(env.sky) || !isString(env.sky.top) || !isString(env.sky.bottom))) fail(`${where}: "sky" needs top/bottom`);
+  if (env.fog !== undefined && env.fog !== null && (!isObject(env.fog) || !isNumber(env.fog.near) || !isNumber(env.fog.far))) {
+    fail(`${where}: "fog" must be null or {color, near, far}`);
+  }
+  if (env.ground !== undefined && env.ground !== null && (!isObject(env.ground) || !isNumber(env.ground.y) || !isNumber(env.ground.size))) {
+    fail(`${where}: "ground" must be null or {y, size, color}`);
+  }
+  if (env.lighting !== undefined && !['day', 'evening', 'night', 'cave'].includes(String(env.lighting))) fail(`${where}: "lighting" must be day, evening, night or cave`);
+  if (env.ambience !== undefined && !AMBIENCE_KINDS.includes(env.ambience as AmbienceKind)) fail(`${where}: "ambience" must be one of ${AMBIENCE_KINDS.join(', ')}`);
+  if (env.stars !== undefined) {
+    const st = env.stars;
+    if (!isObject(st) || !Number.isInteger(st.count) || (st.count as number) < 1 || (st.count as number) > 1000) fail(`${where}: "stars.count" must be a whole number 1–1000`);
+  }
+  if (env.moon !== undefined) {
+    // v1.11 (5-1): the moon (no face).
+    const m = env.moon;
+    if (!isObject(m) || !isNumber(m.azimuth) || m.azimuth < 0 || m.azimuth > 360) fail(`${where}: "moon.azimuth" must be 0–360 degrees`);
+    if (!isNumber(m.elevation) || m.elevation < 5 || m.elevation > 80) fail(`${where}: "moon.elevation" must be 5–80 degrees`);
+    if (m.size !== undefined && !(isNumber(m.size) && m.size >= 0.5 && m.size <= 3)) fail(`${where}: "moon.size" must be 0.5–3`);
+  }
+  if (env.fireflies !== undefined) {
+    // v1.11 (5-1): firefly motes round the camera.
+    const f = env.fireflies;
+    if (!isObject(f) || !Number.isInteger(f.count) || (f.count as number) < 0 || (f.count as number) > AMBIENT_FIREFLIES.max) {
+      fail(`${where}: "fireflies.count" must be a whole number 0–${AMBIENT_FIREFLIES.max}`);
+    }
+    if (f.radius !== undefined && !(isNumber(f.radius) && f.radius > 0)) fail(`${where}: "fireflies.radius" must be > 0`);
+  }
+  for (const k of ['water', 'snow', 'festival', 'cloudSea'] as const) {
+    if (step && env[k] !== undefined) fail(`${where}: "${k}" belongs to the stage's own environment (a look change keeps it)`);
   }
 }
 
@@ -181,6 +231,7 @@ export function validateStageFile(raw: unknown): StageFile {
     const st = env.stars;
     if (!isObject(st) || !Number.isInteger(st.count) || (st.count as number) < 1 || (st.count as number) > 1000) fail('"environment.stars.count" must be a whole number 1–1000');
   }
+  checkEnvironmentParts(env, '"environment"');
   if (env.festival !== undefined) {
     const fe = env.festival;
     if (!isObject(fe) || !Array.isArray(fe.bursts) || fe.bursts.length === 0 || !fe.bursts.every(isVec3)) fail('"environment.festival.bursts" must be a list of [x, y, z]');
@@ -294,6 +345,27 @@ export function validateStageFile(raw: unknown): StageFile {
         fail(`junction "${j.id}": the sinking side must be a loop back before the fork or a dead end`);
       }
     }
+    if (j.fireflies !== undefined) {
+      // v1.11 (5-1): a firefly fork: the true way is the side that is not the default.
+      const f = j.fireflies;
+      if (!isObject(f)) fail(`junction "${j.id}": "fireflies" must be an object`);
+      const callFrom = f.callFrom ?? FIREFLY_FORK.callFrom;
+      const callTo = f.callTo ?? FIREFLY_FORK.callTo;
+      if (!isNumber(callFrom) || !isNumber(callTo) || callTo < 6 || callFrom <= callTo) fail(`junction "${j.id}": fireflies need callFrom > callTo >= 6`);
+      if (f.count !== undefined && !(Number.isInteger(f.count) && (f.count as number) >= 1 && (f.count as number) <= 64)) fail(`junction "${j.id}": fireflies.count must be a whole number 1–64`);
+      if (f.fake !== undefined && typeof f.fake !== 'boolean') fail(`junction "${j.id}": fireflies.fake must be true or false`);
+      if (j.left === undefined || j.right === undefined) fail(`junction "${j.id}": a firefly fork needs both left and right`);
+      if (j.needs !== undefined || j.dive === true || j.bubbles !== undefined) fail(`junction "${j.id}": a firefly fork has no needs, dive or bubbles`);
+      if (f.fake === true && j.signReversed !== true) fail(`junction "${j.id}": a fake firefly fork needs "signReversed": true (Sakasa's lie)`);
+      if (f.fake !== true && j.signReversed === true) fail(`junction "${j.id}": only a fake firefly fork has a reversed sign`);
+      // The false way (the default) must end or come back before the fork: a wrong guess never gets the train further.
+      const falseRail = (rails as Record<string, unknown>[]).find((r) => r.id === j[j.default as 'left' | 'right']);
+      const end = falseRail?.end as Record<string, unknown> | undefined;
+      const loops = end?.type === 'merge' && end.railId === j.railId && isNumber(end.at) && end.at < (j.at as number);
+      if (!falseRail || falseRail.id === j.railId || !(loops || falseRail.deadEnd === true)) {
+        fail(`junction "${j.id}": a firefly fork's false way (its default) must be a dead end or a loop back before the fork`);
+      }
+    }
     if (j.needs !== undefined) {
       if (!ABILITIES.includes(String(j.needs))) fail(`junction "${j.id}": "needs" must be an ability`);
       const other = j.default === 'left' ? 'right' : 'left';
@@ -316,6 +388,7 @@ export function validateStageFile(raw: unknown): StageFile {
     if (p.tag !== undefined && !isString(p.tag)) fail(`props[${i}]: "tag" must be text`);
     if (p.trace !== undefined && typeof p.trace !== 'boolean') fail(`props[${i}]: "trace" must be true or false`);
     if (p.traceLine !== undefined && (!isString(p.traceLine) || p.trace !== true)) fail(`props[${i}]: "traceLine" is text on a prop with "trace": true`);
+    if (p.sleeper !== undefined && typeof p.sleeper !== 'boolean') fail(`props[${i}]: "sleeper" must be true or false`);
     checkPlacement(p, `props[${i}]`, railIds);
   });
 
@@ -332,9 +405,21 @@ export function validateStageFile(raw: unknown): StageFile {
     }
     if (a.type === 'grasshopper' && a.reactsTo === 'light') fail(`actor "${a.id}": a grasshopper hops on by itself ("none") or when whistled for ("whistle")`);
     const ap = (a.params ?? {}) as Record<string, unknown>;
-    if (a.type === 'cat' && ap.look !== undefined && !['cat', 'seabird', 'seal', 'turtle', 'snowman'].includes(String(ap.look))) fail(`actor "${a.id}": look must be cat, seabird, seal, turtle or snowman`);
+    if (a.type === 'cat' && ap.look !== undefined && !['cat', 'seabird', 'seal', 'turtle', 'snowman', 'hedgehog'].includes(String(ap.look))) fail(`actor "${a.id}": look must be cat, seabird, seal, turtle, snowman or hedgehog`);
+    // v1.11 (5-1): an animal that lights the whistle (the hedgehog).
+    if (a.type === 'cat' && ap.glow !== undefined && typeof ap.glow !== 'boolean') fail(`actor "${a.id}": "glow" must be true or false`);
     if (a.type === 'cat') for (const k of ['say', 'woke', 'danger', 'after']) if (ap[k] !== undefined && !isString(ap[k])) fail(`actor "${a.id}": "${k}" must be text`);
-    if (a.type === 'dino-small' && ap.look !== undefined && ap.look !== 'dino' && ap.look !== 'duck') fail(`actor "${a.id}": look must be dino or duck`);
+    if (a.type === 'dino-small' && ap.look !== undefined && !['dino', 'duck', 'fawn'].includes(String(ap.look))) fail(`actor "${a.id}": look must be dino, duck or fawn`);
+    if (a.type === 'dino-small' && ap.glare !== undefined && typeof ap.glare !== 'boolean') fail(`actor "${a.id}": "glare" must be true or false`);
+    if (a.type === 'dino-small' && ap.glare === true && ap.look !== 'fawn') fail(`actor "${a.id}": only a fawn (look "fawn") gazes at the light ("glare")`);
+    if (a.type === 'lure') {
+      // v1.11 (5-1): little tanukis coming to a reversed whistle.
+      if (!isObject(a.onRail)) fail(`actor "${a.id}": a lure is placed with onRail`);
+      if (a.reactsTo !== 'whistle') fail(`actor "${a.id}": a lure reacts to the whistle`);
+      if (ap.look !== undefined && ap.look !== 'tanuki') fail(`actor "${a.id}": a lure's look must be tanuki`);
+      if (ap.count !== undefined && !(Number.isInteger(ap.count) && (ap.count as number) >= 1 && (ap.count as number) <= LURE.countMax)) fail(`actor "${a.id}": count must be a whole number 1–${LURE.countMax}`);
+      for (const k of ['dance', 'danceMax', 'dangerDistance', 'reaction', 'margin']) if (ap[k] !== undefined && !(isNumber(ap[k]) && (ap[k] as number) > 0)) fail(`actor "${a.id}": params.${k} must be > 0`);
+    }
     if (a.type === 'rock-roll' && ap.look !== undefined && !['rock', 'snowbird', 'snowman-upside'].includes(String(ap.look))) fail(`actor "${a.id}": look must be rock, snowbird or snowman-upside`);
     // v1.10 (4-3): a snowman sliding down onto the rail, or snow falling off the pines.
     if (a.type === 'rock-drop' && ap.look !== undefined && !['rock', 'snowman', 'snow-pile'].includes(String(ap.look))) fail(`actor "${a.id}": look must be rock, snowman or snow-pile`);
@@ -360,6 +445,7 @@ export function validateStageFile(raw: unknown): StageFile {
     if (r.requires !== null && !ABILITIES.includes(String(r.requires))) fail(`record "${r.id}": "requires" must be an ability or null`);
     if (r.model !== undefined && (!isString(r.model) || !MODEL_NAME.test(r.model))) fail(`record "${r.id}": "model" must match [a-z0-9-]+`);
     if (r.hint !== undefined && !isString(r.hint)) fail(`record "${r.id}": "hint" must be text`);
+    if (r.hush !== undefined && typeof r.hush !== 'boolean') fail(`record "${r.id}": "hush" must be true or false`);
     checkPlacement(r, `record "${r.id}"`, railIds);
   }
 
@@ -417,6 +503,7 @@ export function validateStageFile(raw: unknown): StageFile {
         if (!isObject(h) || !isString(h.railId) || !railIds.has(h.railId) || !isNumber(h.at) || !isString(h.text)) {
           fail(`mission "${m.id}": hint needs railId, at, text`);
         }
+        if (h.unless !== undefined && !ABILITIES.includes(String(h.unless))) fail(`mission "${m.id}": hint "unless" must be an ability`);
       }
     }
     if (m.onComplete !== undefined && (!isString(m.onComplete) || !cutsceneIds.has(m.onComplete))) {
@@ -424,9 +511,10 @@ export function validateStageFile(raw: unknown): StageFile {
     }
   }
 
+  const nightIds = new Set<string>();
   requireArray(raw, 'gimmicks').forEach((g, i) => {
     if (!isObject(g) || !isString(g.type)) fail(`gimmicks[${i}]: "type" is required`);
-    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound', 'ice', 'thin-ice', 'tunnel'];
+    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound', 'ice', 'thin-ice', 'tunnel', 'hush', 'whistle-reversed'];
     if (zoned.includes(g.type)) {
       if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`gimmicks[${i}] ${g.type}: needs a known railId and "from"`);
       if (g.type !== 'jump-pad' && (!isNumber(g.to) || (g.to as number) <= (g.from as number))) fail(`gimmicks[${i}] ${g.type}: needs "to" after "from"`);
@@ -492,6 +580,21 @@ export function validateStageFile(raw: unknown): StageFile {
       if (p.sign !== undefined && typeof p.sign !== 'boolean') fail(`${where}: params.sign must be true or false`);
     }
     if (g.type === 'tunnel') checkTunnel(g as Record<string, unknown>, p, `gimmicks[${i}] tunnel`);
+    if (g.type === 'hush' || g.type === 'whistle-reversed') {
+      // v1.11 (5-1): a hush stretch, a whistle-reversed stretch.
+      const where = `gimmicks[${i}] ${g.type}`;
+      if (!isString(p.id)) fail(`${where}: params.id is required (text)`);
+      if (nightIds.has(p.id)) fail(`${where}: params.id "${p.id}" is used twice`);
+      nightIds.add(p.id);
+      const rw = p.rewind;
+      if (rw !== undefined && !(isObject(rw) && isString(rw.railId) && railIds.has(rw.railId) && isNumber(rw.at))) fail(`${where}: params.rewind needs a known railId and at`);
+      if (p.sign !== undefined && typeof p.sign !== 'boolean') fail(`${where}: params.sign must be true or false`);
+      if (p.line !== undefined && !isString(p.line)) fail(`${where}: params.line must be text`);
+      if (g.type === 'hush') {
+        if (p.glowBefore !== undefined && !(isNumber(p.glowBefore) && p.glowBefore >= 0 && p.glowBefore <= 80)) fail(`${where}: params.glowBefore must be 0–80`);
+        if (p.startleAfter !== undefined && !(isNumber(p.startleAfter) && p.startleAfter > 0)) fail(`${where}: params.startleAfter must be > 0`);
+      }
+    }
     if (g.type === 'fog' && p.color !== undefined && !(typeof p.color === 'string' && COLOR.test(p.color))) fail(`gimmicks[${i}] fog: params.color must be #rrggbb`);
     if (g.type === 'fog' && p.glow !== undefined && typeof p.glow !== 'boolean') fail(`gimmicks[${i}] fog: params.glow must be true or false`);
     if (g.type === 'flock') {
@@ -1129,5 +1232,132 @@ export function validateSnowLayout(file: StageFile, network: RailNetwork): void 
     const rail = network.getRail(z.railId);
     if (z.to > rail.length) fail(`${where}: runs past the end of rail "${z.railId}"`);
     for (const st of file.stations) if (st.railId === z.railId && st.at >= z.from && st.at <= z.to) fail(`${where}: station "${st.id}" stops in it`);
+  }
+}
+
+/**
+ * v1.11 (5-1) checks that need the rails (PHASE9_CHAPTER5_6 第 4 部 §4.9). A hush stretch (from its moon mark,
+ * `from − glowBefore − 20`, to its end) asks for the light off, so nothing there asks for it on: no fog or tunnel over it
+ * (nor its way back, which lies before it), no reversed-sign, bubble or firefly fork in it or up to 80 m past it, no
+ * mirror, flower bridge, light record, trace or reveal prop in it; no station stops, gap, jump pad, water, snow wall or
+ * whistle-reversed stretch in it. A fawn that gazes at the light stands in a hush stretch, starts crossing inside it,
+ * and with the light off is across before even the fastest train comes (startDistance − 22 × crossSeconds ≥
+ * dangerDistance + 20). A hush record lies in a hush stretch. A whistle-reversed stretch (`from − 20` to `to + 10`) has
+ * nothing that wants the whistle (a cat or a sleeping dinosaur on the rail, a jump pad, a grasshopper or squirrel or
+ * whale, a firefly fork's calling reach), no station, water or hush stretch; its way back lies before it; its lure groups
+ * stand in it, 40 m or more past its start. Firefly forks' calling reaches do not overlap.
+ */
+export function validateNightLayout(file: StageFile, network: RailNetwork): void {
+  const hush = hushZones(file.gimmicks);
+  const reversed = reversedZones(file.gimmicks);
+  const forks = fireflyForks(file.junctions);
+  const overlaps = (railA: string, a0: number, a1: number, railB: string, b0: number, b1: number): boolean => railA === railB && a0 <= b1 && b0 <= a1;
+  const zonesOf = (type: string): { index: number; railId: string; from: number; to: number }[] =>
+    file.gimmicks.flatMap((g, index) => (g.type === type && g.railId !== undefined && g.from !== undefined ? [{ index, railId: g.railId, from: g.from, to: g.to ?? g.from }] : []));
+  const fogs = [...zonesOf('fog'), ...tunnelZones(file.gimmicks)];
+  const plows = plowSpans(file.gimmicks);
+  const stopZone = (st: StageFile['stations'][number]): [number, number] => [st.at - (st.stop?.zone ?? STOP_RULE.zone), st.at + 20];
+  const at = (p: Placement): { railId: string; at: number } | null => ('onRail' in p ? p.onRail : null);
+  const calling = forks.map((f) => ({ f, railId: f.railId, from: f.at - f.callFrom, to: f.at - f.callTo }));
+
+  for (const z of hush) {
+    const where = `gimmicks[${z.index}] hush "${z.id}"`;
+    const rail = network.getRail(z.railId);
+    if (z.to > rail.length) fail(`${where}: runs past the end of rail "${z.railId}"`);
+    const lo = z.from - z.glowBefore - 20;
+    const hi = z.to;
+    const inIt = (railId: string, a: number, b = a): boolean => overlaps(railId, a, b, z.railId, lo, hi);
+    for (const o of fogs) if (inIt(o.railId, o.from, o.to)) fail(`${where}: gimmicks[${o.index}] (a dark stretch) is over it (the light is wanted off here)`);
+    const back = z.rewind;
+    const backRail = network.rails.get(back.railId);
+    if (!backRail || back.at < 0 || back.at > backRail.length) fail(`${where}: rewind at=${back.at} is outside rail "${back.railId}"`);
+    if (back.railId === z.railId && back.at >= z.from) fail(`${where}: its rewind must lie before it`);
+    for (const o of fogs) if (overlaps(back.railId, back.at, back.at, o.railId, o.from, o.to)) fail(`${where}: its rewind lies in a dark stretch (gimmicks[${o.index}])`);
+    for (const j of file.junctions) {
+      if ((j.signReversed || j.bubbles || j.fireflies) && overlaps(j.railId, j.at, j.at, z.railId, lo, hi + 80)) fail(`${where}: junction "${j.id}" (it wants the light or the whistle) is in it or within 80 m past it`);
+    }
+    file.gimmicks.forEach((g, i) => {
+      if (g.railId === undefined || g.from === undefined) return;
+      if (['flower-bridge', 'jump-pad', 'whistle-reversed'].includes(g.type) && inIt(g.railId, g.from, g.to ?? g.from)) fail(`${where}: gimmicks[${i}] ${g.type} is in it`);
+    });
+    file.gimmicks.forEach((g, i) => {
+      const mp = g.params as { railId?: string } | undefined;
+      if (g.type === 'mirror' && mp?.railId === z.railId) fail(`${where}: mirror gimmicks[${i}] stands on its rail`);
+    });
+    for (const r of file.records) {
+      const p = at(r);
+      if (r.requires === 'light' && p && inIt(p.railId, p.at)) fail(`${where}: record "${r.id}" needs the light in it`);
+    }
+    file.props.forEach((pr, i) => {
+      const p = at(pr);
+      if ((pr.trace || pr.reveal) && p && inIt(p.railId, p.at)) fail(`${where}: props[${i}] (a mark the light shows) is in it`);
+    });
+    for (const st of file.stations) {
+      const [a, b] = stopZone(st);
+      if (inIt(st.railId, a, b)) fail(`${where}: station "${st.id}" stops in it`);
+    }
+    for (const g of rail.gaps) if (inIt(z.railId, g.from, g.to)) fail(`${where}: a gap (${g.from}–${g.to}) is in it`);
+    for (const w of [...rail.surfaces, ...rail.dives]) if (inIt(z.railId, w.from, w.to)) fail(`${where}: water (${w.from.toFixed(0)}–${w.to.toFixed(0)}) is in it`);
+    for (const sp of plows) if (inIt(sp.railId, sp.from, sp.to)) fail(`${where}: snow wall gimmicks[${sp.index}] is in it`);
+  }
+
+  for (const a of file.actors) {
+    if (a.type !== 'dino-small' || (a.params as { glare?: boolean } | undefined)?.glare !== true) continue;
+    const where = `actor "${a.id}"`;
+    const p = at(a);
+    if (!p) fail(`${where}: a fawn is placed with onRail`);
+    const z = hush.find((h) => h.railId === p.railId && p.at >= h.from && p.at + 10 <= h.to);
+    if (!z) fail(`${where}: a fawn that gazes at the light stands in a hush stretch (at least 10 m before its end)`);
+    const params = a.params as { startDistance?: number; crossSeconds?: number; dangerDistance?: number };
+    const start = params.startDistance ?? 60;
+    const cross = params.crossSeconds ?? 4;
+    const danger = params.dangerDistance ?? 6;
+    if (p.at - start < z.from) fail(`${where}: it starts crossing (at − startDistance = ${p.at - start}) before its hush stretch (${z.from})`);
+    const fastest = Math.max(...LEVER_NOTCHES.map((n) => n.speed));
+    if (start - fastest * cross < danger + 20) {
+      fail(`${where}: with the light off it must be across before the fastest train comes (startDistance − ${fastest} × crossSeconds ≥ dangerDistance + 20)`);
+    }
+  }
+  for (const r of file.records) {
+    if (!r.hush) continue;
+    const p = at(r);
+    if (!p || !hush.some((z) => z.railId === p.railId && p.at >= z.from && p.at <= z.to)) fail(`record "${r.id}": a hush record lies in a hush stretch`);
+  }
+
+  for (const z of reversed) {
+    const where = `gimmicks[${z.index}] whistle-reversed "${z.id}"`;
+    const rail = network.getRail(z.railId);
+    if (z.to > rail.length) fail(`${where}: runs past the end of rail "${z.railId}"`);
+    const lo = z.from - 20;
+    const hi = z.to + 10;
+    const inIt = (railId: string, a: number, b = a): boolean => overlaps(railId, a, b, z.railId, lo, hi);
+    for (const a of file.actors) {
+      const p = at(a);
+      if (!p) continue;
+      const wants = ['cat', 'dino-mid', 'squirrel', 'whale'].includes(a.type) || (a.type === 'grasshopper' && a.reactsTo === 'whistle');
+      if (wants && inIt(p.railId, p.at)) fail(`${where}: actor "${a.id}" (it wants the whistle) is in it`);
+    }
+    file.gimmicks.forEach((g, i) => {
+      if (g.type === 'jump-pad' && g.railId !== undefined && g.from !== undefined && inIt(g.railId, g.from)) fail(`${where}: jump pad gimmicks[${i}] is in it`);
+    });
+    for (const c of calling) if (inIt(c.railId, c.from, c.to)) fail(`${where}: firefly fork "${c.f.id}"'s calling reach is in it`);
+    for (const st of file.stations) if (inIt(st.railId, st.at)) fail(`${where}: station "${st.id}" stops in it`);
+    for (const w of [...rail.surfaces, ...rail.dives]) if (inIt(z.railId, w.from, w.to)) fail(`${where}: water (${w.from.toFixed(0)}–${w.to.toFixed(0)}) is in it`);
+    for (const h of hush) if (inIt(h.railId, h.from, h.to)) fail(`${where}: hush stretch "${h.id}" overlaps it`);
+    const back = z.rewind;
+    const backRail = network.rails.get(back.railId);
+    if (!backRail || back.at < 0 || back.at > backRail.length) fail(`${where}: rewind at=${back.at} is outside rail "${back.railId}"`);
+    if (back.railId === z.railId && back.at >= z.from) fail(`${where}: its rewind must lie before it`);
+  }
+  for (const a of file.actors) {
+    if (a.type !== 'lure') continue;
+    const p = at(a);
+    if (!p || !reversed.some((z) => z.railId === p.railId && p.at >= z.from + 40 && p.at <= z.to)) {
+      fail(`actor "${a.id}": a lure group stands in a whistle-reversed stretch, 40 m or more past its start`);
+    }
+  }
+  for (const c of calling) {
+    if (c.from < 0) fail(`junction "${c.f.id}": its fireflies' calling reach starts before its rail does`);
+    for (const o of calling) if (o !== c && overlaps(c.railId, c.from, c.to, o.railId, o.from, o.to)) fail(`junctions "${c.f.id}" and "${o.f.id}": their fireflies' calling reaches overlap`);
   }
 }

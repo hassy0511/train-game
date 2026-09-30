@@ -72,6 +72,16 @@ export class CatActor {
     return true;
   }
 
+  /**
+   * v1.11 (5-1): an animal with params.glow true (the hedgehog) lights the whistle while the whistle would move it: not
+   * moved yet, from `wakeDistance` to `dangerDistance` m before it (PHASE9_CHAPTER5_6 §0.9 の 8). Other cats never glow.
+   */
+  glows(): boolean {
+    if (this.state !== 'sleep' || (this.actor.params as { glow?: boolean }).glow !== true) return false;
+    const d = this.distance();
+    return d !== null && d <= this.params.wakeDistance && d > this.params.dangerDistance;
+  }
+
   flee(): void {
     this.state = 'fled';
   }

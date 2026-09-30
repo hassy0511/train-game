@@ -90,6 +90,11 @@ function traceMaterial(): MeshLambertMaterial {
   return traceShared;
 }
 
+/** v1.11 (5-1): the same swirl material, for another set's Sakasa marks lit by the light (the upside-down birdhouse). */
+export function traceGlowMaterial(): MeshLambertMaterial {
+  return traceMaterial();
+}
+
 /** v1.10 (4-2): how brightly every lantern glows (0 = unlit, 1 = the festival). */
 export function setLanternGlow(k: number): void {
   lanternMaterial().emissiveIntensity = 1.1 * Math.min(1, Math.max(0, k));
