@@ -280,7 +280,8 @@ export class LeadRunner {
       case 'follow': {
         this.turnedAt += dt;
         if (this.autoWalk) {
-          aim = trainV - p.followSpeed;
+          // Coming back by herself: a quick trot while far off (twice followSpeed), "とこ とこ" the last followGap m.
+          aim = trainV - (gap > p.followGap ? 2 * p.followSpeed : p.followSpeed);
           lo = -p.speedMax;
           min = p.metGap;
           if (gap <= p.metGap + 0.5) out.push(this.meet(true));

@@ -686,7 +686,8 @@ export const SPIN = { range: 120, stay: 4, turn: 1, minGlow: 12, lockAt: 5, hold
  * learned). Then the runner waits; once the train reverses it turns round and follows to `followGap` m, and after
  * `followBack` m reversed (or `metStandSeconds` s standing) it stops `metGap` m ahead and the station opens. Helpers: an
  * automatic call after `autoCallAfter` s, reminders every `remindEvery` s and the runner coming back by itself after
- * `autoFollowAfter` s (at `followSpeed` m/s; seconds counted while driving or standing). `iconLead`: it starts to run
+ * `autoFollowAfter` s (at `followSpeed` m/s, twice that while further than `followGap`; seconds counted while driving
+ * or standing). `iconLead`: it starts to run
  * this long after a call's picture shows ("hand-stop"), as if it saw it.
  */
 export const LEAD = {

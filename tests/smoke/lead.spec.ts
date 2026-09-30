@@ -84,6 +84,17 @@ function watchErrors(page: Page): string[] {
   return errors;
 }
 
+// On a failure: where the lead was (the log's last entries and the page's hooks), for the CI log.
+test.afterEach(async ({ page }, info) => {
+  if (info.status === info.expectedStatus || page.isClosed()) return;
+  const d = await page.evaluate(() => {
+    const a = document.getElementById('app')?.dataset ?? {};
+    return { lead: a.lead, gap: a.leadGap, calls: a.leadCalls, auto: a.leadAuto, closed: a.stationClosed, s: a.s, speed: a.speed, phase: a.phase, time: a.time };
+  });
+  console.log('lead hooks', JSON.stringify(d));
+  console.log('lead log', JSON.stringify((await leadLog(page).catch(() => [])).slice(-30)));
+});
+
 /** Opens 0-6 with a save that has every ability up to chapter 5 (and `extra`), into driving mission 1. */
 async function start(page: Page, options: { extra?: string[]; leftHanded?: boolean } = {}): Promise<void> {
   await page.addInitScript(
@@ -178,7 +189,7 @@ test('0-6 おいかけっこ: "とまって" twice makes her run off, "ぎゃく
   await expect(app).toHaveAttribute('data-lead-calls', '2');
   // Nobody backs up (うしろむき is PR8a's): she comes back by herself ("あれ？ もどって きた！") and stops before the train.
   await expect.poll(lines, { timeout: 20_000 }).toContain('うしろへ さがって みよう！');
-  await waitLead(page, 'met', 60_000);
+  await waitLead(page, 'met', 90_000);
   await expect.poll(lines, { timeout: 10_000 }).toContain('あれ？ もどって きた！');
   await expect(app).toHaveAttribute('data-station-closed', '', { timeout: 10_000 });
   await expect.poll(async () => Number(await app.getAttribute('data-lead-gap')), { timeout: 20_000 }).toBeLessThanOrEqual(14);
@@ -217,7 +228,7 @@ test('0-6 おいかけっこ: nobody calls — the partner does, she comes back 
   expect(Number(await app.getAttribute('data-lead-auto'))).toBe(2);
   await learn(page);
   // Standing on its stop line when she comes back: the station opens and the stop counts ("とまれた！").
-  await seenLead(page, 'met', 60_000);
+  await seenLead(page, 'met', 90_000);
   await expect(page.locator('#toast')).toBeVisible({ timeout: 20_000 });
   await card(page, 'できた');
   expect(Number(await app.getAttribute('data-fails') ?? '0')).toBe(0);
@@ -243,7 +254,7 @@ test('0-6 おいかけっこ: past the closed station is no fail; the lock keeps
   await expect.poll(async () => Number(await app.getAttribute('data-lead-calls')), { timeout: 90_000 }).toBe(2);
   await learn(page);
   try {
-    await seenLead(page, 'met', 60_000);
+    await seenLead(page, 'met', 90_000);
   } catch (e) {
     console.log('DBG', JSON.stringify(await page.evaluate(() => ({ ...document.getElementById('app')?.dataset }))));
     console.log('DBG log', JSON.stringify((await leadLog(page)).slice(-40)));

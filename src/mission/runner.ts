@@ -3081,13 +3081,14 @@ export class MissionRunner {
     return false;
   }
 
-  /** v1.11 (6-1): the closed station can open now (the train can still stop there, or stands on its line). */
+  /** v1.11 (6-1): the closed station can open now (the train can still stop there, or stands at it, not past it). */
   private canOpenStation(stop: StopMonitor): boolean {
     const st = stop.station;
     if (this.train.state.railId !== st.railId) return false;
     const offset = this.train.offsetTo(st.at);
     if (offset > stop.rule.zone + LEAD.openMargin) return true;
-    return Math.abs(this.train.state.speed) < 0.05 && Math.abs(offset) <= stop.rule.ok;
+    // Standing on its line (the stop counts at once), or short of it in its zone ("もうちょっと まえ！", then on to it).
+    return Math.abs(this.train.state.speed) < 0.05 && offset >= -stop.rule.ok && offset <= stop.rule.zone + LEAD.openMargin;
   }
 
   /** v1.11 (6-1): what the lead did: its lines (Sakasa's own "さようなら〜！"), its events, the learn cutscene. */
