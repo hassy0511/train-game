@@ -58,8 +58,7 @@ function heightAt(sections, s) {
 }
 
 /**
- * §5.2 `umi` heights. The beach (0–150) is longer than the design's 110: its station (45) is then more than 80 m
- * before the water, so "もぐる" comes up after the start, while driving (§0.2: the seat turns 80 m before water).
+ * §5.2 `umi` heights. The beach (0–150) is longer than the design's 110.
  */
 const UMI_HEIGHTS = [
   [0, 150, LAND, LAND],
@@ -408,7 +407,7 @@ const MISSIONS = [
     lines: {
       start: 'うみの うえの せんろを いくよ！\nさんごえきまで いこう！',
       moving: 'そうそう、その ちょうし！',
-      diveNear: 'ジャンプが もぐるに かわった！',
+      diveNear: 'もぐるが ひかった！',
       diveReady: 'いまだ！ もぐる！',
       diveGo: 'わあ… うみの なかだ！',
       recordFound: 'みつけた！ ずかんに のせよう',
@@ -498,7 +497,8 @@ const opening = [
   // Part 2 §6: no "いき" jokes (no breath, no running out of it): the dome is what keeps them dry.
   { say: 'あわの ドームが あるから へっちゃら！', emote: 'cheer' },
   { say: 'でんしゃの なかは くうき いっぱい！' },
-  { say: 'うみでは ジャンプが もぐるに なる！' },
+  { say: 'もぐるの ボタンが ふえた！' },
+  { say: 'どこでも おせるよ' },
   { camera: 'cab' },
 ];
 

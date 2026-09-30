@@ -73,16 +73,16 @@ async function waitFront(page: Page, rail: string, at: number, timeout = 180_000
   );
 }
 
-/** Presses the round button `id` the moment it glows (polled every frame). */
-async function pressOnGlow(page: Page, id: string, mode?: string): Promise<void> {
+/** Presses the round button `id` (jump, dive, ...) the moment it glows (polled every frame). */
+async function pressOnGlow(page: Page, id: string): Promise<void> {
   await page.waitForFunction(
-    ([button, want]) => {
+    (button) => {
       const b = document.getElementById(button);
-      if (!b || b.dataset.glow !== '1' || (want && b.dataset.mode !== want)) return false;
+      if (!b || b.dataset.glow !== '1') return false;
       b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
       return true;
     },
-    [id, mode ?? ''] as const,
+    id,
     { timeout: 180_000, polling: 'raf' },
   );
 }
@@ -118,10 +118,10 @@ test('2-2 with もぐる: out onto the pond, dive for the marble, back to main 3
   await page.locator('.arrow[data-side="left"]').dispatchEvent('pointerdown');
   await expect(page.locator('.arrow[data-side="left"]')).toHaveClass(/is-selected/);
   // Still a jump over the gap before the fork.
-  await pressOnGlow(page, 'jump', 'jump');
+  await pressOnGlow(page, 'jump');
   await expect(page.locator('#app')).toHaveAttribute('data-rail', 'mizutamari', { timeout: 60_000 });
-  await expect(page.locator('#jump')).toHaveAttribute('data-mode', 'dive', { timeout: 60_000 });
-  await pressOnGlow(page, 'jump', 'dive');
+  await expect(page.locator('#app')).toHaveAttribute('data-dive', 'near', { timeout: 60_000 });
+  await pressOnGlow(page, 'dive');
   await expect(page.locator('#app')).toHaveAttribute('data-diving', '1', { timeout: 5_000 });
   await page.waitForTimeout(300);
   await page.screenshot({ path: resolve(OUT, 'records-dive-2-2.png') });
@@ -148,8 +148,8 @@ test('2-3 with もぐる: down to the harbour sea, dive for the bubble spring, b
   await expect(right).toHaveAttribute('data-locked', '0');
   await right.dispatchEvent('pointerdown');
   await expect(page.locator('#app')).toHaveAttribute('data-rail', 'umi', { timeout: 60_000 });
-  await expect(page.locator('#jump')).toHaveAttribute('data-mode', 'dive', { timeout: 60_000 });
-  await pressOnGlow(page, 'jump', 'dive');
+  await expect(page.locator('#app')).toHaveAttribute('data-dive', 'near', { timeout: 60_000 });
+  await pressOnGlow(page, 'dive');
   await expect(page.locator('#app')).toHaveAttribute('data-diving', '1', { timeout: 5_000 });
   await page.waitForTimeout(300);
   await page.screenshot({ path: resolve(OUT, 'records-dive-2-3.png') });

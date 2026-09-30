@@ -122,9 +122,9 @@ export type StageEvent =
   /**
    * v1.10: diving. "dive": a press dived ("ぷくっ・ざぶん"); "surface": the front came up ("ぷかっ") or the last car
    * left the water ("ぷはっ", `long`); "bounce": "ぽよん" off a floater or the water; "bob": a press only bobbed the
-   * train. `railId`/`s`: where the train front was.
+   * train (`land`: a mole's dig on land, PHASE9_0 §3). `railId`/`s`: where the train front was.
    */
-  | { type: 'dive'; state: 'dive' | 'surface' | 'bounce' | 'bob'; long?: boolean; railId?: string; s?: number }
+  | { type: 'dive'; state: 'dive' | 'surface' | 'bounce' | 'bob'; long?: boolean; railId?: string; s?: number; land?: boolean }
   /** v1.10: the bubble dome went on or off (`instant`: a rewind or a resume put it on, no inflating). */
   | { type: 'dome'; on: boolean; instant: boolean }
   /**
@@ -159,6 +159,8 @@ export type StageEvent =
   | { type: 'plow:burst'; index: number; boosted: boolean }
   /** v1.10 (4-2): the snowplow is clearing a buried stretch now (snow flying off both sides) or not any more. */
   | { type: 'plow:spray'; on: boolean }
+  /** PHASE9_0 §3: the snowplow pressed with no snow ahead: petals and leaves fly off both sides of the scoop. */
+  | { type: 'plow:petals' }
   /** v1.10 (4-2): "ぽすっ" into snow wall `index`. */
   | { type: 'plow:bump'; index: number }
   /** v1.10 (4-2): a cutscene turned the sky to evening over `seconds` s (the lanterns come on with it). */

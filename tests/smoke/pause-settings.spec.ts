@@ -82,9 +82,12 @@ async function box(page: Page, selector: string): Promise<Box> {
 
 /**
  * PHASE7 §1: the camera is a small round button just inside the pause button, level with it and apart from it;
- * its tiles open on screen, clear of the thumb buttons. The rocket sits in the 2×2 block (upper, outer seat).
+ * its tiles open on screen, clear of the thumb buttons (on the iPad). The six round buttons follow PHASE9_0 §2.
  */
-async function checkLayout(page: Page, leftHanded: boolean, width: number, height: number, shot?: string): Promise<void> {
+/** Each button's distance from the screen edge on the thumb's side, per viewport size, from the right-handed pass. */
+const layoutEdges = new Map<string, Record<string, number>>();
+
+async function checkLayout(page: Page, leftHanded: boolean, width: number, height: number, shot?: string, menuClearOfButtons = true, buttonsOnly = false): Promise<void> {
   await page.setViewportSize({ width, height });
   await page.waitForTimeout(300);
   const cam = await box(page, '#camera');
@@ -98,13 +101,45 @@ async function checkLayout(page: Page, leftHanded: boolean, width: number, heigh
     expect(cam.x).toBeLessThan(pause.x);
     expect(cam.x).toBeGreaterThan(width / 2);
   }
-  const buttons = await Promise.all(['#light', '#rocket', '#jump', '#whistle'].map((id) => box(page, id)));
-  const [light, rocket, jump, whistle] = buttons;
-  for (let i = 0; i < buttons.length; i++) for (let j = i + 1; j < buttons.length; j++) expect(overlaps(buttons[i], buttons[j])).toBe(false);
-  expect(rocket.y).toBeLessThan(whistle.y);
-  expect(Math.abs(rocket.x - whistle.x)).toBeLessThan(2);
-  expect(leftHanded ? rocket.x < light.x : rocket.x > light.x).toBe(true);
-  expect(leftHanded ? whistle.x < jump.x : whistle.x > jump.x).toBe(true);
+  // PHASE9_0 §2: the six round buttons tucked round the whistle (the layout itself may still change, so only its
+  // rules are checked). They are round, so they are compared as circles (centre distance >= sum of the radii), not as
+  // boxes; all on screen; the whistle is the biggest and the one nearest the thumb's corner (bottom-right, or
+  // bottom-left left-handed); the others within 2.2 button widths of it; the top one under the camera button.
+  const ids = ['whistle', 'jump', 'dive', 'plow', 'light', 'rocket'] as const;
+  const buttons = await Promise.all(ids.map((id) => box(page, `#${id}`)));
+  const at: Record<string, Box & { cx: number; cy: number; r: number }> = {};
+  ids.forEach((id, i) => {
+    const b = buttons[i];
+    at[id] = { ...b, cx: b.x + b.width / 2, cy: b.y + b.height / 2, r: Math.min(b.width, b.height) / 2 };
+  });
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      const a = at[ids[i]];
+      const b = at[ids[j]];
+      expect(Math.hypot(a.cx - b.cx, a.cy - b.cy), `${ids[i]} vs ${ids[j]}`).toBeGreaterThanOrEqual(a.r + b.r - 1);
+    }
+  }
+  const whistle = at.whistle;
+  const corner = { x: leftHanded ? 0 : width, y: height };
+  const toCorner = (c: { cx: number; cy: number }) => Math.hypot(c.cx - corner.x, c.cy - corner.y);
+  for (const id of ids) {
+    const b = at[id];
+    expect(b.x >= 0 && b.y >= cam.y + cam.height && b.x + b.width <= width && b.y + b.height <= height, `${id} on screen, under the camera`).toBe(true);
+    if (id === 'whistle') continue;
+    expect(whistle.r, `the whistle is bigger than ${id}`).toBeGreaterThan(b.r);
+    expect(toCorner(whistle), `the whistle is nearer the corner than ${id}`).toBeLessThan(toCorner(b));
+    expect(Math.hypot(b.cx - whistle.cx, b.cy - whistle.cy), `${id} near the whistle`).toBeLessThanOrEqual(b.r * 2 * 2.2);
+  }
+  // Left-handed mirrors right-handed (remembered from the right-handed pass at the same size).
+  const mirrorKey = `${width}x${height}`;
+  const edges = Object.fromEntries(ids.map((id) => [id, leftHanded ? at[id].x : width - (at[id].x + at[id].width)]));
+  if (!leftHanded) layoutEdges.set(mirrorKey, edges);
+  else {
+    const right = layoutEdges.get(mirrorKey);
+    if (right) for (const id of ids) expect(Math.abs(edges[id] - right[id]), `${id} mirrored`).toBeLessThanOrEqual(2);
+  }
+  // (The smallest phone checks the buttons only; the top bar's own rules are checked at the two sizes above.)
+  if (buttonsOnly) return;
   // The stop gauge (shown near a station) stays clear of the corner camera: shown for a moment to measure it.
   const gauge = await page.evaluate(() => {
     const el = document.getElementById('stop-gauge');
@@ -159,7 +194,9 @@ async function checkLayout(page: Page, leftHanded: boolean, width: number, heigh
   expect(menu.x + menu.width).toBeLessThanOrEqual(width);
   expect(menu.y + menu.height).toBeLessThanOrEqual(height);
   expect(menu.y).toBeGreaterThanOrEqual(cam.y + cam.height);
-  for (const b of buttons) expect(overlaps(menu, b)).toBe(false);
+  // On a short phone (667x375) six buttons are taller than the room under the corner camera button, so the open picker
+  // (a moment's overlay above them) may lie over the top ones: accepted (PHASE9_0 §2); on the iPad it stays clear.
+  if (menuClearOfButtons) for (const b of buttons) expect(overlaps(menu, b), 'camera tiles clear of the round buttons').toBe(false);
   // The open tiles share the stop gauge's row: the gauge (with its stop line) draws over them, never under.
   const order = await page.evaluate(() => {
     const menuEl = document.getElementById('camera-menu');
@@ -177,14 +214,14 @@ async function checkLayout(page: Page, leftHanded: boolean, width: number, heigh
   await expect(page.locator('#camera-menu')).toBeHidden();
 }
 
-test('corner buttons and the rocket seat, lever left and right, iPad and small phone', async ({ page }) => {
+test('corner buttons in the six-button ring, lever left and right, iPad and small phone', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   const app = page.locator('#app');
   for (const leftHanded of [false, true]) {
     await page.goto('/?stage=1-1');
     await page.evaluate((lh) => {
-      localStorage.setItem('train-game.progress.v1', JSON.stringify({ schema: 1, cleared: [], abilities: ['whistle', 'jump', 'light', 'rocket'], records: [], mapLinks: [] }));
+      localStorage.setItem('train-game.progress.v1', JSON.stringify({ schema: 1, cleared: [], abilities: ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow'], records: [], mapLinks: [] }));
       localStorage.setItem('train-game.settings.v1', JSON.stringify({ music: 2, sound: 2, calm: false, leftHanded: lh }));
     }, leftHanded);
     await page.setViewportSize({ width: 1194, height: 834 });
@@ -202,7 +239,8 @@ test('corner buttons and the rocket seat, lever left and right, iPad and small p
     }
     await expect(app).toHaveAttribute('data-phase', 'driving');
     await checkLayout(page, leftHanded, 1194, 834, leftHanded ? 'corner-left.png' : 'corner-right.png');
-    await checkLayout(page, leftHanded, 667, 375, leftHanded ? 'corner-left-small.png' : 'corner-right-small.png');
+    await checkLayout(page, leftHanded, 667, 375, leftHanded ? 'corner-left-small.png' : 'corner-right-small.png', false);
+    await checkLayout(page, leftHanded, 568, 320, undefined, false, true);
   }
   await page.setViewportSize({ width: 1194, height: 834 });
   expect(errors).toEqual([]);

@@ -315,7 +315,6 @@ const MISSIONS = [
     steps: [{ stationId: 'skijo', alight: 2, parcel: 'load', say: 'ちょうちんを ひろばへ おねがい！', reply: 'まかせて！' }],
     lines: {
       start: 'なかまを スキーじょうえきへ！\nゆきかきと ジャンプ、どっちも！',
-      plowUp: 'ボタンが ジャンプに もどった！',
       gapNear: 'つぎの きれめは {speed} で とべる！',
       padGone: 'ジャンプだいを きてきで だそう！',
       padAppear: 'ジャンプだいが でた！',
@@ -324,6 +323,7 @@ const MISSIONS = [
       complete: 'ジャンプも ゆきかきも できた！',
     },
     hints: [
+      { railId: 'main', at: 1130, text: 'こんどは ジャンプ！' },
       { railId: 'main', at: 1230, text: 'ひだりの おかに ゆきが どっさり…' },
       { railId: 'main', at: 1450, text: 'スキーの おかだ！ のぼるよ' },
       { railId: 'main', at: 1540, text: 'たかい ところで なにか きらっ' },
@@ -372,8 +372,8 @@ const CUTSCENES = {
     { unlock: 'plow' },
     { say: 'ゆきかき！ ゆきの かべも へっちゃら！' },
     { camera: 'cab' },
-    { say: 'ボタンが むらさきに ひかったら、' },
-    { say: 'ゆきかきの あいず！ ぽちっと おしてね' },
+    { say: 'むらさきの ボタンが ゆきかき！' },
+    { say: 'ひかったら ぽちっと おしてね' },
     { say: 'むらの まつりの おてつだいに いこう！' },
     { remove: 'murabito' },
   ],

@@ -138,50 +138,79 @@ body {
 }
 
 /* ---- round action buttons (right thumb) ---- */
+/* PHASE9_0 §2: up to six always-usable buttons tucked into the corner (layout "F"): the whistle (1.1×) in the corner;
+   jump, rocket and light touch it (lower-left, left-up, up), dive and snowplow nest in the gaps behind them (6 px
+   gaps, honeycomb). A button not learned yet leaves its place empty, so no button ever moves. --r/--bt place each
+   button from the block's right/bottom edge (worked out in docs/PHASE9_0_FREE_ABILITIES.md §2 for 88 px and 72 px
+   buttons). */
+#ui {
+  --b: 88px;
+  --cluster-w: 271px;
+  --cluster-h: 268px;
+}
+
+#whistle {
+  --r: 20px;
+  --bt: 13px;
+}
+
+#jump {
+  --r: 121px;
+  --bt: 0px;
+}
+
+#dive {
+  --r: 183px;
+  --bt: 70px;
+}
+
+#rocket {
+  --r: 91px;
+  --bt: 89px;
+}
+
+#plow {
+  --r: 66px;
+  --bt: 180px;
+}
+
+#light {
+  --r: 0px;
+  --bt: 113px;
+}
+
 .action-buttons {
   position: absolute;
   right: calc(var(--safe-right) + 22px);
   bottom: calc(var(--safe-bottom) + 26px);
-  /* Up to four always-visible buttons in a 2×2 block under the right thumb: whistle and jump on the
-     bottom row, light and rocket above (PHASE7 §1: the camera moved to the top corner). Hidden buttons leave
-     their cell empty; an empty column has width 0. */
-  display: grid;
-  grid-template-columns: auto auto;
-  grid-template-areas:
-    'light rocket'
-    'jump whistle';
-  gap: 18px;
-  align-items: center;
-  justify-items: center;
+  width: var(--cluster-w);
+  height: var(--cluster-h);
+}
+
+.action-buttons > .round-button {
+  position: absolute;
+  right: var(--r);
+  bottom: var(--bt);
 }
 
 #whistle {
-  grid-area: whistle;
-}
-
-#rocket {
-  grid-area: rocket;
-}
-
-#jump {
-  grid-area: jump;
-}
-
-#light {
-  grid-area: light;
+  width: calc(var(--b) * 1.1);
+  height: calc(var(--b) * 1.1);
 }
 
 /* The door button is temporary; it sits to the left of the block. */
-#door {
+#door.round-button {
   position: absolute;
+  left: auto;
+  top: auto;
   right: calc(100% + 18px);
   bottom: 0;
 }
 
 .round-button {
   position: relative;
-  width: 96px;
-  height: 96px;
+  width: var(--b, 96px);
+  height: var(--b, 96px);
   border: none;
   border-radius: 50%;
   padding: 0;
@@ -709,7 +738,8 @@ body {
 
 .bubble {
   position: absolute;
-  right: calc(var(--safe-right) + 130px);
+  /* Left of the buttons' block (its places are kept even while empty). */
+  right: calc(var(--safe-right) + var(--cluster-w) + 34px);
   bottom: calc(var(--safe-bottom) + 40px);
   max-width: min(60vw, 520px);
   padding: 14px 20px;
@@ -1038,11 +1068,6 @@ body {
   box-shadow: 0 0 18px 6px rgba(255, 230, 120, 0.8);
 }
 
-/* With a second column of buttons the partner's bubble moves left of the block. */
-#ui:has(#jump:not([hidden])) .bubble,
-#ui:has(#light:not([hidden])) .bubble {
-  right: calc(var(--safe-right) + 250px);
-}
 
 .arrow.is-true {
   background: rgba(255, 230, 120, 0.85);
@@ -2402,14 +2427,17 @@ body {
 #app.is-left-handed .action-buttons {
   right: auto;
   left: calc(var(--safe-left) + 22px);
-  grid-template-areas:
-    'rocket light'
-    'whistle jump';
 }
 
-#app.is-left-handed #door {
+/* Mirrored: the same distances from the block's left edge. */
+#app.is-left-handed .action-buttons > .round-button {
   right: auto;
+  left: var(--r);
+}
+
+#app.is-left-handed #door.round-button {
   left: calc(100% + 18px);
+  right: auto;
 }
 
 #app.is-left-handed .camera-menu {
@@ -2424,13 +2452,7 @@ body {
 
 #app.is-left-handed .bubble {
   right: auto;
-  left: calc(var(--safe-left) + 130px);
-}
-
-#app.is-left-handed #ui:has(#jump:not([hidden])) .bubble,
-#app.is-left-handed #ui:has(#light:not([hidden])) .bubble {
-  right: auto;
-  left: calc(var(--safe-left) + 250px);
+  left: calc(var(--safe-left) + var(--cluster-w) + 34px);
 }
 
 #app.is-left-handed .bubble::after {
@@ -2750,10 +2772,41 @@ body {
     height: 72px;
   }
 
-  /* A short phone: slightly smaller thumb buttons, so the camera tiles under the corner stay clear of them. */
-  .round-button {
-    width: 80px;
-    height: 80px;
+  /* A short phone: smaller thumb buttons, so the camera tiles under the corner stay clear of them. */
+  #ui {
+    --b: 72px;
+    --cluster-w: 224px;
+    --cluster-h: 221px;
+  }
+
+  #whistle {
+    --r: 16px;
+    --bt: 11px;
+  }
+
+  #jump {
+    --r: 100px;
+    --bt: 0px;
+  }
+
+  #dive {
+    --r: 152px;
+    --bt: 58px;
+  }
+
+  #rocket {
+    --r: 76px;
+    --bt: 74px;
+  }
+
+  #plow {
+    --r: 55px;
+    --bt: 149px;
+  }
+
+  #light {
+    --r: 0px;
+    --bt: 93px;
   }
 
   .round-button .face {
@@ -2767,10 +2820,6 @@ body {
 
   .round-button .label {
     font-size: 13px;
-  }
-
-  .action-buttons {
-    gap: 12px;
   }
 
   .camera-tile svg {
@@ -2853,25 +2902,12 @@ body {
   text-shadow: 0 3px 0 #2b3a4a, 0 0 18px rgba(43, 58, 74, 0.8);
 }
 
-/* ---- v1.10: diving ("もぐる"): the jump seat's other face, and the bubble rim in the cab under water ---- */
-.round-button .icon-dive {
-  display: none;
-}
-
-#jump[data-mode='dive'] .icon-jump,
-#jump[data-mode='dive'] .icon-hopper {
-  display: none;
-}
-
-#jump[data-mode='dive'] .icon-dive {
-  display: block;
-}
-
-#jump[data-mode='dive'] .ring.is-jump {
+/* ---- v1.10: diving ("もぐる", its own blue button since PHASE9_0), and the bubble rim in the cab under water ---- */
+#dive .ring {
   --accent: #3aa7e0;
 }
 
-#jump[data-mode='dive'][data-glow='1'] .face {
+#dive[data-glow='1'] .face {
   background: #c9ecff;
   animation: dive-glow 0.5s ease-in-out infinite alternate;
 }
@@ -2885,21 +2921,6 @@ body {
   }
 }
 
-/* The face turns round once when it changes (jump ⇄ dive). */
-#jump.is-turning .icon,
-#jump.is-turning .label {
-  animation: seat-turn 0.25s ease-out;
-}
-
-@keyframes seat-turn {
-  from {
-    transform: scaleX(0.1);
-  }
-  to {
-    transform: scaleX(1);
-  }
-}
-
 .dive-bubbles {
   position: absolute;
   inset: 6px;
@@ -2909,7 +2930,7 @@ body {
   display: none;
 }
 
-#jump[data-diving='1'] .dive-bubbles {
+#dive[data-diving='1'] .dive-bubbles {
   display: block;
 }
 
@@ -3151,31 +3172,17 @@ body {
   opacity: 0.35;
 }
 
-/* ---- v1.10 (4-2): the snowplow ("ゆきかき"): the jump seat's purple face, snow flying in it, the snowy window ---- */
-.round-button .icon-plow {
-  display: none;
-}
-
-#jump[data-mode='plow'] .icon-jump,
-#jump[data-mode='plow'] .icon-hopper,
-#jump[data-mode='plow'] .icon-dive {
-  display: none;
-}
-
-#jump[data-mode='plow'] .icon-plow {
-  display: block;
-}
-
-#jump[data-mode='plow'] .ring.is-jump {
+/* ---- v1.10 (4-2): the snowplow ("ゆきかき", its own purple button since PHASE9_0), snow flying in it, the snowy window ---- */
+#plow .ring {
   --accent: #7b86e8;
 }
 
 /* The blade is down: the scoop sits a little lower in the face (pressed). */
-#jump[data-mode='plow'][data-blade='1'] .icon-plow {
+#plow[data-blade='1'] .icon {
   transform: translateY(3px);
 }
 
-#jump[data-mode='plow'][data-glow='1'] .face {
+#plow[data-glow='1'] .face {
   background: #e3e6ff;
   animation: plow-glow 0.5s ease-in-out infinite alternate;
 }
@@ -3198,7 +3205,7 @@ body {
   display: none;
 }
 
-#jump[data-mode='plow'][data-plowing='1'] .plow-snow {
+#plow[data-plowing='1'] .plow-snow {
   display: block;
 }
 

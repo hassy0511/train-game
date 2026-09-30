@@ -2,11 +2,11 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { budget, card, doors, FAST, NORMAL, pressOnGlow, progress, recordLines, seatOnGlow, setNotch, stopAt, tapUntil, waitDriving, waitFront, waitRewound } from './drive';
+import { budget, card, doors, FAST, NORMAL, pressOnGlow, progress, recordLines, pressOnGlowBefore, setNotch, stopAt, tapUntil, waitDriving, waitFront, waitRewound } from './drive';
 
 /**
  * Stage 3-3 "ほしのうみ" from start to chapter 3's end on the map (docs/PHASE8_CHAPTER3_4.md 第 5 部 §15, read with §0.2,
- * and 第 1 部 §4.2): M1 the seabird, the pier's gaps (the seat is the jump), forgets to dive once ("ぽよん"), dives into
+ * and 第 1 部 §4.2): M1 the seabird, the pier's gaps, forgets to dive once ("ぽよん"), dives into
  * the sea, wakes the sleeping turtle with the whistle; M2 misses the red ring once (the loop on the water), goes down
  * at it, lets the false sign fool the train once in the dark (the loop), then the light shows the swirl and finds the
  * star sand; the glimpse; M3 slips on the underwater slope once, climbs it with the rocket, greets the whale, rides
@@ -53,7 +53,7 @@ test('stage 3-3 full run: jump and dive, the star trench, the moon, the festival
 
   await page.goto('/?stage=3-3');
   const app = page.locator('#app');
-  const seat = page.locator('#jump');
+  const diveButton = page.locator('#dive');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
   await page.screenshot({ path: resolve(OUT, '120-hoshi-title.png') });
   await page.locator('#title-start').click();
@@ -61,8 +61,10 @@ test('stage 3-3 full run: jump and dive, the star trench, the moon, the festival
 
   // ---- M1 ジャンプと もぐる ----
   await card(page, 'ジャンプと もぐる', 120_000);
-  await expect(seat).toHaveAttribute('data-mode', 'jump');
-  expect(await page.locator('.round-button:visible').count()).toBeLessThanOrEqual(4);
+  // Five round buttons (whistle, jump, light, rocket, dive), none changing face; the dive is not glowing yet.
+  await expect(diveButton).toBeVisible();
+  await expect(diveButton).toHaveAttribute('data-glow', '0');
+  await expect(page.locator('.round-button:visible')).toHaveCount(5);
   await waitDriving(page);
   await setNotch(page, NORMAL);
   await page.waitForTimeout(800);
@@ -71,20 +73,21 @@ test('stage 3-3 full run: jump and dive, the star trench, the moon, the festival
   await waitFront(page, 'main', 100);
   await whistle(page);
   await expect(app).toHaveAttribute('data-actors', /umidori:awake/, { timeout: 10_000 });
-  // The pier's first gap: the seat is the jump.
-  await seatOnGlow(page, 'jump', 'main', 230);
+  // The pier's first gap: the jump button glows.
+  await pressOnGlowBefore(page, 'jump', 'main', 230);
   await waitFront(page, 'main', 250);
   await expect(app).not.toHaveAttribute('data-phase', 'failing');
-  // The seat turns into "もぐる"; on purpose not pressed — "ぽよん" at the water, back before it.
-  await expect(seat).toHaveAttribute('data-mode', 'dive', { timeout: 150_000 });
-  await page.screenshot({ path: resolve(OUT, '122-hoshi-dive-seat.png') });
+  // The もぐる button lights up (hint: water within 80 m); on purpose not pressed — "ぽよん" at the water, back before it.
+  await expect(app).toHaveAttribute('data-dive', 'near', { timeout: 150_000 });
+  await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('もぐるが ひかった！');
+  await page.screenshot({ path: resolve(OUT, '122-hoshi-dive-button.png') });
   await expect(app).toHaveAttribute('data-dive-bounces', '1', { timeout: 240_000 });
   await expect(app).toHaveAttribute('data-submerged', '0');
   await waitRewound(page, 'main', 400);
   await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('ぽよん！ もぐるの わすれた〜');
   await waitDriving(page);
   await setNotch(page, NORMAL);
-  await seatOnGlow(page, 'dive', 'main', 453);
+  await pressOnGlowBefore(page, 'dive', 'main', 453);
   await expect(app).toHaveAttribute('data-submerged', '1', { timeout: 90_000 });
   await page.screenshot({ path: resolve(OUT, '123-hoshi-into-the-sea.png') });
   // The sleeping turtle: the whistle wakes it (under water too).
@@ -93,11 +96,12 @@ test('stage 3-3 full run: jump and dive, the star trench, the moon, the festival
   await whistle(page);
   await expect(app).toHaveAttribute('data-actors', /kame:awake/, { timeout: 10_000 });
   await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('およいで いった〜！');
-  // Up on the pier again: the seat is the jump; the second gap at はやい.
+  // Up on the pier again (the hint is over, "つぎは ジャンプだよ"); the second gap at はやい.
   await waitFront(page, 'main', 690);
-  await expect(seat).toHaveAttribute('data-mode', 'jump', { timeout: 10_000 });
+  await expect(app).toHaveAttribute('data-dive', '', { timeout: 10_000 });
+  await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('ぷはっ！ つぎは ジャンプだよ');
   await setNotch(page, FAST);
-  await seatOnGlow(page, 'jump', 'main', 770);
+  await pressOnGlowBefore(page, 'jump', 'main', 770);
   await waitFront(page, 'main', 800);
   await expect(app).not.toHaveAttribute('data-phase', 'failing');
   await setNotch(page, NORMAL);
@@ -115,7 +119,7 @@ test('stage 3-3 full run: jump and dive, the star trench, the moon, the festival
   await expect(app).toHaveAttribute('data-rail', 'wa', { timeout: 240_000 });
   await expect(app).not.toHaveAttribute('data-phase', 'failing');
   await expect(app).toHaveAttribute('data-rail', 'main', { timeout: 240_000 });
-  await seatOnGlow(page, 'dive', 'main', 1150);
+  await pressOnGlowBefore(page, 'dive', 'main', 1150);
   await expect(app).toHaveAttribute('data-submerged', '1', { timeout: 90_000 });
   await expect(app).toHaveAttribute('data-rail', 'main');
   // The star trench is dark: the light glows (not pressed yet). The false sign sends the train round the loop.
@@ -171,11 +175,11 @@ test('stage 3-3 full run: jump and dive, the star trench, the moon, the festival
   await waitDriving(page);
   await setNotch(page, NORMAL);
   // The jump right away (its glow can come and go during a slow screenshot); the moon still counts down after it.
-  await seatOnGlow(page, 'jump', 'main', 2790);
+  await pressOnGlowBefore(page, 'jump', 'main', 2790);
   await waitFront(page, 'main', 2815);
   await page.screenshot({ path: resolve(OUT, '130-hoshi-moon-timer.png') });
   for (const at of [2985, 3035]) {
-    await seatOnGlow(page, 'dive', 'main', at - 3);
+    await pressOnGlowBefore(page, 'dive', 'main', at - 3);
     if (at === 2985) {
       await page.waitForTimeout(300);
       await page.screenshot({ path: resolve(OUT, '131-hoshi-under-rafts.png') });

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 /**
  * Stage 4-2 "おおゆきの むら" played through (docs/PHASE8_CHAPTER3_4.md 第 6 部 §15): the snowplow learned in the
  * opening; a wall bumped on purpose ("ぽすっ", the snowy window and the wiper, back 60 m with the button glowing), then
- * burst ("ずぼーん！"); a long buried stretch cleared; the buried station; the seat's face turning back to the jump
+ * burst ("ずぼーん！"); a long buried stretch cleared; the buried station; "こんどは ジャンプ！" and the jump
  * for the stream; the side way whose wall hides the mitten; the ski jump called out with the whistle over the snowy
  * valley; two walls with one press; the buried uphill (the wall stays open after slipping back without the rocket);
  * the snow shed's swirl marks in the light; the ice station of the plaza; the evening festival.
@@ -112,28 +112,28 @@ async function doors(page: Page): Promise<void> {
 }
 
 /**
- * Presses a round button (`id`) each time it glows (with the jump seat's face `mode`, if given) until the train front
+ * Presses a round button (`id`: jump, plow, rocket ...) each time it glows until the train front
  * reaches `at` on `rail` (in the page, so no frame is missed on a slow machine). Returns the presses.
  */
-async function pressOnGlow(page: Page, id: string, rail: string, at: number, mode?: string): Promise<number> {
+async function pressOnGlow(page: Page, id: string, rail: string, at: number): Promise<number> {
   await page.evaluate(() => {
     (window as unknown as { __glow: { presses: number; last: number } }).__glow = { presses: 0, last: -1 };
   });
   await page.waitForFunction(
-    ([button, m, r, t]) => {
+    ([button, r, t]) => {
       const app = document.getElementById('app');
       const b = document.getElementById(button as string);
       const g = (window as unknown as { __glow: { presses: number; last: number } }).__glow;
       if (!app || !b) return false;
       const now = Number(app.dataset.time);
-      if (b.dataset.glow === '1' && (!m || b.dataset.mode === m) && app.dataset.phase === 'driving' && app.dataset.burn !== '1' && now - g.last > 0.5) {
+      if (b.dataset.glow === '1' && app.dataset.phase === 'driving' && app.dataset.burn !== '1' && now - g.last > 0.5) {
         g.last = now;
         g.presses += 1;
         b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
       }
       return app.dataset.rail === r && Number(app.dataset.s) >= Number(t);
     },
-    [id, mode ?? '', rail, at - FRONT] as const,
+    [id, rail, at - FRONT] as const,
     { timeout: 240_000, polling: 'raf' },
   );
   return page.evaluate(() => (window as unknown as { __glow: { presses: number } }).__glow.presses);
@@ -185,7 +185,7 @@ test('stage 4-2 full run: the snowplow, the buried station, the ski jump, the bu
 
   await page.goto('/?stage=4-2');
   const app = page.locator('#app');
-  const seat = page.locator('#jump');
+  const plow = page.locator('#plow');
   const rocket = page.locator('#rocket');
   const light = page.locator('#light');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
@@ -200,21 +200,47 @@ test('stage 4-2 full run: the snowplow, the buried station, the ski jump, the bu
   await page.screenshot({ path: resolve(OUT, '4-2-02-learned.png') });
   await page.locator('#card-button').click();
   expect((await saved(page)).abilities).toContain('plow');
-  // Still four round buttons at most: the snowplow takes the jump's seat.
-  await expect(page.locator('.round-button:visible')).toHaveCount(4);
+  // All six round buttons now (whistle, jump, light, rocket, dive, snowplow): the snowplow has its own button.
+  await expect(plow).toBeVisible();
+  await expect(page.locator('.round-button:visible')).toHaveCount(6);
+  await expect.poll(saidSoFar, { timeout: 10_000 }).toContain('むらさきの ボタンが ゆきかき！');
 
   // ---- M1 ゆきかき しゅっぱつ ----
   await card(page, 'ゆきかき しゅっぱつ', 120_000);
   await waitDriving(page);
   await setNotch(page, NORMAL);
-  // Wall 1 (main 260): the seat turns purple and glows 80 m before it.
+  // Wall 1 (main 260): the purple snowplow button glows 80 m before it (until then it does not).
+  await expect(plow).toHaveAttribute('data-glow', '0');
   await waitFront(page, 'main', 186);
-  await expect(seat).toHaveAttribute('data-mode', 'plow', { timeout: 30_000 });
-  await expect(seat).toHaveAttribute('data-glow', '1');
+  await expect(plow).toHaveAttribute('data-glow', '1', { timeout: 30_000 });
   await expect(app).toHaveAttribute('data-plow', 'near');
   await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('ゆきの かべ！ ゆきかきを おして！');
   await page.screenshot({ path: resolve(OUT, '4-2-03-plow-button.png') });
-  // Not pressed on purpose: "ぽすっ", the snowy window and the wiper, soft (no shake), back 60 m before the wall.
+  // Not pressed on purpose. A jump does not clear a snow wall either (PHASE9_0 §3, too tall): jump 6 m short of it,
+  // seen in the air, and the front still meets it: "ぽすっ", the snowy window and the wiper, soft (no shake), back
+  // 60 m before the wall. (Checked in the page every frame, so a slow machine misses nothing.)
+  await expect(app).toHaveAttribute('data-plow-bumps', '0');
+  const jumpedAtWall = await page.evaluate(
+    () =>
+      new Promise<{ air: boolean; bumps: string | undefined; timedOut: boolean }>((resolve) => {
+        const app = document.getElementById('app') as HTMLElement;
+        const deadline = Date.now() + 120_000;
+        let pressed = false;
+        let air = false;
+        const tick = (): void => {
+          if (!pressed && app.dataset.rail === 'main' && Number(app.dataset.s) + 6 >= 254 && app.dataset.phase === 'driving') {
+            pressed = true;
+            document.getElementById('jump')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+          }
+          if (pressed && app.dataset.air === '1') air = true;
+          if (app.dataset.plowBumps !== '0') resolve({ air, bumps: app.dataset.plowBumps, timedOut: false });
+          else if (Date.now() > deadline) resolve({ air, bumps: app.dataset.plowBumps, timedOut: true });
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+  expect(jumpedAtWall).toEqual({ air: true, bumps: '1', timedOut: false });
   await expect(app).toHaveAttribute('data-plow-bumps', '1', { timeout: 60_000 });
   await expect(page.locator('.snow-splat')).toHaveClass(/is-on/);
   await page.waitForTimeout(400);
@@ -224,13 +250,12 @@ test('stage 4-2 full run: the snowplow, the buried station, the ski jump, the bu
   expect(await saidSoFar()).toContain('ぽすっ！ ゆきに ささった〜');
   expect(await saidSoFar()).toContain('ひかったら ゆきかきを おしてね');
   // Put back 60 m before the wall with the button already glowing.
-  await expect(seat).toHaveAttribute('data-mode', 'plow', { timeout: 10_000 });
-  await expect(seat).toHaveAttribute('data-glow', '1');
+  await expect(plow).toHaveAttribute('data-glow', '1', { timeout: 10_000 });
   console.log('4-2: bumped wall 1 without the snowplow ("ぽすっ"), back before it');
   // Pressed now (standing still works): "かこん", and ten more presses do nothing.
-  await seat.dispatchEvent('pointerdown');
+  await plow.dispatchEvent('pointerdown');
   await expect(app).toHaveAttribute('data-plow', 'on');
-  for (let i = 0; i < 10; i++) await seat.dispatchEvent('pointerdown');
+  for (let i = 0; i < 10; i++) await plow.dispatchEvent('pointerdown');
   await expect(app).toHaveAttribute('data-blade-drops', '1');
   await expect(app).toHaveAttribute('data-phase', 'driving');
   await setNotch(page, NORMAL);
@@ -240,11 +265,11 @@ test('stage 4-2 full run: the snowplow, the buried station, the ski jump, the bu
   await page.screenshot({ path: resolve(OUT, '4-2-05-burst.png') });
   await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('ずぼーん！');
   // Wall 2 and its long buried stretch: plowing all the way ("ざざざ〜！").
-  const two = await pressOnGlow(page, 'jump', 'main', 505, 'plow');
+  const two = await pressOnGlow(page, 'plow', 'main', 505);
   expect(two).toBe(1);
   await waitFront(page, 'main', 540);
   await expect(app).toHaveAttribute('data-plowing', '1');
-  await expect(seat).toHaveAttribute('data-plowing', '1');
+  await expect(plow).toHaveAttribute('data-plowing', '1');
   await camera(page, 'chase');
   await page.waitForTimeout(700);
   await page.screenshot({ path: resolve(OUT, '4-2-06-plowing.png') });
@@ -256,7 +281,7 @@ test('stage 4-2 full run: the snowplow, the buried station, the ski jump, the bu
   await expect(app).toHaveAttribute('data-plow', '');
   await hasRecord(page, 'frozen-fall');
   // Wall 3 buries かまくらえき: cleared, the platform comes out of the snow.
-  const three = await pressOnGlow(page, 'jump', 'main', 925, 'plow');
+  const three = await pressOnGlow(page, 'plow', 'main', 925);
   expect(three).toBe(1);
   await expect(app).toHaveAttribute('data-wall-2', 'burst');
   await stopAt(page, 'main', 1010);
@@ -273,19 +298,23 @@ test('stage 4-2 full run: the snowplow, the buried station, the ski jump, the bu
   await expect(app).toHaveAttribute('data-plow', 'on');
   await setNotch(page, NORMAL);
   await waitFront(page, 'main', 1085);
-  // Past it the seat is the jump again ("ボタンが ジャンプに もどった！").
-  await expect(seat).toHaveAttribute('data-mode', 'jump', { timeout: 20_000 });
-  await page.screenshot({ path: resolve(OUT, '4-2-08-back-to-jump.png') });
-  await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('ボタンが ジャンプに もどった！');
+  // Past it the blade folds up (the button goes back up and stops glowing); there is no "back to the jump" line any
+  // more, but a hint before the gap: "こんどは ジャンプ！" (main 1130).
+  await expect(plow).toHaveAttribute('data-blade', '0', { timeout: 20_000 });
+  await expect(plow).toHaveAttribute('data-glow', '0');
+  expect(await saidSoFar()).not.toContain('ボタンが ジャンプに もどった！');
+  await page.screenshot({ path: resolve(OUT, '4-2-08-blade-up.png') });
+  await waitFront(page, 'main', 1140);
+  await expect.poll(saidSoFar, { timeout: 30_000 }).toContain('こんどは ジャンプ！');
   // The stream (1200–1216): jump when it glows.
-  const jumps = await pressOnGlow(page, 'jump', 'main', 1225, 'jump');
+  const jumps = await pressOnGlow(page, 'jump', 'main', 1225);
   expect(jumps).toBeGreaterThanOrEqual(1);
   await expect(app).toHaveAttribute('data-phase', 'driving');
   // The side way: up the hill to the left, its wall and the mitten in the snow (record ②).
   await expect(page.locator('#junction')).toBeVisible({ timeout: 60_000 });
   await page.locator('#junction .arrow[data-side="left"]').dispatchEvent('pointerdown');
   await waitFront(page, 'miharashi', 5);
-  const side = await pressOnGlow(page, 'jump', 'miharashi', 100, 'plow');
+  const side = await pressOnGlow(page, 'plow', 'miharashi', 100);
   expect(side).toBe(1);
   await hasRecord(page, 'spiral-mitten');
   // Its buffer: back onto the main line (no fail).
@@ -304,7 +333,7 @@ test('stage 4-2 full run: the snowplow, the buried station, the ski jump, the bu
   // Two walls in a row: one press bursts both.
   await setNotch(page, NORMAL);
   const bursts = Number(await app.getAttribute('data-plow-bursts'));
-  const pair = await pressOnGlow(page, 'jump', 'main', 1990, 'plow');
+  const pair = await pressOnGlow(page, 'plow', 'main', 1990);
   expect(pair).toBe(1);
   expect(Number(await app.getAttribute('data-plow-bursts'))).toBe(bursts + 2);
   expect(await saidSoFar()).toContain('かべが ふたつ！');
@@ -322,12 +351,12 @@ test('stage 4-2 full run: the snowplow, the buried station, the ski jump, the bu
   await waitDriving(page);
   await setNotch(page, NORMAL);
   // The buried uphill: the wall is burst, but the rocket is not pressed: "ずるずる", back to 2140.
-  const seven = await pressOnGlow(page, 'jump', 'main', 2210, 'plow');
+  const seven = await pressOnGlow(page, 'plow', 'main', 2210);
   expect(seven).toBe(1);
   await expect(app).toHaveAttribute('data-wall-6', 'burst');
   await waitRewound(page, 'main', 2200);
   expect(await saidSoFar()).toContain('ずるずる');
-  // The wall stays open: this time only the rocket (the seat stays the jump, no "ぽすっ").
+  // The wall stays open: this time only the rocket (no "ぽすっ").
   const bumps = Number(await app.getAttribute('data-plow-bumps'));
   await setNotch(page, NORMAL);
   const rockets = await pressOnGlow(page, 'rocket', 'main', 2360);

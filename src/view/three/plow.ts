@@ -51,6 +51,10 @@ const SNOW_TOP = new Color('#FBFDFF');
 const SNOW_LOW = new Color('#D6E2F0');
 const DENT_COLOR = '#B8C7DD';
 const SPRAY_COUNT = 320;
+/** PHASE9_0 §3: petals and leaves off a play press of the snowplow, clods of earth off a mole's dig (one Points). */
+const BITS_COUNT = 160;
+const PETAL_COLORS = ['#F7A8C8', '#FFD86B', '#FFFFFF', '#8CCB6A', '#F28FB0'].map((c) => new Color(c));
+const EARTH_COLORS = ['#9C7A55', '#B8936A', '#7E6446', '#8CCB6A'].map((c) => new Color(c));
 const BALLS = 40;
 /** Where the scoop sits on the lead car (m, car frame: +Z forward): down, and folded up under the headlight. */
 const BLADE_DOWN = { y: 0.08, z: 6.45, tilt: 0, scale: 1 };
@@ -114,6 +118,12 @@ export class PlowGimmicks {
   private readonly matrix = new Matrix4();
   private readonly quat = new Quaternion();
   private readonly scale = new Vector3();
+  private bits: Points<BufferGeometry, PointsMaterial> | null = null;
+  private readonly bitsPos = new Float32Array(BITS_COUNT * 3);
+  private readonly bitsVel = new Float32Array(BITS_COUNT * 3);
+  private readonly bitsColor = new Float32Array(BITS_COUNT * 3);
+  private readonly bitsLife = new Float32Array(BITS_COUNT);
+  private bitsNext = 0;
   /** The train's speed (m/s), set every frame by the scene. */
   trainSpeed = 0;
 
@@ -127,6 +137,7 @@ export class PlowGimmicks {
 
   async init(models: ModelLibrary): Promise<void> {
     this.models = models;
+    this.buildBits();
     if (this.spans.length === 0) return;
     const coverMaterial = new MeshLambertMaterial({ vertexColors: true, side: DoubleSide, emissive: new Color('#DDE6F2'), emissiveIntensity: 0.35 });
     const dentMaterial = new MeshLambertMaterial({ color: DENT_COLOR });
@@ -361,6 +372,76 @@ export class PlowGimmicks {
       this.emit(24, 3);
     }
     if (e.type === 'plow:spray') this.spraying = e.on;
+    // PHASE9_0 §3: play presses anywhere.
+    if (e.type === 'plow:petals') this.throwBits(46, PETAL_COLORS, 6.4, 3.2);
+    if (e.type === 'dive' && e.state === 'bob' && e.land) this.throwBits(30, EARTH_COLORS, 0, 2.2);
+  }
+
+  /** The petals / clods (one small Points with a colour each, falling slowly: they flutter rather than drop). */
+  private buildBits(): void {
+    const geometry = new BufferGeometry();
+    for (let i = 0; i < BITS_COUNT; i++) this.bitsPos[i * 3 + 1] = -9999;
+    const pos = new Float32BufferAttribute(this.bitsPos, 3);
+    pos.setUsage(DynamicDrawUsage);
+    const color = new Float32BufferAttribute(this.bitsColor, 3);
+    color.setUsage(DynamicDrawUsage);
+    geometry.setAttribute('position', pos);
+    geometry.setAttribute('color', color);
+    this.bits = new Points(
+      geometry,
+      new PointsMaterial({ vertexColors: true, size: 0.55, map: dotTexture(), transparent: true, depthWrite: false, opacity: 0.95 }),
+    );
+    this.bits.name = 'play-bits';
+    this.bits.frustumCulled = false;
+    this.bits.visible = false;
+    this.group.add(this.bits);
+  }
+
+  /** Throws `n` bits to both sides from `z` m ahead of the lead car's middle, `speed` m/s out. */
+  private throwBits(n: number, colors: Color[], z: number, speed: number): void {
+    if (!this.bits) return;
+    const right = new Vector3(1, 0, 0).applyQuaternion(this.train.quaternion);
+    const up = new Vector3(0, 1, 0).applyQuaternion(this.train.quaternion);
+    const forward = new Vector3(0, 0, 1).applyQuaternion(this.train.quaternion);
+    for (let k = 0; k < n; k++) {
+      const i = this.bitsNext;
+      this.bitsNext = (this.bitsNext + 1) % BITS_COUNT;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const origin = this.train.localToWorld(this.tmp.set(side * (z > 0 ? 1.6 : 1.9), 0.4, z + (Math.random() - 0.5) * (z > 0 ? 1 : 10)));
+      this.bitsPos.set([origin.x, origin.y, origin.z], i * 3);
+      const v = this.tmp2
+        .copy(right)
+        .multiplyScalar(side * speed * (0.6 + Math.random() * 0.9))
+        .addScaledVector(up, speed * (0.7 + Math.random() * 0.8))
+        .addScaledVector(forward, this.trainSpeed * (0.8 + 0.3 * Math.random()));
+      this.bitsVel.set([v.x, v.y, v.z], i * 3);
+      const c = colors[Math.floor(Math.random() * colors.length)];
+      this.bitsColor.set([c.r, c.g, c.b], i * 3);
+      this.bitsLife[i] = 1.2 + Math.random() * 0.8;
+    }
+    (this.bits.geometry.getAttribute('color') as Float32BufferAttribute).needsUpdate = true;
+  }
+
+  private updateBits(dt: number): void {
+    if (!this.bits) return;
+    let alive = false;
+    for (let i = 0; i < BITS_COUNT; i++) {
+      if (this.bitsLife[i] <= 0) continue;
+      this.bitsLife[i] -= dt;
+      if (this.bitsLife[i] <= 0) {
+        this.bitsPos[i * 3 + 1] = -9999;
+        continue;
+      }
+      alive = true;
+      // Light things: gravity held back by the air, and the forward speed fades.
+      this.bitsVel[i * 3 + 1] -= 3.2 * dt;
+      const drag = Math.max(0, 1 - 1.4 * dt);
+      this.bitsVel[i * 3] *= drag;
+      this.bitsVel[i * 3 + 2] *= drag;
+      for (let a = 0; a < 3; a++) this.bitsPos[i * 3 + a] += this.bitsVel[i * 3 + a] * dt;
+    }
+    this.bits.visible = alive;
+    if (alive) (this.bits.geometry.getAttribute('position') as Float32BufferAttribute).needsUpdate = true;
   }
 
   /** The scoop goes on the train's nose once the snowplow is known (folded up until lowered). */
@@ -435,6 +516,7 @@ export class PlowGimmicks {
       this.bladeK = this.bladeDown ? Math.min(1, this.bladeK + step) : Math.max(0, this.bladeK - step);
     }
     this.placeBlade();
+    this.updateBits(dt);
     if (!this.spray) return;
     // Snow thrown off both ends of the scoop in two arcs, more and higher the faster the train goes.
     if (this.spraying && this.bladeK > 0.5) {

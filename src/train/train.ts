@@ -60,8 +60,13 @@ export interface TrainEvents extends Record<string, unknown> {
   surfaced: { long: boolean };
   /** v1.10: the bubble dome went on or off. `instant`: put on by a rewind or a resume (no sound, no inflating). */
   dome: { on: boolean; instant: boolean };
-  /** v1.10: a press that only bobs the train (stopped, on land, under water): a playful "ぷくぷく". */
-  bob: void;
+  /**
+   * v1.10: a press that only bobs the train (stopped, under water): a playful "ぷくぷく". `land` (PHASE9_0 §3): on land it
+   * digs in like a mole instead ("ずぶっ" … "ぽこっ"), deeper; never counted as diving.
+   */
+  bob: { land: boolean };
+  /** PHASE9_0 §3: the snowplow pressed with no snow ahead: the blade goes down for a moment and flings petals ("ずざーっ"). */
+  petals: void;
   /**
    * v1.10: "ぽよん": the lead bogie reached a floater without diving under it (`floater` its id), or water without
    * the dome (`floater` null). The train bounces back softly; `rewind` is where it should be put back.
@@ -78,8 +83,11 @@ export interface TrainEvents extends Record<string, unknown> {
   snowBump: { railId: string; s: number; span: PlowSpan; rewind: { railId: string; at: number } };
 }
 
-/** v1.10 (4-2): what a press of "ゆきかき" did ("none": no snow ahead to clear, nothing happens). */
-export type PlowResult = 'ok' | 'on' | 'none' | 'locked';
+/**
+ * v1.10 (4-2): what a press of "ゆきかき" did. "play" (PHASE9_0 §3): no snow ahead to clear, so the blade goes down for
+ * PLOW.playSeconds and flings petals.
+ */
+export type PlowResult = 'ok' | 'on' | 'play' | 'locked';
 
 /** v1.10: what a press of "もぐる" did. */
 export type DiveResult = 'ok' | 'bob' | 'diving' | 'cooldown' | 'air' | 'locked';
@@ -122,7 +130,8 @@ export interface SlopeUnder {
   max: number;
 }
 
-export type JumpResult = 'ok' | 'stopped' | 'cooldown' | 'air' | 'locked' | 'bough';
+/** "busy" (PHASE9_0 §3): diving, under water or digging in on land (the jump waits). */
+export type JumpResult = 'ok' | 'stopped' | 'cooldown' | 'air' | 'locked' | 'bough' | 'busy';
 
 /** A jump arc in space: bogies between `from` and `from + length` on `railId` are lifted. */
 interface JumpArc {
@@ -217,6 +226,8 @@ export class Train {
   private leadWasUnder = false;
   /** v1.10: seconds into a playful bob (−1 = none). */
   private bobT = -1;
+  /** PHASE9_0 §3: the bob going on is a mole's dig on land (deeper). */
+  private bobLand = false;
   /** v1.10: "ぽよん" off a floater or the water: seconds so far and where the car center was. */
   private bouncing: { t: number; from: number } | null = null;
   /** v1.10: floaters the lead bogie got past (this try). */
@@ -225,6 +236,8 @@ export class Train {
   private readonly floaters: FloaterDef[];
   /** v1.10 (4-2): the snowplow's blade is down. */
   private blade = false;
+  /** PHASE9_0 §3: seconds the blade stays down after a play press (no snow ahead). */
+  private bladePlay = 0;
   /** v1.10 (4-2): snow walls burst (span index), and how far each one's buried stretch is cleared (s on its rail). */
   private readonly plowBurst = new Set<number>();
   private readonly plowCleared = new Map<number, number>();
@@ -424,6 +437,7 @@ export class Train {
   jump(): JumpResult {
     if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping) return 'locked';
     if (this.airborne) return 'air';
+    if (this.leadInDive || this.domeLatch > 0 || this.submerged || this.bobT >= 0) return 'busy';
     if (this.jumpCooldown > 0) return 'cooldown';
     if (this.jumpBlocked) return 'bough';
     if (this.state.speed < JUMP.minSpeed) return 'stopped';
@@ -716,24 +730,28 @@ export class Train {
     this.handleEnd(rail);
     this.handleJump(dt, wasAirborne);
     this.handleDive(dt);
-    this.handlePlow();
+    this.handlePlow(dt);
     this.computePose();
   }
 
   // ---- v1.10 (4-2): the snowplow ("ゆきかき") -------------------------------------------------------------------
 
   /**
-   * "ゆきかき": lowers the blade (counted as down at once). Pressed again while down it does nothing ("on"); with no
-   * snow to clear within PLOW.approach m ahead nothing happens either ("none"). Works standing, with the rocket and
-   * the light; not while the controls are locked or during a fail.
+   * "ゆきかき": lowers the blade (counted as down at once). Pressed again while down it does nothing ("on"). With no
+   * snow to clear within PLOW.approach m ahead it is play (PHASE9_0 §3): the blade goes down for PLOW.playSeconds and
+   * flings petals ("play"); snow coming within reach meanwhile keeps it down as a real press would. Works standing,
+   * with the rocket and the light; not while the controls are locked or during a fail.
    */
   plow(): PlowResult {
     if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping) return 'locked';
     if (this.blade) return 'on';
-    if (this.nextPlowWall(PLOW.approach) === null) return 'none';
+    const play = this.nextPlowWall(PLOW.approach) === null;
     this.blade = true;
+    this.bladePlay = play ? PLOW.playSeconds : 0;
     this.events.emit('bladeDown', { instant: false });
-    return 'ok';
+    if (!play) return 'ok';
+    this.events.emit('petals');
+    return 'play';
   }
 
   /** v1.10 (4-2): the snowplow's blade is down. */
@@ -814,7 +832,8 @@ export class Train {
   }
 
   /** Per frame: the front reaching a wall (burst or "ぽすっ"), clearing a buried stretch, the blade going up. */
-  private handlePlow(): void {
+  private handlePlow(dt: number): void {
+    if (this.bladePlay > 0) this.bladePlay = Math.max(0, this.bladePlay - dt);
     const rail = this.currentRail;
     const f = this.frontS;
     const last = this.plowFront;
@@ -836,7 +855,7 @@ export class Train {
         this.plowCleared.set(sp.index, Math.max(this.plowCleared.get(sp.index) ?? sp.from, Math.min(f, sp.to)));
       }
     }
-    if (this.blade && this.nextPlowWall(PLOW.approach) === null) {
+    if (this.blade && this.bladePlay <= 0 && this.nextPlowWall(PLOW.approach) === null) {
       this.blade = false;
       this.events.emit('bladeUp', { instant: false });
     }
@@ -845,6 +864,8 @@ export class Train {
   /** "ぽすっ": the front stops at the wall, sinks in a little and springs back (the caller puts the train back). */
   private snowBump(span: PlowSpan, front: number): void {
     const st = this.state;
+    // PHASE9_0 §3: a jump does not clear a wall (it is too tall): in the air the train comes down against it.
+    this.arcs = [];
     st.s -= front - span.from;
     st.speed = 0;
     this.stopRocket();
@@ -858,6 +879,7 @@ export class Train {
    */
   private resetPlow(): void {
     this.bumping = null;
+    this.bladePlay = 0;
     this.plowFront = null;
     for (const i of this.plowBurst) {
       const sp = this.spanByIndex(i);
@@ -969,8 +991,11 @@ export class Train {
     if (surface && this.diveCooldown > 0) return 'cooldown';
     const length = surface && this.state.speed >= DIVE.minSpeed && !this.submerged ? this.diveLength() : null;
     if (length === null) {
-      if (this.bobT < 0 || this.bobT > DIVE.bobSeconds * 0.6) this.bobT = 0;
-      this.events.emit('bob');
+      // One bob at a time (a press while bobbing does nothing). On land (PHASE9_0 §3) it digs in like a mole, deeper.
+      if (this.bobT >= 0) return 'cooldown';
+      this.bobT = 0;
+      this.bobLand = !surface && !this.submerged && this.waterAt('dives', this.bogieS) === null;
+      this.events.emit('bob', { land: this.bobLand });
       return 'bob';
     }
     const b = this.bogieS;
@@ -1097,7 +1122,7 @@ export class Train {
   }
 
   /**
-   * Route distance (m) from the car front to the next place the jump seat turns into "もぐる" (a stretch on or under
+   * Route distance (m) from the car front to the next place diving helps, the dive hint (a stretch on or under
    * water, or a dive fork) along the way the train will go, or null when none is within `range`.
    */
   waterAhead(range: number): number | null {
@@ -1437,7 +1462,7 @@ export class Train {
     const id = this.state.railId;
     const sf = sag ? sag(id, s + TRAIN.bogieOffset) : 0;
     const sr = sag ? sag(id, s - TRAIN.bogieOffset) : 0;
-    const bob = this.bobT >= 0 ? DIVE.bobDepth * Math.sin((Math.PI * this.bobT) / DIVE.bobSeconds) : 0;
+    const bob = this.bobT >= 0 ? (this.bobLand ? DIVE.digDepth : DIVE.bobDepth) * Math.sin((Math.PI * this.bobT) / DIVE.bobSeconds) : 0;
     const dip = this.bounceDip();
     const hf = hc + JUMP_PITCH * (hFront - hc) - this.fallDrop(true) - sf - bob - dip;
     const hr = hc + JUMP_PITCH * (hRear - hc) - this.fallDrop(false) - sr - bob - dip * 0.4;

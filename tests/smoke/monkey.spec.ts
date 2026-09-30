@@ -14,7 +14,7 @@ const STAGES = (process.env.MONKEY_STAGES ?? '1-1,1-2').split(',');
 const SECONDS = Number(process.env.MONKEY_SECONDS ?? 240);
 const RUNS = Number(process.env.MONKEY_RUNS ?? 2);
 
-/** Runs in the page: random presses every 250 ms, with a little sense (jump when it glows, slow down at stations). */
+/** Runs in the page: random presses every 250 ms, with a little sense (jump, dive and snowplow when they glow, slow down at stations). */
 function installMonkey(seed: number): void {
   let x = seed;
   const rnd = (): number => {
@@ -74,6 +74,14 @@ function installMonkey(seed: number): void {
       act('jump(glow)');
       press(jump);
     }
+    // The dive and the snowplow have their own buttons (PHASE9_0): press them on their glow too.
+    for (const id of ['dive', 'plow']) {
+      const b = visible(id);
+      if (b?.dataset.glow === '1' && rnd() < 0.5) {
+        act(`${id}(glow)`);
+        press(b);
+      }
+    }
     const r = rnd();
     const gauge = visible('stop-gauge');
     if (r < 0.12) {
@@ -115,6 +123,20 @@ function installMonkey(seed: number): void {
     } else if (r < 0.3) {
       const b = visible('bubble');
       if (b) press(b);
+    } else if (r < 0.34) {
+      // "もぐる" anywhere: on land it only digs in, on water it dives (or bobs).
+      const d = visible('dive');
+      if (d) {
+        act('dive');
+        press(d);
+      }
+    } else if (r < 0.38) {
+      // "ゆきかき" anywhere: without snow ahead it is the play stroke.
+      const p = visible('plow');
+      if (p) {
+        act('plow');
+        press(p);
+      }
     }
   }, 250);
 }

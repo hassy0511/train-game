@@ -173,16 +173,6 @@ for (const [id, sp] of Object.entries(SPANS)) {
     check(WATERS[d.water].y - low >= 4.5, `${id} under water ${d.from}–${d.to}: ${(WATERS[d.water].y - low).toFixed(1)} m deep`);
   }
 }
-// Stations are not on or near water (the seat is not "もぐる" while standing there).
-for (const [at, name] of [
-  [45, 'ささぶねえき'],
-  [1120, 'せせらぎえき'],
-  [1889.7, 'しぶきえき'],
-  [2922, 'わきみずえき'],
-]) {
-  const near = [...kawaSpans.surfaces, ...kawaSpans.dives].some((sp) => at >= sp.from - 50 && at <= sp.to + 20);
-  check(!near, `${name} (kawa ${at}) keeps off the water`);
-}
 // Rails under ground: outside every water, a rail is not under the meadow.
 for (const [id, l] of Object.entries(LINES)) {
   let worst = { y: Infinity, s: 0 };
@@ -296,7 +286,7 @@ const MISSIONS = [
     lines: {
       start: 'せせらぎえきへ むかえに いこう！\nみずの うえでは もぐるが つかえる！',
       moving: 'そうそう、その ちょうし！',
-      diveNear: 'ジャンプが もぐるに かわった！',
+      diveNear: 'もぐるが ひかった！',
       diveReady: 'いまだ！ もぐる！',
       diveGo: 'ぶくぶく… あわの ドーム！',
       gapNear: 'しろい なみ！ {speed} で ジャンプ！',
@@ -307,7 +297,7 @@ const MISSIONS = [
       complete: 'なかまを のせたよ！',
     },
     hints: [
-      { railId: 'kawa', at: 400, text: 'ぷかっ！ まるが ジャンプに もどった' },
+      { railId: 'kawa', at: 400, text: 'ぷかっ！ つぎは ジャンプ！' },
       { railId: 'kawa', at: 800, text: 'ぴょこっ！ また もぐろう！' },
     ],
   },

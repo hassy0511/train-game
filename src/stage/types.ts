@@ -509,7 +509,6 @@ export type MissionLines = Partial<
     | 'plowNear'
     | 'plowGo'
     | 'plowLong'
-    | 'plowUp'
     | 'plowBump'
     | 'plowBumpAfter'
     // v1.10 (4-3 ゆきの なみ・トンネル)
@@ -622,7 +621,7 @@ export interface GimmickDef {
 export interface PlowWallParams {
   /** "snow" (default), "sand" or "foam": looks and sounds only. */
   look?: 'snow' | 'sand' | 'foam';
-  /** Said the first time the jump seat turns into "ゆきかき" for this wall (default the mission's plowNear). */
+  /** Said the first time the snowplow button glows for this wall (default the mission's plowNear). */
   line?: string | null;
   /** Where the train front goes back to after bumping it (default `from − PLOW.rewindBefore` on its rail). */
   rewind?: { railId: string; at: number };
