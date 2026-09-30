@@ -548,8 +548,8 @@
       "params": {
         "id": "m-meiro",
         "look": "frame",
-        "position": [-778.2, 0, 1991],
-        "rotationY": 107.7,
+        "position": [-773.3, -1.8, 1996.3],
+        "rotationY": 98.2,
         "width": 24,
         "height": 16,
         "reflect": ["train", "cutscene"]
@@ -583,7 +583,7 @@
       "params": {
         "id": "m-oo",
         "look": "frame",
-        "position": [-1408.1, 0, 3109.4],
+        "position": [-1399.9, -1.8, 3102],
         "rotationY": 132,
         "width": 30,
         "height": 18,
@@ -692,18 +692,18 @@
       { "say": "みどりに ひかったら じしゃくだよ" }
     ],
     "glimpse": [
-      { "camera": "fixed", "at": [-734.6, 6, 1977.1], "lookAt": [-778.2, 8, 1991], "reach": 1 },
+      { "camera": "fixed", "at": [-749.8, 2.8, 1992.9], "lookAt": [-773.3, 8, 1996.3], "reach": 1 },
       {
         "spawn": "sakasa",
         "model": "amanojaku",
-        "onRail": { "railId": "main", "at": 2262, "lateral": 20, "heightFromRail": -0.6 },
+        "onRail": { "railId": "main", "at": 2266, "lateral": 15, "heightFromRail": -0.6 },
         "rotationY": 0,
         "mirror": "hide"
       },
       {
         "spawn": "sakasa-mirror",
         "model": "amanojaku-wave",
-        "onRail": { "railId": "main", "at": 2262, "lateral": 20, "heightFromRail": -0.6 },
+        "onRail": { "railId": "main", "at": 2266, "lateral": 15, "heightFromRail": -0.6 },
         "rotationY": -90,
         "mirror": "only"
       },
@@ -714,7 +714,7 @@
       {
         "spawn": "sakasa",
         "model": "amanojaku-blush",
-        "onRail": { "railId": "main", "at": 2262, "lateral": 20, "heightFromRail": -0.6 },
+        "onRail": { "railId": "main", "at": 2266, "lateral": 15, "heightFromRail": -0.6 },
         "rotationY": -60,
         "mirror": "hide"
       },
@@ -723,12 +723,12 @@
       {
         "spawn": "sakasa",
         "model": "amanojaku",
-        "onRail": { "railId": "main", "at": 2262, "lateral": 20, "heightFromRail": -0.6 },
+        "onRail": { "railId": "main", "at": 2266, "lateral": 15, "heightFromRail": -0.6 },
         "rotationY": 0,
         "mirror": "hide"
       },
-      { "move": "sakasa", "onRail": { "railId": "main", "at": 2262, "lateral": 20, "heightFromRail": -0.19999999999999996 }, "seconds": 0.2 },
-      { "move": "sakasa", "onRail": { "railId": "main", "at": 2262, "lateral": 20, "heightFromRail": -0.6 }, "seconds": 0.2 },
+      { "move": "sakasa", "onRail": { "railId": "main", "at": 2266, "lateral": 15, "heightFromRail": -0.19999999999999996 }, "seconds": 0.2 },
+      { "move": "sakasa", "onRail": { "railId": "main", "at": 2266, "lateral": 15, "heightFromRail": -0.6 }, "seconds": 0.2 },
       { "say": "こ、こんにちは〜！", "who": "amanojaku" },
       { "remove": "sakasa-mirror" },
       { "move": "sakasa", "onRail": { "railId": "main", "at": 2300, "lateral": 70, "heightFromRail": -0.6 }, "seconds": 3 },
@@ -736,18 +736,18 @@
       { "say": "サカサ、てれてる みたい", "emote": "tilt" }
     ],
     "ending": [
-      { "camera": "fixed", "at": [-1328, 5, 3053.4], "lookAt": [-1408.1027103477868, 9, 3109.402082357148], "reach": 1 },
+      { "camera": "fixed", "at": [-1374.5, 2.8, 3076.5], "lookAt": [-1399.93217499843, 6, 3102.0371416170665], "reach": 1 },
       {
         "spawn": "sakasa",
         "model": "amanojaku",
-        "onRail": { "railId": "main", "at": 3548, "lateral": 4, "heightFromRail": -0.6 },
+        "onRail": { "railId": "main", "at": 3559, "lateral": 3, "heightFromRail": -0.6 },
         "rotationY": 90,
         "mirror": "hide"
       },
       {
         "spawn": "sakasa-mirror",
         "model": "amanojaku-shy",
-        "onRail": { "railId": "main", "at": 3548, "lateral": 4, "heightFromRail": -0.6 },
+        "onRail": { "railId": "main", "at": 3559, "lateral": 3, "heightFromRail": -0.6 },
         "rotationY": 0,
         "mirror": "only"
       },
@@ -755,14 +755,14 @@
       { "fx": "hearts", "id": "sakasa-mirror" },
       { "say": "ほんとうは のりたい", "who": "amanojaku", "name": "かがみの サカサ", "icon": "ride" },
       { "say": "サカサの きもち…！", "emote": "jump" },
-      { "camera": "fixed", "at": [-1361.9, 4, 3078.5], "lookAt": [-1408.1027103477868, 8, 3109.402082357148], "reach": 1 },
-      { "move": "sakasa", "onRail": { "railId": "main", "at": 3548, "lateral": 4, "heightFromRail": -0.19999999999999996 }, "seconds": 0.2 },
-      { "move": "sakasa", "onRail": { "railId": "main", "at": 3548, "lateral": 4, "heightFromRail": -0.6 }, "seconds": 0.2 },
+      { "camera": "fixed", "at": [-1377.9, 2.4, 3086.2], "lookAt": [-1399.93217499843, 5, 3102.0371416170665], "reach": 1 },
+      { "move": "sakasa", "onRail": { "railId": "main", "at": 3559, "lateral": 3, "heightFromRail": -0.19999999999999996 }, "seconds": 0.2 },
+      { "move": "sakasa", "onRail": { "railId": "main", "at": 3559, "lateral": 3, "heightFromRail": -0.6 }, "seconds": 0.2 },
       { "say": "さ、さようなら！", "who": "amanojaku" },
       { "remove": "sakasa-mirror" },
       { "fx": "mirrorTurn", "mirror": "m-oo", "to": "back" },
       { "say": "こ、こんにちは〜！", "who": "amanojaku" },
-      { "move": "sakasa", "onRail": { "railId": "main", "at": 3538, "lateral": 60, "heightFromRail": -0.6 }, "seconds": 3 },
+      { "move": "sakasa", "onRail": { "railId": "main", "at": 3549, "lateral": 60, "heightFromRail": -0.6 }, "seconds": 3 },
       { "remove": "sakasa" },
       { "door": "open" },
       { "camera": "fixed", "at": [-1314.7, 3.2, 3042.7], "lookAt": [-1326, 1.8, 3042.9], "reach": 1 },
