@@ -1404,7 +1404,7 @@
     {
       "id": "5-1",
       "chapter": 5,
-      "x": 18,
+      "x": 21,
       "y": 74,
       "diorama": {
         "base": "island-b",
@@ -1424,7 +1424,7 @@
               -6
             ],
             "rotY": 120,
-            "scale": 0.17
+            "scale": 0.09
           },
           {
             "model": "firefly-swarm",
@@ -1433,8 +1433,8 @@
               -6
             ],
             "rotY": 0,
-            "scale": 2,
-            "lift": 3
+            "scale": 1.2,
+            "lift": 1
           },
           {
             "model": "night-tree-a",
@@ -1443,7 +1443,7 @@
               4
             ],
             "rotY": 30,
-            "scale": 0.45
+            "scale": 0.36
           },
           {
             "model": "night-tree-a",
@@ -1452,7 +1452,7 @@
               -14
             ],
             "rotY": 0,
-            "scale": 0.4
+            "scale": 0.32
           },
           {
             "model": "night-tree-a",
@@ -1461,7 +1461,7 @@
               -7
             ],
             "rotY": 70,
-            "scale": 0.42
+            "scale": 0.34
           },
           {
             "model": "glow-mushroom",
