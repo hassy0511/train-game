@@ -143,11 +143,6 @@ const STATIONS = [
   { id: 'teibou', name: 'ていぼうえき', railId: 'main', at: 2710, platformSide: 'right' },
   { id: 'toudai', name: 'とうだいえき', railId: 'main', at: 3180, platformSide: 'left' },
 ];
-for (const st of STATIONS) {
-  if (st.id === 'hoshizoko') continue; // on the trench floor, under water on purpose
-  const near = SPANS.main.surfaces.some((sp) => st.at >= sp.from - 85 && st.at <= sp.to + 20);
-  check(!near, `${st.name} (main ${st.at}) is more than 80 m before the water (the seat is the jump there)`);
-}
 
 // ---------------------------------------------------------------------------------------------------------------
 // Gimmicks, actors, records, missions (§4, §7, §9, §13)
@@ -255,14 +250,14 @@ const MISSIONS = [
       catNear: 'うみどりが せんろに いる！ きてき！',
       catWoke: 'とんでった！ ありがとう〜',
       gapNear: 'こわれてる！ {speed} で とぼう',
-      diveNear: 'ボタンが もぐるに かわった！',
+      diveNear: 'もぐるが ひかった！',
       diveReady: 'いまだ！ もぐる！',
       diveGo: 'ぶくぶく… あわの ドーム！',
       recordFound: 'みつけた！ ずかんに のせよう',
       stationNear: 'さんばしえきだ。ゆっくり！',
       complete: 'ジャンプも もぐるも ばっちり！',
     },
-    hints: [{ railId: 'main', at: 676, text: 'ぷはっ！ ボタンは ジャンプに もどるよ' }],
+    hints: [{ railId: 'main', at: 676, text: 'ぷはっ！ つぎは ジャンプだよ' }],
   },
   {
     id: 'm2',

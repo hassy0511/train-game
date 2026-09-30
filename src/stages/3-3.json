@@ -592,14 +592,14 @@
         "catNear": "うみどりが せんろに いる！ きてき！",
         "catWoke": "とんでった！ ありがとう〜",
         "gapNear": "こわれてる！ {speed} で とぼう",
-        "diveNear": "ボタンが もぐるに かわった！",
+        "diveNear": "もぐるが ひかった！",
         "diveReady": "いまだ！ もぐる！",
         "diveGo": "ぶくぶく… あわの ドーム！",
         "recordFound": "みつけた！ ずかんに のせよう",
         "stationNear": "さんばしえきだ。ゆっくり！",
         "complete": "ジャンプも もぐるも ばっちり！"
       },
-      "hints": [{ "railId": "main", "at": 676, "text": "ぷはっ！ ボタンは ジャンプに もどるよ" }]
+      "hints": [{ "railId": "main", "at": 676, "text": "ぷはっ！ つぎは ジャンプだよ" }]
     },
     {
       "id": "m2",
