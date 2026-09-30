@@ -220,7 +220,7 @@ export class Ambience {
         break;
       case 'mirror':
         // Only a thin shimmer of glass air. No steady tone on purpose: a constant hum would feel eerie.
-        this.layer('white', 'bandpass', 6000, 0.4, 0.008);
+        this.layer('white', 'bandpass', 6000, 0.4, 0.014);
         break;
       case 'castle':
         // A big, calm hall: a low-passed breath (the room's echo comes with the little sounds).
