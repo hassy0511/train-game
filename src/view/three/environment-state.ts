@@ -122,7 +122,7 @@ export class EnvironmentState {
     this.lightingAsSet = env.lighting;
 
     // v1.10: the stage's water is the same everywhere (it cuts the ground's holes), so it is part of the key.
-    const groundKey = env.ground || env.water?.length ? JSON.stringify([env.ground?.size, env.ground?.y, env.water ?? null]) : null;
+    const groundKey = env.ground || env.water?.length ? JSON.stringify([env.ground?.size, env.ground?.y, env.ground?.look ?? null, env.water ?? null]) : null;
     const ground = this.piece('ground', groundKey, () => buildGround(env), scene) as Mesh | null;
     if (ground) paintGround(ground, env);
 

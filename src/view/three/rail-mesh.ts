@@ -92,6 +92,9 @@ const SNOW_RIDGE_FOOT_COLOR = new Color('#C9D6E6');
 const SNOW_RIDGE_TOP_COLOR = new Color('#F6F9FC');
 const SNOW_RIDGE_COLOR_HEIGHT = 20;
 const SNOW_BASE_COLOR = new Color('#E6EDF5');
+/** v1.11 (5-2): toy blocks under the track (`base.look` "blocks"): pastel blocks, BLOCK_SIZE m a side. */
+const BLOCK_COLORS = ['#F6D365', '#8FD3F4', '#F7A8C4', '#7FD8BE', '#B8A4FF', '#FFB38A'].map((c) => new Color(c));
+const BLOCK_SIZE = 3;
 
 /**
  * v1.7: how parts of the track look — slopes (bed colour, arrows) and the rock bed under a rail (`rails[].base`).
@@ -456,8 +459,10 @@ function addBaseSegment(data: GeometryData, start: RailFrame, end: RailFrame, ba
     if (base.toGround) {
       if (groundY === null || top.y - groundY <= 0.05) return null;
       const h = top.y - groundY;
-      const bulge = 1 + RIDGE_BULGE * rockHash(top.x, top.z);
-      const out = new Vector3(f.right.x, 0, f.right.z).normalize().multiplyScalar(side * h * BASE_SPREAD * bulge);
+      // v1.11 (5-2): toy blocks stack nearly straight (no rocky bulge).
+      const blocks = base.look === 'blocks';
+      const bulge = blocks ? 1 : 1 + RIDGE_BULGE * rockHash(top.x, top.z);
+      const out = new Vector3(f.right.x, 0, f.right.z).normalize().multiplyScalar(side * h * (blocks ? 0.12 : BASE_SPREAD) * bulge);
       return new Vector3(top.x + out.x, groundY, top.z + out.z);
     }
     return top.clone().addScaledVector(DOWN, base.depth ?? 3);
@@ -482,6 +487,30 @@ function addBaseSegment(data: GeometryData, start: RailFrame, end: RailFrame, ba
 function rockHash(x: number, z: number): number {
   const v = Math.sin(Math.round(x * 10) * 12.9898 + Math.round(z * 10) * 78.233) * 43758.5453;
   return v - Math.floor(v);
+}
+
+/**
+ * v1.11 (5-2): a base of toy blocks: each quad painted one pastel colour, picked by the BLOCK_SIZE m block its middle
+ * lies in (so the sides show a stack of coloured blocks). Every quad has its own four vertices (addQuad).
+ */
+function paintedBlocks(geometry: BufferGeometry): BufferGeometry {
+  const position = geometry.getAttribute('position');
+  const colors = new Float32Array(position.count * 3);
+  for (let i = 0; i + 3 < position.count; i += 4) {
+    let x = 0;
+    let y = 0;
+    let z = 0;
+    for (let k = 0; k < 4; k++) {
+      x += position.getX(i + k) / 4;
+      y += position.getY(i + k) / 4;
+      z += position.getZ(i + k) / 4;
+    }
+    const cell = Math.floor(x / BLOCK_SIZE) * 7 + Math.floor(y / BLOCK_SIZE) * 3 + Math.floor(z / BLOCK_SIZE) * 5;
+    const c = BLOCK_COLORS[((cell % BLOCK_COLORS.length) + BLOCK_COLORS.length) % BLOCK_COLORS.length];
+    for (let k = 0; k < 4; k++) colors.set([c.r, c.g, c.b], (i + k) * 3);
+  }
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  return geometry;
 }
 
 /**
@@ -559,6 +588,7 @@ function buildChunkParts(
   const chevronData: GeometryData = { positions: [], indices: [] };
   const baseData: GeometryData = { positions: [], indices: [] };
   const snowBaseData: GeometryData = { positions: [], indices: [] };
+  const blocksBaseData: GeometryData = { positions: [], indices: [] };
   const deckData: GeometryData = { positions: [], indices: [] };
   const floats: BufferGeometry[] = [];
   const onSurface = (s: number): boolean => rail.surfaces.some((sp) => s >= sp.from && s <= sp.to);
@@ -600,12 +630,13 @@ function buildChunkParts(
       addBallastSegment(kind === 'up' ? steepData : kind === 'down' ? slideData : bedTarget, start, end);
     }
     const base = baseAt(bases, mid);
-    // A solid bed under the track: rock, or v1.10 (4-2) a snowy ridge (each in its own colours).
-    if (base && (base.look === 'rock' || base.look === 'snow') && hasBase(mid, base)) {
+    // A solid bed under the track: rock, or v1.10 (4-2) a snowy ridge, v1.11 (5-2) toy blocks (each in its own colours).
+    if (base && (base.look === 'rock' || base.look === 'snow' || base.look === 'blocks') && hasBase(mid, base)) {
       const before = index === 0 ? -1 : (samples[index - 1] + startS) / 2;
       const after = index + 2 < samples.length ? (endS + samples[index + 2]) / 2 : rail.length + 1;
       const sameAt = (s: number): boolean => baseAt(bases, s)?.look === base.look && hasBase(s);
-      addBaseSegment(base.look === 'snow' ? snowBaseData : baseData, start, end, base, looks?.groundY ?? null, !sameAt(before), !sameAt(after));
+      const target = base.look === 'snow' ? snowBaseData : base.look === 'blocks' ? blocksBaseData : baseData;
+      addBaseSegment(target, start, end, base, looks?.groundY ?? null, !sameAt(before), !sameAt(after));
     }
   }
   if (looks) {
@@ -652,6 +683,7 @@ function buildChunkParts(
     const ridge = bases.some((b) => b.look === 'rock' && b.toGround);
     parts.push(ridge && groundY !== null ? paintedRidge(geometry, groundY) : painted(geometry, ROCK_BASE_COLOR));
   }
+  if (blocksBaseData.indices.length) parts.push(paintedBlocks(makeGeometry(blocksBaseData)));
   if (snowBaseData.indices.length) {
     const geometry = makeGeometry(snowBaseData);
     const ridge = bases.some((b) => b.look === 'snow' && b.toGround);

@@ -1,6 +1,8 @@
 import { Vector3 } from 'three';
 import type { Whistle } from '../actions/whistle';
 import { CatActor } from '../actors/cat';
+import { Parade } from '../actors/parade';
+import { SpinSystem } from '../gimmick/spin';
 import { GlareDino, LargeDino, makeDino, MidDino, SmallDino, type Dino } from '../actors/dino';
 import type { LureGroup } from '../actors/lure';
 import { FireflyForks, type FireflyFork } from '../gimmick/fireflies';
@@ -54,12 +56,14 @@ import {
   LIGHT,
   LURE,
   MIRROR,
+  PARADE,
   PASSENGER_SECONDS,
   RECORD,
   REFUSE_COOLDOWN,
   REWIND_DISTANCE,
   SLOPE,
   SNOW_WAVE,
+  WINDUP,
 } from '../train/params';
 import type { JunctionSide, Train } from '../train/train';
 import { StopMonitor, type GaugeState, type StopGrade } from './station-stop';
@@ -235,7 +239,17 @@ type DefaultLine =
   | 'fireflyFakeNear'
   | 'fireflyConfused'
   | 'fireflyConfusedLit'
-  | 'fakeRevealed';
+  | 'fakeRevealed'
+  // v1.11 (5-2 おもちゃの まち)
+  | 'spinCall'
+  | 'spinStop'
+  | 'paradeNear'
+  | 'paradeCall'
+  | 'paradeTurn'
+  | 'paradeFollow'
+  | 'paradeMatch'
+  | 'paradeWait'
+  | 'paradeBye';
 
 const DEFAULT_LINES: Record<DefaultLine, string> = {
   tooFast: 'わわっ、はやすぎた〜！ もういっかい！',
@@ -357,6 +371,16 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   fireflyConfused: 'ほたるが まよってる！ ライトで みて！',
   fireflyConfusedLit: 'ちかづくと わかるよ！',
   fakeRevealed: 'にせものの ひかりだ！ サカサの かな',
+  // v1.11 (5-2 おもちゃの まち, PHASE9_CHAPTER5_6 第 5 部 §4.8). paradeNear has no default (said only when written).
+  spinCall: 'こっちを むいた！ いま きてき！',
+  spinStop: 'ぴたっ！ とまった！',
+  paradeNear: '',
+  paradeCall: 'がくたいさんを きてきで まきなおそう',
+  paradeTurn: 'くるりん！ ぱっぱかぱーん！',
+  paradeFollow: 'パレードだ！ ゆっくり ついていこう',
+  paradeMatch: 'ぴったり！ パレードの なかまだ！',
+  paradeWait: 'がくたいさんが まってるよ！',
+  paradeBye: 'ありがとう〜 がくたいさん！',
 };
 
 /**
@@ -374,6 +398,9 @@ const NEED_LINE_OTHER = 'いまは まだ いけないみたい…';
 
 /** Car front to car centre (m): a fork is taken when the car centre passes it. */
 const TRAIN_HALF = 6;
+
+/** v1.11 (5-2): the lever notch nearest the band's pace ("ゆっくり", 5 m/s): it glows behind the marching band. */
+const PARADE_NOTCH = LEVER_NOTCHES.reduce((best, n, i) => (Math.abs(n.speed - PARADE.speed) < Math.abs(LEVER_NOTCHES[best].speed - PARADE.speed) ? i : best), 1);
 
 /** Lever labels by jump hint, for the partner's "つぎの きれめは ふつう で とべる". */
 const HINT_NOTCH: Record<NonNullable<GapDef['hint']>, number> = { normal: 3, fast: 4, max: 5 };
@@ -552,6 +579,15 @@ export class MissionRunner {
   private readonly reversedCalled = new Set<string>();
   /** v1.11 (5-1): times a fawn stopped to gaze at the light (only goes up; a test hook). */
   glareFreezes = 0;
+  /** v1.11 (5-2): the toy band(s) and the spinning forks. */
+  private readonly parades: Parade[];
+  private readonly spins: SpinSystem;
+  /** v1.11 (5-2): the band's timers: held standing (paradeCall again), standing behind it (paradeWait), at "ゆっくり". */
+  private paradeHeldFor = 0;
+  private paradeStandFor = 0;
+  private paradeMatchFor = 0;
+  /** v1.11 (5-2): the ways taken at spinning forks, "kuru-1:loop,kuru-1:good" (only grows; a test hook). */
+  private readonly spinTaken: string[] = [];
 
   constructor(
     private readonly stage: StageData,
@@ -589,6 +625,12 @@ export class MissionRunner {
     this.reversed = new ReversedWhistle(stage.file.gimmicks, stage.actors, train);
     this.fireflies = new FireflyForks(stage.file.junctions, train);
     this.listenNight();
+    // v1.11 (5-2): the band holds the train behind it; the spinning forks pick the way at themselves.
+    this.parades = stage.actors.filter((a) => a.type === 'parade' && a.onRail).map((a) => new Parade(a, train));
+    if (this.parades.length > 0) train.setLeader(() => this.leaderNow());
+    this.spins = new SpinSystem(stage.file.junctions, train);
+    if (this.spins.forks.length > 0) train.setSpinSides((j) => this.spins.side(j.id));
+    this.listenToys();
     this.nuts = stage.actors.filter((a) => a.type === 'nut').map((a) => new RollingNut(a, train));
     this.squirrels = stage.actors.filter((a) => a.type === 'squirrel').map((a) => new Squirrel(a, train));
     this.hoppers = stage.actors
@@ -720,6 +762,7 @@ export class MissionRunner {
     if (set.has(id)) return;
     set.add(id);
     const text = opts.own ?? this.lines[key] ?? DEFAULT_LINES[key];
+    if (!text) return;
     const lines = text.split('\n');
     if (opts.now) {
       this.ports.sayNow(lines[0]);
@@ -941,6 +984,145 @@ export class MissionRunner {
       const d = g.onRail ? g.distance() : null;
       return d !== null && d > 0;
     });
+  }
+
+
+  // ---- v1.11 (5-2) the toy town: the band and the spinning forks ----
+
+  /** The band nearest ahead that still walks on the rail (Train.setLeader), or null. */
+  private leaderNow(): { railId: string; at: number; speed: number; gap: number } | null {
+    let best: { railId: string; at: number; speed: number; gap: number } | null = null;
+    let bestD = Infinity;
+    for (const p of this.parades) {
+      const l = p.leader();
+      if (!l) continue;
+      const d = this.train.routeDistance(l.railId, l.at);
+      if (d === null || d < -TRAIN_HALF * 2) continue;
+      if (d < bestD) {
+        bestD = d;
+        best = l;
+      }
+    }
+    return best;
+  }
+
+  /** v1.11 (5-2): the spinning forks' lines and the view's events. */
+  private listenToys(): void {
+    this.spins.events.on('wake', ({ id, line }) => {
+      this.events.post({ type: 'spin', id, state: 'wake' });
+      if (this.phase !== 'driving' || !line) return;
+      const key = `spin:${id}`;
+      if (this.zoneLines.has(key)) return;
+      this.zoneLines.add(key);
+      this.ports.sayAsync(line);
+    });
+    this.spins.events.on('turn', ({ id, side }) => this.events.post({ type: 'spin', id, state: 'turn', side }));
+    this.spins.events.on('good', ({ id }) => this.events.post({ type: 'spin', id, state: 'good' }));
+    this.spins.events.on('fixed', ({ id }) => {
+      this.events.post({ type: 'spin', id, state: 'fixed' });
+      this.events.post({ type: 'windup', id, kind: 'spin' });
+      if (this.phase === 'driving') this.ports.sayNow(this.lines.spinStop ?? DEFAULT_LINES.spinStop);
+      this.events.post({ type: 'partner:emote', kind: 'jump' });
+    });
+    this.spins.events.on('taken', ({ id, side, good }) => {
+      this.spinTaken.push(`${id}:${good ? 'good' : 'loop'}`);
+      this.events.post({ type: 'spin:taken', id, side, good });
+    });
+  }
+
+  /** Tells the view what band `p` does now (it moves the band between these). */
+  private postParade(p: Parade): void {
+    this.events.post({ type: 'parade', id: p.actor.id, state: p.state, railId: p.railId, tail: p.tail, speed: p.speed });
+  }
+
+  /**
+   * v1.11 (5-2): per frame while driving: the band (its lines: pointed out, wind me, follow slowly, well matched, it is
+   * waiting, bye) and the spinning forks (the call when one glows, once a try).
+   */
+  private updateToys(dt: number): void {
+    const speed = Math.abs(this.train.state.speed);
+    for (const p of this.parades) {
+      for (const o of p.update(dt)) {
+        if (o === 'near') this.sayNight('paradeNear', 'try', { tag: p.actor.id });
+        else if (o === 'state') this.postParade(p);
+        else if (o === 'bye') this.sayNight('paradeBye', 'try', { tag: p.actor.id });
+      }
+      if (p.callable) this.sayNight('paradeCall', 'try', { now: true, tag: p.actor.id });
+      // Held standing behind the unwound band: asked again every PARADE.callAgain s.
+      const unwound = p.state === 'idle' || p.state === 'back';
+      if (unwound && this.train.leaderHolding && speed < 0.3) {
+        this.paradeHeldFor += dt;
+        if (this.paradeHeldFor >= PARADE.callAgain) {
+          this.paradeHeldFor = 0;
+          this.ports.sayNow(this.lines.paradeCall ?? DEFAULT_LINES.paradeCall);
+        }
+      } else this.paradeHeldFor = 0;
+      const marching = p.state === 'march' || p.state === 'wait';
+      const d = marching ? p.distance() : null;
+      const close = d !== null && d <= PARADE.hintRange;
+      if (close) this.sayNight('paradeFollow', 'try', { tag: p.actor.id });
+      // At "ゆっくり" close behind for a while: "ぴったり！".
+      if (close && this.train.state.notch === PARADE_NOTCH) {
+        this.paradeMatchFor += dt;
+        if (this.paradeMatchFor >= PARADE.matchSeconds) this.sayNight('paradeMatch', 'try', { tag: p.actor.id });
+      } else this.paradeMatchFor = 0;
+      // Standing behind the marching band: it marks time and waits ("がくたいさんが まってるよ！").
+      if (marching && speed < 0.3) {
+        this.paradeStandFor += dt;
+        if (this.paradeStandFor >= PARADE.waitSay) this.sayNight('paradeWait', 'try', { tag: p.actor.id });
+      } else this.paradeStandFor = 0;
+    }
+    this.spins.update(dt);
+    const glowing = this.spins.glowing;
+    if (glowing) this.sayNight('spinCall', 'try', { now: true, tag: glowing.id });
+  }
+
+  /** v1.11 (5-2): the first band's state ("" without one; a test hook). */
+  get paradeState(): string {
+    return this.parades[0]?.state ?? '';
+  }
+
+  /** v1.11 (5-2): metres from the train front to the first band's tail (rounded; "" when not ahead). */
+  get paradeGap(): string {
+    const p = this.parades[0];
+    const d = p && p.state !== 'gone' ? p.distance() : null;
+    return d === null ? '' : String(Math.round(d));
+  }
+
+  /** v1.11 (5-2): the band holds the train's speed down now. */
+  get paradeHeld(): boolean {
+    return this.parades.length > 0 && this.train.leaderHolding;
+  }
+
+  /** v1.11 (5-2): the lever notch that glows behind the marching band ("ゆっくり"), or null. */
+  get paradeLeverHint(): number | null {
+    if (this.phase !== 'driving') return null;
+    for (const p of this.parades) {
+      if (p.state !== 'march' && p.state !== 'wait') continue;
+      const d = p.distance();
+      if (d !== null && d <= PARADE.hintRange) return PARADE_NOTCH;
+    }
+    return null;
+  }
+
+  /** v1.11 (5-2): "kuru-1:sleep,kuru-2:stay-good". */
+  get spinStates(): string {
+    return this.spins.states;
+  }
+
+  /** v1.11 (5-2): the ways taken at spinning forks so far, "kuru-1:loop,kuru-1:good". */
+  get spinTakenList(): string {
+    return this.spinTaken.join(',');
+  }
+
+  /** v1.11 (5-2): how each spinning fork looks now (for the view). */
+  get spinLooks(): { id: string; side: 'left' | 'right'; turning: boolean; good: boolean }[] {
+    return this.spins.looks;
+  }
+
+  /** v1.11 (5-2): whether the stage has the band or spinning forks (their test hooks are written every frame). */
+  get hasToys(): boolean {
+    return this.parades.length > 0 || this.spins.forks.length > 0;
   }
 
   /** v1.10: water ahead, the dive button's hint started: the partner says so, the first time in a mission. */
@@ -1312,6 +1494,8 @@ export class MissionRunner {
     this.parcel = parcel;
     this.ports.setCargo(passengers, parcel);
     this.resetActors(target);
+    // v1.11 (5-2): the spinning forks on the way here were stopped the good way.
+    this.spins.reset({ resumeAt: target });
     // The flower bridges the way from the start to this station crosses must have bloomed.
     const way = this.wayTo(target);
     const crossed = (railId: string, from: number, to: number): boolean =>
@@ -1461,6 +1645,7 @@ export class MissionRunner {
     this.updateTraces();
     this.updateRecords();
     if (this.updateNight(dt)) return;
+    this.updateToys(dt);
     if (this.checkDeadEnd() || this.checkSpur()) return;
     const outcome = this.stop?.update(dt) ?? null;
     if (outcome) {
@@ -1487,8 +1672,14 @@ export class MissionRunner {
       }
     }
     for (const cat of this.cats) {
-      const c = cat.update();
+      const c = cat.update(dt);
       if (!c) continue;
+      if (c.kind === 'walk') {
+        // v1.11 (5-2): a reverse-wound toy walks back towards the train.
+        const frame = this.stage.network.getRail(cat.railId).frameAt(c.to);
+        this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'walk', position: frame.position.clone(), seconds: c.seconds });
+        continue;
+      }
       // v1.10 (3-3): an animal with its own lines (the sea turtle) says them, and at once (only useful now).
       const own = cat.lines;
       if (c.kind === 'near') {
@@ -1499,12 +1690,16 @@ export class MissionRunner {
         this.train.emergencyStop();
         this.ports.autoCamera('side');
         cat.flee();
-        this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'flee', position: this.catFleePosition(cat), seconds: 0.6 });
+        // v1.11 (5-2): a wind-up toy stays where it is, ticking (startled, its key rattles).
+        if (cat.windup) {
+          const here = this.stage.network.getRail(cat.railId).frameAt(cat.at).position.clone();
+          this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'stopped', position: here, seconds: 0 });
+        } else this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'flee', position: this.catFleePosition(cat), seconds: 0.6 });
         // v1.10 (4-3): a snowman on the rail is soft (it only wobbles).
-        // v1.11 (5-1): so is the hedgehog (it curls up where it is).
+        // v1.11 (5-1): so is the hedgehog (it curls up where it is); v1.11 (5-2) and the wind-up toys.
         const look = (cat.actor.params as { look?: string }).look;
-        const soft = look === 'snowman' || look === 'hedgehog';
-        this.finishDrive({ kind: 'fail', reason: 'cat', soft, text: own.danger, after: own.after, rewind: { railId: cat.railId, at: cat.at - REWIND_DISTANCE } });
+        const soft = look === 'snowman' || look === 'hedgehog' || cat.windup;
+        this.finishDrive({ kind: 'fail', reason: 'cat', soft, text: own.danger, after: own.after, rewind: { railId: cat.railId, at: cat.placedAt - REWIND_DISTANCE } });
         return;
       }
     }
@@ -1771,6 +1966,15 @@ export class MissionRunner {
    * riding, or whose leaf is ahead of the train again, go back to their leaf.
    */
   private resetActors(target?: { railId: string; at: number }): void {
+    // v1.11 (5-2): the band back where it waits (or gone, past it), the spinning forks asleep (fixed ones stay).
+    for (const p of this.parades) {
+      p.reset(target);
+      this.postParade(p);
+    }
+    this.spins.reset();
+    this.paradeHeldFor = 0;
+    this.paradeStandFor = 0;
+    this.paradeMatchFor = 0;
     // v1.11 (5-1): everyone asleep again, the tanukis in their bushes, the fireflies in the grass.
     this.hush.reset();
     this.reversed.reset();
@@ -1862,6 +2066,9 @@ export class MissionRunner {
     // v1.11 (5-1): the hedgehog (cat glow) in reach, and a firefly fork in calling reach.
     if (this.cats.some((c) => c.glows())) glow = true;
     if (this.fireflies.glow) glow = true;
+    // v1.11 (5-2): the unwound band in calling reach, a spinning fork pointing the good way.
+    if (this.parades.some((p) => p.callable)) glow = true;
+    if (this.spins.glow) glow = true;
     // Never in a whistle-reversed stretch (the hush mark says "しーっ" there instead).
     if (this.reversed.current) glow = false;
     this.ports.whistleHint(glow);
@@ -1923,7 +2130,7 @@ export class MissionRunner {
 
   /** Test hook (v1.10, 3-3): every animal on the rail and its state, "umidori:sleep,kame:awake". */
   get actorStates(): string {
-    return this.cats.map((c) => `${c.actor.id}:${c.state}`).join(',');
+    return this.cats.map((c) => `${c.actor.id}:${c.shownState}`).join(',');
   }
 
   /** Test hook: every whale's state, "kujira:follow". */
@@ -2126,7 +2333,9 @@ export class MissionRunner {
     else if (short && this.lightOn) line = 'fellLight';
     // v1.10 (4-2): a gap may have its own line (the snowy valley: "ジャンプだいは きてきで でるよ").
     const text = gap.bridge === undefined ? gap.line : undefined;
-    this.finishDrive({ kind: 'fail', reason, line, text, rewind: gap.rewind ?? { railId, at: gap.from - REWIND_DISTANCE } });
+    // v1.11 (5-2): into a ball pit ("ぼよよん… ぽふっ") is soft.
+    const soft = this.stage.file.environment.fall === 'balls' ? true : undefined;
+    this.finishDrive({ kind: 'fail', reason, line, text, soft, rewind: gap.rewind ?? { railId, at: gap.from - REWIND_DISTANCE } });
   }
 
   /** Lever moved while locked: explain why. */
@@ -2186,12 +2395,26 @@ export class MissionRunner {
     }
     for (const cat of this.cats) {
       if (cat.onWhistle()) {
-        this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'awake', position: this.catFleePosition(cat), seconds: cat.params.fleeSeconds });
+        // v1.11 (5-2): a wind-up toy's key turns back first ("きりきり… くるりん！"), then it hops aside.
+        const delay = cat.windup ? WINDUP.keySeconds : undefined;
+        this.events.post({ type: 'actor:state', id: cat.actor.id, state: 'awake', position: this.catFleePosition(cat), seconds: cat.params.fleeSeconds, delay });
+        if (cat.windup) this.events.post({ type: 'windup', id: cat.actor.id, kind: 'toy' });
         const woke = cat.lines.woke ?? this.lines.catWoke;
         if (woke) this.ports.sayAsync(woke);
         this.events.post({ type: 'partner:emote', kind: 'jump' });
       }
     }
+    // v1.11 (5-2): the band (wound: it turns and marches; marching: it answers), then the spinning forks.
+    for (const p of this.parades) {
+      const r = p.onWhistle();
+      if (r === 'wound') {
+        this.postParade(p);
+        this.events.post({ type: 'windup', id: p.actor.id, kind: 'band' });
+        this.ports.sayNow(this.lines.paradeTurn ?? DEFAULT_LINES.paradeTurn);
+        this.events.post({ type: 'partner:emote', kind: 'jump' });
+      } else if (r === 'fanfare') this.events.post({ type: 'parade:fanfare', id: p.actor.id });
+    }
+    this.spins.onWhistle();
     for (const hopper of this.hoppers) {
       if (hopper.onWhistle(this.hopperFree)) this.board(hopper);
     }

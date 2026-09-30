@@ -17,6 +17,7 @@ import {
   LIGHT,
   PLOW,
   RECORD,
+  WINDUP,
   SNOW_WAVE,
   RESOLUTION_MIN_FPS,
   RESOLUTION_SLOW_SECONDS,
@@ -499,7 +500,7 @@ async function boot(): Promise<void> {
   const cargo = createCargoStrip(uiEl);
   const toast = createToast(uiEl);
   /** What a fall fades to: black, a white cloud (1-3) or a green leaf (2-1). */
-  const FALL_COLORS = { dark: '#000000', cloud: '#ffffff', leaf: '#d6efb4', water: '#cdeefe', snow: '#f2f7fc' } as const;
+  const FALL_COLORS = { dark: '#000000', cloud: '#ffffff', leaf: '#d6efb4', water: '#cdeefe', snow: '#f2f7fc', balls: '#ffe0f0' } as const;
   const fade = createFade(uiEl, FALL_COLORS[stage.file.environment.fall ?? 'dark']);
   /**
    * v1.11 (PR2c): a cutscene changes the look (day ⇄ night): the stage's own environment with the step's fields written
@@ -567,7 +568,9 @@ async function boot(): Promise<void> {
 
   train.events.on('landed', () => audio.playLand());
   train.events.on('fell', () => {
-    audio.playFall();
+    // v1.11 (5-2): into the ball pit under a toy-block gap: "ぼよよん… ぽふっ".
+    if (stage.file.environment.fall === 'balls') audio.playBallPit();
+    else audio.playFall();
     if (!hasMissions) {
       // Test course: no runner to handle it; fade and put the train back before the gap.
       void (async () => {
@@ -837,6 +840,13 @@ async function boot(): Promise<void> {
   }
 
   train.events.on('junctionApproach', (e) => {
+    // v1.11 (5-2): a spinning fork shows no arrows (its flag and the whistle's glow are the sign).
+    if (e.junction.spin) {
+      ui.junction.hide();
+      ui.junction.spin(e.junction.id);
+      return;
+    }
+    ui.junction.spin(null);
     const ability = e.junction.needs;
     const side = e.default === 'left' ? 'right' : 'left';
     ui.junction.show({ ...e, needs: ability ? { side, ability, has: abilities.has(ability) } : undefined, bubbles: e.junction.bubbles });
@@ -1050,7 +1060,9 @@ async function boot(): Promise<void> {
       const silk = hint === null ? null : (fastestNotchUnder(hint, 1) ?? fastestNotchUnder(hint, train.speedScale));
       // v1.10 (4-3): the snow wave close behind a slow train: "はやい" glows.
       // v1.11 (5-1): tanukis dancing on the rail ahead: "とまる" glows.
-      ui.lever.setHint(runner.chaseLeverHint ? FAST_NOTCH : runner.lureStopHint ? STOP_NOTCH : runner.phase === 'driving' && iceNotch !== null ? iceNotch : silk);
+      // v1.11 (5-2): close behind the marching band: "ゆっくり" glows.
+      const parade = runner.paradeLeverHint;
+      ui.lever.setHint(runner.chaseLeverHint ? FAST_NOTCH : runner.lureStopHint ? STOP_NOTCH : parade !== null ? parade : runner.phase === 'driving' && iceNotch !== null ? iceNotch : silk);
     } else if (hasIce) ui.lever.setHint(iceNotch);
 
     const pose = train.getPose();
@@ -1176,6 +1188,25 @@ async function boot(): Promise<void> {
         app.dataset.fireflies = runner.fireflyStates;
         app.dataset.fireflyCalls = String(runner.fireflyCalls);
       }
+      if (runner.hasToys) {
+        // v1.11 (5-2) test hooks (PHASE9_CHAPTER5_6 第 5 部 §4.10).
+        app.dataset.parade = runner.paradeState;
+        app.dataset.paradeGap = runner.paradeGap;
+        app.dataset.paradeHeld = runner.paradeHeld ? '1' : '0';
+        app.dataset.spins = runner.spinStates;
+        app.dataset.spinTaken = runner.spinTakenList;
+        view.setSpinLooks?.(runner.spinLooks);
+        // The band's footsteps on the song's beat while it walks ("とん").
+        const walking = runner.paradeState === 'march' || runner.paradeState === 'exit';
+        if (walking) {
+          bandStepIn -= dt;
+          if (bandStepIn <= 0) {
+            bandStepIn += BAND_STEP_SECONDS;
+            bandSteps += 1;
+            audio.playBandStep(bandSteps % 4 === 0);
+          }
+        } else bandStepIn = 0;
+      }
       // The hush mark (a moon and ZZZ): a hint only; both buttons work as always (PHASE9_0 §6).
       lightButton.setMark(runner.lightMark ? 'hush' : null);
       ui.whistle.setMark(runner.whistleMark ? 'hush' : null);
@@ -1276,6 +1307,10 @@ async function boot(): Promise<void> {
   const fawns = new Set(stage.file.actors.filter((a) => a.type === 'dino-small' && lookOf(a) === 'fawn').map((a) => a.id));
   const hedgehogs = new Set(stage.file.actors.filter((a) => a.type === 'cat' && lookOf(a) === 'hedgehog').map((a) => a.id));
   let lastFailReason: string | null = null;
+  // v1.11 (5-2): windings so far (toys, the band, spinning forks, cutscene figures; only goes up), the town wound.
+  let windups = 0;
+  app.dataset.windups = '0';
+  const figureModels = new Map<string, string>();
   let fails = 0;
   const fakeOut = new Set<string>();
   /** v1.10 (3-1): jump pads that are a whale's back (it surfaces with a song and throws the train with its spout). */
@@ -1512,6 +1547,25 @@ async function boot(): Promise<void> {
     if (e.type === 'lure' && e.state === 'dance') audio.playLureDance();
     if (e.type === 'fireflies:call') audio.playFireflyWake();
     if (e.type === 'fake:out') audio.playFakeOut();
+    // v1.11 (5-2): the toy town's sounds and test hooks.
+    if (e.type === 'windup') {
+      if (!e.instant) {
+        windups += 1;
+        app.dataset.windups = String(windups);
+        audio.playWindUp();
+        if (e.kind === 'band') audio.playBandFanfare(WINDUP.keySeconds);
+        if (e.kind === 'spin') audio.playSpinStop();
+      }
+      if (e.town) {
+        app.dataset.town = 'wound';
+        if (!e.instant) audio.playBandFanfare(WINDUP.keySeconds + 0.4);
+      }
+    }
+    if (e.type === 'parade:fanfare') audio.playBandFanfare();
+    if (e.type === 'spin' && e.state === 'turn') audio.playSpinTurn();
+    if (e.type === 'spin' && e.state === 'good') audio.playSpinGood();
+    if (e.type === 'actor:spawn') figureModels.set(e.id, e.model);
+    if (e.type === 'actor:move' && figureModels.get(e.id) === 'toy-block-train' && e.seconds > 0) audio.playToyPuff();
     // Test hooks: the evening sky, the swirl marks shown by the light.
     if (e.type === 'sky') app.dataset.sky = e.sky;
     if (e.type === 'trace') app.dataset.trace = e.on ? '1' : '0';
@@ -1565,6 +1619,11 @@ boot().catch((err: unknown) => {
   p.appendChild(msg);
   uiEl.appendChild(p);
 });
+
+/** v1.11 (5-2): the band's footsteps: one a beat of the song "omocha" (116 a minute). */
+const BAND_STEP_SECONDS = 60 / 116;
+let bandStepIn = 0;
+let bandSteps = 0;
 
 /** v1.10 (4-1): the "ゆっくり" notch (the ice station's first glow). */
 const ICE_SLOW_NOTCH = 2;

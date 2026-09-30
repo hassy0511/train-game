@@ -19,6 +19,8 @@ export interface JunctionArrows {
   /** The light showed the true way: highlight it instead of the (reversed) sign's. */
   reveal(side: JunctionSide): void;
   hide(): void;
+  /** v1.11 (5-2): a spinning fork is coming (no arrows for it): its id on `#junction[data-spin]`, or null. */
+  spin(id: string | null): void;
 }
 
 /** v1.10 (3-1): the little bubble marks on a bubble fork's arrows: three rising white ones, three sinking pink swirls. */
@@ -97,6 +99,10 @@ export function createJunctionArrows(root: HTMLElement, onSelect: (side: Junctio
     },
     hide(): void {
       box.hidden = true;
+    },
+    spin(id): void {
+      if (id) box.dataset.spin = id;
+      else delete box.dataset.spin;
     },
   };
 }

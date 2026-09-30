@@ -66,6 +66,11 @@ function isHedgehog(actor: ResolvedActor): boolean {
 function isFawn(actor: ResolvedActor): boolean {
   return actor.type === 'dino-small' && (actor.params as { look?: string }).look === 'fawn';
 }
+/** v1.11 (5-2): a "cat" with params.look "windup-chick" / "windup-car" is a reverse-wound toy ("-back" until wound). */
+function windupLook(actor: ResolvedActor): string | null {
+  const look = (actor.params as { look?: string }).look;
+  return actor.type === 'cat' && typeof look === 'string' && look.startsWith('windup-') ? look : null;
+}
 /** v1.10 (3-2): a "dino-small" with params.look "duck" is a mother duck and her ducklings crossing. */
 function isDuck(actor: ResolvedActor): boolean {
   return actor.type === 'dino-small' && (actor.params as { look?: string }).look === 'duck';
@@ -87,6 +92,8 @@ interface ActorMove {
   to: Vector3;
   elapsed: number;
   seconds: number;
+  /** v1.11 (5-2): seconds to wait before it sets off (a toy's key turns back first). */
+  delay: number;
   bob: boolean;
   /** v1.10 (4-3): it tumbles over and over on the way ("ころころ"), standing up again at the end. */
   roll: boolean;
@@ -235,11 +242,17 @@ export class ActorLayer {
         this.lookModels.set(actor.id, { sleep: 'snowman', awake: 'snowman' });
         this.rollers.add(actor.id);
       }
+      const windup = windupLook(actor);
+      if (windup) {
+        this.lookModels.set(actor.id, { sleep: `${windup}-back`, awake: windup });
+        this.hoppers.add(actor.id);
+      }
     }
     // Nuts and squirrels are drawn by the forest gimmicks, grasshoppers by the meadow ones and rocks by the volcano
     // ones (they move on their own).
     // v1.11 (5-1): the little tanukis (lure groups) by the night layer (night.ts).
-    const drawnElsewhere = new Set(['trigger', 'nut', 'squirrel', 'grasshopper', 'rock-roll', 'rock-drop', 'whale', 'lure']);
+    // v1.11 (5-2): the toy band by the toy town layer (toy.ts).
+    const drawnElsewhere = new Set(['trigger', 'nut', 'squirrel', 'grasshopper', 'rock-roll', 'rock-drop', 'whale', 'lure', 'parade']);
     await Promise.all(
       actors
         .filter((actor) => !drawnElsewhere.has(actor.type))
@@ -350,7 +363,7 @@ export class ActorLayer {
   private async addCrossingGates(actors: ResolvedActor[]): Promise<void> {
     // A seabird basks on an open line (a sea cliff), not at a level crossing: no gate for it.
     const placements = actors
-      .filter((actor) => actor.type === 'cat' && !isSeabird(actor) && !isSeal(actor) && !isTurtle(actor) && !isSnowman(actor) && !isHedgehog(actor))
+      .filter((actor) => actor.type === 'cat' && !isSeabird(actor) && !isSeal(actor) && !isTurtle(actor) && !isSnowman(actor) && !isHedgehog(actor) && windupLook(actor) !== 'windup-chick')
       .map((actor) => ({
         model: 'crossing-gate',
         position: actor.position.clone().add(new Vector3(-3, 0, 0).applyQuaternion(actor.quaternion)),
@@ -518,12 +531,12 @@ export class ActorLayer {
     return instance;
   }
 
-  private move(id: string, to: Vector3, seconds: number): void {
+  private move(id: string, to: Vector3, seconds: number, delay = 0): void {
     const object = this.objects.get(id);
     if (!object) return;
     const oldMove = this.moving.findIndex((move) => move.id === id);
     if (oldMove >= 0) this.moving.splice(oldMove, 1);
-    if (seconds <= 0) {
+    if (seconds <= 0 && delay <= 0) {
       object.position.copy(to);
       return;
     }
@@ -533,7 +546,8 @@ export class ActorLayer {
       from: object.position.clone(),
       to: to.clone(),
       elapsed: 0,
-      seconds,
+      seconds: Math.max(seconds, 1e-3),
+      delay,
       bob: this.objectModels.get(id) === 'amanojaku' || this.objectModels.get(id) === 'amanojaku-blush' || this.hoppers.has(id),
       roll: this.rollers.has(id) || (this.objectModels.get(id) ?? '').startsWith('snowman') || this.objectModels.get(id) === 'snow-wave',
     });
@@ -664,7 +678,15 @@ export class ActorLayer {
             neck.t = 0;
           }
         }
-        if (event.position) this.move(event.id, event.position, event.seconds ?? 0);
+        if (event.position) this.move(event.id, event.position, event.seconds ?? 0, event.delay ?? 0);
+        break;
+      }
+      case 'windup': {
+        // v1.11 (5-2): a cutscene figure wound the right way round: its model without "-back", where it stands.
+        if (event.kind !== 'cutscene') break;
+        const object = this.objects.get(event.id);
+        const model = this.objectModels.get(event.id);
+        if (object && model?.endsWith('-back')) await this.place(event.id, model.slice(0, -5), object.position, object.quaternion);
         break;
       }
       case 'record:found': {
@@ -741,6 +763,11 @@ export class ActorLayer {
   update(dt: number): void {
     for (let index = this.moving.length - 1; index >= 0; index -= 1) {
       const move = this.moving[index];
+      if (move.delay > 0) {
+        move.delay -= dt;
+        if (move.delay > 0) continue;
+        move.from.copy(move.object.position);
+      }
       move.elapsed = Math.min(move.elapsed + dt, move.seconds);
       const t = move.elapsed / move.seconds;
       move.object.position.lerpVectors(move.from, move.to, t);

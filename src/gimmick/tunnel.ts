@@ -20,6 +20,8 @@ export interface TunnelZone {
   portal: boolean;
   /** The big ice hall inside it (no tube there): a stretch of it, or the whole of it ("all"), or none. */
   hall: { from: number; to: number } | 'all' | null;
+  /** v1.11 (5-2): "ice" (4-3's arched icy tube, default) or "toybox" (the inside of a big toy box, its lid open). */
+  look: 'ice' | 'toybox';
 }
 
 const num = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -46,6 +48,7 @@ export function tunnelZones(gimmicks: GimmickDef[]): TunnelZone[] {
       lightGlow: num(p.lightGlow, TUNNEL.lightGlow),
       portal: p.portal !== false,
       hall,
+      look: p.look === 'toybox' ? 'toybox' : 'ice',
     });
   });
   return out;

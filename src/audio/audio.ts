@@ -455,6 +455,81 @@ export class AudioEngine {
     for (let i = 0; i < 5; i++) this.knock(500, i * 0.07, 0.09, o);
   }
 
+  // ---- v1.11 (5-2) おもちゃの まち (PHASE9_CHAPTER5_6 第 5 部 §10) ----------------------------------------------------
+
+  /** A key wound back the right way: small clicks coming faster, then a rising "くるりん", "きりきり… くるりん！". */
+  playWindUp(): void {
+    const o = this.out(0.15, 1.4);
+    let t = 0;
+    for (let i = 0; i < 12; i++) {
+      this.ping(2400, t, 0.02, 'triangle', 0.05, 2400, 0.001, o);
+      t += 0.05 - (0.03 * i) / 11;
+    }
+    this.ping(660, t + 0.02, 0.15, 'sine', 0.1, 990, 0.01, o);
+  }
+
+  /** The toy band's "ぱっぱかぱーん": four notes of the game's own (G G C E) on a soft trumpet, and a soft cymbal. */
+  playBandFanfare(delay = 0): void {
+    const o = this.out(0.3, 1.3);
+    const notes: [number, number, number][] = [
+      [392, 0, 0.12],
+      [392, 0.14, 0.08],
+      [523, 0.24, 0.12],
+      [659, 0.38, 0.4],
+    ];
+    for (const [f, at, len] of notes) {
+      this.ping(f, delay + at, len, 'triangle', 0.11, f, 0.01, o);
+      this.ping(f * 2, delay + at, len * 0.6, 'sine', 0.03, f * 2, 0.01, o);
+    }
+    this.hiss({ delay: delay + 0.38, seconds: 0.2, gain: 0.03, filter: 'highpass', freq: 6000, dest: o });
+  }
+
+  /** The band's footstep "とん" on the beat (`accent`: every fourth, with a tiny cymbal "ちっ"). */
+  playBandStep(accent = false): void {
+    const o = this.out(0.05, 1);
+    this.ping(110, 0, 0.08, 'sine', 0.07, 90, 0.004, o);
+    this.hiss({ seconds: 0.03, gain: 0.02, filter: 'bandpass', freq: 900, q: 1, dest: o });
+    if (accent) this.hiss({ delay: 0.01, seconds: 0.06, gain: 0.015, filter: 'highpass', freq: 7000, dest: o });
+  }
+
+  /** A spinning fork turning over: four wooden clicks and a little rise, "かたかた… くるっ". */
+  playSpinTurn(): void {
+    const o = this.out(0.1, 1.1);
+    for (let i = 0; i < 4; i++) this.knock(900, i * 0.06, 0.06, o);
+    this.ping(500, 0.24, 0.1, 'sine', 0.06, 700, 0.01, o);
+  }
+
+  /** A spinning fork points the good way: two high notes, "ぴこん" (higher than the magnet's "ぴろん"). */
+  playSpinGood(): void {
+    const o = this.out(0.2, 1.2);
+    this.ping(1568, 0, 0.06, 'sine', 0.07, 1568, 0.004, o);
+    this.ping(2093, 0.07, 0.08, 'sine', 0.07, 2093, 0.004, o);
+  }
+
+  /** The whistle stopped a spinning fork: a wooden "ぴたっ" with a little bell. */
+  playSpinStop(): void {
+    const o = this.out(0.2, 1.3);
+    this.knock(1200, 0, 0.1, o);
+    this.ping(880, 0, 0.05, 'sine', 0.08, 880, 0.004, o);
+    this.bell(1319, 0.04, 0.08, 0.5);
+  }
+
+  /** Into the ball pit: a soft wobbling drop and a puff, "ぼよよん… ぽふっ". */
+  playBallPit(): void {
+    const o = this.out(0.1, 1.6);
+    this.ping(300, 0, 0.4, 'sine', 0.12, 180, 0.01, o);
+    this.ping(318, 0.04, 0.34, 'sine', 0.06, 190, 0.01, o);
+    this.ping(282, 0.08, 0.3, 'sine', 0.05, 170, 0.01, o);
+    this.hiss({ color: 'pink', delay: 0.35, seconds: 0.2, gain: 0.08, filter: 'lowpass', freq: 1000, q: 0.7, dest: o });
+  }
+
+  /** Sakasa's toy block train: two tiny puffs, "しゅっ しゅっ". */
+  playToyPuff(): void {
+    const o = this.out(0.05, 1.2);
+    this.hiss({ seconds: 0.08, gain: 0.04, filter: 'bandpass', freq: 3000, q: 1.2, dest: o });
+    this.hiss({ delay: 0.22, seconds: 0.08, gain: 0.04, filter: 'bandpass', freq: 3000, q: 1.2, dest: o });
+  }
+
   /** Stop grade: a bell for ok; for perfect, two rising bells and a little sparkle. */
   playStop(kind: 'perfect' | 'ok'): void {
     this.bell(660, 0, 0.16, 0.6);

@@ -92,20 +92,24 @@ export class SnowGimmicks {
     const material = new MeshLambertMaterial({ vertexColors: true, flatShading: true, side: DoubleSide });
     for (const z of this.zones) {
       for (const [from, to] of this.tubeStretches(z)) {
-        const tube = this.buildTube(z.railId, from, to);
+        const tube = z.look === 'toybox' ? this.buildBox(z.railId, from, to) : this.buildTube(z.railId, from, to);
         if (!tube) continue;
         const mesh = new Mesh(tube, material);
         mesh.name = `tunnel:${z.index}:${Math.round(from)}`;
         this.group.add(mesh);
       }
     }
-    const portal = this.zones.some((z) => z.portal) ? await models.load('tunnel-portal') : null;
+    this.addStickers();
+    const portal = this.zones.some((z) => z.portal && z.look === 'ice') ? await models.load('tunnel-portal') : null;
+    // v1.11 (5-2): the toy box's mouth is its open lid.
+    const lid = this.zones.some((z) => z.portal && z.look === 'toybox') ? await models.load('toybox-lid') : null;
     const glow = this.zones.some((z) => z.portal) ? await models.load('exit-glow') : null;
     for (const z of this.zones) {
-      if (!z.portal || !portal || !glow) continue;
+      const mouth = z.look === 'toybox' ? lid : portal;
+      if (!z.portal || !mouth || !glow) continue;
       // The mouths: their outside faces away from the tunnel (+Z of the model).
-      this.place(portal, z.railId, z.from, -1, 0);
-      this.place(portal, z.railId, z.to, 1, 0);
+      this.place(mouth, z.railId, z.from, -1, 0);
+      this.place(mouth, z.railId, z.to, 1, 0);
       // The daylight at the far end, facing in (only seen from inside).
       this.place(glow, z.railId, z.to + 2.5, -1, 0);
     }
@@ -187,6 +191,70 @@ export class SnowGimmicks {
     g.computeVertexNormals();
     g.computeBoundingSphere();
     return g;
+  }
+
+  /**
+   * v1.11 (5-2): the inside of the big toy box along `railId` from `from` to `to`: a flat floor, straight cream walls
+   * with soft stripes and a flat lid over it (TUNNEL.width × TUNNEL.height + 1), and little star stickers on the walls
+   * that glow faintly in the dark (a Points of their own, one draw).
+   */
+  private buildBox(railId: string, from: number, to: number): BufferGeometry | null {
+    const rail = this.stage.network.rails.get(railId);
+    if (!rail) return null;
+    const half = TUNNEL.width / 2 + 0.5;
+    const top = TUNNEL.height + 1 + FLOOR;
+    const profile: [number, number][] = [
+      [-half, FLOOR],
+      [-half, top],
+      [half, top],
+      [half, FLOOR],
+      [-half, FLOOR],
+    ];
+    const pos: number[] = [];
+    const col: number[] = [];
+    const right = new Vector3();
+    const steps = Math.max(1, Math.ceil((to - from) / TUNNEL.ring));
+    const rings: Vector3[][] = [];
+    for (let i = 0; i <= steps; i++) {
+      const f = rail.frameAt(from + ((to - from) * i) / steps);
+      right.crossVectors(f.tangent, UP).normalize();
+      rings.push(profile.map(([x, y]) => f.position.clone().addScaledVector(right, x).addScaledVector(UP, y)));
+    }
+    for (let k = 0; k + 1 < rings.length; k++) {
+      for (let j = 0; j + 1 < profile.length; j++) {
+        const [a, b, c, d] = [rings[k][j], rings[k][j + 1], rings[k + 1][j + 1], rings[k + 1][j]];
+        const floor = j === profile.length - 2;
+        const color = floor ? mix('#C9B8A0', '#B7A58C', hash(k, j, 3)) : j === 1 ? mix('#F4E6CF', '#EBD9BC', hash(k, 1, 4)) : k % 2 ? mix('#FFF1D6', '#F6E3C2', 0.3) : mix('#FCE3EC', '#F7D4E1', 0.3);
+        for (const v of [a, b, c, a, c, d]) {
+          pos.push(v.x, v.y, v.z);
+          col.push(color.r, color.g, color.b);
+        }
+      }
+      // Star stickers on the walls every few rings.
+      if (k % 3 === 1) {
+        const f = rail.frameAt(from + ((to - from) * (k + 0.5)) / steps);
+        right.crossVectors(f.tangent, UP).normalize();
+        for (const side of [-1, 1]) this.stickers.push(f.position.clone().addScaledVector(right, side * (half - 0.1)).addScaledVector(UP, 2.5 + hash(k, side, 5) * 4));
+      }
+    }
+    const g = new BufferGeometry();
+    g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new Float32BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    g.computeBoundingSphere();
+    return g;
+  }
+
+  /** v1.11 (5-2): the toy box's star stickers (glowing dots, one Points). */
+  private readonly stickers: Vector3[] = [];
+
+  private addStickers(): void {
+    if (this.stickers.length === 0) return;
+    const g = new BufferGeometry();
+    g.setAttribute('position', new Float32BufferAttribute(this.stickers.flatMap((v) => [v.x, v.y, v.z]), 3));
+    const points = new Points(g, new PointsMaterial({ color: '#FFF3A0', size: 0.9, sizeAttenuation: true, fog: false }));
+    points.name = 'toybox-stars';
+    this.group.add(points);
   }
 
   /** A copy of `template` on the floor at `s` on `railId`, its +Z along the rail (`dir` 1) or against it (−1). */
