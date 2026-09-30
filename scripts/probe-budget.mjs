@@ -18,6 +18,8 @@
  * v1.11 (PR5): every stage is measured with the magnet light learned (its odds and ends by the line are drawn).
  * v1.11: a hidden (test) stage is probed when it is named. A look a cutscene changes to (the "environment" step: 0-1's
  * night) is probed too: every rail point again under it, as the cameras "<camera>+<lighting>".
+ * v1.11 (PR8a): a stage with back junctions (うしろむきの わき道) is also measured reversed on each siding every 10 m, as
+ * the cameras "rear" (the rear window) and "chase-rev" (what cab and chase turn into reversing), うしろむき learned.
  * Runs the dev server, since the __debugView / __debugTrain handles only exist in dev builds.
  * Needs Playwright's Chromium (PW_CHROMIUM_PATH to reuse an installed one). BUDGET_ROWS=40 lists more objects.
  */
@@ -233,6 +235,28 @@ function instrument() {
     }
     return out;
   };
+  /** v1.11 (PR8a): the train reversed with its front at `s` on `railId` (a back siding): one frame per camera. */
+  window.__probeReverseAt = async (railId, s, cameras) => {
+    window.__debugTrain.reverseAt(railId, s);
+    // The turn ("ぐるりん") takes half a second of game time; the game's camera goes to the rear window meanwhile.
+    for (let i = 0; i < 40 && window.__debugTrain.turning; i++) await frame();
+    await frame();
+    const out = [];
+    for (const camera of cameras) {
+      view.setCamera(camera, true);
+      tally = new Map();
+      await frame();
+      const { calls, triangles } = renderer.info.render;
+      out.push({ camera, calls, tris: triangles, objects: [...tally] });
+      tally = null;
+    }
+    // Forward again for whatever is measured next.
+    window.__debugTrain.rewindTo(s, railId);
+    await frame();
+    return out;
+  };
+  // v1.11 (PR8a): with うしろむき learned (the swirl posts pink).
+  view.onStageEvent({ type: 'ability', id: 'reverse' });
   // v1.11 (PR5): measured as after 5-3 (the magnet light learned): the iron odds and ends by the line and the targets'
   // glints are drawn, the magnet on the roof too (PHASE9_CHAPTER5_6 第 2 部 M11: "小物は ぜんぶ ならべて 描く").
   view.onStageEvent({ type: 'ability', id: 'magnetLight' });
@@ -303,6 +327,26 @@ try {
       }
     };
     await probeRails('');
+    // v1.11 (PR8a): reversed on the back sidings (the rear window's frames).
+    const sidings = (stage.junctions ?? []).filter((j) => j.back).map((j) => (j.left === j.railId ? j.right : j.left));
+    for (const id of sidings) {
+      const rail = rails.find((r) => r.id === id);
+      if (!rail) continue;
+      for (let s = 6.5; s <= rail.length; s += 10) {
+        points += 1;
+        const frames = await page.evaluate(([rid, at, cameras]) => window.__probeReverseAt(rid, at, cameras), [id, s, ['rear', 'chase-rev']]);
+        for (const f of frames) {
+          const frame = { ...f, stage: stage.id, rail: id, s: Math.round(s * 10) / 10 };
+          if (!byCamera.has(f.camera)) byCamera.set(f.camera, { stage: stage.id, camera: f.camera, frames: 0, calls: null, tris: null, worst: null });
+          const row = byCamera.get(f.camera);
+          row.frames += 1;
+          if (!row.calls || f.calls > row.calls.calls) row.calls = frame;
+          if (!row.tris || f.tris > row.tris.tris) row.tris = frame;
+          if (!row.worst || load(f) > load(row.worst)) row.worst = frame;
+          if (over(f)) failures.push(frame);
+        }
+      }
+    }
     for (const env of cutsceneLooks(stage)) {
       await page.evaluate((e) => window.__debugView.applyEnvironment(e), env);
       await probeRails(`+${env.lighting}`);

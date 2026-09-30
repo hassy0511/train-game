@@ -50,7 +50,7 @@ interface Rail {
   points: Vec3[];             // 2点以上。レール上面の中心線。Catmull-Rom（centripetal）で補間
   up?: Vec3;                  // 既定 [0,1,0]。線路全体の上方向（重力逆転ステージ用。区間指定は gimmicks 側）
   gaps?: { from: number; to: number }[];   // 線路なし区間（m）。ジャンプで越える
-  oneWay?: boolean;           // true = 逆走専用（通常方向は進入不可）
+  // oneWay は 使わない（v1.11 PR8a で 読み込みが はじく。うしろむきでしか 入れない わき道は junctions[].back ＝ §22）
   end:
     | { type: "buffer" }                              // 車止め。自動停止
     | { type: "merge"; railId: string; at: number }   // 他の線路に合流
@@ -1439,3 +1439,62 @@ type LineKey = /* v1.11 (5-3) */ 'flipIn' | 'flipOut' | 'mirrorGateNear' | 'mirr
 - わざと まちがえた 形は `tests/stages-bad/mirror-*.json`（はんてんの 中に 分かれ道、みじかい はんてん、きてきの もんが 駅に 近い、切れ目を 写す かがみが ない、まぼろしの はしに 穴、まぼろしの 道が いきどまり で ない、そっぽの かがみに まと が ない、かんばんの 字、ない かがみを まわす、`notes` だけ）
 - `#app` の `data-flip`（`1`／空）・`data-flips`（入った 回数。ふえる だけ）・`data-flip-gate`（200 m 以内の きてきの もんの `shut`／`open`／空）・`data-gate-bumps`（ぽよんの 回数）・`data-phantoms`（`k-j1:solid,gap:main:700:gone` の ように。`solid`／`gone`／`fall`）・`data-glass`（先頭が ガラスの 上 1）・`data-mirror-facing`（まわった かがみ `m-oo:back`）。`#view.is-flipped`・`#mirror-fade.is-on`・`#card.is-reflect`
 - できごと（`src/core/stage-events.ts`）: `flip:in`・`flip:out`・`flip:gate`（`open`／`bump`）・`phantom`・`mirror:turn`・`glass`。本番に デバッグの 口は 足さない（テストは `addInitScript` の 記録係 `window.__mirror`）
+
+## 22. v1.11 の追加（うしろむき `reverse` の しくみ: まえ／うしろ の 切りかえ・来た 道を もどる・うしろむきの わき道・うしろの ホーム、2026-09-30 PR8a）
+`schemaVersion` は 1 の まま、ぜんぶ 省略可。設計は `docs/PHASE9_CHAPTER5_6.md` 第 3 部 第 A 部（`docs/PHASE9_0_FREE_ABILITIES.md` §5 が 先に きく）。全ステージ共通の 数は `src/train/params.ts` の `REVERSE`・`TRAIL`。実例: テストコース `src/stages/0-0.json`（うしろむきの わき道 `ura`、記録 `test-ura`、切れ目 main 620–632）と ためしの ステージ `src/stages/0-5.json`（てすとの うしろむき、`hidden: true`・`chapter: 0`: 駅の いきすぎ・うしろの ホーム・ねこ・ゆきの なみの まね）。まだ だれも うしろむきを 覚えない（6-1 M2 で 覚える。PR8b／PR9）。
+
+### しくみ（JSON には 書かない）
+- レバーの となりの「まえ／うしろ」切りかえ（`#reverse-switch`）。うしろむきを 覚えて いないと 出ない。止まって いれば すぐ「ぐるりん」（0.5 秒）、走って いれば ふつうの ブレーキで 止まって から（その あいだ もう 1 回で とりけし）
+- うしろむきは どこでも「ゆっくり」（5 m/s）まで（ライトで 0.7 倍）。**通った 道を そのまま もどる**（分かれ道・合流も 来た とおり。ふつうの 分かれ道では 矢印を 出さない）
+- 止まる 所（いちばん うしろの はしで、「おっとっと」。しっぱい なし）: 切れ目の 1 m 手前、とんだ 所・もぐった 所の はしの 1 m 手前、さいごに 通った 駅（先頭の はしが 停止線に ぴったり）、ステージの はじまり・巻き戻しの 位置、通った 道の はし（2000 m）、わき道の 車止めの 0.5 m 手前
+- うしろむきの あいだと、まえに もどって 前に いちばん 先まで 行った 所に もう 一度 着くまで（もどり）は、しかけ・生き物・ヒントの せりふが うごかない（坂は たいら、こおりは すべらない。記録は とれる。時計・ゆきの なみは うごく）
+- ロケットは「ぷすっ」（うごかない）、ジャンプは その場で 0.3 m ぴょこっ、もぐるは もぐら ごっこ、ゆきかきは あそびの かき
+- 駅を いきすぎた とき（うしろむきを 覚えて いれば）: 60 m まで しっぱいに しない。「いきすぎ〜！ うしろで もどって！」、切りかえが 光る。うしろで もどれば 停止線で 止まり いつもの 採点
+
+### うしろむきの わき道（`junctions[].back`）
+```json
+"rails": [{ "id": "ura", "points": [[258, 0, 172], "…", [315.76, 0, 180]], "end": { "type": "merge", "railId": "main", "at": 470 } }],
+"junctions": [{ "id": "ura-guchi", "railId": "main", "at": 470, "back": true, "left": "main", "right": "ura", "default": "left", "line": "うしろに わきみちが ある！" }]
+```
+- うしろむきの ときだけ はたらく 分かれ道（スイッチバック）。左右の 1 つが この 分かれ道の `railId`（`default`）、もう 1 つが わき道。わき道は ふつうの 線路で、**おわりが `merge` で この 分かれ道の (`railId`, `at`)**、はじまり（s = 0）が 車止め（`rail-mesh.ts` が −s に むけて 描く。ローダーは 置かない）
+- **左右は うしろむきに すすむ ときの 左右**（うしろの まどから 見た 左右）
+- 前に 通りすぎて（3 両 ぜんぶ）から うしろへ 下がると、いちばん うしろの はしが 40 m 手前で 矢印（`#junction[data-back="1"]`、5 m 手前で きまる）。わき道から 出て きた ときは 出ない
+- `line`（なくて よい、`null` で 言わない）: 切りかえが 光りはじめた ときの ひとこと（なければ ミッションの `backNear`）
+- `glow`（既定 `"auto"`）: 通りすぎた あと 80 m まで 切りかえを 光らせる とき。`"auto"` ＝ わき道に まだ とって いない 記録か、いまの ステップの 駅（`stations[].reverse`）が ある。`true` いつも、`false` 光らせない
+- ポイントの よこ 3.2 m（わき道と 反対がわ）に ローダーが ぐるぐるの 柱（`reverse-post`、覚える まえは 灰色 `reverse-post-off`）を 立てる。覚えて いない 子が 柱の そばで 止まると「うしろむきに はしれたら…」（ステージで 1 回）
+- ローダーは `back` の 分かれ道を `junctions` から ぬいて `StageData.backJunctions` に わける（前向きの しくみは 見ない）
+
+### うしろの ホーム（`stations[].reverse`）
+```json
+{ "id": "ura-home", "name": "うらの ホーム", "railId": "ura", "at": 0.5, "platformSide": "left", "reverse": true }
+```
+- うしろむきの わき道の おくに だけ。`at` は いちばん うしろの はしが 止まる 所（車止めから 0.5 m）。ホーム・札・乗客の 列は `at` から +s 向きに ならぶ。`platformSide` は +s に 対する 左右
+- 着いた ＝ うしろむきで わき道の 車止めに 止まった。いつも「ぴたっ！」（ゲージ・はやすぎ・とおりすぎ なし）。そのあと ドアは いつもどおり。ドアが しまると 切りかえが 光る（まえへ）
+- ミッションの さいごの ステップに しない
+
+### 記録（`requires: "reverse"`）・`endLines`
+- 取れるのは うしろむきの あいだ（止まって いても よい）、いちばん うしろの 車両の まん中から 25 m 以内（`onRail` で 同じ 線路なら 線路に そって）
+- `records[].endLines`（`{ text, who? }[]`）: その 記録を 見つけた あと、わき道の 車止めで 止まった ときに 言う（ミッションで 1 回）
+- 覚える まえは 図鑑に「？」と 灰色の うしろむきの 絵
+
+### せりふの キー（v1.11 の うしろむきの 分）
+```ts
+type LineKey = /* v1.11 (PR8a) */ 'backNear' | 'backArrows' | 'reverseNudge' | 'reverseStop' | 'reverseStopGap' | 'reverseEnd' | 'backUp' | 'refuseRocketBack' | 'reverseOops';
+```
+- 既定: `backNear`「うしろむきで いって みよう！」・`backArrows`「やじるしで わきみちへ！」（ステージで 1 回）・`reverseNudge`「レバーを あげると うしろへ すすむよ」（うしろむきで 6 秒 とまる の まま、1 回）・`reverseStop`「おっとっと！ ここまで」・`reverseStopGap`「おっとっと！ きれめだ」（どちらも 20 秒に 1 回 まで）・`reverseEnd`「ついた！ まえに もどろう」・`backUp`「いきすぎ〜！ うしろで もどって！」・`refuseRocketBack`「うしろでは つかえないよ」・`reverseOops`「あれれ？ まえに もどろう」。`needAbility`（うしろむき）の 既定は「うしろむきに はしれたら…」
+- しっぱいの 理由に `reverse`（念のため。ふだんは 起きない）
+
+### 読み込み時の 検査（`validate.ts` の 形の 検査 ＋ `validateBackJunctions`）
+- `back: true` の 分かれ道: 左右 両方、1 つが 自分の `railId`、`default` は その 側。`dive`・`bubbles`・`needs`・`signReversed`・`fireflies`・`spin`・`phantom` と いっしょに 書かない。`line`・`glow` は `back` の 分かれ道 だけ
+- わき道: `end` が `merge` で 分かれ道の (`railId`, `at`)（0.5 m 以内）、はじまりに 分かれ道も 合流も ない、長さ 46〜150 m、口で わき道の おわりの 向きと 線路の +s の 角が 30° 以下、形が 左右と 合う（口から 20 m の 点）。わき道に 切れ目・水・`plow-wall`・`slope`・`ice`・`thin-ice`・`camera`・`jump-pad`・`updraft`・`bough`・`flower-bridge`・`fragile`・`magnet`・`mirror-flip`・うきもの・線路の 上の 役者・分かれ道・ふつうの 駅 なし
+- 口の まわり（線路の `at − 40`〜`at + 60`）に ほかの 分かれ道・合流・切れ目・水の はし・`plow-wall`・じしゃくの `bridge`／`gate` なし、駅の 停止線から 40 m 以上、ゆきの なみの 道の 上で ない
+- `stations[].reverse`: わき道の 上、`at` ≤ 1、ミッションの さいごの ステップで ない
+- `back` の 分かれ道が ある ステージでは、`requires: "reverse"` の 記録は わき道の（いちばん うしろの 車両の まん中が 来られる）点から 25 m 以内
+- `rails[].oneWay`・`gimmicks[]` の `reverse`（はじめの 案）は はじく
+- わざと まちがえた 形: `tests/stages-bad/back-*.json`・`rail-one-way.json`・`gimmick-reverse.json`
+
+### テスト用の しるし
+- `#reverse-switch` の `data-dir`（`front`／`back`）・`data-pending`（`1`／`0`）・`data-glow`・`hidden`。`#junction[data-back="1"]`
+- `#app` の `data-direction`（`1`／`-1`）・`data-reverse`（空／`pending`／`turning`／`on`／`stop`）・`data-reverse-stop`（さいごに 止まった わけ: `gap`・`air`・`dive`・`station`・`floor`・`buffer`）・`data-retracing`・`data-tail-rail`・`data-tail-s`（いちばん うしろの 車両の まん中）・`data-trail-m`（通った 道の 長さ）・`data-reverse-toggles`（向きが かわった 回数。ふえる だけ）・`data-back-arrows`・`data-hop`・`data-camera="rear"`／`"chase-rev"`、PR7 の `data-car-gap`・`data-car-lift-err`
+- できごと: `reverse`（`on`）・`reverse:stop`・`reverse:siding`・`reverse:backup`。本番に デバッグの 口は 足さない（テストは `addInitScript` の 記録係 `window.__reverseLog`。開発だけ キー `r` で 切りかえ、`__debugTrain.reverseAt(railId, s)`）
+
