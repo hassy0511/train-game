@@ -12,7 +12,7 @@
 
 ```ts
 type Vec3 = [number, number, number];   // [x, y, z] m
-type AbilityId = "whistle" | "light" | "jump" | "rocket" | "dive" | "magnetLight" | "reverse";
+type AbilityId = "whistle" | "light" | "jump" | "rocket" | "dive" | "plow" | "magnetLight" | "reverse";
 
 interface StageFile {
   schemaVersion: 1;
@@ -1280,3 +1280,85 @@ type LineKey = /* v1.11 (5-2) */ 'spinCall' | 'spinStop' | 'paradeNear' | 'parad
 
 ### テスト用の しるし
 `#app` の `data-windups`（まきなおした 数の 合計: おもちゃ・がくたい・ポイント・寸劇。ふえる だけ）・`data-actors`（`hiyoko:sleep|walk|awake|stopped`）・`data-parade`（`idle`／`back`／`turn`／`march`／`wait`／`exit`／`gone`）・`data-parade-gap`（m）・`data-parade-held`（1: でんしゃが おさえられて いる）・`data-spins`（`kuru-1:sleep,kuru-2:stay-good`。`sleep`／`stay-good`／`stay-other`／`turn`／`hold`／`fixed`／`mercy`）・`data-spin-taken`（`kuru-1:loop,kuru-1:good`、ふえる だけ）・`data-town`（`wound`）。`#junction[data-spin]`。できごと: `windup`・`parade`・`parade:fanfare`・`spin`・`spin:taken`
+
+## 20. v1.11 の追加（じしゃくライト `magnetLight` の しくみ、2026-09-30 PR5）
+`schemaVersion` は 1 の まま、ぜんぶ 省略可。設計は `docs/PHASE9_CHAPTER5_6.md` 第 2 部（`docs/PHASE9_0_FREE_ABILITIES.md` が 先に きく: 覚えた わざは いつでも どこでも。光るのは ヒント だけ）。実例は テストコース `src/stages/0-0.json` の わき道 `jishaku`（手で 書いた）と ためしの ステージ `src/stages/0-4.json`（てすとの じしゃく、`hidden: true`・`chapter: 0`、`scripts/layout-0-4.mjs`。JSON を 手で 直さない）。全ステージ共通の 数は `src/train/params.ts` の `MAGNET`・`IRON_PROPS`。
+
+### ライトの ボタンの 3 段（しくみ。JSON には 書かない）
+- 押す たびに **ライト → じしゃく → けす**（じしゃくライトを 覚える 前は いまの まま ライト ⇄ けす）。0.4 秒 まち（`LIGHT.cooldown`）。ボタンが 見せるのは 子どもが えらんだ 段 だけ（`#light[data-light]`）。場所で 顔は かわらない
+- じしゃくの 段は ライトの しかけ（霧・トンネル・かがみ・逆標識・しーっ・`requires: "light"` の 記録）には **「ライト なし」**。光の すじは うすい みどり、霧・夜・トンネルで 見える きょりは ライトの 半分だけ のびる
+- 減速: ライトと じしゃくの 段は 0.7 倍、**ひっぱって いる あいだ（2 秒 まで）だけ 0.5 倍**（`Train.speedCaps`、TECH_SPEC §2）
+- テストコース 0-0 は じしゃくライトも 持って いる（ライトが 3 段）
+
+### じしゃくの まと（`gimmicks[]` の `magnet`）
+```json
+{ "type": "magnet", "railId": "jishaku", "from": 90,
+  "params": { "id": "hoshi", "kind": "pick", "look": "star", "lateral": 7, "height": 3, "line": "また てつの ほし！" } }
+{ "type": "magnet", "railId": "jishaku", "from": 200, "to": 208,
+  "params": { "id": "hanare", "kind": "bridge", "look": "rail-piece", "piece": { "lateral": -9, "height": 0, "rotationY": 60 },
+              "line": "レールが はなれてる！ ひっぱろう！", "done": "つながった！", "rewind": { "railId": "jishaku", "at": 140 } } }
+{ "type": "magnet", "railId": "jishaku", "from": 380, "params": { "id": "tobira", "kind": "gate", "look": "door", "done": "あいた！" } }
+{ "type": "magnet", "railId": "main", "from": 980,
+  "params": { "id": "kurutto", "kind": "turn", "look": "mirror", "lateral": -12, "height": 4, "junction": "usono", "mirror": "m-turn",
+              "line": "そっぽの かがみ！ じしゃくで くるっ！", "done": "くるっ！ ほんとうの みちが みえた！", "miss": "かがみが そっぽ… うその みち！" } }
+```
+| `kind` | `look` | `from` | じしゃくの 段で 近づくと | じしゃく なしで 着くと |
+|---|---|---|---|---|
+| `pick` | `star`・`bell` | ものの 位置 | 電車へ とんで きて「かちっ… ぽん」、ふわっと もとの 場所へ もどる | 何も おきない |
+| `bridge` | `rail-piece`・`drawbridge`（6-1 まで `rail-piece` の 形）・`toy-blocks` | すきまの はじまり（`to` が おわり、4〜16 m） | かけらが とんで きて はまる | しゃぼんの まくで「ぽよん」→ `rewind`（既定 60 m 手前、来た 道に そって） |
+| `gate` | `door`・`crossing` | とびらの 面（`to` は 書かない） | よこへ ひらく（ふみきりは なおる） | まるい クッションで「ぽよん」→ `rewind` |
+| `turn` | `mirror` | かがみの 位置 | こちらを むき、`junction` の ほんとうの 道が 見える（`sign:reveal`、ほんとうの 道を 自動で えらぶ） | うその 道（いきどまり） |
+- **じしゃくの 段の とき だけ**、前 50 m（`MAGNET.reach`）の まとを 近い 順に 1 つずつ **自動で** ひっぱる（押すのは 段を かえる とき だけ）。`pick`・`turn` は `minAhead`（4 m か 線路からの はなれ √(横² ＋ 高さ²) の 大きい 方）〜 50 m、`bridge`・`gate` は 面まで 0〜50 m。とぶ 時間 0.6 ＋ きょり ÷ 40 秒（0.8〜2 秒）。**`bridge`・`gate`・`turn` は ひっぱりはじめた しゅんかんに ひらいた と 数える**（見た目は 早回し）
+- **光る**（ヒント）: まとの 80 m 手前（`hintAhead`）から、じしゃくライトを 持って いて いまが じしゃくで ない とき ライトの ボタンが みどりに 光る（`data-glow-for="magnet"`。ライトの 黄色・しーっ の 光より 先）。止まる 駅の 80 m 手前〜停止線の あいだ、`pick` では 光らない。見つけた 記録では 光らない（ひっぱれば きらきら だけ）
+- 1 つの まとは 1 回 とおる あいだに 1 回（`pick` は 巻き戻し・やりなおしで また）。ひらいた すきま・とびら・かがみは その ステージを やりなおすまで ひらいた まま（しっぱいで 戻っても）
+- `line`: この まとで みどりに 光りはじめた とき（もう じしゃくの 段でも 同じ 所で）1 回の ためしに 1 回。ほかの せりふが 出て いない ときだけ（`sayIfQuiet`。光る 所の 前半の あいだ まつ）。`done`: とどいた・ひらいた とき（既定 `bridge`「つながった！」・`gate`「あいた！」）。`miss`（`turn`）: じしゃく なしで 分かれ道を すぎた とき
+- `turn` の 分かれ道（`junction`、`signReversed`）は **矢印を 出さない**・ライトでは 見やぶれない・まちがえた あとの ライトの 黄色の 光も ない（ローダーが `JunctionDef.turn` を つける。手で 書かない）。`mirror`（書けば）: まわす `mirror` の `params.id`（5-3 の かがみ、PR6a）。書かない ときは 仮の かがみ `turn-mirror` を 描いて それを まわす
+- `model`: 形を かえる とき。既定は `star` → `iron-star-small`、`bell` → `iron-bell-small`、`rail-piece` → すきまと 同じ 線路、`door` → `iron-door`、`crossing` → `crossing-bar-iron`、`mirror` → `turn-mirror`、`toy-blocks` → `toy-blocks-loose`
+- `lever`（かぎの ポイント）は 作らない（版 2 の 候補。書くと はじく）
+
+### 記録（`requires: "magnetLight"`）
+| `requires` | 見つかる とき |
+|---|---|
+| `"magnetLight"`（v1.11） | じしゃくで ひっぱって 電車に とどいた とき（25 m の きまりは 使わない。とちゅうで しっぱい・寸劇・おわりが 来ても その しゅんかんに 見つかる） |
+- ローダーが `pick` の まと（id `record:<記録の id>`）に する（書かなくて よい）。`hint` は その まとの `line`（光りはじめの ひとこと）
+- `onRail` で 置く（`position` は だめ）、線路から 20 m 以内
+
+### どこでも の 小物（`environment.ironProps`・`props[].iron`）
+```json
+"environment": { "ironProps": { "every": 200, "looks": ["bell", "bucket"] } }
+"props": [ { "model": "sign-bell", "onRail": { "railId": "jishaku", "at": 450, "lateral": 5 }, "iron": "bell" } ]
+```
+- ローダーが **ぜんぶの ステージ**の 線路ぎわに ばらまく（`IRON_PROPS.every` 140 m ごと ± 40、ステージ id から きまる たねで いつも 同じ、よこ 3.5〜6 m・左右 かわりばんこ、あきかん 5・バケツ 3・かんばんの ベル 2、1 ステージ 40 こ まで）。置かない 所: 駅の 停止線の 前後 60 m、切れ目の 前後 40 m、水の 区間、雪の かべ、まとの 前後 60 m、分かれ道・合流の 前後 30 m、地面から 1.5 m より 高い 線路、`mirror-flip` の 中。地面の ない ステージには ない
+- **じしゃくライトを 覚えるまで 描かない・うごかない**（1-1〜5-2 の 見た目は かわらない）
+- じしゃくの 段で、ひっぱって いる まとが ない とき、前 3〜25 m・よこ 7 m 以内の いちばん 近い 1 つが「びよん」と 先頭車の 前の 下の すみに くっつき、2 秒で「からん」と 落ちて ころころ（ベルは のびて もどる。はずれない）。1 つずつ、1 回の ためしに 1 回。しっぱい・記録・減速なし
+- `ironProps`: `false`（ばらまかない）か `{ every?: 80〜400, looks?: ("can" | "bucket" | "bell")[] }`。`props[].iron`: その 置物を 小物に する（`onRail`、線路から 2〜12 m。`can`・`bucket` と モデル `sign-bell` の `bell` は 小物の 絵で 描く。ほかの モデルの `bell` は 置物に ベルが つく）
+
+### 寸劇で じしゃくを ためす（`press: "magnet"`）
+```json
+{ "spawn": "tut-star", "model": "iron-star-small", "onRail": { "railId": "main", "at": 85, "lateral": 7, "heightFromRail": 3 } },
+{ "press": "magnet", "target": "tut-star", "say": "もう いちど おすと じしゃく！" }
+```
+- 段を `light` に して ライトの ボタンを みどりに 光らせて まつ。押すと じしゃくの 段に なり、`target` が 電車へ とんで きて 消える（「きゅいーん… かちっ… ぽん」）。ほかの ボタンは 何も しない
+- ▶▶・つづき: `target` が 消える だけ。▶▶ で とばすと 段は `off` に もどる
+- `target` は その 寸劇で 前に `spawn` した id（まだ `remove` して いない）。`fx` は 書かない
+
+### 小さな 足し・せりふ
+- 失敗の 理由 `magnet`（**やわらかい**: しずみ 0.3・ゆれ 0、音は「ぽよん ぷるん」）。ジャンプの ボタンは 灰色に しない（とべば とぶ。まく・とびらは 高さ 6 m なので とんで ぶつかっても ぽよん）。テストコース（ミッション なし）は フェードして 戻す だけ
+- 分かれ道の `needs: "magnetLight"`: 矢印に じしゃくの 絵、`needAbility` の 既定「じしゃくライトが あれば いけそう…」
+```ts
+type LineKey = /* v1.11 (PR5) */ 'magnetNear' | 'magnetGo' | 'magnetBump' | 'magnetBumpAfter' | 'magnetPlay';
+```
+- 既定: `magnetNear`「てつの ものだ！ じしゃくに しよう！」（ミッションで はじめて 光った とき、まとの `line` が なければ）・`magnetGo`「きゅいーん… くっついた！」（はじめて とどいた とき）・`magnetBump`「ぽよん！ レールが たりない〜」（`gate` は「ぽよん！ とびらが しまってた〜」）・`magnetBumpAfter`「ひかったら じしゃくに してね」・`magnetPlay`「びよん！ くっついちゃった！」（どこでも の 小物、ステージで 1 回、ほかの せりふが ない とき）
+
+### 読み込み時の 検査（`validate.ts` の 形の 検査 ＋ `validateMagnetLayout`）
+- 形: `params.id` は ステージで ひとつ・`record:` で はじまらない。`kind` は 4 つ（`lever` は はじく）、`look` は その `kind` の もの。`bridge` は `to`（4〜16 m）と `piece`、ほかは `to` なし。線路から 20 m 以内。`line`・`done`・`miss` は 文字 か null。`rewind` は `bridge`・`gate` だけ。`turn` は `junction`（`signReversed` の 分かれ道）、`mirror` は ある `mirror` の `params.id`。`junctions[].turn` は 書かない。`requires: "magnetLight"` の 記録は `onRail`。`environment.ironProps`・`props[].iron`（2〜12 m）
+- まとどうし 同じ 線路で 30 m 以上。わき道の `bridge`・`gate` は 分かれ道から 60 m 以上 先
+- `bridge`・`gate` の 区間（面の 120 m 手前〜おわりの 40 m 先）に: 切れ目（その 60 m 手前から）・水の 入り口と 出口（120 m 手前〜40 m 先）・雪の かべ・分かれ道・ジャンプだい・上昇気流・えだ・花の はし・いとの はし・うすい こおり・線路の 上の 生き物・ゆきの なみ を 置かない。駅の 停止線は 面の 30 m 手前〜おわりの 20 m 先に ない。面は すべりざかの 中に ない。光る 所（面の 80 m 手前〜面）と 戻り先が 駅の ブレーキ区間（停止線の 80 m 手前〜停止線 ＋ `ok`）と かさならない。戻り先は 線路の 中で 面より 手前（または その わき道の 分かれ道より 手前の 親の 線路）、坂・うすい こおり・水・雪の 中で ない
+- `turn`: ひっぱる 所の おわり（`from − minAhead`）が 分かれ道の 40 m 以上 手前、いきどまりの 戻り先（分かれ道 − 80 m）から ひっぱる 所が 30 m 以上 のこる
+- じしゃくの 記録: 光る 所の うち 駅の ブレーキ区間の 外が 30 m 以上
+- `needs: "magnetLight"` の 分かれ道: わき道の 先 400 m 以内（合流・分かれ道も たどる）に `bridge`・`gate`・`turn`・じしゃくの 記録
+- 5-3 より 前（`chapter` 1〜4、`chapter` 5 で じしゃくライトを くれない ステージ。`chapter: 0` の ためしの ステージは のぞく）: `bridge`・`gate`・`turn` は `needs: "magnetLight"` の わき道の 先 だけ（`pick` と 記録は どこでも）
+- わざと まちがえた 形は `tests/stages-bad/magnet-*.json`・`iron-props-*.json`・`prop-iron-*.json`・`press-magnet-*.json`・`junction-turn-written.json`
+
+### テスト用の しるし
+`#light` の `data-light`（`off`／`light`／`magnet`）・`data-on`（ライトの 段で 1）・`data-steps`（2／3）・`data-glow`・`data-glow-for`（`magnet`／`light`／`dim`／`''`）・`data-pulling`。`#app` の `data-magnet`（`''`／`hint`／`pull`）・`data-magnet-target`・`data-magnet-pulls`（ひっぱった 回数）・`data-magnet-caught`（とどいた まとの id を カンマで）・`data-magnet-bumps`・`data-magnet-<id>`（`idle`／`pulled`／`open`）・`data-iron`（くっついた 小物の 数）・`data-light-mode`。回数と 列は ふえる だけ。しっぱいの `data-fail-reason` は `magnet`。できごと: `light:mode`・`magnet:hint`・`magnet:pull`・`magnet:caught`・`magnet:open`・`magnet:bump`・`magnet:miss`・`magnet:fetch`・`iron:biyon`・`iron:karan`。テストの 道具（`tests/smoke/drive.ts`）: `lightTo(page, mode)`・`lightOnGlow(page, mode, rail, latest)`・`waitCaught(page, id)`

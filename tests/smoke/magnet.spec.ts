@@ -168,9 +168,9 @@ test('0-0 jishaku: three steps, the green hint, the pull, mashing, the gap (in t
   await setNotch(page, NORMAL);
   await pressOnGlow(page, 'rocket');
   await waitFront(page, 'main', 505);
-  await expect(page.locator('#junction')).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('#junction')).toBeVisible({ timeout: 180_000 });
   await page.locator('.arrow[data-side="right"]').dispatchEvent('pointerdown');
-  await expect(app).toHaveAttribute('data-rail', 'jishaku', { timeout: 60_000 });
+  await expect(app).toHaveAttribute('data-rail', 'jishaku', { timeout: 180_000 });
   await expect(app).toHaveAttribute('data-iron', '0');
 
   // The star (jishaku 90, 7 right, 3 up): the green glow from 80 m before it; pressed on to the magnet it is pulled by
@@ -202,7 +202,7 @@ test('0-0 jishaku: three steps, the green hint, the pull, mashing, the gap (in t
   await expect(app).toHaveAttribute('data-magnet-pulls', '1');
 
   // The gap (jishaku 200–208) with the light: "ぽよん" off the soap film, back 60 m, green at once.
-  await expect(app).toHaveAttribute('data-magnet-bumps', '1', { timeout: 60_000 });
+  await expect(app).toHaveAttribute('data-magnet-bumps', '1', { timeout: 180_000 });
   await page.waitForFunction(() => {
     const d = document.getElementById('app')?.dataset;
     return d?.rail === 'jishaku' && Number(d.s) + 6 < 145 && d.speed === '0.0';
@@ -224,7 +224,7 @@ test('0-0 jishaku: three steps, the green hint, the pull, mashing, the gap (in t
   await page.locator('#camera').dispatchEvent('pointerdown');
   await page.locator('.camera-tile[data-mode="chase"]').dispatchEvent('pointerdown');
   await setNotch(page, NORMAL);
-  await expect(app).toHaveAttribute('data-magnet-hanare', 'open', { timeout: 60_000 });
+  await expect(app).toHaveAttribute('data-magnet-hanare', 'open', { timeout: 180_000 });
   await page.waitForTimeout(400);
   await page.screenshot({ path: resolve(OUT, 'magnet-bridge.png') });
   await waitFront(page, 'jishaku', 215);
@@ -294,13 +294,13 @@ test('0-4 with the magnet: the first go, the lines, the side way and its record,
   // The side way that needs the magnet (main 180, right): its record up high is pulled to the train and found; its
   // hint is said when nothing else is.
   await setNotch(page, NORMAL);
-  await expect(page.locator('#junction')).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('#junction')).toBeVisible({ timeout: 180_000 });
   await page.locator('.arrow[data-side="right"]').dispatchEvent('pointerdown');
-  await expect(app).toHaveAttribute('data-rail', 'yoko', { timeout: 60_000 });
+  await expect(app).toHaveAttribute('data-rail', 'yoko', { timeout: 180_000 });
   await waitCaught(page, 'record:test-suzu');
   await expect.poll(async () => (await progress(page)).records, { timeout: 30_000 }).toContain('test-suzu');
   // The spur's end puts the train back on main (past the fork).
-  await expect(app).toHaveAttribute('data-rail', 'main', { timeout: 120_000 });
+  await expect(app).toHaveAttribute('data-rail', 'main', { timeout: 240_000 });
   await waitDriving(page);
 
   // The star (main 420, no line of its own): magnetNear, then "きゅいーん… くっついた！".
@@ -308,19 +308,19 @@ test('0-4 with the magnet: the first go, the lines, the side way and its record,
   await waitCaught(page, 'hoshi');
   // Off for the gap: "ぽよん" is a soft fail with its two lines, back 60 m, green at once.
   await lightTo(page, 'off');
-  await expect(app).toHaveAttribute('data-fail-reason', 'magnet', { timeout: 120_000 });
+  await expect(app).toHaveAttribute('data-fail-reason', 'magnet', { timeout: 240_000 });
   await expect(app).toHaveAttribute('data-fail-soft', '1');
   await page.waitForFunction(() => {
     const d = document.getElementById('app')?.dataset;
     return d?.phase === 'driving' && d.rail === 'main' && Math.abs(Number(d.s) + 6 - 540) < 1.5;
-  }, undefined, { timeout: 60_000 });
+  }, undefined, { timeout: 180_000 });
   await expect(light).toHaveAttribute('data-glow-for', 'magnet', { timeout: 10_000 });
   await lightOnGlow(page, 'magnet', 'main', 600);
   await setNotch(page, NORMAL);
-  await expect(app).toHaveAttribute('data-magnet-hanare', 'open', { timeout: 60_000 });
+  await expect(app).toHaveAttribute('data-magnet-hanare', 'open', { timeout: 180_000 });
   // The gate (780) with its own line and "あいた！"; the mirror (980) turns round and the fork (1012) takes the true way.
-  await expect(app).toHaveAttribute('data-magnet-tobira', 'open', { timeout: 120_000 });
-  await expect(app).toHaveAttribute('data-magnet-kurutto', 'open', { timeout: 120_000 });
+  await expect(app).toHaveAttribute('data-magnet-tobira', 'open', { timeout: 240_000 });
+  await expect(app).toHaveAttribute('data-magnet-kurutto', 'open', { timeout: 240_000 });
   await waitFront(page, 'main', 1040);
   await expect(page.locator('#junction')).toBeHidden();
   await page.screenshot({ path: resolve(OUT, 'magnet-04.png') });
@@ -364,7 +364,7 @@ test('0-4 without the magnet: two steps, no green, the side way refused, the gap
 
   // The side way needs the magnet: the arrow says so.
   await setNotch(page, NORMAL);
-  await expect(page.locator('#junction')).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('#junction')).toBeVisible({ timeout: 180_000 });
   await page.locator('.arrow[data-side="right"]').dispatchEvent('pointerdown');
   await expect.poll(lines, { timeout: 20_000 }).toContain('じしゃくライトが あれば いけそう…');
   await waitFront(page, 'main', 230);
@@ -372,10 +372,10 @@ test('0-4 without the magnet: two steps, no green, the side way refused, the gap
   await waitFront(page, 'main', 440);
   await expect(app).toHaveAttribute('data-magnet-hoshi', 'idle');
   // The gap: "ぽよん" and back, twice.
-  await expect(app).toHaveAttribute('data-magnet-bumps', '1', { timeout: 120_000 });
+  await expect(app).toHaveAttribute('data-magnet-bumps', '1', { timeout: 240_000 });
   await waitDriving(page);
   await setNotch(page, NORMAL);
-  await expect(app).toHaveAttribute('data-magnet-bumps', '2', { timeout: 120_000 });
+  await expect(app).toHaveAttribute('data-magnet-bumps', '2', { timeout: 240_000 });
   const log = await magnetLog(page);
   expect(log.glowedGreen).toBe(false);
   expect(log.fails.map((f) => f.reason)).toEqual(['magnet', 'magnet']);

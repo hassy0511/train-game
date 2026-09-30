@@ -712,6 +712,7 @@ export class ThreeSceneView implements SceneView {
     this.toy?.update(dt);
     if (this.magnet) {
       this.magnet.trainSpeed = pose.speed;
+      this.magnet.cabView = cab;
       this.magnet.update(dt);
     }
     this.iron?.update(dt);

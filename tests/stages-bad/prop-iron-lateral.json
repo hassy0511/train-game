@@ -1,0 +1,1 @@
+{"_expect": "an \"iron\" prop stands on a rail (onRail), 2–12 m from it", "_base": "0-4", "_edit": [{"path": "props.0.onRail.lateral", "value": 1}]}

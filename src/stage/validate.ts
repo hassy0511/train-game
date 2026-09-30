@@ -1620,6 +1620,9 @@ function checkMagnetShapes(raw: Record<string, unknown>, railIds: Set<string>): 
     } else if (p.junction !== undefined || p.mirror !== undefined) fail(`${where}: only a turn takes params.junction and params.mirror`);
   });
   for (const j of raw.junctions as Record<string, unknown>[]) if (j.turn !== undefined) fail(`junction "${String(j.id)}": "turn" is set by the loader (write a magnet "turn" instead)`);
+  for (const r of raw.records as Record<string, unknown>[]) {
+    if (r.requires === 'magnetLight' && !isObject(r.onRail)) fail(`record "${String(r.id)}": a record needing the magnet light is placed with onRail (the magnet pulls it along its rail)`);
+  }
   const env = raw.environment as Record<string, unknown>;
   const ip = env.ironProps;
   if (ip !== undefined && ip !== false) {

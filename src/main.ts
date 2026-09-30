@@ -58,7 +58,7 @@ import { IceSystem, iceZones, thinIceZones } from './gimmick/ice';
 import { ThinIceSystem } from './gimmick/thin-ice';
 import { MirrorSystem } from './gimmick/mirror';
 import { TunnelSystem } from './gimmick/tunnel';
-import { LightSwitch, type LightMode } from './gimmick/light-switch';
+import { LightSwitch } from './gimmick/light-switch';
 import { MagnetSystem } from './gimmick/magnet';
 import { IronProps } from './gimmick/iron-props';
 import { fallsLoudness, underFalls, waterfalls } from './gimmick/waterfall';

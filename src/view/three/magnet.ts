@@ -41,6 +41,8 @@ const RING_COUNT = 6;
 const RING_EVERY = 0.35;
 const RING_SPEED = 30;
 const RING_COLOR = new Color('#9ff2d2');
+/** Rings start this far ahead of the lamp (the cab's camera sits just behind it). */
+const RING_START = 5;
 const SPARKS = 64;
 /** The lamp on the lead car (car frame, +Z forward), as the light's beam has it. */
 const LAMP = new Vector3(0, 3.3, 6.3);
@@ -100,8 +102,11 @@ export class MagnetGimmicks {
   private readonly quat = new Quaternion();
   private readonly scaleV = new Vector3();
   private readonly zPlus = new Vector3(0, 0, 1);
+  private readonly forward = new Vector3();
   /** The train's speed (m/s), set every frame by the scene. */
   trainSpeed = 0;
+  /** The cab's camera is on (the lamp's ring is not drawn: it would fill the window). Set every frame by the scene. */
+  cabView = false;
 
   constructor(
     private readonly stage: StageData,
@@ -249,7 +254,7 @@ export class MagnetGimmicks {
     const ring = new RingGeometry(0.8, 1, 18);
     const mesh = new InstancedMesh(
       ring,
-      new MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, blending: AdditiveBlending, depthWrite: false, side: DoubleSide }),
+      new MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, blending: AdditiveBlending, depthWrite: false, side: DoubleSide }),
       RING_COUNT,
     );
     mesh.name = 'magnet-rings';
@@ -319,7 +324,10 @@ export class MagnetGimmicks {
       const m = o.material as MeshBasicMaterial;
       if (!this.beamColors.has(m)) this.beamColors.set(m, m.color.clone());
       const own = this.beamColors.get(m) as Color;
+      // The pool on the rail is a soft, thin green (the green light only lights a little).
+      const k = m.opacity > 0.1 ? 0.35 : 1;
       m.color.copy(this.mode === 'magnet' ? BEAM_GREEN : own);
+      if (this.mode === 'magnet') m.color.multiplyScalar(k);
     });
   }
 
@@ -441,7 +449,7 @@ export class MagnetGimmicks {
       const want = this.pulling ? 0.9 : this.mode === 'magnet' ? 0.35 : 0;
       const m = this.lampRim.material;
       m.opacity += (want - m.opacity) * Math.min(1, dt * 6);
-      this.lampRim.visible = m.opacity > 0.02;
+      this.lampRim.visible = m.opacity > 0.02 && !this.cabView;
     }
   }
 
@@ -548,6 +556,7 @@ export class MagnetGimmicks {
     if (!g) return;
     const pos = g.geometry.getAttribute('position') as Float32BufferAttribute;
     const col = g.geometry.getAttribute('color') as Float32BufferAttribute;
+    let any = false;
     this.glintIds.forEach((id, i) => {
       const v = this.visuals.get(id) as TargetVisual;
       // A record's glint waits for the magnet light (the stages before 5-3 look as they always did).
@@ -558,6 +567,7 @@ export class MagnetGimmicks {
         col.setXYZ(i, 0, 0, 0);
         return;
       }
+      any = true;
       if (id === this.hintId) {
         const k = 0.6 + 0.4 * Math.sin(this.clock * 8);
         col.setXYZ(i, 0.45 * k, 1 * k, 0.75 * k);
@@ -569,6 +579,8 @@ export class MagnetGimmicks {
     });
     pos.needsUpdate = true;
     col.needsUpdate = true;
+    // Nothing to glint (a stage before 5-3 with only its records): not drawn at all.
+    g.visible = any;
   }
 
   private updateRings(dt: number): void {
@@ -590,8 +602,10 @@ export class MagnetGimmicks {
       if (this.ringAge[i] < 0) continue;
       this.ringAge[i] += dt;
       const dist = goal ? goal.distanceTo(this.lamp) : 0;
-      const travelled = this.ringAge[i] * RING_SPEED;
-      if (!goal || travelled >= dist || dist < 0.5) {
+      const travelled = RING_START + this.ringAge[i] * RING_SPEED;
+      // No ring to something behind the lamp (a gate the train is already through).
+      const ahead = goal ? this.tmp.subVectors(goal, this.lamp).dot(this.forward.set(0, 0, 1).applyQuaternion(this.train.quaternion)) > 0 : false;
+      if (!goal || !ahead || travelled >= dist || dist < RING_START + 1) {
         this.ringAge[i] = -1;
         this.matrix.makeScale(0, 0, 0);
         mesh.setMatrixAt(i, this.matrix);
@@ -599,10 +613,10 @@ export class MagnetGimmicks {
       }
       any = true;
       const dir = this.tmp.subVectors(goal, this.lamp).normalize();
-      const u = travelled / dist;
+      const u = (travelled - RING_START) / (dist - RING_START);
       const p = new Vector3().copy(this.lamp).addScaledVector(dir, travelled);
       this.quat.setFromUnitVectors(this.zPlus, dir);
-      const s = 0.6 + 1.4 * u;
+      const s = 0.5 + 1.2 * u;
       this.scaleV.set(s, s, s);
       this.matrix.compose(p, this.quat, this.scaleV);
       mesh.setMatrixAt(i, this.matrix);
