@@ -61,12 +61,19 @@ export interface WorldChapter {
     /**
      * gold (default): the light round the ring, islands hop. water: a blue light along the path, islands bob,
      * then snow on the next chapter's islands. aurora: a band of light across the sky, islands twinkle in turn.
+     * v1.11 firefly (chapter 5): night falls, fireflies rise from each island of the path in turn and gather along the
+     * rails into one big light that flies to `target`; dawn.
      */
-    light?: 'gold' | 'water' | 'aurora';
+    light?: 'gold' | 'water' | 'aurora' | 'firefly';
+    /**
+     * v1.11: where the big light of an end without a link lands (an island, or "teaser:<chapter>"; docs/
+     * PHASE9_CHAPTER5_6.md §0.9 の 1: "teaser:6" until 6-1's island comes, then "6-1").
+     */
+    target?: string;
     /** Card text (lines split by "\n", 20 characters at most per line) and its button. */
     card: string;
     button: string;
-    icon?: 'badge' | 'ring' | 'wave' | 'snow';
+    icon?: 'badge' | 'ring' | 'wave' | 'snow' | 'firefly';
   };
   /** A chapter without stages yet: one "?" island with a dotted line, once `after` is cleared. */
   teaser?: {
@@ -97,6 +104,8 @@ export interface WorldDiorama {
   base: string;
   /** v1.11 (5-1): drawn under the night's blue light at 70 % (the map's pictures stay bright enough to read). */
   lighting?: 'night';
+  /** v1.11 (5-3): the island top's colour (e.g. lavender "#d9cdf4"); the rock underneath keeps its own. */
+  ground?: string;
   /** A ring of track on the top. */
   rail?: { radius: number };
   camera?: { yaw: number; pitch: number };

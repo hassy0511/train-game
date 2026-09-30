@@ -382,8 +382,7 @@
       "rotationY": -90,
       "windup": true
     },
-    { "model": "toy-shelf", "onRail": { "railId": "tana", "at": 150, "lateral": -7, "heightFromRail": -1 }, "rotationY": 90 },
-    { "model": "toy-blocks-loose", "onRail": { "railId": "tana", "at": 85, "lateral": 9, "heightFromRail": -1 } }
+    { "model": "toy-shelf", "onRail": { "railId": "tana", "at": 150, "lateral": -7, "heightFromRail": -1 }, "rotationY": 90 }
   ],
   "actors": [
     {
@@ -515,6 +514,7 @@
       "note": "たなの うえから ひっぱった ねじまき",
       "requires": "magnetLight",
       "model": "tin-key",
+      "hint": "たなの うえに ねじまき！ ひっぱろう！",
       "onRail": { "railId": "tana", "at": 150, "lateral": -7, "heightFromRail": 6 }
     }
   ],
@@ -598,7 +598,22 @@
     { "type": "camera", "railId": "main", "from": 2350, "to": 2440, "params": { "mode": "side" } },
     { "type": "camera", "railId": "main", "from": 2490, "to": 2590, "params": { "mode": "chase" } },
     { "type": "camera", "railId": "kuru-wa2", "from": 10, "to": 207, "params": { "mode": "top" } },
-    { "type": "flock", "params": { "model": "toy-plane", "count": 8, "center": [607.6, 18, 1512.2], "radius": 45, "speed": 0.08 } }
+    { "type": "flock", "params": { "model": "toy-plane", "count": 8, "center": [607.6, 18, 1512.2], "radius": 45, "speed": 0.08 } },
+    {
+      "type": "magnet",
+      "railId": "tana",
+      "from": 80,
+      "to": 90,
+      "params": {
+        "id": "tsumiki-hashi",
+        "kind": "bridge",
+        "look": "toy-blocks",
+        "piece": { "lateral": 8, "height": 0, "rotationY": -40 },
+        "line": "つみきが たりない！ ひっぱろう！",
+        "done": "つながった！",
+        "rewind": { "railId": "main", "at": 1230 }
+      }
+    }
   ],
   "opening": "opening",
   "ending": "ending",

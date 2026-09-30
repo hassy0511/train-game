@@ -786,6 +786,23 @@ body {
   color: #6b7a8a;
 }
 
+/* v1.11 (5-3): a little picture before the words (for a child who cannot read yet). */
+.bubble-pic {
+  float: left;
+  width: 56px;
+  height: 45px;
+  margin: 2px 10px 0 0;
+}
+
+.bubble-pic[hidden] {
+  display: none;
+}
+
+.bubble-icon {
+  width: 100%;
+  height: 100%;
+}
+
 .bubble.is-amanojaku {
   background: #e8dcf5;
 }
@@ -1867,6 +1884,142 @@ body {
   25%,
   75% {
     opacity: 1;
+  }
+}
+
+/* ---- v1.11 chapter 5's end: fireflies (PHASE9_CHAPTER5_6 第 1 部 §4.2) ---- */
+/* Night: the sky a deeper blue-violet over the map, never darker than 70 % bright; a dozen little stars twinkle. */
+.map.is-night .map-sky {
+  opacity: 1;
+  background: linear-gradient(rgba(34, 40, 110, 0.42), rgba(60, 50, 130, 0.26) 70%, rgba(60, 50, 130, 0.14));
+  transition-duration: 0.6s;
+}
+
+.map-stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.map-star {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.7);
+  animation: map-star-twinkle 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes map-star-twinkle {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* A firefly: a soft yellow-green dot that drifts from island to island along the rail (its place is set by map.ts). */
+.map-firefly {
+  position: absolute;
+  z-index: 120;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fffbe0 0 30%, #d9ff66 45%, rgba(217, 255, 102, 0) 72%);
+  pointer-events: none;
+  transition:
+    left 0.45s ease-in-out,
+    top 0.45s ease-in-out;
+  animation: map-firefly-glow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes map-firefly-glow {
+  from {
+    opacity: 0.65;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* The one big light they gather into (a fifth of an island across): it flies to the "?" island (or the castle). */
+.map-bigfly {
+  position: absolute;
+  z-index: 121;
+  width: 5%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fffef0 0 22%, #e9ff8a 40%, rgba(217, 255, 102, 0.45) 60%, rgba(217, 255, 102, 0) 72%);
+  pointer-events: none;
+  transition:
+    left 0.8s ease-in-out,
+    top 0.8s ease-in-out;
+}
+
+/* An island of the path: a warm ring of light (no hop, no bob). */
+.map-island.is-glow img {
+  filter: drop-shadow(0 0 16px rgba(233, 255, 138, 0.95)) drop-shadow(0 0 6px rgba(255, 240, 170, 0.9));
+  transition: filter 0.3s ease-out;
+}
+
+.map-link.is-firefly .glow {
+  stroke: rgba(210, 255, 110, 0.85);
+}
+
+.map-link.is-firefly .glow-core {
+  stroke: #fbffe0;
+}
+
+/* The "?" island the big light lands on glows warmly from then on (6-1's castle wakes there from PR9). */
+.map-island.is-teaser.is-lit img {
+  filter: grayscale(0.2) brightness(1.6) drop-shadow(0 0 14px rgba(255, 230, 140, 0.95));
+}
+
+.map-island.is-teaser.is-lit .map-mystery {
+  color: #f2b53a;
+}
+
+.map-island.is-teaser.is-next {
+  animation: island-bounce 0.9s ease-in-out infinite alternate;
+}
+
+/* v1.11 (§0.4): an island with a record the child can fetch now with a later ability: its badge glows softly. */
+.map-badge.is-takeable {
+  background: #fffbe0;
+  animation: badge-takeable 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes badge-takeable {
+  from {
+    box-shadow:
+      0 2px 0 rgba(31, 42, 68, 0.15),
+      0 0 0 0 rgba(255, 214, 90, 0.4);
+  }
+  to {
+    box-shadow:
+      0 2px 0 rgba(31, 42, 68, 0.15),
+      0 0 12px 4px rgba(255, 214, 90, 0.85);
+  }
+}
+
+/* Calm motion: no dots fly and nothing twinkles; the islands glow in turn and the night comes and goes at once. */
+@media (prefers-reduced-motion: reduce) {
+  .map.is-night .map-sky {
+    transition: none;
+  }
+  .map-star,
+  .map-badge.is-takeable {
+    animation: none;
+  }
+  .map-firefly,
+  .map-bigfly {
+    display: none;
   }
 }
 
@@ -3517,5 +3670,330 @@ body {
   }
   to {
     box-shadow: 0 0 0 14px rgba(143, 164, 232, 0), 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* ---- v1.11 (PR5): the light button's three steps (ライト → じしゃく → けす), PHASE9_CHAPTER5_6 第 2 部 M5・M12 ---- */
+/* The magnet step: an emerald rim (told apart from yellow, orange, red, blue and purple), a little U magnet over the
+   lamp, the label "じしゃく". The button only shows the step the child chose; nothing changes it by place. */
+#light[data-light='magnet'] .ring.is-light {
+  --accent: #19b38a;
+}
+
+#light[data-light='magnet'] .face {
+  background: #e3fbf2;
+  box-shadow: 0 0 14px 4px rgba(25, 179, 138, 0.55);
+}
+
+#light .magnet-mark {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 20px;
+  height: 20px;
+  display: none;
+  pointer-events: none;
+}
+
+#light[data-light='magnet'] .magnet-mark {
+  display: block;
+}
+
+/* The steps' dots under the button (only with three steps; the two-step light looks as it always did). */
+#light .light-steps {
+  position: absolute;
+  left: 50%;
+  bottom: -11px;
+  transform: translateX(-50%);
+  display: none;
+  gap: 4px;
+  pointer-events: none;
+}
+
+#light[data-steps='3'] .light-steps {
+  display: flex;
+}
+
+#light .light-steps i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+#light[data-light='light'] .light-steps i[data-step='light'] {
+  background: #f4c542;
+}
+
+#light[data-light='magnet'] .light-steps i[data-step='magnet'] {
+  background: #19b38a;
+}
+
+#light[data-light='off'] .light-steps i[data-step='off'] {
+  background: #ffffff;
+}
+
+/* The step changing: a little swell (the pressed look). */
+#light[data-steps='3'].is-stepped .face {
+  animation: light-step 0.15s ease-out;
+}
+
+@keyframes light-step {
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+/* Green glow: an iron thing ahead, and the light is not in the magnet step (a hint: pressing on reaches it). The
+   little magnet peeks out too. */
+#light[data-glow='1'][data-glow-for='magnet'] .face {
+  background: #d5f7ea;
+  animation: magnet-glow 0.6s ease-in-out infinite alternate;
+}
+
+#light[data-glow='1'][data-glow-for='magnet'] .magnet-mark {
+  display: block;
+  animation: magnet-peek 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes magnet-glow {
+  from {
+    box-shadow: 0 0 0 0 rgba(25, 179, 138, 0.9), 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+  to {
+    box-shadow: 0 0 0 14px rgba(25, 179, 138, 0), 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+}
+
+@keyframes magnet-peek {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Pulling: a light runs round the rim. */
+#light[data-pulling='1'] .ring.is-light {
+  background: conic-gradient(from var(--pull-angle, 0deg), #ffffff 0 40deg, #19b38a 40deg 360deg);
+  animation: magnet-pull-rim 0.6s linear infinite;
+}
+
+@property --pull-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes magnet-pull-rim {
+  to {
+    --pull-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #light[data-pulling='1'] .ring.is-light,
+  #light[data-steps='3'].is-stepped .face {
+    animation: none;
+  }
+}
+
+/* ---- v1.11 (5-3) the mirror world (PHASE9_CHAPTER5_6 第 6 部 §4.1.4) ---- */
+
+/* "かがみの なか": only the 3D view's box turns round left to right (no draw cost). The controls, the arrows, the
+   gauges, the bubbles and the cards are outside it (#ui) and never flip: the thumbs find everything where it was. */
+#view.is-flipped {
+  transform: scaleX(-1);
+}
+
+/* The shimmer the view turns round behind (0.35 s): lavender white with sparkling dots. */
+.mirror-fade {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 30%, #fff 0 3px, transparent 4px),
+    radial-gradient(circle at 72% 22%, #fff 0 4px, transparent 5px),
+    radial-gradient(circle at 40% 68%, #fff 0 3px, transparent 4px),
+    radial-gradient(circle at 84% 74%, #fff 0 3px, transparent 4px),
+    radial-gradient(circle at 58% 44%, #ffffff 0 5px, transparent 6px),
+    #f6f0ff;
+}
+
+#ui > .mirror-fade {
+  pointer-events: none;
+}
+
+.mirror-fade.is-on {
+  animation: mirror-shimmer 0.35s ease-in-out;
+}
+
+@keyframes mirror-shimmer {
+  0% {
+    opacity: 0;
+  }
+  45%,
+  55% {
+    opacity: 0.96;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* A plain soft white, shorter (the view still turns round). */
+  .mirror-fade {
+    background: #fbf9ff;
+  }
+  .mirror-fade.is-on {
+    animation-duration: 0.15s;
+  }
+}
+
+/* v1.11 (5-3): card mirror "reflect": Sakasa's mirror-written notes held up to a silver mirror, which shows the words
+   in plain letters (and a little crayon drawing of her riding the train). */
+.card.is-reflect .reflect-scene {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+}
+
+.reflect-notes {
+  position: relative;
+  width: 210px;
+  height: 170px;
+  animation: reflect-notes-in 0.4s ease-out both;
+}
+
+.reflect-note {
+  position: absolute;
+  left: calc(var(--k) * 26px);
+  top: calc(var(--k) * 22px);
+  width: 170px;
+  height: 116px;
+  border-radius: 8px;
+  background: #fff8e6;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.3);
+  transform: rotate(calc(-4deg + var(--k) * 7deg));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reflect-note-words {
+  color: #5a4a3a;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  transform: scaleX(-1);
+}
+
+.reflect-note .card-swirl {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  width: 34px;
+  height: 34px;
+}
+
+@keyframes reflect-notes-in {
+  from {
+    transform: translateX(-40px);
+  }
+  to {
+    transform: translateX(10px);
+  }
+}
+
+.reflect-mirror {
+  padding: 14px;
+  border-radius: 20px;
+  background: linear-gradient(#e8e6f4, #d9d6ea);
+  border: 6px solid #b9a8ec;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.reflect-glass {
+  position: relative;
+  overflow: hidden;
+  width: 280px;
+  min-height: 200px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #eaf4ff, #f6f0ff);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.card.is-reflect .reflect-glass h1 {
+  margin: 0;
+  color: #5a4a3a;
+  font-size: 58px;
+  letter-spacing: 0.12em;
+  animation: reflect-words 0.3s ease-out 0.7s both;
+}
+
+.reflect-ride {
+  width: 110px;
+  height: 84px;
+  animation: reflect-words 0.3s ease-out 0.8s both;
+}
+
+@keyframes reflect-words {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+.reflect-sparkle {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.95) 48%, transparent 66%);
+  transform: translateX(-120%);
+  animation: reflect-sparkle 0.6s ease-in-out 0.4s both;
+}
+
+@keyframes reflect-sparkle {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+@media (max-height: 500px) {
+  .reflect-notes {
+    width: 150px;
+    height: 120px;
+  }
+  .reflect-note {
+    width: 120px;
+    height: 84px;
+  }
+  .reflect-note-words {
+    font-size: 28px;
+  }
+  .reflect-glass {
+    width: 200px;
+    min-height: 140px;
+  }
+  .card.is-reflect .reflect-glass h1 {
+    font-size: 42px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reflect-notes,
+  .reflect-sparkle,
+  .card.is-reflect .reflect-glass h1,
+  .reflect-ride {
+    animation-duration: 0.01s;
   }
 }

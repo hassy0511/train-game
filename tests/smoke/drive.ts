@@ -154,3 +154,165 @@ export async function budget(page: Page): Promise<{ draws: number; tris: number 
     tris: Number(document.getElementById('app')?.dataset.trisMax),
   }));
 }
+
+/**
+ * v1.11 (PR5, PHASE9_CHAPTER5_6 第 2 部 M15): steps the light button to `mode` ("off" | "light" | "magnet"): a
+ * pointerdown on #light every 0.45 s (over its 0.4 s lockout, in game time roughly) until data-light is `mode`; at most
+ * four presses. Done in the page, so a slow CI frame does not lose a press.
+ */
+export async function lightTo(page: Page, mode: 'off' | 'light' | 'magnet'): Promise<void> {
+  const ok = await page.evaluate(async (want) => {
+    const b = document.getElementById('light');
+    if (!b) return false;
+    for (let i = 0; i < 5; i++) {
+      if (b.dataset.light === want) return true;
+      if (i === 4) break;
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      // Wait 0.45 s of game time (the lockout is in game time; a slow frame is clamped to 0.1 s).
+      const app = document.getElementById('app') as HTMLElement;
+      const t0 = Number(app.dataset.time);
+      const w0 = performance.now();
+      while (Number(app.dataset.time) < t0 + 0.45 && performance.now() - w0 < 10_000) await new Promise((r) => setTimeout(r, 30));
+    }
+    return b.dataset.light === want;
+  }, mode);
+  expect(ok, `light to ${mode}`).toBe(true);
+}
+
+/**
+ * v1.11 (PR5): waits (every frame, in the page) for #light to glow for `mode` ("magnet": green; "light": yellow) while
+ * driving or stopped, then steps it to `mode` with lightTo. Fails when the front passes `latest` on `rail` first.
+ */
+export async function lightOnGlow(page: Page, mode: 'light' | 'magnet', rail: string, latest: number): Promise<void> {
+  const seen = await page.waitForFunction(
+    ([m, r, t]) => {
+      const app = document.getElementById('app');
+      const b = document.getElementById('light');
+      if (!app || !b) return false;
+      if (app.dataset.rail === r && Number(app.dataset.s) >= Number(t)) return 'late';
+      const phase = app.dataset.phase ?? 'driving';
+      if (b.dataset.glow === '1' && b.dataset.glowFor === m && (phase === 'driving' || phase === 'stopped')) return 'glow';
+      return false;
+    },
+    [mode, rail, latest - FRONT] as const,
+    { timeout: 240_000, polling: 'raf' },
+  );
+  expect(await seen.jsonValue()).toBe('glow');
+  await lightTo(page, mode);
+}
+
+/** v1.11 (PR5): waits until magnet target `id` has arrived (data-magnet-caught lists it). */
+export async function waitCaught(page: Page, id: string, timeoutMs = 120_000): Promise<void> {
+  await page.waitForFunction((i) => (document.getElementById('app')?.dataset.magnetCaught ?? '').split(',').includes(i), id, { timeout: timeoutMs });
+}
+
+/** v1.11 (PR6b): one of the seven magnet "?" records fetched on a return visit (PHASE9_CHAPTER5_6 第 2 部 M20). */
+export interface MagnetRecordRun {
+  stage: string;
+  /** The mission to resume (0-based) and its card's title. */
+  mission: number;
+  title: string;
+  record: string;
+  /** Its hint (said when the light button glows green for it) and the riddle line that must not come any more. */
+  hint: string;
+  riddle?: string;
+  cleared: string[];
+  notch?: number;
+  /** Round buttons pressed whenever they glow on the way (the obstacles before the record). */
+  press?: ('jump' | 'dive' | 'plow' | 'whistle' | 'rocket')[];
+  /** Arrows tapped on the way: the side at the fork `at` on `rail` (tapped once the arrows show within 60 m). */
+  arrows?: { rail: string; at: number; side: 'left' | 'right' }[];
+  /** Where the record's pull ends (the front must not pass it on `rail` before the record arrives). */
+  rail: string;
+  latest: number;
+  shot: string;
+  /** Standing where it already glows (4-3): wait for the hint line before stepping to the magnet. */
+  waitHint?: boolean;
+}
+
+/**
+ * v1.11 (PR6b): a child with the magnet light comes back to `run.stage` ("つづき" into `run.mission`) and drives on:
+ * the round buttons in `run.press` are pressed whenever they glow, the arrows in `run.arrows` tapped, and the light
+ * button stepped whenever it glows (green: to the magnet; yellow: to the light; "dim": off the light), all in the page
+ * every frame; until the record has flown to the train. Then: found and saved, its hint said, its riddle not.
+ */
+export async function magnetRecordRun(page: Page, run: MagnetRecordRun, out: string): Promise<void> {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  await page.addInitScript(
+    ([stage, mission, cleared]) => {
+      localStorage.setItem(
+        'train-game.progress.v1',
+        JSON.stringify({ schema: 1, cleared, abilities: ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'magnetLight'], records: [], mapLinks: [], resume: { stage, mission } }),
+      );
+    },
+    [run.stage, run.mission, run.cleared] as const,
+  );
+  const lines = await recordLines(page);
+  const app = page.locator('#app');
+  await page.goto(`/?stage=${run.stage}&go=1&resume=1`);
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  await card(page, run.title, 120_000);
+  // A mission may start with the doors open (passengers getting on): shut them.
+  const deadline = Date.now() + 90_000;
+  while ((await app.getAttribute('data-phase')) !== 'driving' && Date.now() < deadline) {
+    if ((await app.getAttribute('data-phase')) === 'doors' && (await page.locator('#door').isVisible())) await page.locator('#door').dispatchEvent('pointerdown');
+    else if (await page.locator('#bubble').isVisible()) await page.locator('#bubble').dispatchEvent('pointerdown');
+    await page.waitForTimeout(150);
+  }
+  await expect(page.locator('#light')).toHaveAttribute('data-steps', '3');
+  await setNotch(page, run.notch ?? NORMAL);
+  const result = await page.waitForFunction(
+    ([id, press, arrows, rail, latest, hint]) => {
+      const app = document.getElementById('app');
+      if (!app) return false;
+      const d = app.dataset;
+      if ((d.magnetCaught ?? '').split(',').includes(`record:${id}`)) return 'caught';
+      if (d.rail === rail && Number(d.s) + 6 > Number(latest) + 2 && d.magnet !== 'pull') return `late at ${d.rail} ${Number(d.s) + 6}`;
+      const w = window as unknown as { __auto?: { last: Record<string, number>; tapped: string[] } };
+      w.__auto ??= { last: {}, tapped: [] };
+      const now = Number(d.time);
+      const ready = (k: string, gap: number): boolean => now - (w.__auto!.last[k] ?? -99) > gap;
+      const tap = (el: HTMLElement, k: string): void => {
+        w.__auto!.last[k] = now;
+        el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      };
+      const moving = d.phase === 'driving';
+      for (const bid of press as string[]) {
+        const b = document.getElementById(bid);
+        if (b && moving && b.dataset.glow === '1' && d.burn !== '1' && ready(bid, 0.6)) tap(b, bid);
+      }
+      const light = document.getElementById('light');
+      if (light && (moving || d.phase === 'stopped') && light.dataset.glow === '1' && ready('light', 0.5)) {
+        const f = light.dataset.glowFor;
+        const want = f === 'magnet' ? 'magnet' : f === 'light' ? 'light' : null;
+        const heard = !hint || ((window as unknown as { __lines?: string[] }).__lines ?? []).includes(hint as string);
+        if ((want !== 'magnet' || heard) && (want ? light.dataset.light !== want : light.dataset.light === 'light')) tap(light, 'light');
+      }
+      for (const a of arrows as { rail: string; at: number; side: string }[]) {
+        const key = `${a.rail}:${a.at}`;
+        if (w.__auto.tapped.includes(key) || d.rail !== a.rail) continue;
+        const front = Number(d.s) + 6;
+        const box = document.getElementById('junction');
+        const b = box?.querySelector<HTMLElement>(`.arrow[data-side="${a.side}"]`);
+        if (front > a.at - 60 && front < a.at && box && !box.hidden && b && !b.hidden) {
+          w.__auto.tapped.push(key);
+          b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+        }
+      }
+      return false;
+    },
+    [run.record, run.press ?? [], run.arrows ?? [], run.rail, run.latest, run.waitHint ? run.hint : ''] as const,
+    { timeout: 600_000, polling: 'raf' },
+  );
+  expect(await result.jsonValue()).toBe('caught');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${out}/${run.shot}` });
+  await expect.poll(async () => (await progress(page)).records ?? [], { timeout: 30_000 }).toContain(run.record);
+  await expect.poll(lines, { timeout: 20_000 }).toContain(run.hint);
+  if (run.riddle) expect(await lines()).not.toContain(run.riddle);
+  expect(errors).toEqual([]);
+}

@@ -15,6 +15,8 @@ import {
   JUMP,
   LEVER_NOTCHES,
   LIGHT,
+  MAGNET,
+  MIRROR_WORLD,
   PLOW,
   RECORD,
   WINDUP,
@@ -56,7 +58,12 @@ import { PlowHint } from './gimmick/plow-hint';
 import { IceSystem, iceZones, thinIceZones } from './gimmick/ice';
 import { ThinIceSystem } from './gimmick/thin-ice';
 import { MirrorSystem } from './gimmick/mirror';
+import { MirrorFlipSystem } from './gimmick/mirror-flip';
+import { PhantomSystem } from './gimmick/phantom';
 import { TunnelSystem } from './gimmick/tunnel';
+import { LightSwitch } from './gimmick/light-switch';
+import { MagnetSystem } from './gimmick/magnet';
+import { IronProps } from './gimmick/iron-props';
 import { fallsLoudness, underFalls, waterfalls } from './gimmick/waterfall';
 import { Vector3 } from 'three';
 import { showZukan } from './ui/zukan';
@@ -131,6 +138,8 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
   const progress = loadProgress();
   const resume = await savedResume();
   const islands: MapIsland[] = [];
+  // v1.11 (PHASE9_CHAPTER5_6 §0.4): the abilities stages before this one give (in world order), for "takeable".
+  const givenBefore = new Set<string>();
   for (const island of file.islands) {
     const stage = await peekStage(island.id);
     if (!stage) {
@@ -138,6 +147,9 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
       continue;
     }
     const missing = stage.records.filter((r) => !progress.records.includes(r.id));
+    // What the child has at this stage's start: the earlier stages' abilities and its own opening's.
+    const atStart = new Set([...givenBefore, ...stage.openingUnlocks]);
+    for (const a of stage.unlocks) givenBefore.add(a);
     islands.push({
       id: island.id,
       title: stage.title,
@@ -146,6 +158,8 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
       recordsFound: stage.records.length - missing.length,
       recordsTotal: stage.records.length,
       needsLater: missing.some((r) => r.requires !== null && !progress.abilities.includes(r.requires)),
+      // A record for an ability this stage does not give at its start, and the child has it now: come back for it.
+      takeable: missing.some((r) => r.requires !== null && !atStart.has(r.requires) && progress.abilities.includes(r.requires)),
       resumeMission: resume?.stage === island.id ? resume.mission : undefined,
     });
   }
@@ -183,10 +197,14 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
       ring: ending.ring,
       path: ending.path,
       light,
+      target: ending.target,
       // The water light ends on the next chapter's first island: it wakes up then, and snow falls on its chapter.
-      wake: light === 'water' && opens ? [opens.id] : undefined,
+      // v1.11: the fireflies' path wakes its last island the same way (when it opens with the end).
+      wake: (light === 'water' || light === 'firefly') && opens ? [opens.id] : undefined,
       snow: light === 'water' ? file.islands.filter((i) => i.chapter === lastChapter).map((i) => i.id) : undefined,
-      onHop: () => (light === 'water' ? audio.playBubblePop() : audio.playRecord()),
+      onHop: () => (light === 'water' ? audio.playBubblePop() : light === 'firefly' ? audio.playFirefly() : audio.playRecord()),
+      // v1.11: the fireflies' big light lands on the "?" island (the castle's windows come with 6-1, PR9).
+      onLand: () => audio.playFirefly(),
       onSnow: () => audio.playSnowShimmer(),
       onShown: async () => {
         if (ending.ring || ending.path) audio.playFanfare();
@@ -295,8 +313,11 @@ async function boot(): Promise<void> {
   for (const rail of stage.file.rails) railLooks.set(rail.id, rail.look);
   const hasMissions = stage.file.missions.length > 0;
   // The hidden test course has every button, so the jump, the light, the rocket and diving can be tried there.
+  // v1.11 (PR5): and the magnet light (the light button's third step), for its side way "jishaku".
   const abilities = new Set<AbilityId>(
-    hasMissions ? [...loadProgress().abilities, ...(await inheritedAbilities(stageId))] : ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow'],
+    hasMissions
+      ? [...loadProgress().abilities, ...(await inheritedAbilities(stageId))]
+      : ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'magnetLight'],
   );
   const train = new Train(stage.network, stage.file.junctions, stage.file.start, {
     waters: stage.file.environment.water ?? [],
@@ -322,8 +343,19 @@ async function boot(): Promise<void> {
   // v1.10 (4-3): the rocket also glows when the snow wave is close (the runner knows the wave).
   rocket.extraGlow = () => thinIce.glow || (runner?.chaseRocketGlow ?? false);
   const mirrors = new MirrorSystem(stage.file.gimmicks, train);
+  // v1.11 (5-3): "かがみの なか" (the view mirrored between two gates; a whistle gate holds the train until it opens) and
+  // Sakasa's phantoms (a false way, a false bridge; never in a mirror).
+  const flip = new MirrorFlipSystem(stage.file.gimmicks, train);
+  const phantoms = new PhantomSystem(stage.file, train);
   // v1.10 (4-3): tunnels (dark inside; the light button glows for them).
   const tunnels = new TunnelSystem(stage.file.gimmicks, train);
+  // v1.11 (PR5): the magnet light's iron targets (unopened gaps and gates stop the train: "ぽよん") and the iron odds
+  // and ends by the line. Both do nothing until the magnet light is learned (showAbility).
+  const magnet = new MagnetSystem(stage.magnets, train, stage.file.junctions, (id) => foundRecords.has(id));
+  // The shut whistle gates (5-3) and the unopened magnet gaps and gates: "ぽよん" before them.
+  train.setBlocks(() => [...flip.blocks(), ...magnet.blocks()]);
+  const ironProps = new IronProps(stage.ironProps, train);
+  const hasMagnetHooks = stage.magnets.length > 0 || stage.ironProps.length > 0;
   const hasIce = iceZones(stage.file.gimmicks).length > 0 || thinIceZones(stage.file.gimmicks).length > 0;
   // v1.11 (5-1): a stage with the night's mechanisms (their test hooks are written every frame).
   const hasNight =
@@ -381,8 +413,8 @@ async function boot(): Promise<void> {
    * v1.10 (3-3): a cutscene waiting for one button (`press`): that button alone does something (and glows); `done`
    * ends the wait.
    */
-  let cutscenePress: { ability: 'light' | 'whistle' | 'rocket' | 'jump'; done: () => void } | null = null;
-  const pressWanted = (ability: 'light' | 'whistle' | 'rocket' | 'jump'): boolean | null => {
+  let cutscenePress: { ability: 'light' | 'whistle' | 'rocket' | 'jump' | 'magnet'; done: () => void } | null = null;
+  const pressWanted = (ability: 'light' | 'whistle' | 'rocket' | 'jump' | 'magnet'): boolean | null => {
     if (!cutscenePress) return null;
     if (cutscenePress.ability !== ability) return false;
     const done = cutscenePress.done;
@@ -405,6 +437,8 @@ async function boot(): Promise<void> {
       if (whistle.trigger()) {
         // v1.11 (5-1): in a whistle-reversed stretch it sounds reversed ("…っぴー"; it still works: PHASE9_0 §6).
         audio.playWhistle({ reversed: runner?.whistleReversed ?? false });
+        // v1.11 (5-3): a shut mirror gate glowing ahead opens ("ぽわわん"); only once (the whistle's own rest spaces presses).
+        flip.onWhistle();
         // v1.10 (3-3): in the dark the glowing motes flash ("ちりりん").
         const fog = zoneAt(stage.file.gimmicks, 'fog', train.state.railId, train.frontS);
         if (fog && typeof fog.params?.color === 'string') audio.playGlimmer();
@@ -447,24 +481,38 @@ async function boot(): Promise<void> {
     train.plow();
   });
   let lightOn = false;
-  let lightReadyAt = 0;
+  // v1.11 (PR5): the light button's step (off → light → magnet → off; off ⇄ light before the magnet light).
+  const lightSwitch = new LightSwitch(() => abilities.has('magnetLight'), () => simTime);
   const lightButton = createLightButton(actionButtons, () => {
-    // v1.10 (3-3): a cutscene asking for another button: the light waits.
+    audio.unlock();
+    // v1.10 (3-3): a cutscene asking for another button: the light waits. Asked for, it comes on (never off).
+    // v1.11 (PR5): a cutscene's "press": "magnet" (the light is on already): the press turns it to the magnet step.
+    if (cutscenePress?.ability === 'magnet') {
+      lightSwitch.set('magnet');
+      pressWanted('magnet');
+      return;
+    }
     const wanted = pressWanted('light');
     if (wanted === false) return;
-    // Asked for in a cutscene, it comes on (never off).
-    if (wanted === true && lightOn) return;
-    // Toggle, with a short lockout so a double tap does not flicker it.
-    if (wanted === null && simTime < lightReadyAt) return;
-    lightReadyAt = simTime + LIGHT.cooldown;
-    lightOn = !lightOn;
-    audio.unlock();
-    audio.playLight(lightOn);
-    train.speedScale = lightOn ? LIGHT.speedScale : 1;
-    lightButton.setOn(lightOn);
-    mirrors.lightOn = lightOn;
-    runner?.setLight(lightOn);
-    events.post({ type: 'light', on: lightOn });
+    if (wanted === true) {
+      if (lightSwitch.mode !== 'light') lightSwitch.set('light');
+      return;
+    }
+    // One step on, with a short lockout so a double tap does not flicker it (LightSwitch).
+    lightSwitch.press();
+  });
+  lightSwitch.events.on('mode', ({ mode, from }) => {
+    const on = mode === 'light';
+    lightOn = on;
+    if (mode === 'magnet') audio.playMagnetOn();
+    else audio.playLight(on);
+    train.setSpeedCap('light', mode === 'off' ? null : { scale: LIGHT.speedScale });
+    lightButton.setMode(mode);
+    mirrors.lightOn = on;
+    runner?.setLight(on);
+    // "light" as before (the light's own step on or off), then the step itself (the beam's colour).
+    if (on || from === 'light') events.post({ type: 'light', on });
+    events.post({ type: 'light:mode', mode });
   });
   const rocketButton = createRocketButton(actionButtons, () => {
     audio.unlock();
@@ -484,6 +532,12 @@ async function boot(): Promise<void> {
       plowButton.show();
     }
     if (ability === 'light') lightButton.show();
+    if (ability === 'magnetLight') {
+      // v1.11 (PR5): the light button's third step, the magnet targets and the odds and ends by the line.
+      magnet.enabled = true;
+      ironProps.enabled = true;
+      lightButton.setSteps(3);
+    }
     if (ability === 'rocket') {
       rocket.enabled = true;
       rocketButton.show();
@@ -608,6 +662,84 @@ async function boot(): Promise<void> {
       events.post({ type: 'rewind' });
       await fade(false, 0.4);
     })();
+  });
+
+  // v1.11 (PR5): the magnet light's sounds and events; "ぽよん" off a film or a gate is the runner's soft fail (the test
+  // course puts the train back itself); a record pulled to the train is found (the runner's; the test course's here).
+  let magnetBumps = 0;
+  let magnetHintPosted: string | null = null;
+  let testCourseFailing = false;
+  magnet.events.on('pull', ({ target, seconds }) => {
+    audio.playMagnetPull(seconds);
+    events.post({ type: 'magnet:pull', id: target.id, kind: target.kind, seconds, distance: magnet.pulling?.distance ?? 0 });
+  });
+  magnet.events.on('caught', ({ target, instant }) => {
+    if (!instant) {
+      if (target.kind === 'bridge') audio.playRailSnap();
+      else if (target.kind === 'pick') audio.playMagnetCatch();
+    }
+    events.post({ type: 'magnet:caught', id: target.id, instant });
+    if (!hasMissions && target.recordId && !foundRecords.has(target.recordId)) {
+      const record = stage.records.find((r) => r.def.id === target.recordId);
+      if (record) {
+        foundRecords.add(record.def.id);
+        app.dataset.records = [...foundRecords].join(',');
+        events.post({ type: 'record:found', id: record.def.id });
+        toast.show(`みつけた！\n${record.def.name}`, 'perfect');
+        audio.playRecord();
+      }
+    }
+  });
+  magnet.events.on('open', ({ target, instant }) => {
+    if (!instant && target.kind === 'gate') audio.playGateOpen();
+    // A turn with `mirror` turns 5-3's framed mirror round (its own "きらーん"); without, PR5's code-drawn stand-in.
+    if (target.kind === 'turn' && target.mirror) {
+      events.post({ type: 'mirror:turn', id: target.mirror, face: 'front', seconds: MIRROR_WORLD.turnSeconds, instant });
+    } else if (!instant && target.kind === 'turn') audio.playMirror();
+    events.post({ type: 'magnet:open', id: target.id, instant });
+    // The test course has no runner to show the fork's true way.
+    if (!hasMissions && target.kind === 'turn' && target.junction) events.post({ type: 'sign:reveal', junctionId: target.junction });
+  });
+  magnet.events.on('miss', ({ target }) => events.post({ type: 'magnet:miss', id: target.id }));
+  train.events.on('magnetBounce', ({ id }) => {
+    magnetBumps += 1;
+    audio.playMagnetBounce();
+    events.post({ type: 'magnet:bump', id });
+    if (hasMissions) return;
+    // Test course: put the train back before it (the fade in the stage's fall colour).
+    const target = stage.magnets.find((t) => t.id === id);
+    const back = target?.rewind ?? { railId: train.state.railId, at: Math.max(0, train.frontS - MAGNET.rewindBefore) };
+    testCourseFailing = true;
+    void (async () => {
+      await waitSeconds(0.8);
+      await fade(true, 0.4);
+      train.rewindTo(back.at, back.railId);
+      rocket.reset();
+      rocket.refill();
+      ui.lever.setNotch(STOP_NOTCH);
+      events.post({ type: 'rewind' });
+      testCourseFailing = false;
+      await fade(false, 0.4);
+    })();
+  });
+  ironProps.events.on('biyon', ({ prop }) => {
+    audio.playIronBiyon();
+    if (prop.look === 'bell') audio.playSignBell();
+    events.post({ type: 'iron:biyon', index: prop.index, look: prop.look });
+  });
+  ironProps.events.on('karan', ({ prop }) => {
+    audio.playIronKaran();
+    events.post({ type: 'iron:karan', index: prop.index, look: prop.look });
+  });
+  events.on('event', (e) => {
+    if (e.type !== 'rewind') return;
+    // A flight going on lands at once (a record is found); picks and odds and ends are back; open things stay open.
+    magnet.reset();
+    ironProps.reset();
+    // A turned mirror still shows its fork's true way.
+    for (const t of stage.magnets) {
+      if (t.kind === 'turn' && t.junction && magnet.state(t.id) === 'open') events.post({ type: 'sign:reveal', junctionId: t.junction });
+    }
   });
 
   // v1.10: diving. The sounds, the view's dome and splashes; "ぽよん" is the runner's fail (the test course puts the
@@ -748,6 +880,94 @@ async function boot(): Promise<void> {
     audio.playMirror();
     events.post({ type: 'mirror', index: m.index, state: 'flash' });
   });
+  // ---- v1.11 (5-3) the mirror world: the view mirrored between two gates, the whistle gate, phantoms, glass ----
+  const mirrorWorld = flip.sections.length > 0 || phantoms.phantoms.length > 0 || stage.file.rails.some((r) => r.glass?.length) || mirrors.mirrors.some((m) => m.id !== '');
+  const mirrorFade = document.createElement('div');
+  mirrorFade.className = 'mirror-fade';
+  mirrorFade.id = 'mirror-fade';
+  mirrorFade.addEventListener('animationend', () => mirrorFade.classList.remove('is-on'));
+  uiEl.prepend(mirrorFade);
+  /** The shimmer the view turns round behind ("しゃらん"). */
+  const shimmer = (): void => {
+    mirrorFade.classList.remove('is-on');
+    void mirrorFade.offsetWidth;
+    mirrorFade.classList.add('is-on');
+  };
+  const turnedMirrors = new Map<string, 'front' | 'back'>();
+  if (mirrorWorld) {
+    app.dataset.flip = '';
+    app.dataset.flips = '0';
+    app.dataset.gateBumps = '0';
+    app.dataset.phantoms = phantoms.list;
+    app.dataset.glass = '0';
+    app.dataset.mirrorFacing = '';
+  }
+  flip.events.on('in', ({ section, instant }) => {
+    app.dataset.flips = String(flip.flips);
+    events.post({ type: 'flip:in', id: section.id, instant });
+    if (instant) return;
+    shimmer();
+    audio.playMirrorGate();
+    runner?.sayMirrorWorld('flipIn', { own: section.line });
+  });
+  flip.events.on('out', ({ section, instant }) => {
+    events.post({ type: 'flip:out', id: section.id, instant });
+    if (instant) return;
+    shimmer();
+    audio.playMirrorGate();
+    runner?.sayMirrorWorld('flipOut', { own: section.lineOut });
+  });
+  flip.events.on('near', (section) => runner?.sayMirrorWorld('mirrorGateNear', { tag: section.id }));
+  flip.events.on('open', ({ section, byWhistle }) => {
+    events.post({ type: 'flip:gate', id: section.id, state: 'open', instant: !byWhistle });
+    if (!byWhistle) return;
+    audio.playMirrorRipple();
+    runner?.sayMirrorWorld('mirrorGateOpen', { tag: section.id });
+  });
+  flip.events.on('bump', ({ section }) => {
+    app.dataset.gateBumps = String(flip.bumps);
+    audio.playMirrorBump();
+    events.post({ type: 'flip:gate', id: section.id, state: 'bump' });
+    runner?.sayMirrorWorld('mirrorGateBump', { tag: section.id });
+    runner?.sayMirrorWorld('mirrorGateAfter', { tag: section.id });
+  });
+  phantoms.events.on('change', ({ id, state }) => {
+    app.dataset.phantoms = phantoms.list;
+    events.post({ type: 'phantom', id, state });
+    if (state !== 'solid') audio.playPhantomPop();
+  });
+  // Glass: "しゃららん" the first time in a mission the train front goes onto it.
+  const glassRails = new Map(stage.file.rails.filter((r) => r.glass?.length).map((r) => [r.id, r.glass ?? []]));
+  let onGlass = false;
+  let glassMission = -2;
+  const updateGlass = (): void => {
+    if (glassRails.size === 0) return;
+    const f = train.frontS;
+    const on = (glassRails.get(train.state.railId) ?? []).some((k) => f >= k.from && f <= k.to);
+    if (on === onGlass) return;
+    onGlass = on;
+    app.dataset.glass = on ? '1' : '0';
+    events.post({ type: 'glass', on });
+    const mission = runner?.missionIndex ?? -1;
+    if (on && mission !== glassMission) {
+      glassMission = mission;
+      audio.playGlassOn();
+    }
+  };
+  events.on('event', (e) => {
+    if (e.type === 'sign:reveal') phantoms.onReveal(e.junctionId);
+    if (e.type === 'sign:reset') phantoms.reset(e.junctionId);
+    if (e.type === 'rewind') {
+      phantoms.reset();
+      flip.reset();
+    }
+    if (e.type === 'mirror:turn') {
+      // A cutscene's fx "mirrorTurn" (and the magnet's "turn", PR5/PR6b): the mirror turns round and stays so.
+      if (mirrors.turn(e.id, e.face) && !e.instant) audio.playMirrorTurn(e.face === 'front');
+      turnedMirrors.set(e.id, e.face);
+      app.dataset.mirrorFacing = [...turnedMirrors].map(([id, face]) => `${id}:${face}`).join(',');
+    }
+  });
   events.on('event', (e) => {
     if (e.type === 'rewind') {
       snowSplat.classList.remove('is-on');
@@ -841,12 +1061,18 @@ async function boot(): Promise<void> {
 
   train.events.on('junctionApproach', (e) => {
     // v1.11 (5-2): a spinning fork shows no arrows (its flag and the whistle's glow are the sign).
-    if (e.junction.spin) {
+    // v1.11 (5-3): nor does a turned-away mirror's fork (only the magnet turns the mirror round to show the way).
+    if (e.junction.spin || e.junction.turn) {
       ui.junction.hide();
       ui.junction.spin(e.junction.id);
       return;
     }
     ui.junction.spin(null);
+    // v1.11 (PR5): a fork whose true way a mirror shows (magnet "turn"): no arrows (only the magnet sees it through).
+    if (e.junction.turn) {
+      ui.junction.hide();
+      return;
+    }
     const ability = e.junction.needs;
     const side = e.default === 'left' ? 'right' : 'left';
     ui.junction.show({ ...e, needs: ability ? { side, ability, has: abilities.has(ability) } : undefined, bubbles: e.junction.bubbles });
@@ -977,6 +1203,19 @@ async function boot(): Promise<void> {
     slopes.update();
     rocket.update();
     ice.update(dt);
+    // v1.11 (PR5): the magnet light pulls (its phase: the runner's; on the test course driving, stopped or failing),
+    // the odds and ends by the line, and the speed caps (the light's and the magnet's 0.7, pulling 0.5).
+    const magnetPhase = runner ? runner.phase : testCourseFailing || train.isBouncing || train.isFalling ? 'failing' : train.state.speed < 0.05 ? 'stopped' : 'driving';
+    magnet.update(dt, { mode: lightSwitch.mode, phase: magnetPhase, stopLine: runner?.stopLine ?? null });
+    ironProps.update(dt, { mode: lightSwitch.mode, pulling: magnet.pulling !== null, phase: magnetPhase });
+    const pulling = magnet.pulling !== null;
+    train.setSpeedCap('magnet', pulling ? { scale: MAGNET.pullScale } : null);
+    train.setSpeedCap('light', lightSwitch.mode !== 'off' && !pulling ? { scale: LIGHT.speedScale } : null);
+    const hintId = magnet.hint?.id ?? null;
+    if (hintId !== magnetHintPosted) {
+      magnetHintPosted = hintId;
+      events.post({ type: 'magnet:hint', id: hintId });
+    }
 
     train.update(dt);
     dive.update();
@@ -997,6 +1236,11 @@ async function boot(): Promise<void> {
     } else plowSprayIn = 0;
     thinIce.update(dt);
     mirrors.update();
+    // v1.11 (5-3): the view is mirrored while the train front is between a stretch's gates (a box's CSS: no draw cost).
+    flip.update();
+    phantoms.update({ lightOn });
+    updateGlass();
+    viewEl.classList.toggle('is-flipped', flip.flipped);
     tunnels.update();
     if (ice.sparkle !== iceSparkle) {
       iceSparkle = ice.sparkle;
@@ -1006,6 +1250,12 @@ async function boot(): Promise<void> {
     updateFalls();
     // Under water the island's sound turns to the underwater bed, and the rails to a soft "ことっ" with bubbles.
     audio.setAmbienceUnderwater(train.submerged);
+    // v1.11 (5-3): in a cutscene the mirror world's sound stops, the song alone (the mirror Sakasa is never eerie).
+    if (stage.file.environment.ambience === 'mirror') {
+      const quiet = runner?.phase === 'cutscene';
+      audio.setAmbience(quiet ? null : 'mirror', hasVolcanoProp);
+      app.dataset.ambience = quiet ? '' : 'mirror';
+    }
     view.setSubmerged(train.submerged);
     audio.updateRun(dt, {
       speed: Math.abs(train.state.speed),
@@ -1047,13 +1297,16 @@ async function boot(): Promise<void> {
     }
     // v1.10 (4-1): at an ice station the notch to go to glows ("ゆっくり", then "とまる").
     const iceNotch = ice.hint === 'stop' ? STOP_NOTCH : ice.hint === 'slow' ? ICE_SLOW_NOTCH : null;
+    lightButton.setPulling(pulling);
     if (cutscenePress) {
-      // v1.10 (3-3): a cutscene waits for one button: it alone glows.
-      lightButton.setGlow(cutscenePress.ability === 'light');
+      // v1.10 (3-3): a cutscene waits for one button: it alone glows. v1.11 (PR5): green for the magnet's first go.
+      lightButton.setGlow(cutscenePress.ability === 'light' || cutscenePress.ability === 'magnet', cutscenePress.ability === 'magnet' ? 'magnet' : 'light');
       ui.whistle.setGlow(cutscenePress.ability === 'whistle');
     } else if (runner) {
       // v1.11 (5-1): yellow for "the light helps here"; the hush glow ("dim", press = off) while it is on by sleepers.
-      lightButton.setGlow(runner.lightHint || runner.lightOffHint, runner.lightOffHint ? 'dim' : 'light');
+      // v1.11 (PR5): green first: an iron thing ahead and the light not in the magnet step (a hint only).
+      if (magnet.hint) lightButton.setGlow(true, 'magnet');
+      else lightButton.setGlow(runner.lightHint || runner.lightOffHint, runner.lightOffHint ? 'dim' : 'light');
       jumpButton.setHopper(runner.hopperId !== '');
       const hint = runner.phase === 'driving' ? runner.leverHintSpeed : null;
       // The notch the partner names (ゆっくり): judged on the plain notch speeds, so the light does not change it.
@@ -1064,6 +1317,8 @@ async function boot(): Promise<void> {
       const parade = runner.paradeLeverHint;
       ui.lever.setHint(runner.chaseLeverHint ? FAST_NOTCH : runner.lureStopHint ? STOP_NOTCH : parade !== null ? parade : runner.phase === 'driving' && iceNotch !== null ? iceNotch : silk);
     } else if (hasIce) ui.lever.setHint(iceNotch);
+    // v1.11 (PR5): the test course's light glows green for the magnet (it has no runner).
+    if (!runner && !cutscenePress && hasMagnetHooks) lightButton.setGlow(magnet.hint !== null, 'magnet');
 
     const pose = train.getPose();
     physics.setTrainPose(pose.position, pose.quaternion);
@@ -1160,6 +1415,23 @@ async function boot(): Promise<void> {
       app.dataset.thin = thinIce.status === 'shake' ? 'on' : thinIce.status;
     }
     if (mirrors.mirrors.length > 0) app.dataset.mirror = mirrors.active ? String(mirrors.active.index) : '';
+    if (hasMagnetHooks) {
+      // v1.11 (PR5) test hooks (PHASE9_CHAPTER5_6 第 2 部 M15). Counts and lists only grow.
+      app.dataset.magnet = pulling ? 'pull' : magnet.hint ? 'hint' : '';
+      app.dataset.magnetTarget = magnet.pulling?.target.id ?? magnet.hint?.id ?? '';
+      app.dataset.magnetPulls = String(magnet.pulls);
+      app.dataset.magnetCaught = magnet.caughtIds.join(',');
+      app.dataset.magnetBumps = String(magnetBumps);
+      for (const t of stage.magnets) if (!t.recordId) app.setAttribute(`data-magnet-${t.id}`, magnet.state(t.id));
+      app.dataset.iron = String(ironProps.count);
+      app.dataset.lightMode = lightSwitch.mode;
+    }
+    if (mirrorWorld) {
+      // v1.11 (5-3) test hooks (PHASE9_CHAPTER5_6 第 6 部 §4.10). Counts only go up.
+      app.dataset.flip = flip.flipped ? '1' : '';
+      app.dataset.flipGate = flip.gateNear;
+      if (!runner) ui.whistle.setGlow(flip.whistleGlow);
+    }
     app.dataset.timer = timer ? String(timer.seconds) : '';
     app.dataset.timerState = timer?.state ?? '';
     app.dataset.timerIcon = timer?.icon ?? '';
@@ -1330,23 +1602,31 @@ async function boot(): Promise<void> {
   let skippedAt = -Infinity;
   const skipGuard = (): number => (performance.now() - skippedAt < SKIP_CARD_WINDOW_MS ? SKIP_CARD_GUARD_SECONDS : 0);
   const ports: MissionPorts = {
-    say: (text, who, name) => bubbles.say(text, who, name),
+    say: (text, who, name, icon) => bubbles.say(text, who, name, icon),
     sayAsync: (text, who) => void bubbles.say(text, who),
+    sayIfQuiet: (text) => {
+      if (!bubbles.quiet) return false;
+      void bubbles.say(text);
+      return true;
+    },
     hush: () => bubbles.clear(),
     sayNow: (text) => {
       bubbles.clear();
       void bubbles.say(text);
     },
-    card: (title, button, icon, mirror) => {
-      audio.playCard();
-      return showCard(uiEl, title, button, icon, skipGuard(), undefined, { mirror });
+    card: (title, button, icon, mirror, notes) => {
+      // v1.11 (5-3): the notes shown in a mirror ring "しゃらーん" as the words come out in it.
+      if (mirror === 'reflect') audio.playLetterReflect();
+      else audio.playCard();
+      return showCard(uiEl, title, button, icon, skipGuard(), undefined, { mirror, notes });
     },
     // v1.10 (3-3): the runner opens and closes a cutscene's doors itself (it knows the station).
     door: () => undefined,
-    press: (ability, say, fx, cancel) =>
+    press: (ability, say, fx, cancel, target) =>
       new Promise<void>((resolve) => {
-        const buttons = { light: lightButton, whistle: null, rocket: rocketButton, jump: jumpButton } as const;
-        const el = ability === 'whistle' ? document.getElementById('whistle') : document.getElementById(ability === 'jump' ? 'jump' : ability);
+        const buttons = { light: lightButton, magnet: lightButton, whistle: null, rocket: rocketButton, jump: jumpButton } as const;
+        const el =
+          ability === 'whistle' ? document.getElementById('whistle') : document.getElementById(ability === 'jump' ? 'jump' : ability === 'magnet' ? 'light' : ability);
         let over = false;
         const finish = (pressed: boolean): void => {
           if (over) return;
@@ -1363,6 +1643,45 @@ async function boot(): Promise<void> {
           }
           resolve();
         };
+        if (ability === 'magnet') {
+          // v1.11 (PR5, 第 2 部 M5): the light comes on first; the press turns it to the magnet step and `target` flies to
+          // the train ("きゅいーん… かちっ… ぽん"). "▶▶" skips it: the step goes back to off (the target is taken off).
+          lightSwitch.set('light');
+          const seconds = 1.0;
+          cutscenePress = {
+            ability,
+            done: () => {
+              cutscenePress = null;
+              delete app.dataset.cutscenePress;
+              el?.classList.remove('is-press');
+              lightButton.setGlow(false);
+              if (target) events.post({ type: 'magnet:fetch', id: target, seconds });
+              audio.playMagnetPull(seconds);
+              void waitSeconds(seconds).then(() => {
+                if (over) return;
+                audio.playMagnetCatch();
+                finish(true);
+              });
+            },
+          };
+          app.dataset.cutscenePress = ability;
+          el?.classList.add('is-press');
+          if (say) {
+            void bubbles.say(say);
+            void (async () => {
+              while (!over && cutscenePress?.ability === 'magnet') {
+                await waitSeconds(DOOR_REMIND_SECONDS);
+                if (!over && cutscenePress?.ability === 'magnet') void bubbles.say(say);
+              }
+            })();
+          }
+          void cancel?.then(() => {
+            if (over) return;
+            lightSwitch.set('off');
+            finish(false);
+          });
+          return;
+        }
         cutscenePress = { ability, done: () => finish(true) };
         app.dataset.cutscenePress = ability;
         el?.classList.add('is-press');
@@ -1405,7 +1724,8 @@ async function boot(): Promise<void> {
       fx.dip = Math.max(fx.dip, dip * shakeScale());
       fx.shake = Math.max(fx.shake, shake * shakeScale());
       // A bumped rock has its own rounder "ぽよん" (played with its bonk), and so does the water (v1.10).
-      if (lastFailReason !== 'rock' && lastFailReason !== 'dive' && lastFailReason !== 'crack' && lastFailReason !== 'plow' && lastFailReason !== 'snow') audio.playBoing();
+      // v1.11 (PR5): so does the magnet's soap film and cushion.
+      if (lastFailReason !== 'rock' && lastFailReason !== 'dive' && lastFailReason !== 'crack' && lastFailReason !== 'plow' && lastFailReason !== 'snow' && lastFailReason !== 'magnet') audio.playBoing();
     },
     resetLever: () => ui.lever.setNotch(STOP_NOTCH),
     gauge: (state) => gauge.set(state),
@@ -1419,7 +1739,8 @@ async function boot(): Promise<void> {
       await showCard(uiEl, `${ABILITY_NAMES[ability] ?? ability}を\nおぼえた！`, 'やったね！', 'badge');
     },
     revealJunction: (side) => ui.junction.reveal(side),
-    whistleHint: (on) => ui.whistle.setGlow(on),
+    // v1.11 (5-3): a shut mirror gate close ahead lights it too (a hint: it opens on the whistle).
+    whistleHint: (on) => ui.whistle.setGlow(on || flip.whistleGlow),
     recordFound: (record) => {
       toast.show(`みつけた！\n${record.name}`, 'perfect');
       audio.playRecord();
@@ -1588,11 +1909,15 @@ async function boot(): Promise<void> {
     if (runner?.skipCutscene()) skippedAt = performance.now();
   });
 
-  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, dive, ice, thinIce, mirrors, plow, plowHint, tunnel: tunnels });
+  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, dive, ice, thinIce, mirrors, plow, plowHint, tunnel: tunnels, magnet, iron: ironProps });
   runner.knowAbilities(abilities);
   runner.setLight(lightOn);
   if (resumeFrom > 0) {
     runner.prepareResume(resumeFrom, resume ?? undefined);
+    // v1.11 (5-3): the whistle gates on the way to the station it starts at are open.
+    const before = stage.file.missions[resumeFrom - 1].steps;
+    const at = stage.file.stations.find((st) => st.id === before[before.length - 1].stationId);
+    if (at) flip.reset({ resumeAt: { railId: at.railId, at: at.at } });
     // The train stands at another station now: the camera jumps there instead of flying over the stage.
     applyCamera(true);
   }

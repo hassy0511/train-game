@@ -390,9 +390,11 @@ const RECORDS = [
   {
     id: 'iron-star',
     name: 'うみに おちた ながれぼし',
-    note: 'すきまの そこ… ひっぱれたら？',
+    note: 'すきまの そこから ひっぱった ほし',
     requires: 'magnetLight',
     model: 'iron-star',
+    // v1.11 (PR6b, PHASE9_CHAPTER5_6 第 2 部 M7.2): fetched with the magnet light now: its hint, the note as the answer.
+    hint: 'すきまに てつの ほし！ ひっぱろう！',
     onRail: { railId: 'umi', at: 2500, lateral: -10, heightFromRail: -3 },
   },
 ];
@@ -465,7 +467,7 @@ const MISSIONS = [
       { railId: 'wa2', at: 20, text: 'あれれ、とおりすぎちゃった' },
       { railId: 'wa2', at: 200, text: 'もういちど、わっかで もぐろう！' },
       { railId: 'umi', at: 2380, text: 'うえに いく あわが ほんもの！' },
-      { railId: 'umi', at: 2490, text: 'ふかい すきまに なにか きらっ' },
+      { railId: 'umi', at: 2490, text: 'ふかい すきまに なにか きらっ', unless: 'magnetLight' },
       { railId: 'umi', at: 2690, text: 'くらい… ライトを つけよう！' },
       ...['uso-1', 'uso-2', 'uso-3'].flatMap((railId) => [
         { railId, at: 20, text: 'あれれ？ ぐるっと まわってる…' },

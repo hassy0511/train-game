@@ -701,3 +701,35 @@ for (const [w, hgt] of [
     }
   });
 }
+
+/** v1.11 (PR6b/PR6c): chapter 5 done, its end seen: page 3 with 5-1, 5-2, 5-3, the gate and 「6しょう ？」. */
+for (const [w, hgt] of [
+  [1194, 834],
+  [568, 320],
+] as const) {
+  test(`page 3 with chapter 5 done at ${w}×${hgt}: 5-1, 5-2, 5-3, the gate and 「6しょう ？」 apart`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: hgt });
+    const cleared = ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', ...CH3, ...CH4, '5-1', '5-2', '5-3'];
+    const links = seenMapLinks(WORLD, cleared);
+    expect(links).toEqual(expect.arrayContaining(['5-2>5-3', 'finale:5']));
+    await seed(page, { cleared, abilities: [...ABILITIES, 'dive', 'plow', 'magnetLight'], mapLinks: links });
+    await toTitle(page);
+    await openMap(page);
+    await turned(page, 3);
+    await page.waitForTimeout(300);
+    await expect(page.locator('.map-island[data-island="5-3"]')).toHaveClass(/is-cleared/);
+    await expect(page.locator('[data-link="5-2>5-3"]')).toHaveClass(/is-laid/);
+    await expect(page.locator('.map-island[data-island="teaser:6"]')).toBeVisible();
+    const { things, arrows } = await layout(page);
+    expect(things.map((t) => t.id).sort()).toEqual(expect.arrayContaining(['5-1', '5-2', '5-3', 'teaser:6']));
+    for (let i = 0; i < things.length; i++) {
+      for (let j = i + 1; j < things.length; j++) {
+        const a = things[i].box;
+        const b = things[j].box;
+        expect(overlap(a, b) / Math.min(a.width * a.height, b.width * b.height), `${things[i].id} / ${things[j].id}`).toBeLessThanOrEqual(0.1);
+      }
+      for (const arrow of arrows) expect(overlap(things[i].box, arrow), `arrow on ${things[i].id}`).toBe(0);
+    }
+    await page.screenshot({ path: resolve(OUT, `map-pages-3-ch5-${w}.png`) });
+  });
+}

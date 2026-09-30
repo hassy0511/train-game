@@ -1,0 +1,1 @@
+{"_expect": "has no gap, gate, mirror or magnet record", "_base": "0-4", "_edit": [{"path": "records.0.onRail.railId", "value": "main"}, {"path": "records.0.onRail.at", "value": 1150}, {"path": "records.0.onRail.lateral", "value": 8}, {"path": "props.0.onRail.at", "value": 1180}]}

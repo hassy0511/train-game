@@ -1,0 +1,1 @@
+{"_expect": "must not start with \"record:\"", "_base": "0-4", "_edit": [{"path": "gimmicks.0.params.id", "value": "record:hoshi"}]}

@@ -1,5 +1,5 @@
 {
-  "_doc": "The world map (docs/PHASE4_DESIGN.md), in pages of two chapters (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3; page 3, chapters 5 and 6: docs/PHASE9_CHAPTER5_6.md 第 1 部 §3): a chapter's `page` is where its islands are; `pages[].title` is the heading beside \"ちず\" once there is more than one page. Islands are placed in % of the map area (x from the left, y from the top) of their page. An island without a stage file yet is shown as a '?' silhouette (no name, no records, it only wiggles); the rails to it are laid as usual, so a page can come before its stages, and the island gets its name once its stage file is there (and its own picture once it has a `diorama`). `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees. `chapters[].finale` plays once when its link is first drawn, or without a link once the chapter is done (a light — gold round a `ring`, water along a `path`, or an aurora — then a card); `chapters[].teaser` is a later chapter's single \"?\" island on the page of its `from` island (docs/PHASE7_FINISH.md §3). A link's optional `via` is the curve's control point in %; `afterChapter` holds it back until that chapter is done; `exit`/`enter` take it to another page through the cloud gate (the gate's place on each page, with the curve to it).",
+  "_doc": "The world map (docs/PHASE4_DESIGN.md), in pages of two chapters (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3; page 3, chapters 5 and 6: docs/PHASE9_CHAPTER5_6.md 第 1 部 §3): a chapter's `page` is where its islands are; `pages[].title` is the heading beside \"ちず\" once there is more than one page. Islands are placed in % of the map area (x from the left, y from the top) of their page. An island without a stage file yet is shown as a '?' silhouette (no name, no records, it only wiggles); the rails to it are laid as usual, so a page can come before its stages, and the island gets its name once its stage file is there (and its own picture once it has a `diorama`). `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees. `chapters[].finale` plays once when its link is first drawn, or without a link once the chapter is done (a light — gold round a `ring`, water along a `path`, an aurora, or fireflies gathering along a `path` into one big light that flies to `target`, the node it lands on (\"teaser:6\" until 6-1's island is there) — then a card); `chapters[].teaser` is a later chapter's single \"?\" island on the page of its `from` island (docs/PHASE7_FINISH.md §3). A link's optional `via` is the curve's control point in %; `afterChapter` holds it back until that chapter is done; `exit`/`enter` take it to another page through the cloud gate (the gate's place on each page, with the curve to it).",
   "pages": [
     {
       "id": 1,
@@ -84,7 +84,32 @@
     {
       "id": 5,
       "page": 3,
-      "title": "5しょう ふしぎな せかい"
+      "title": "5しょう ふしぎな せかい",
+      "finale": {
+        "path": [
+          "5-1",
+          "5-2",
+          "5-3"
+        ],
+        "light": "firefly",
+        "target": "teaser:6",
+        "card": "5しょう クリア！\nふしぎな せかいが\nぜんぶ つながった！",
+        "button": "つぎへ",
+        "icon": "firefly"
+      }
+    },
+    {
+      "id": 6,
+      "page": 3,
+      "title": "6しょう さいごの たび",
+      "teaser": {
+        "label": "6しょう",
+        "x": 50,
+        "y": 36,
+        "from": "5-3",
+        "after": "5-3",
+        "line": "つづきは また こんど！"
+      }
     }
   ],
   "islands": [
@@ -1598,6 +1623,96 @@
           }
         ]
       }
+    },
+    {
+      "id": "5-3",
+      "chapter": 5,
+      "x": 77,
+      "y": 70,
+      "diorama": {
+        "base": "island-b",
+        "ground": "#d9cdf4",
+        "rail": {
+          "radius": 11
+        },
+        "camera": {
+          "yaw": 25,
+          "pitch": 28
+        },
+        "items": [
+          {
+            "model": "mirror-frame",
+            "at": [
+              -6,
+              -9
+            ],
+            "rotY": 20,
+            "scale": 0.42
+          },
+          {
+            "model": "mirror-frame",
+            "at": [
+              -14,
+              3
+            ],
+            "rotY": 65,
+            "scale": 0.34
+          },
+          {
+            "model": "crystal-tree-b",
+            "at": [
+              6,
+              -13
+            ],
+            "rotY": 0,
+            "scale": 1.1
+          },
+          {
+            "model": "crystal-tree-a",
+            "at": [
+              14,
+              -4
+            ],
+            "rotY": 40,
+            "scale": 1.3
+          },
+          {
+            "model": "crystal-tree-a",
+            "at": [
+              -2,
+              8
+            ],
+            "rotY": 10,
+            "scale": 1.1
+          },
+          {
+            "model": "crystal-rock",
+            "at": [
+              -9,
+              -1
+            ],
+            "rotY": 30,
+            "scale": 1.2
+          },
+          {
+            "model": "mirror-pillar",
+            "at": [
+              4,
+              4
+            ],
+            "rotY": 0,
+            "scale": 0.6
+          },
+          {
+            "model": "train-proto",
+            "at": [
+              11,
+              2
+            ],
+            "rotY": 0
+          }
+        ]
+      }
     }
   ],
   "links": [
@@ -1706,6 +1821,20 @@
     [
       "5-1",
       "5-2"
+    ],
+    [
+      "5-2",
+      "5-3"
+    ],
+    [
+      "5-3",
+      "teaser:6",
+      {
+        "via": [
+          76,
+          44
+        ]
+      }
     ]
   ]
 }

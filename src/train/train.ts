@@ -19,6 +19,7 @@ import {
   UPDRAFT_ACCELERATION,
   JUNCTION_LOCK_DISTANCE,
   LEVER_NOTCHES,
+  MIRROR_WORLD,
   PARADE,
   ROCKET,
   SLOPE,
@@ -29,6 +30,20 @@ import {
 import type { TrainPose, TrainState } from './types';
 
 export type JunctionSide = 'left' | 'right';
+
+/**
+ * v1.11: a face across the rail the train front must not pass yet (Train.setBlocks; asked every frame, in the air
+ * too). "magnet" (PR5): an unopened magnet gap's soap film or iron gate; the front stops at `at`, bounces softly back
+ * ("ぽよん") and the caller puts the train back (magnetBounce). "mirror" (5-3): a shut whistle gate; the train touches
+ * its soft glass MIRROR_WORLD.gateHold − bounceBack m before it, bounces back ("ぽよん", not a fail) and is held there
+ * until the face is gone (mirrorBump).
+ */
+export interface TrainBlock {
+  kind: 'magnet' | 'mirror';
+  railId: string;
+  at: number;
+  id: string;
+}
 
 export interface JunctionApproach {
   junction: JunctionDef;
@@ -82,7 +97,26 @@ export interface TrainEvents extends Record<string, unknown> {
   wallBurst: { railId: string; span: PlowSpan; boosted: boolean };
   /** v1.10 (4-2): "ぽすっ": the train front reached a snow wall without the blade; `rewind` is where to put it back. */
   snowBump: { railId: string; s: number; span: PlowSpan; rewind: { railId: string; at: number } };
+  /**
+   * v1.11 (PR5): "ぽよん": the train front reached a block (an unopened magnet gap's soap film or iron gate; in the air
+   * too). The train bounces softly back; the caller puts it back.
+   */
+  magnetBounce: { railId: string; s: number; id: string; kind: TrainBlock['kind'] };
+  /** v1.11 (5-3): "ぽよん" off a shut mirror gate (block `id`); `airborne`: it was in the air (the jump ends there). */
+  mirrorBump: { id: string; railId: string; s: number; airborne: boolean };
 }
+
+/**
+ * v1.11 (PR5, PHASE9_CHAPTER5_6 第 2 部 M6): one cap on the lever's target speed. `scale` multiplies it; `max` (m/s)
+ * and `holdAt` (brake to a stop before `s` on `railId`) cap it. Every cap is applied: scales multiply, the lowest cap
+ * wins.
+ */
+export interface SpeedCap {
+  scale?: number;
+  max?: number;
+  holdAt?: { railId: string; s: number };
+}
+
 
 /**
  * v1.10 (4-2): what a press of "ゆきかき" did. "play" (PHASE9_0 §3): no snow ahead to clear, so the blade goes down for
@@ -181,8 +215,11 @@ export class Train {
   private arcs: JumpArc[] = [];
   private jumpCooldown = 0;
   private falling: { t: number } | null = null;
-  /** Multiplies every notch's target speed (the light slows the train down). */
-  speedScale = 1;
+  /** v1.11 (PR5): the caps on the lever's target speed by who set them (the light, the magnet's pull, …). */
+  private readonly speedCaps = new Map<string, SpeedCap>();
+  /** v1.11 (PR5): where the train front may not go yet (asked every frame), and the front last frame. */
+  private blocks: (() => readonly TrainBlock[]) | null = null;
+  private blockFront: { railId: string; s: number } | null = null;
   /** An updraft pushes the train up to this speed (m/s) while the lever is on a running notch; 0 = none. */
   boostSpeed = 0;
   /** A bending bough under the train: how far (m) the rail hangs below rest at `s` on `railId`. */
@@ -253,6 +290,10 @@ export class Train {
   private leaderHeld = false;
   /** v1.11 (5-2): the side a spinning fork sends the train (SpinSystem.side). */
   private spinSides: ((j: JunctionDef) => JunctionSide) | null = null;
+  /** v1.11 (5-3): "ぽよん" off a mirror block: seconds so far and where the car centre was when it touched. */
+  private blockBump: { t: number; from: number; id: string } | null = null;
+  /** v1.11 (5-3): mirror blocks bumped this try: held before them until they are gone. */
+  private readonly held = new Set<string>();
 
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
@@ -371,7 +412,7 @@ export class Train {
    * falling, slipping, in the air or already burning. Works from a standstill.
    */
   startRocket(): boolean {
-    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping) return false;
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping || this.blockBump) return false;
     if (this.airborne || this.rocketLeft > 0) return false;
     this.rocketLeft = ROCKET.burn;
     this.settling = false;
@@ -443,7 +484,7 @@ export class Train {
 
   /** Starts a jump. Distance = speed × air time; the lever does nothing until the lead car lands. */
   jump(): JumpResult {
-    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping) return 'locked';
+    if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping || this.blockBump) return 'locked';
     if (this.airborne) return 'air';
     if (this.leadInDive || this.domeLatch > 0 || this.submerged || this.bobT >= 0) return 'busy';
     if (this.jumpCooldown > 0) return 'cooldown';
@@ -487,7 +528,7 @@ export class Train {
    */
   setNotch(notch: number): boolean {
     if (this.ended || this.lockReason !== null || this.emergency || this.airborne || this.falling) return false;
-    if (this.rocketLeft > 0 || this.slipping || this.onSlide || this.bouncing || this.bumping) return false;
+    if (this.rocketLeft > 0 || this.slipping || this.onSlide || this.bouncing || this.bumping || this.blockBump) return false;
     const next = Math.min(Math.max(Math.round(notch), 0), SPEED_NOTCHES.length - 1);
     if (next === HARD_BRAKE_NOTCH && this.state.notch !== HARD_BRAKE_NOTCH && this.state.speed > 3) {
       this.events.emit('hardBrake', { speed: this.state.speed });
@@ -519,6 +560,8 @@ export class Train {
     this.rocketRails = [];
     this.slope = null;
     this.jumpCooldown = 0;
+    this.blockBump = null;
+    this.held.clear();
     st.s = this.wrap(frontS - TRAIN.length / 2);
     st.speed = 0;
     st.notch = STOP_NOTCH;
@@ -527,6 +570,7 @@ export class Train {
     this.refreshPending();
     this.resetDive();
     this.resetPlow();
+    this.blockFront = null;
     this.computePose();
   }
 
@@ -601,6 +645,54 @@ export class Train {
     this.spinSides = fn;
   }
 
+
+  /** v1.11 (5-3): "ぽよん" off a mirror gate is going on. */
+  get isBlockBumping(): boolean {
+    return this.blockBump !== null;
+  }
+
+  /** v1.11 (5-3): held before a shut mirror gate it bumped (the lever's target is 0 there). */
+  get blockHolding(): boolean {
+    return this.holdCap() !== null;
+  }
+
+  /** v1.11 (5-3): the fastest a mirror gate bumped this try lets the train go (0 at its hold), or null. */
+  private holdCap(): number | null {
+    if (this.held.size === 0 || !this.blocks) return null;
+    const blocks = this.blocks();
+    for (const id of [...this.held]) if (!blocks.some((b) => b.id === id)) this.held.delete(id);
+    for (const b of blocks) {
+      if (b.kind !== 'mirror' || !this.held.has(b.id)) continue;
+      const d = this.distanceAhead(b.railId, b.at);
+      if (d !== null && d > -1 && d <= MIRROR_WORLD.gateHold + 0.5) return 0;
+    }
+    return null;
+  }
+
+  /**
+   * v1.11 (5-3): the train front reached a mirror block's soft glass this frame (from `frontBefore`): stop there, end a
+   * jump, and bounce back ("ぽよん"); held before it from then on.
+   */
+  private handleMirrorBlocks(frontBefore: number, railBefore: string): void {
+    if (!this.blocks || this.blockBump || this.falling) return;
+    const st = this.state;
+    if (st.railId !== railBefore) return;
+    for (const b of this.blocks()) {
+      if (b.kind !== 'mirror' || b.railId !== st.railId) continue;
+      const contact = b.at - (MIRROR_WORLD.gateHold - MIRROR_WORLD.bounceBack);
+      if (frontBefore > contact + 1e-6 || this.frontS < contact) continue;
+      const airborne = this.airborne;
+      this.arcs = [];
+      this.stopRocket();
+      st.s = contact - TRAIN.length / 2;
+      st.speed = 0;
+      this.blockBump = { t: 0, from: st.s, id: b.id };
+      this.held.add(b.id);
+      this.events.emit('mirrorBump', { id: b.id, railId: st.railId, s: contact, airborne });
+      return;
+    }
+  }
+
   /**
    * v1.11 (5-2): the fastest the leader lets the train go now (m/s), or null (no leader, or not ahead on the way): a
    * braking curve of PARADE.approachBrake down to its speed at `gap` m, and while it moves no more than a little faster
@@ -668,6 +760,48 @@ export class Train {
     this.choice = side;
   }
 
+  /**
+   * v1.11 (PR5): sets (or with null removes) the speed cap `id`: "light" (the light's and the magnet's 0.7), "magnet"
+   * (0.5 while pulling), later "reverse", "parade", "mirror-gate", "depart", "lead-learn".
+   */
+  setSpeedCap(id: string, cap: SpeedCap | null): void {
+    if (cap) this.speedCaps.set(id, cap);
+    else this.speedCaps.delete(id);
+  }
+
+  /** The caps' scales multiplied: every notch's target speed is this many times its own (the light: 0.7). */
+  get speedScale(): number {
+    let k = 1;
+    for (const cap of this.speedCaps.values()) if (cap.scale !== undefined) k *= cap.scale;
+    return k;
+  }
+
+  /**
+   * v1.11: the faces the train front must not pass now (read every frame; see TrainBlock). The jump is never refused
+   * for them (PHASE9_0): a jump into one bounces off it in the air.
+   */
+  setBlocks(fn: (() => readonly TrainBlock[]) | null): void {
+    this.blocks = fn;
+    this.blockFront = null;
+  }
+
+  /** The lowest `max` / `holdAt` cap now (m/s), or null. */
+  private capLimit(): number | null {
+    let limit: number | null = null;
+    for (const cap of this.speedCaps.values()) {
+      let v: number | null = cap.max ?? null;
+      if (cap.holdAt) {
+        const d = this.routeDistance(cap.holdAt.railId, cap.holdAt.s);
+        if (d !== null && d > -TRAIN.length) {
+          const hold = d <= 0 ? 0 : Math.sqrt(2 * BRAKING * d);
+          v = v === null ? hold : Math.min(v, hold);
+        }
+      }
+      if (v !== null) limit = limit === null ? v : Math.min(limit, v);
+    }
+    return limit;
+  }
+
   /** The speed the lever asks for now (0 while stopping at a buffer or stop point): the running sound's motor. */
   get targetSpeed(): number {
     return this.leverTarget(this.currentRail).target;
@@ -688,11 +822,23 @@ export class Train {
         brake = Math.max(brake, BRAKING * this.grip);
       }
     }
+    // v1.11 (PR5): a cap's max or hold (the lowest wins).
+    const limit = this.capLimit();
+    if (limit !== null && limit < target) {
+      target = limit;
+      brake = Math.max(brake, BRAKING);
+    }
     // v1.11 (5-2): the band walking ahead holds the speed down (never nearer than its gap).
     const cap = this.leaderCap();
     this.leaderHeld = cap !== null && cap < target - 1e-3;
     if (cap !== null && cap < target) {
       target = cap;
+      brake = Math.max(brake, BRAKING);
+    }
+    // v1.11 (5-3): held before a shut mirror gate it bumped (whatever the lever says), until the gate opens.
+    const hold = this.holdCap();
+    if (hold !== null && hold < target) {
+      target = hold;
       brake = Math.max(brake, BRAKING);
     }
     return { target, brake };
@@ -735,6 +881,14 @@ export class Train {
       // Slide on a little while sinking; the runner fades out and puts the train back.
       this.falling.t = Math.min(this.falling.t + dt, FALL.seconds);
       st.speed = Math.max(0, st.speed - st.speed * 1.8 * dt);
+    } else if (this.blockBump) {
+      // v1.11 (5-3) "ぽよん" off a shut mirror gate: stopped at once, then back a few metres (and held there).
+      const bump = this.blockBump;
+      bump.t = Math.min(bump.t + dt, DIVE.bounceStop + MIRROR_WORLD.bounceSeconds);
+      const k = Math.max(0, bump.t - DIVE.bounceStop) / MIRROR_WORLD.bounceSeconds;
+      st.speed = 0;
+      st.s = bump.from - MIRROR_WORLD.bounceBack * k * (2 - k);
+      if (bump.t >= DIVE.bounceStop + MIRROR_WORLD.bounceSeconds) this.blockBump = null;
     } else if (wasAirborne) {
       // Ballistic: the speed does not change in the air (the arc keeps its shape). Up a steep slope without the
       // rocket, the climb is still paid, at landing (handleJump), as if the train had rolled the distance flown.
@@ -791,7 +945,10 @@ export class Train {
     } else if (st.speed < target) st.speed = Math.min(target, st.speed + ACCELERATION * dt);
     else if (st.speed > target) st.speed = Math.max(target, st.speed - (this.settling ? Math.max(brake, ROCKET.settle) : brake) * dt);
 
+    const frontBefore = this.frontS;
+    const railBefore = st.railId;
     st.s += st.speed * dt * st.direction;
+    this.handleMirrorBlocks(frontBefore, railBefore);
 
     this.handleJunctions();
     rail = this.currentRail;
@@ -799,7 +956,32 @@ export class Train {
     this.handleJump(dt, wasAirborne);
     this.handleDive(dt);
     this.handlePlow(dt);
+    this.handleMagnetBlocks();
     this.computePose();
+  }
+
+  /**
+   * v1.11 (PR5): the train front reaching a block (an unopened magnet gap's film, an iron gate): "ぽよん" (a quick soft
+   * stop, then bounced back a little; in the air the arc ends there: the block is too tall to jump).
+   */
+  private handleMagnetBlocks(): void {
+    const f = this.frontS;
+    const rail = this.currentRail.id;
+    const last = this.blockFront;
+    this.blockFront = { railId: rail, s: f };
+    if (!this.blocks || this.bouncing || this.bumping || this.falling) return;
+    const before = last && last.railId === rail ? last.s : f;
+    for (const b of this.blocks()) {
+      if (b.kind !== 'magnet' || b.railId !== rail || !(before < b.at && f >= b.at)) continue;
+      const st = this.state;
+      this.arcs = [];
+      st.s -= f - b.at;
+      st.speed = 0;
+      this.stopRocket();
+      this.bouncing = { t: 0, from: st.s };
+      this.events.emit('magnetBounce', { railId: rail, s: b.at, id: b.id, kind: b.kind });
+      return;
+    }
   }
 
   // ---- v1.10 (4-2): the snowplow ("ゆきかき") -------------------------------------------------------------------

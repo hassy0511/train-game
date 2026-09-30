@@ -231,9 +231,11 @@ const RECORDS = [
   {
     id: 'festival-bell',
     name: 'まつりの すず',
-    note: 'すきまで ちりん… ひっぱれたら？',
+    note: 'すきまで ちりん。じしゃくで ひろった',
     requires: 'magnetLight',
     model: 'festival-bell',
+    // v1.11 (PR6b, PHASE9_CHAPTER5_6 第 2 部 M7.2): fetched with the magnet light now: its hint, the note as the answer.
+    hint: 'すきまに すず！ じしゃくライト！',
     onRail: { railId: 'main', at: 1440, lateral: 11, heightFromRail: 1 },
   },
 ];
@@ -278,7 +280,7 @@ const MISSIONS = [
       { railId: 'wa', at: 170, text: 'もういちど、わっかで もぐろう！' },
       { railId: 'main', at: 1345, text: 'くらい… ライトを つけよう！' },
       { railId: 'main', at: 1385, text: 'わあ… ほしぞら みたい！' },
-      { railId: 'main', at: 1420, text: 'かべの すきまで なにか ちりん…' },
+      { railId: 'main', at: 1420, text: 'かべの すきまで なにか ちりん…', unless: 'magnetLight' },
       { railId: 'uso', at: 20, text: 'あれれ？ ぐるっと まわってる…' },
       { railId: 'uso', at: 170, text: 'ライトで ひょうしきを みよう！' },
       { railId: 'main', at: 1790, text: 'ほしぞこえきが みえる！' },

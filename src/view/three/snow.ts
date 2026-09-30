@@ -19,7 +19,7 @@ import type { CameraTarget } from '../camera-rig';
 import type { TrainPose } from '../../train/types';
 import { tunnelZones, type TunnelZone } from '../../gimmick/tunnel';
 import type { StageData } from '../../stage/types';
-import { SNOW_WAVE, TRAIN, TUNNEL } from '../../train/params';
+import { MAGNET, SNOW_WAVE, TRAIN, TUNNEL } from '../../train/params';
 import { bakeModel } from './bake';
 import type { EnvironmentState } from './environment-state';
 import { hash, mix } from './placeholder-kit';
@@ -54,6 +54,8 @@ export class SnowGimmicks {
   /** 0 outside, 1 all the way into a tunnel's dark. */
   private dark = 0;
   private lightOn = false;
+  /** v1.11 (PR5): the light button is in the magnet step. */
+  private magnetOn = false;
   private readonly tint = new Color();
   private wave: Object3D | null = null;
   private powder: Points<BufferGeometry, PointsMaterial> | null = null;
@@ -271,6 +273,8 @@ export class SnowGimmicks {
 
   onEvent(e: StageEvent): void {
     if (e.type === 'light') this.lightOn = e.on;
+    // v1.11 (PR5): the magnet step's thin green beam sees half as much further as the light does.
+    if (e.type === 'light:mode') this.magnetOn = e.mode === 'magnet';
     if (e.type === 'tunnel') this.inside = e.index === null ? null : (this.zones.find((z) => z.index === e.index) ?? null);
     if (e.type === 'sign:reveal' && this.revealIds.has(e.junctionId)) this.revealTarget = 1;
     if (e.type === 'rewind') {
@@ -314,7 +318,8 @@ export class SnowGimmicks {
     if (fog && z && baseFogColor) {
       fog.color.copy(baseFogColor).lerp(this.tint.set(z.fogColor), k);
       fog.near += (z.near - fog.near) * k;
-      fog.far += ((this.lightOn ? z.lightFar : z.far) - fog.far) * k;
+      const far = this.lightOn ? z.lightFar : this.magnetOn ? z.far + (z.lightFar - z.far) * MAGNET.beamRange : z.far;
+      fog.far += (far - fog.far) * k;
     }
     const lights = this.look.lights;
     if (lights) {

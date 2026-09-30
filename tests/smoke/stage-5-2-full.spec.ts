@@ -18,6 +18,8 @@ import {
   waitDriving,
   waitFront,
   waitRewound,
+  lightOnGlow,
+  waitCaught,
 } from './drive';
 
 /**
@@ -25,7 +27,7 @@ import {
  * opening (the child winds a chick with the whistle); M1 the reverse-wound chick walking back (wound on the glow), the
  * block gap A over the ball pit (a jump), the wind-up car let be on purpose (a soft stop, back 80 m, then wound), the
  * gold screw, three chicks wound by one whistle; M2 gap B, the side track that needs the magnet light (its arrow grey,
- * "いまは まだ いけないみたい…"), the band let be (the train held softly behind it), wound, followed at "はやい" at the
+ * "じしゃくライトが あれば いけそう…"), the band let be (the train held softly behind it), wound, followed at "はやい" at the
  * band's pace with "ゆっくり" glowing, the glimpse of Sakasa with a block train; M3 the spinning fork let be (round the
  * loop, then it waits the good way and is stopped with the whistle), gap C at "はやい", the screw hill without the
  * rocket (a slip) and with it, the slide over the line below, the dark toy box (the light, the glowing marble), the
@@ -326,7 +328,7 @@ test('stage 5-2 full run: wind-up toys, the band, the spinning forks, the screw 
     'わわっ、くるまさん！',
     'ぶーん！ いって らっしゃい〜',
     '3ば いっぺんに くるりん！',
-    'いまは まだ いけないみたい…',
+    'じしゃくライトが あれば いけそう…',
     'みぎの ほうで なにか きらっ…',
     'がくたいさんが うしろあるき〜！',
     'がくたいさんを きてきで まきなおそう',
@@ -367,5 +369,65 @@ test('stage 5-2 full run: wind-up toys, the band, the spinning forks, the screw 
   expect(saved.records).toEqual(expect.arrayContaining(['gold-screw', 'glow-marble']));
   expect(saved.records).not.toContain('tin-key');
   expect(await app.getAttribute('data-frame-errors')).toBeNull();
+  expect(errors).toEqual([]);
+});
+
+// v1.11 (PR6b, 第 5 部 §15 and 第 2 部 M20): with the magnet light (5-3) a child comes back to the shelf way: the block
+// bridge forgotten once ("ぽよん", back to main 1230 before the fork), then pulled into place; the tin key on the shelf.
+test('stage 5-2 with the magnet light: the block bridge on the shelf way (forgotten once), then the tin key', async ({ page }) => {
+  test.setTimeout(900_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  await page.addInitScript(
+    ([key, done]) => {
+      localStorage.setItem(
+        key,
+        JSON.stringify({ schema: 1, cleared: [...done, '5-2'], abilities: ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'magnetLight'], records: [], mapLinks: [], resume: { stage: '5-2', mission: 1 } }),
+      );
+    },
+    [KEY, DONE] as const,
+  );
+  const lines = await recordLines(page);
+  await recordToys(page);
+  const app = page.locator('#app');
+  await page.goto('/?stage=5-2&go=1&resume=1');
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  await card(page, 'がくたいの パレード', 120_000);
+  await waitDriving(page);
+  await expect(page.locator('#light')).toHaveAttribute('data-light', 'off');
+  await setNotch(page, NORMAL);
+  await pressOnGlowBefore(page, 'jump', 'main', 1181);
+  // The shelf way's arrow is not grey any more: tapped, the train goes up it.
+  const right = page.locator('#junction .arrow[data-side="right"]');
+  await expect(right).toBeVisible({ timeout: 90_000 });
+  await expect(right).not.toHaveAttribute('data-locked', '1');
+  await right.dispatchEvent('pointerdown');
+  await expect(app).toHaveAttribute('data-rail', 'tana', { timeout: 60_000 });
+  // The block bridge forgotten: "ぽよん" off it (a soft fail), back on main before the fork.
+  await expect(app).toHaveAttribute('data-magnet-bumps', '1', { timeout: 120_000 });
+  await expect(app).toHaveAttribute('data-fail-reason', 'magnet');
+  await waitRewound(page, 'main', 1235);
+  await waitDriving(page);
+  await setNotch(page, NORMAL);
+  await expect(right).toBeVisible({ timeout: 90_000 });
+  await right.dispatchEvent('pointerdown');
+  await expect(app).toHaveAttribute('data-rail', 'tana', { timeout: 60_000 });
+  // Green: to the magnet; the blocks fly into the gap ("つながった！"), then the tin key flies over from the shelf.
+  await lightOnGlow(page, 'magnet', 'tana', 75);
+  await expect(app).toHaveAttribute('data-magnet-tsumiki-hashi', 'open', { timeout: 60_000 });
+  await waitCaught(page, 'record:tin-key');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: resolve(OUT, 'magnet-tin-key.png') });
+  await expect.poll(async () => (await progress(page)).records ?? [], { timeout: 30_000 }).toContain('tin-key');
+  // The buffer puts the train back on main past the fork (no fail).
+  await expect(app).toHaveAttribute('data-rail', 'main', { timeout: 180_000 });
+  const said = await lines();
+  for (const line of ['つみきが たりない！ ひっぱろう！', 'つながった！', 'たなの うえに ねじまき！ ひっぱろう！']) expect(said, line).toContain(line);
+  expect(said).not.toContain('みぎの ほうで なにか きらっ…');
+  expect(said).not.toContain('じしゃくライトが あれば いけそう…');
+  expect((await toys(page)).fails.map((f) => f.reason)).toContain('magnet');
   expect(errors).toEqual([]);
 });

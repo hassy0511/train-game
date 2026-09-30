@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "id": "0-4",
+  "title": "てすとの じしゃく",
+  "chapter": 0,
+  "hidden": true,
+  "unlock": { "requires": ["4-3"], "purchase": null },
+  "unlocks": [],
+  "environment": {
+    "sky": { "top": "#4f9dff", "bottom": "#d9f1ff" },
+    "fog": { "color": "#d9f1ff", "near": 150, "far": 450 },
+    "lighting": "day",
+    "ground": { "y": -0.6, "size": 3000, "color": "#7fc96f" },
+    "bgm": null,
+    "ambience": "town",
+    "surface": "rail"
+  },
+  "start": { "railId": "main", "at": 45, "direction": 1 },
+  "rails": [
+    {
+      "id": "main",
+      "points": [
+        [0, 0, 0], [0, 0, 10], [0, 0, 20], [0, 0, 30], [0, 0, 40],
+        [0, 0, 50], [0, 0, 60], [0, 0, 70], [0, 0, 80], [0, 0, 90],
+        [0, 0, 100], [0, 0, 110], [0, 0, 120], [0, 0, 130], [0, 0, 140],
+        [0, 0, 150], [0, 0, 160], [0, 0, 170], [0, 0, 180], [0, 0, 190],
+        [0, 0, 200], [0, 0, 210], [0, 0, 220], [0, 0, 230], [0, 0, 240],
+        [0, 0, 250], [0, 0, 260], [0, 0, 270], [0, 0, 280], [0, 0, 290],
+        [0, 0, 300], [0, 0, 310], [0, 0, 320], [0, 0, 330], [0, 0, 340],
+        [0, 0, 350], [0, 0, 360], [0, 0, 370], [0, 0, 380], [0, 0, 390],
+        [0, 0, 400], [0, 0, 410], [0, 0, 420], [0, 0, 430], [0, 0, 440],
+        [0, 0, 450], [0, 0, 460], [0, 0, 470], [0, 0, 480], [0, 0, 490],
+        [0, 0, 500], [0, 0, 510], [0, 0, 520], [0, 0, 530], [0, 0, 540],
+        [0, 0, 550], [0, 0, 560], [0, 0, 570], [0, 0, 580], [0, 0, 590],
+        [0, 0, 600], [0, 0, 610], [0, 0, 620], [0, 0, 630], [0, 0, 640],
+        [0, 0, 650], [0, 0, 660], [0, 0, 670], [0, 0, 680], [0, 0, 690],
+        [0, 0, 700], [0, 0, 710], [0, 0, 720], [0, 0, 730], [0, 0, 740],
+        [0, 0, 750], [0, 0, 760], [0, 0, 770], [0, 0, 780], [0, 0, 790],
+        [0, 0, 800], [0, 0, 810], [0, 0, 820], [0, 0, 830], [0, 0, 840],
+        [0, 0, 850], [0, 0, 860], [0, 0, 870], [0, 0, 880], [0, 0, 890],
+        [0, 0, 900], [0, 0, 910], [0, 0, 920], [0, 0, 930], [0, 0, 940],
+        [0, 0, 950], [0, 0, 960], [0, 0, 970], [0, 0, 980], [0, 0, 990],
+        [0, 0, 1000], [0, 0, 1010], [0, 0, 1020], [0, 0, 1030], [0, 0, 1040],
+        [0, 0, 1050], [0, 0, 1060], [0, 0, 1070], [0, 0, 1080], [0, 0, 1090],
+        [0, 0, 1100], [0, 0, 1110], [0, 0, 1120], [0, 0, 1130], [0, 0, 1140],
+        [0, 0, 1150], [0, 0, 1160], [0, 0, 1170], [0, 0, 1180], [0, 0, 1190],
+        [0, 0, 1200], [0, 0, 1210], [0, 0, 1220], [0, 0, 1230], [0, 0, 1240],
+        [0, 0, 1250], [0, 0, 1260], [0, 0, 1270], [0, 0, 1280], [0, 0, 1290],
+        [0, 0, 1300], [0, 0, 1310], [0, 0, 1320], [0, 0, 1330], [0, 0, 1340],
+        [0, 0, 1350], [0, 0, 1360], [0, 0, 1370], [0, 0, 1380], [0, 0, 1390],
+        [0, 0, 1400], [0, 0, 1410], [0, 0, 1420]
+      ],
+      "end": { "type": "buffer" }
+    },
+    {
+      "id": "maboroshi",
+      "points": [
+        [0, 0, 1012], [0.18, 0, 1017], [0.73, 0, 1021.96], [1.63, 0, 1026.88], [2.89, 0, 1031.72],
+        [4.5, 0, 1036.45], [6.44, 0, 1041.06], [10.67, 0, 1050.12], [14.89, 0, 1059.18], [19.12, 0, 1068.25]
+      ],
+      "deadEnd": true,
+      "end": { "type": "buffer" }
+    },
+    {
+      "id": "yoko",
+      "points": [
+        [0, 0, 180], [-0.18, 0, 185], [-0.73, 0, 189.96], [-1.63, 0, 194.88], [-2.89, 0, 199.72],
+        [-4.5, 0, 204.45], [-6.44, 0, 209.06], [-10.67, 0, 218.12], [-14.89, 0, 227.18], [-19.12, 0, 236.25],
+        [-23.35, 0, 245.31], [-27.57, 0, 254.37], [-31.8, 0, 263.44], [-36.03, 0, 272.5], [-40.25, 0, 281.56],
+        [-44.48, 0, 290.63], [-48.7, 0, 299.69], [-52.93, 0, 308.75], [-57.16, 0, 317.81], [-61.38, 0, 326.88]
+      ],
+      "spur": { "back": { "railId": "main", "at": 210 } },
+      "end": { "type": "buffer" }
+    }
+  ],
+  "junctions": [
+    { "id": "usono", "railId": "main", "at": 1012, "left": "maboroshi", "right": "main", "default": "left", "signReversed": true },
+    { "id": "to-yoko", "railId": "main", "at": 180, "left": "main", "right": "yoko", "default": "left", "needs": "magnetLight" }
+  ],
+  "stations": [
+    { "id": "hajime", "name": "はじまりのえき", "railId": "main", "at": 45, "platformSide": "left" },
+    { "id": "owari", "name": "おわりのえき", "railId": "main", "at": 1330, "platformSide": "left" }
+  ],
+  "props": [
+    { "model": "sign-bell", "onRail": { "railId": "main", "at": 1150, "lateral": 5 }, "iron": "bell" },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 73, "lateral": 22 }, "rotationY": 208 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 107, "lateral": -18.1 }, "rotationY": 199 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 137, "lateral": -18.9 }, "rotationY": 151 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 131, "lateral": 23.9 }, "rotationY": 357 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 165, "lateral": -20.3 }, "rotationY": 235 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 197, "lateral": -24.7 }, "rotationY": 284 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 225, "lateral": -13.9 }, "rotationY": 277 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 255, "lateral": -21.7 }, "rotationY": 347 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 284, "lateral": -26.9 }, "rotationY": 66 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 343, "lateral": -22.6 }, "rotationY": 8 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 377, "lateral": -20.9 }, "rotationY": 253 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 404, "lateral": -26.9 }, "rotationY": 172 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 401, "lateral": 14.6 }, "rotationY": 1 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 440, "lateral": -16.3 }, "rotationY": 137 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 440, "lateral": 22.2 }, "rotationY": 312 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 465, "lateral": -13.1 }, "rotationY": 105 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 498, "lateral": -19.1 }, "rotationY": 55 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 495, "lateral": 13.6 }, "rotationY": 86 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 523, "lateral": 20.8 }, "rotationY": 32 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 554, "lateral": -13.3 }, "rotationY": 41 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 560, "lateral": 21.9 }, "rotationY": 332 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 589, "lateral": 25.8 }, "rotationY": 264 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 612, "lateral": 23 }, "rotationY": 154 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 648, "lateral": 22.7 }, "rotationY": 179 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 671, "lateral": -28.4 }, "rotationY": 134 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 674, "lateral": 20 }, "rotationY": 358 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 740, "lateral": 28.3 }, "rotationY": 79 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 760, "lateral": 13.3 }, "rotationY": 134 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 791, "lateral": -25.5 }, "rotationY": 296 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 791, "lateral": 19.9 }, "rotationY": 151 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 828, "lateral": -16.3 }, "rotationY": 283 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 825, "lateral": 26.3 }, "rotationY": 293 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 860, "lateral": 17.3 }, "rotationY": 21 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 889, "lateral": -14.8 }, "rotationY": 187 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 888, "lateral": 23.1 }, "rotationY": 143 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 919, "lateral": 17.5 }, "rotationY": 208 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 1002, "lateral": -24 }, "rotationY": 345 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 1001, "lateral": 20.7 }, "rotationY": 29 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 1035, "lateral": 13.7 }, "rotationY": 331 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 1061, "lateral": 26.1 }, "rotationY": 65 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 1130, "lateral": 14.1 }, "rotationY": 310 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 1159, "lateral": -25 }, "rotationY": 256 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 1184, "lateral": -18.2 }, "rotationY": 351 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 1183, "lateral": 28.2 }, "rotationY": 287 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 1213, "lateral": 13.6 }, "rotationY": 316 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 1279, "lateral": -15.8 }, "rotationY": 194 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 1279, "lateral": 18.3 }, "rotationY": 116 },
+    { "model": "tree-a", "onRail": { "railId": "main", "at": 1310, "lateral": 19.9 }, "rotationY": 138 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 1336, "lateral": 26.9 }, "rotationY": 8 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 1399, "lateral": -28.4 }, "rotationY": 261 },
+    { "model": "tree-b", "onRail": { "railId": "main", "at": 1397, "lateral": 20.1 }, "rotationY": 135 }
+  ],
+  "actors": [],
+  "records": [
+    {
+      "id": "test-suzu",
+      "name": "たかい すず（ためし）",
+      "note": "じしゃくで ひきよせた すず",
+      "requires": "magnetLight",
+      "model": "ice-bell",
+      "onRail": { "railId": "yoko", "at": 110, "lateral": 8, "heightFromRail": 4 },
+      "hint": "たかい ところに すず！"
+    }
+  ],
+  "missions": [
+    {
+      "id": "m1",
+      "type": "pickup",
+      "title": "じしゃくの ためし",
+      "steps": [{ "stationId": "owari", "board": 1, "say": "じしゃくの でんしゃ、すごい！", "reply": "きゅいーん だよ！" }],
+      "lines": {
+        "start": "じしゃくの ためしだよ！\nみどりに ひかったら じしゃく",
+        "moving": "そうそう、その ちょうし！",
+        "deadEnd": "いきどまり… かがみを くるっと しよう",
+        "stationNear": "おわりの えきだ。ゆっくり！",
+        "complete": "じしゃくの ためし、できたね！"
+      }
+    }
+  ],
+  "gimmicks": [
+    { "type": "magnet", "railId": "main", "from": 420, "params": { "id": "hoshi", "kind": "pick", "look": "star", "lateral": 7, "height": 3 } },
+    {
+      "type": "magnet",
+      "railId": "main",
+      "from": 600,
+      "to": 608,
+      "params": { "id": "hanare", "kind": "bridge", "look": "rail-piece", "piece": { "lateral": -9, "height": 0, "rotationY": 60 } }
+    },
+    {
+      "type": "magnet",
+      "railId": "main",
+      "from": 780,
+      "params": { "id": "tobira", "kind": "gate", "look": "door", "line": "てつの とびら！ じしゃく！", "done": "あいた！" }
+    },
+    {
+      "type": "magnet",
+      "railId": "main",
+      "from": 980,
+      "params": {
+        "id": "kurutto",
+        "kind": "turn",
+        "look": "mirror",
+        "lateral": -12,
+        "height": 4,
+        "junction": "usono",
+        "line": "そっぽの かがみ！ じしゃくで くるっ！",
+        "done": "くるっ！ ほんとうの みちが みえた！",
+        "miss": "かがみが そっぽ… うその みち！"
+      }
+    }
+  ],
+  "cutscenes": {
+    "opening": [
+      { "caption": "てすとの じしゃく", "seconds": 2 },
+      { "say": "ライトの ボタンで じしゃくを ためそう", "emote": "tilt" },
+      { "spawn": "tut-star", "model": "iron-star-small", "onRail": { "railId": "main", "at": 85, "lateral": 7, "heightFromRail": 3 } },
+      { "press": "magnet", "target": "tut-star", "say": "もう いちど おすと じしゃく！" },
+      { "say": "くっついた！ じしゃくライト！", "emote": "jump" }
+    ]
+  },
+  "opening": "opening"
+}

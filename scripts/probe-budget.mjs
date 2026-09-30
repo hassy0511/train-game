@@ -15,6 +15,7 @@
  * The title screen's camera (PHASE7_FINISH §4 item 6: it swings around the train standing at the start) is measured
  * first, as the camera "title", at TITLE_ANGLES on both sides of the train (the game uses the side away from the
  * platform).
+ * v1.11 (PR5): every stage is measured with the magnet light learned (its odds and ends by the line are drawn).
  * v1.11: a hidden (test) stage is probed when it is named. A look a cutscene changes to (the "environment" step: 0-1's
  * night) is probed too: every rail point again under it, as the cameras "<camera>+<lighting>".
  * Runs the dev server, since the __debugView / __debugTrain handles only exist in dev builds.
@@ -232,6 +233,9 @@ function instrument() {
     }
     return out;
   };
+  // v1.11 (PR5): measured as after 5-3 (the magnet light learned): the iron odds and ends by the line and the targets'
+  // glints are drawn, the magnet on the roof too (PHASE9_CHAPTER5_6 第 2 部 M11: "小物は ぜんぶ ならべて 描く").
+  view.onStageEvent({ type: 'ability', id: 'magnetLight' });
   return [...window.__debugTrain.network.rails.values()].map((rail) => ({
     id: rail.id,
     length: rail.length,

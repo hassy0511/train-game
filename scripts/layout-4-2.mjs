@@ -280,9 +280,11 @@ const RECORDS = [
   {
     id: 'tin-shovel',
     name: 'ブリキの ちいさな スコップ',
-    note: 'たかい ところ… ひきよせられたら？',
+    note: 'リフトの てっぺんに のこってた',
     requires: 'magnetLight',
     model: 'tin-shovel',
+    // v1.11 (PR6b, PHASE9_CHAPTER5_6 第 2 部 M7.2): fetched with the magnet light now: its hint, the note as the answer.
+    hint: 'てっぺんに スコップ！ ひっぱろう！',
     onRail: { railId: 'main', at: 1600, lateral: 14, heightFromRail: 11 },
   },
 ];
@@ -326,7 +328,7 @@ const MISSIONS = [
       { railId: 'main', at: 1130, text: 'こんどは ジャンプ！' },
       { railId: 'main', at: 1230, text: 'ひだりの おかに ゆきが どっさり…' },
       { railId: 'main', at: 1450, text: 'スキーの おかだ！ のぼるよ' },
-      { railId: 'main', at: 1540, text: 'たかい ところで なにか きらっ' },
+      { railId: 'main', at: 1540, text: 'たかい ところで なにか きらっ', unless: 'magnetLight' },
       { railId: 'main', at: 1720, text: 'ひゃっほー！ とんだ〜！' },
       { railId: 'main', at: 1905, text: 'おろした まま で いいんだね！' },
     ],
