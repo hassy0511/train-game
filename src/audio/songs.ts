@@ -17,6 +17,11 @@ export interface Song {
 }
 
 const repeat = (bar: string, times: number): string => Array.from({ length: times }, () => bar).join(' | ');
+/** v1.11 (5-3): the half as written, then the same notes backwards (the mirror song "kagami"). */
+const mirrored = (half: string): string => {
+  const notes = half.split(/\s+/).filter((t) => t && t !== '|');
+  return `${half} | ${notes.slice().reverse().join(' ')}`;
+};
 
 const F = 'F2:1 -:1 C3:1 -:1';
 const C = 'C2:1 -:1 G2:1 -:1';
@@ -561,6 +566,23 @@ export const SONGS: Record<string, Song> = {
           'C3:1 -:1 G2:1 -:1 | G2:1 -:1 D3:1 -:1 | D3:1 -:1 A2:1 -:1 | C3:1 -:1 G2:1 -:1 | C3:1 -:1 G2:1 -:1 | F2:1 -:1 C3:1 -:1 | G2:1 -:1 D3:1 -:1 | C3:1 -:1 C2:1 -:1',
       },
       { voice: 'drums', gain: 0.35, notes: `${repeat('k:1 -:1 s:1 -:1', 15)} | k:1 s:1 k:1 -:1` },
+    ],
+  },
+
+  // 5-3 かがみのせかい「かがみの むこう」(PHASE9_CHAPTER5_6 第 1 部 §8.1): a gentle 4/4 in G at 92, a glassy bell melody,
+  // a soft sine answering, a pad and a marimba "ぽろん"; no drums. The song is its own mirror: bars 9–16 are bars 1–8
+  // played backwards (every track, note by note: the chords come back in reverse and end on the first bar's G).
+  kagami: {
+    id: 'kagami',
+    title: 'かがみの むこう',
+    bpm: 92,
+    stepsPerBeat: 2,
+    tracks: [
+      { voice: 'bell', notes: mirrored('G5:2 B5:2 D6:2 B5:1 A5:1 | G5:3 E5:1 D5:4 | C5:2 E5:2 G5:2 E5:1 F#5:1 | A5:3 G5:1 F#5:4 | B5:2 D6:2 G6:2 F#6:1 E6:1 | D6:3 B5:1 G5:4 | A5:2 C6:2 B5:2 A5:1 F#5:1 | G5:6 -:2') },
+      { voice: 'lead', gain: 0.35, notes: mirrored('-:4 D5:4 | B4:8 | -:4 G4:4 | A4:8 | -:4 D5:4 | D5:8 | C5:4 A4:4 | B4:6 -:2') },
+      { voice: 'pad', gain: 0.45, notes: mirrored('B3:8 | B3:8 | C4:8 | A3:8 | B3:8 | B3:8 | A3:8 | B3:8') },
+      { voice: 'pad', gain: 0.35, notes: mirrored('D4:8 | E4:8 | E4:8 | D4:8 | D4:8 | D4:8 | F#4:8 | D4:8') },
+      { voice: 'wood', gain: 0.3, notes: mirrored('G3:2 -:2 D4:2 -:2 | E3:2 -:2 B3:2 -:2 | C4:2 -:2 G3:2 -:2 | D4:2 -:2 A3:2 -:2 | G3:2 -:2 D4:2 -:2 | G3:2 -:2 B3:2 -:2 | D4:2 -:2 A3:2 -:2 | G3:2 -:2 D4:2 -:2') },
     ],
   },
 };

@@ -1239,6 +1239,12 @@ async function boot(): Promise<void> {
     updateFalls();
     // Under water the island's sound turns to the underwater bed, and the rails to a soft "ことっ" with bubbles.
     audio.setAmbienceUnderwater(train.submerged);
+    // v1.11 (5-3): in a cutscene the mirror world's sound stops, the song alone (the mirror Sakasa is never eerie).
+    if (stage.file.environment.ambience === 'mirror') {
+      const quiet = runner?.phase === 'cutscene';
+      audio.setAmbience(quiet ? null : 'mirror', hasVolcanoProp);
+      app.dataset.ambience = quiet ? '' : 'mirror';
+    }
     view.setSubmerged(train.submerged);
     audio.updateRun(dt, {
       speed: Math.abs(train.state.speed),
@@ -1585,7 +1591,7 @@ async function boot(): Promise<void> {
   let skippedAt = -Infinity;
   const skipGuard = (): number => (performance.now() - skippedAt < SKIP_CARD_WINDOW_MS ? SKIP_CARD_GUARD_SECONDS : 0);
   const ports: MissionPorts = {
-    say: (text, who, name) => bubbles.say(text, who, name),
+    say: (text, who, name, icon) => bubbles.say(text, who, name, icon),
     sayAsync: (text, who) => void bubbles.say(text, who),
     sayIfQuiet: (text) => {
       if (!bubbles.quiet) return false;

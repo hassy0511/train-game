@@ -723,9 +723,10 @@
     {
       "id": "iron-star",
       "name": "うみに おちた ながれぼし",
-      "note": "すきまの そこ… ひっぱれたら？",
+      "note": "すきまの そこから ひっぱった ほし",
       "requires": "magnetLight",
       "model": "iron-star",
+      "hint": "すきまに てつの ほし！ ひっぱろう！",
       "onRail": { "railId": "umi", "at": 2500, "lateral": -10, "heightFromRail": -3 }
     }
   ],
@@ -790,7 +791,7 @@
         { "railId": "wa2", "at": 20, "text": "あれれ、とおりすぎちゃった" },
         { "railId": "wa2", "at": 200, "text": "もういちど、わっかで もぐろう！" },
         { "railId": "umi", "at": 2380, "text": "うえに いく あわが ほんもの！" },
-        { "railId": "umi", "at": 2490, "text": "ふかい すきまに なにか きらっ" },
+        { "railId": "umi", "at": 2490, "text": "ふかい すきまに なにか きらっ", "unless": "magnetLight" },
         { "railId": "umi", "at": 2690, "text": "くらい… ライトを つけよう！" },
         { "railId": "uso-1", "at": 20, "text": "あれれ？ ぐるっと まわってる…" },
         { "railId": "uso-1", "at": 195, "text": "しずむ あわは サカサの あわ！" },

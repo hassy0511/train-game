@@ -328,9 +328,11 @@ const RECORDS = [
   {
     id: 'ice-bell',
     name: 'こおりの たなの すず',
-    note: 'たかい たなの すず。ひきよせられたら…',
+    note: 'たかい たなから ひきよせた すず',
     requires: 'magnetLight',
     model: 'ice-bell',
+    // v1.11 (PR6b, PHASE9_CHAPTER5_6 第 2 部 M7.2): fetched with the magnet light now: its hint, the note as the answer.
+    hint: 'たなの うえに すず！ ひっぱろう！',
     onRail: { railId: 'main', at: 2760, lateral: 16, heightFromRail: 9 },
   },
 ];
@@ -398,7 +400,7 @@ const MISSIONS = [
     hints: [
       { railId: 'main', at: 2540, text: 'こおりの かべ… ぴかぴか してる' },
       { railId: 'main', at: 2700, text: 'かがみの やじるしは ほんとうの むき！' },
-      { railId: 'main', at: 2740, text: 'たかい ところで なにか ちりん…' },
+      { railId: 'main', at: 2740, text: 'たかい ところで なにか ちりん…', unless: 'magnetLight' },
       { railId: 'main', at: 2775, text: 'また かがみ かも…？' },
       { railId: 'main', at: 2985, text: 'さいごの えきも こおり！ はやめに！' },
     ],

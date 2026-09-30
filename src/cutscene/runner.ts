@@ -1,13 +1,14 @@
 import type { StageEvent, StageEventBus } from '../core/stage-events';
 import type { RailNetwork } from '../rail/types';
 import { resolvePlacement } from '../stage/loader';
-import type { AbilityId, CutsceneStep, Emote, Speaker, Vec3 } from '../stage/types';
+import type { AbilityId, BubbleIcon, CutsceneStep, Emote, Speaker, Vec3 } from '../stage/types';
 import { MIRROR_WORLD, WINDUP } from '../train/params';
 import type { CameraMode } from '../view/camera-rig';
 
 /** What the cutscene runner needs from the UI. */
 export interface CutscenePorts {
-  say(text: string, who: Speaker, name?: string): Promise<void>;
+  /** v1.11 (5-3) `icon`: a little picture on the bubble (BubbleIcon). */
+  say(text: string, who: Speaker, name?: string, icon?: BubbleIcon): Promise<void>;
   /**
    * v1.10 `mirror`: a note on paper with its title written mirror-wise; icon "drawing" (3-2): a crayon picture. v1.11
    * (5-3) `mirror` "reflect": `notes` mirror-written notes held up to a mirror that shows the title in plain letters.
@@ -113,7 +114,7 @@ export async function runCutscene(
       ports.door(step.door === 'open');
     } else if ('say' in step) {
       if (step.emote) events.post({ type: 'partner:emote', kind: step.emote });
-      await race(ports.say(step.say, step.who ?? 'partner', step.name));
+      await race(ports.say(step.say, step.who ?? 'partner', step.name, step.icon));
     } else if ('spawn' in step) {
       const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail }, rotationY: step.rotationY }, network, groundY);
       events.post({ type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion, mirror: step.mirror });
@@ -149,6 +150,10 @@ export async function runCutscene(
         // v1.11 (5-3): a mirror turns round ("くるっ… ぱたん"); it stays so.
         events.post({ type: 'mirror:turn', id: step.mirror, face: step.to ?? 'back', seconds: MIRROR_WORLD.fxTurnSeconds });
         await race(ports.wait(MIRROR_WORLD.fxTurnSeconds));
+      } else if (step.fx === 'hearts') {
+        // v1.11 (5-3): hearts and stars round a figure ("きもちが うつって いる"); they stay until it is taken off.
+        events.post({ type: 'hearts', id: step.id });
+        await race(ports.wait(0.4));
       }
     } else if ('caption' in step) {
       await race(ports.caption(step.caption, step.seconds ?? 3));

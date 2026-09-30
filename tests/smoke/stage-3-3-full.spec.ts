@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { budget, card, doors, FAST, NORMAL, pressOnGlow, progress, recordLines, pressOnGlowBefore, setNotch, stopAt, tapUntil, waitDriving, waitFront, waitRewound } from './drive';
+import { budget, card, doors, FAST, NORMAL, pressOnGlow, progress, recordLines, pressOnGlowBefore, setNotch, stopAt, tapUntil, waitDriving, waitFront, waitRewound, magnetRecordRun } from './drive';
 
 /**
  * Stage 3-3 "ほしのうみ" from start to chapter 3's end on the map (docs/PHASE8_CHAPTER3_4.md 第 5 部 §15, read with §0.2,
@@ -279,4 +279,27 @@ test('stage 3-3: the moon comes up when the countdown runs out (not the volcano)
   await waitDriving(page);
   await expect(app).toHaveAttribute('data-timer', '85');
   expect(errors).toEqual([]);
+});
+
+// v1.11 (PR6b, PHASE9_CHAPTER5_6 第 2 部 M20): with the magnet light (5-3) a child comes back for the festival bell in the trench wall (M2: dive at the ring into the star trench).
+test('stage 3-3 with the magnet light: festival-bell is pulled to the train', async ({ page }) => {
+  test.setTimeout(900_000);
+  await magnetRecordRun(
+    page,
+    {
+      stage: '3-3',
+      mission: 1,
+      title: 'ほしの みぞ',
+      record: 'festival-bell',
+      hint: 'すきまに すず！ じしゃくライト！',
+      riddle: 'かべの すきまで なにか ちりん…',
+      cleared: ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', '3-1', '3-2', '3-3', '4-1', '4-2', '4-3', '5-1', '5-2'],
+      press: ['dive'],
+      arrows: [],
+      rail: 'main',
+      latest: 1430,
+      shot: 'magnet-festival-bell.png',
+    },
+    OUT,
+  );
 });

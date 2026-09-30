@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { magnetRecordRun } from './drive';
 
 /**
  * Stage 4-2 "おおゆきの むら" played through (docs/PHASE8_CHAPTER3_4.md 第 6 部 §15): the snowplow learned in the
@@ -453,4 +454,27 @@ test('4-2 models on the model page', async ({ page }) => {
   await page.waitForTimeout(1500);
   await page.screenshot({ path: resolve(OUT, '4-2-models-b.png') });
   expect(errors).toEqual([]);
+});
+
+// v1.11 (PR6b, PHASE9_CHAPTER5_6 第 2 部 M20): with the magnet light (5-3) a child comes back for the tin shovel on the lift tower (M2: the snowplow and the jump on the way).
+test('stage 4-2 with the magnet light: tin-shovel is pulled to the train', async ({ page }) => {
+  test.setTimeout(900_000);
+  await magnetRecordRun(
+    page,
+    {
+      stage: '4-2',
+      mission: 1,
+      title: 'ゆきかきと ジャンプ',
+      record: 'tin-shovel',
+      hint: 'てっぺんに スコップ！ ひっぱろう！',
+      riddle: 'たかい ところで なにか きらっ',
+      cleared: ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', '3-1', '3-2', '3-3', '4-1', '4-2', '4-3', '5-1', '5-2'],
+      press: ['plow', 'jump'],
+      arrows: [],
+      rail: 'main',
+      latest: 1582,
+      shot: 'magnet-tin-shovel.png',
+    },
+    OUT,
+  );
 });

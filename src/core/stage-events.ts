@@ -171,6 +171,8 @@ export type StageEvent =
   | { type: 'bubbles:true'; junctionId: string }
   /** v1.10 (3-1): a big bubble pops ("ぱちん") at cutscene figure `id` (or in front of the camera). */
   | { type: 'pop'; id?: string }
+  /** v1.11 (5-3): little hearts and stars round cutscene figure `id` (until it is taken off). */
+  | { type: 'hearts'; id: string }
   /** v1.10 (4-1): slowing down on ice (the wheels throw up sparkling ice dust) or not any more. */
   | { type: 'ice'; sparkle: boolean }
   /**

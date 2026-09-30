@@ -488,9 +488,10 @@
     {
       "id": "sleigh-bell",
       "name": "ゆきに うまった すず",
-      "note": "ゆきの なかで ちりん… ひっぱれたら？",
+      "note": "ゆきの なかで ちりん。ひっぱりだした",
       "requires": "magnetLight",
       "model": "sleigh-bell",
+      "hint": "ゆきの なかに すず！ ひっぱろう！",
       "onRail": { "railId": "main", "at": 1830, "lateral": -10, "heightFromRail": -0.4 }
     }
   ],

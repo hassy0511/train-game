@@ -110,6 +110,11 @@ export const PLACEHOLDER_SIZES: Record<string, [number, number, number]> = {
   'mirror-pillar': [1.4, 8, 1.4],
   'mirror-frame': [21.2, 14.8, 1],
   'turn-mirror': [13.2, 10.8, 1],
+  'mirror-shelf': [2.1, 3.2, 1.4],
+  'hand-mirror': [0.4, 0.7, 0.1],
+  'sakasa-doodle': [1.2, 1.5, 0.6],
+  'note-pink': [0.7, 0.45, 0.02],
+  'mirror-stand-small': [1.2, 2, 0.9],
 };
 
 export function placeholderSize(model: string): [number, number, number] {

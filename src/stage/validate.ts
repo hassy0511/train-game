@@ -109,6 +109,7 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
   } else if ('say' in st) {
     if (!isString(st.say)) fail(`${where}: "say" must be text`);
     if (st.name !== undefined && !isString(st.name)) fail(`${where}: "name" must be text`);
+    if (st.icon !== undefined && st.icon !== 'ride') fail(`${where}: "icon" must be "ride"`);
   } else if ('spawn' in st) {
     if (!isString(st.spawn) || !isString(st.model) || !MODEL_NAME.test(st.model) || !onRailOk(st.onRail)) {
       fail(`${where}: spawn needs id, model and onRail`);
@@ -142,8 +143,10 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
       if (st.reach !== undefined && !(typeof st.reach === 'number' && st.reach >= 1 && st.reach <= 4)) fail(`${where}: a fixed camera's "reach" must be 1 to 4`);
     } else if (!['cab', 'chase', 'side', 'top'].includes(String(st.camera))) fail(`${where}: camera`);
   } else if ('fx' in st) {
-    if (st.fx !== 'sneeze' && st.fx !== 'pop' && st.fx !== 'festival' && st.fx !== 'mirrorTurn') fail(`${where}: fx must be "sneeze", "pop", "festival" or "mirrorTurn"`);
-    if (st.id !== undefined && (st.fx !== 'pop' || !isString(st.id))) fail(`${where}: only fx "pop" takes an "id" (a cutscene figure)`);
+    if (st.fx !== 'sneeze' && st.fx !== 'pop' && st.fx !== 'festival' && st.fx !== 'mirrorTurn' && st.fx !== 'hearts') fail(`${where}: fx must be "sneeze", "pop", "festival", "mirrorTurn" or "hearts"`);
+    if (st.id !== undefined && ((st.fx !== 'pop' && st.fx !== 'hearts') || !isString(st.id))) fail(`${where}: only fx "pop" and "hearts" take an "id" (a cutscene figure)`);
+    // v1.11 (5-3): hearts round a figure.
+    if (st.fx === 'hearts' && !isString(st.id)) fail(`${where}: fx "hearts" needs an "id" (a figure brought on before it)`);
     // v1.11 (5-3): a mirror turns round.
     if (st.fx === 'mirrorTurn' && !isString(st.mirror)) fail(`${where}: fx "mirrorTurn" needs "mirror" (a mirror's params.id)`);
     if (st.fx === 'mirrorTurn' && st.to !== undefined && st.to !== 'back' && st.to !== 'front') fail(`${where}: fx "mirrorTurn" "to" must be "back" or "front"`);

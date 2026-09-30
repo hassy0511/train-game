@@ -743,9 +743,16 @@ export interface MissionDef {
 export type Speaker = 'partner' | 'amanojaku' | 'passenger';
 export type Emote = 'jump' | 'tilt' | 'cheer';
 
+/** v1.11 (5-3): the little pictures a bubble can carry (PHASE9_CHAPTER5_6 第 6 部 §12; 6-1 adds more). */
+export type BubbleIcon = 'ride';
+
 export type CutsceneStep =
   /** v1.6 `name`: the name shown on the bubble instead of the speaker's usual one (e.g. "くもさん"). */
-  | { say: string; who?: Speaker; emote?: Emote; name?: string }
+  /**
+   * v1.11 (5-3) `icon`: a little picture on the bubble for a child who cannot read yet ("ride": Sakasa riding the
+   * Wonder train, the mirror Sakasa's "ほんとうは のりたい").
+   */
+  | { say: string; who?: Speaker; emote?: Emote; name?: string; icon?: BubbleIcon }
   | {
       spawn: string;
       model: string;
@@ -812,6 +819,11 @@ export type CutsceneStep =
    * "front" turns it to face the train again. It stays so (a fast-forward does it at once).
    */
   | { fx: 'mirrorTurn'; mirror: string; to?: 'back' | 'front' }
+  /**
+   * v1.11 (5-3): little hearts and stars float round cutscene figure `id` until it is taken off (the feelings shown in
+   * the mirror: drawn wherever the figure is, so a mirror-only figure has them in the mirror only).
+   */
+  | { fx: 'hearts'; id: string }
   /**
    * v1.10 (3-3): the child presses one button during the cutscene (it alone glows; the partner says `say` again every
    * DOOR_REMIND_SECONDS). `fx` "beacon": the press lights the lighthouse. v1.11 (5-2) `fx` "windup": the press winds

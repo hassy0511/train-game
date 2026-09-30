@@ -49,6 +49,15 @@ function drawAbility(ctx: CanvasRenderingContext2D, ability: AbilityId): boolean
       ctx.fill();
       stroke('M19 10l9-4M19 16h10M19 22l9 4', 2.4);
       return true;
+    case 'magnetLight':
+      // v1.11 (5-2's "tana"): the horseshoe magnet with light rays (as MAGNET_ICON), its tips in the emerald green.
+      stroke('M9 7v9a7 7 0 0 0 14 0V7', 4.4);
+      ctx.strokeStyle = '#1fae7a';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'butt';
+      ctx.stroke(new Path2D('M6.8 7h4.4M20.8 7h4.4'));
+      stroke('M16 27v3M8 25l-2 2M24 25l2 2', 2);
+      return true;
     default:
       return false;
   }

@@ -1423,6 +1423,10 @@ type LineKey = /* v1.11 (PR5) */ 'magnetNear' | 'magnetGo' | 'magnetBump' | 'mag
 - `{ "fx": "mirrorTurn", "mirror": "m-oo", "to": "back" }`: かがみが 0.8 秒で くるっと まわる（`back`: うらを むける ＝ 写さない、`front`: こちらを むく）。**割らない**。のこる 変化（▶▶・つづきでも）。音「くるっ… ぱたん」（`front` は「きらーん」つき）。`mirror` は ある `mirror` の `id`
 - `card` の `"mirror": "reflect"` と `"notes": 1 | 2`: 左に かがみ文字の 紙（`notes` まい）、右に 銀の わくの かがみ。0.4 秒で 紙が かがみに 近づき、きらきらが 0.6 秒 はしって、かがみの 中に ふつうの 字の `title` と ワンダーごうの まどに ぐるぐる ぼうしの 小さな え。ボタンは 0.9 秒 あと。`aria-label`「かがみに うつった てがみ」。`notes` は `reflect` と だけ
 - `amanojaku-wave`（かがみの サカサ、手を あげて ゆれる）・`amanojaku-shy`（手を まえで あわせ、首を かしげる）は 組み立てずみの `amanojaku` を ポーズ した 仮の 形（チケット 0020）
+- （PR6b）`{ "fx": "hearts", "id": "sakasa-mirror" }`: 寸劇の 役者 `id` の まわりに ピンクの ハートと 金の ほし 24 こ（1 回で 描く）。役者を けすまで のこる。役者の 子ども なので `mirror: "only"` の 役者なら かがみの 写しの 中に だけ（「きもちが うつって いる」）。`id` は `fx` の `pop` と `hearts` だけ
+- （PR6b）`say` の `"icon": "ride"`: 吹き出しに 小さな 絵（ワンダーごうの 客車の まどに ぐるぐる ぼうし ＝ のりたい サカサ。顔なし）。字が よめない 子の ため。`#bubble[data-icon="ride"]`。6-1 で `hand-stop`・`run-swirl` を 足す（`LineDef.icon`）
+- （PR6b）`environment.ambience` が `mirror` の ステージでは 寸劇の あいだ まわりの 音を 止めて 曲 だけ（`#app[data-ambience]` が 空）
+- （PR6b）`magnet` の `turn` に `mirror`（この 節の `mirror` の `id`）を 書くと、じしゃくで ひっぱりはじめた しゅんかんに その かがみが こちらを むく（`mirror:turn`、`front`）。その かがみは `facing: false` で なければ ならない（検査）。書かない ときは §20 の 仮の かがみ `turn-mirror-small`
 
 ### せりふの キー（v1.11 の 5-3 の 分）
 ```ts
