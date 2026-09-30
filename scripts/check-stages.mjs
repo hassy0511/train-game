@@ -8,9 +8,11 @@
 //     whole stage file, or a copy of a real one with edits:
 //       { "_expect": "text of the error", "_base": "1-1", "_edit": [ { "path": "start.at", "value": 99999 } ] }
 //     ("path" walks keys and array indexes; "delete": true removes the key instead of setting a value).
-//  3. The あいことば versions in src/core/progress.ts: bits add up (5 + items + checkBits = 5 x letters, check >= 16
-//     bits), no id is listed twice, a version keeps the lists of the one before it in the same order, and every clear,
-//     ability and record of every playable (non-hidden) stage has a place in the latest version.
+//  3. The あいことば versions in src/core/progress.ts: bits add up (5 + items + padBits + checkBits = 5 x letters,
+//     check >= 16 bits), no id is listed twice, a version keeps the lists of the one before it in the same order, a
+//     version without rails says up to which map page it rebuilds them (`pages`, from version 2 on), and every
+//     clear, ability (also the ones records require) and record of every playable (non-hidden) stage has a place in
+//     the latest version.
 //
 // The TypeScript is loaded with Vite's SSR loader (Vite is a dependency; Node cannot import .ts). A `throw` while a
 // module loads does not fail `vite build`, which is why the checks are made here, on the loaded values.
@@ -108,9 +110,16 @@ try {
     const label = `passcode v${v.version}`;
     if (v.version !== i + 1) fail(`${label}: versions must be 1, 2, 3 ... in order (this is number ${i + 1})`);
     const items = FIELDS.reduce((sum, f) => sum + (v[f]?.length ?? 0), 0);
-    const bits = 5 + items + v.checkBits;
-    if (bits !== 5 * v.letters) fail(`${label}: 5 + ${items} items + ${v.checkBits} check = ${bits} bits, but ${v.letters} letters are ${5 * v.letters}`);
+    const pad = v.padBits ?? 0;
+    const bits = 5 + items + pad + v.checkBits;
+    if (bits !== 5 * v.letters) {
+      fail(`${label}: 5 + ${items} items + ${pad} padding + ${v.checkBits} check = ${bits} bits, but ${v.letters} letters are ${5 * v.letters}`);
+    }
     if (v.checkBits < 16) fail(`${label}: only ${v.checkBits} check bits (at least 16)`);
+    if (!Number.isInteger(pad) || pad < 0) fail(`${label}: padBits must be a whole number, 0 or more`);
+    // Without rails, the rails are rebuilt from the clears up to the pages the map had then (v1 carries its rails).
+    if (!v.mapLinks && v.version > 1 && !(Number.isInteger(v.pages) && v.pages >= 1)) fail(`${label}: carries no rails, so it needs \`pages\` (the map pages when it came out)`);
+    if (v.version > 1 && versions[i - 1]?.pages !== undefined && v.pages < versions[i - 1].pages) fail(`${label}: pages ${v.pages} is fewer than version ${v.version - 1}'s`);
     for (const f of FIELDS) {
       const list = v[f] ?? [];
       const dup = list.find((id, j) => list.indexOf(id) !== j);
@@ -131,7 +140,9 @@ try {
     const at = `stage ${s.id}`;
     place('cleared', s.id, `${at} clear`);
     const abilities = new Set(s.unlocks ?? []);
-    // (A record's `requires` is not counted: chapters 1 to 4 have records that wait for chapter 5 and 6 abilities.)
+    // A record's `requires` too: every ability a record waits for (chapter 5's magnetLight, chapter 6's reverse) has
+    // had a place since version 3, so a record naming an ability the あいことば cannot carry is caught here.
+    for (const r of s.records ?? []) if (typeof r.requires === 'string') abilities.add(r.requires);
     for (const steps of Object.values(s.cutscenes ?? {})) {
       for (const step of steps) for (const key of ['unlock', 'learn']) if (typeof step[key] === 'string') abilities.add(step[key]);
     }

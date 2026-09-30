@@ -92,11 +92,11 @@ export function showParents(root: HTMLElement, options: ParentsOptions): void {
     else if (!homeScreenApp()) state.textContent = 'いまは ふつうの保存です（ホーム画面への追加がおすすめです）。';
   });
 
-  // あいことば: the progress as 16 letters, and back (the older 12-letter ones are still read).
+  // あいことば: the progress as 20 letters, and back (the older 12- and 16-letter ones are still read).
   const pass = section(
     'あいことば（記録の書きうつし）',
     `記録を ${PASSCODE_LETTERS}文字の「あいことば」にできます。書きうつしておけば、記録が消えたときや、別の端末でも、入れると元にもどせます。通信はしません。`,
-    '前に書きうつした 12文字の あいことばも、そのまま使えます。',
+    '前に書きうつした 12文字・16文字の あいことばも、そのまま使えます。',
   );
   const show = document.createElement('button');
   show.type = 'button';
