@@ -1,0 +1,10 @@
+{
+  "_expect": "\"depart.to\"",
+  "_base": "0-6",
+  "_edit": [
+    {
+      "path": "cutscenes.ending.4.depart.to",
+      "value": 150
+    }
+  ]
+}

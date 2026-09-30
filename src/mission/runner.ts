@@ -3067,9 +3067,11 @@ export class MissionRunner {
       return false;
     }
     stop.hold(true);
-    // Standing at the closed station: "えきは あとで！ サカサを おいかけよう" (once a lap).
+    // Standing at the closed station while she runs ahead (not the stop for "ぎゃくだ！"): "えきは あとで！ サカサを
+    // おいかけよう" (once a lap).
     const st = stop.station;
-    if (this.train.state.railId !== st.railId) return false;
+    const chasing = lead.phase === 'tease' || lead.phase === 'dash' || lead.phase === 'follow';
+    if (this.phase !== 'driving' || !chasing || this.train.state.railId !== st.railId) return false;
     const offset = this.train.offsetTo(st.at);
     if (Math.abs(offset) > 100) this.stationClosedSaid = false;
     else if (!this.stationClosedSaid && Math.abs(this.train.state.speed) < 0.05 && offset <= stop.rule.zone && offset >= -40) {

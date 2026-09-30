@@ -1,0 +1,10 @@
+{
+  "_expect": "takes no board",
+  "_base": "0-6",
+  "_edit": [
+    {
+      "path": "missions.1.steps.0.board",
+      "value": 1
+    }
+  ]
+}

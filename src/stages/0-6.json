@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "id": "0-6",
+  "title": "てすとの おいかけっこ",
+  "chapter": 0,
+  "hidden": true,
+  "unlock": { "requires": ["5-3"], "purchase": null },
+  "unlocks": ["reverse"],
+  "environment": {
+    "sky": { "top": "#f7b7a3", "bottom": "#8fc8f4" },
+    "fog": { "color": "#e6ecf8", "near": 180, "far": 520 },
+    "lighting": "day",
+    "ground": { "y": -0.6, "size": 1400, "color": "#bfe3a6" },
+    "bgm": "kagami",
+    "fall": "cloud"
+  },
+  "start": { "railId": "t-wa", "at": 45, "direction": 1 },
+  "rails": [
+    {
+      "id": "t-wa",
+      "points": [
+        [0, 0, 0], [0, 0, 10], [0, 0, 20], [0, 0, 30], [0, 0, 40],
+        [0, 0, 50], [0, 0, 60], [0, 0, 70], [0, 0, 80], [0, 0, 90],
+        [0, 0, 100], [-0.31, 0, 104.99], [-1.24, 0, 109.9], [-2.78, 0, 114.65], [-4.9, 0, 119.18],
+        [-7.56, 0, 123.4], [-10.73, 0, 127.27], [-14.36, 0, 130.7], [-18.39, 0, 133.66], [-22.75, 0, 136.09],
+        [-27.39, 0, 137.96], [-32.22, 0, 139.24], [-37.17, 0, 139.9], [-42.17, 0, 139.94], [-47.13, 0, 139.36],
+        [-51.98, 0, 138.16], [-56.65, 0, 136.37], [-61.05, 0, 134.01], [-65.13, 0, 131.12], [-68.81, 0, 127.75],
+        [-72.05, 0, 123.94], [-74.78, 0, 119.76], [-76.97, 0, 115.27], [-78.59, 0, 110.54], [-79.6, 0, 105.64],
+        [-79.99, 0, 100.66], [-80, 0, 90.66], [-80, 0, 80.66], [-80, 0, 70.66], [-80, 0, 60.66],
+        [-80, 0, 50.66], [-80, 0, 40.66], [-80, 0, 30.66], [-80, 0, 20.66], [-80, 0, 10.66],
+        [-80, 0, 0.66], [-79.76, 0, -4.33], [-78.91, 0, -9.25], [-77.46, 0, -14.03], [-75.42, 0, -18.59],
+        [-72.82, 0, -22.86], [-69.72, 0, -26.77], [-66.15, 0, -30.27], [-62.17, 0, -33.29], [-57.84, 0, -35.8],
+        [-53.24, 0, -37.74], [-48.43, 0, -39.1], [-43.49, 0, -39.85], [-38.5, 0, -39.97], [-33.53, 0, -39.47],
+        [-28.66, 0, -38.35], [-23.96, 0, -36.64], [-19.52, 0, -34.36], [-15.4, 0, -31.53], [-11.66, 0, -28.22],
+        [-8.36, 0, -24.47], [-5.55, 0, -20.33], [-3.29, 0, -15.88], [-1.6, 0, -11.18], [-0.5, 0, -6.3],
+        [0, 0, 0]
+      ],
+      "end": { "type": "merge", "railId": "t-wa", "at": 0 }
+    },
+    {
+      "id": "t-shima",
+      "points": [
+        [0, 0, 20], [0.62, 0, 24.95], [2.45, 0, 29.59], [5.37, 0, 33.63], [9.2, 0, 36.83],
+        [13.7, 0, 38.98], [18.59, 0, 39.95], [23.59, 0, 40], [33.59, 0, 40], [43.59, 0, 40],
+        [53.59, 0, 40], [63.59, 0, 40], [73.59, 0, 40], [83.59, 0, 40], [93.59, 0, 40],
+        [103.59, 0, 40], [113.59, 0, 40], [123.59, 0, 40], [133.59, 0, 40], [140, 0, 40]
+      ],
+      "end": { "type": "buffer" }
+    }
+  ],
+  "junctions": [{ "id": "t-wakare", "railId": "t-wa", "at": 20, "left": "t-shima", "right": "t-wa", "default": "right" }],
+  "stations": [
+    { "id": "t-eki", "name": "わの えき", "railId": "t-wa", "at": 310, "platformSide": "right" },
+    { "id": "t-shima-eki", "name": "しまの えき", "railId": "t-shima", "at": 100, "platformSide": "left" }
+  ],
+  "props": [
+    { "model": "tree-a", "onRail": { "railId": "t-wa", "at": 150, "lateral": -22 } },
+    { "model": "tree-b", "onRail": { "railId": "t-wa", "at": 260, "lateral": -24 } },
+    { "model": "tree-a", "onRail": { "railId": "t-wa", "at": 380, "lateral": -20 } },
+    { "model": "tree-b", "onRail": { "railId": "t-shima", "at": 60, "lateral": 18 } }
+  ],
+  "actors": [],
+  "records": [],
+  "missions": [
+    {
+      "id": "m1",
+      "type": "pickup",
+      "title": "おいかけっこの ためし",
+      "steps": [
+        {
+          "stationId": "t-eki",
+          "lead": {
+            "id": "sakasa",
+            "railId": "t-wa",
+            "from": 60,
+            "keep": 40,
+            "dash": 80,
+            "calls": 2,
+            "learn": "t-gyaku",
+            "autoCallAfter": 14,
+            "remindEvery": 5,
+            "autoFollowAfter": 12,
+            "followBack": 15,
+            "home": { "railId": "t-shima", "at": 78, "lateral": -5.5, "heightFromRail": 1, "model": "amanojaku-sit" }
+          }
+        }
+      ],
+      "junctions": { "t-wakare": { "lock": "right" } },
+      "lines": { "start": "おいかけっこの ためしだよ！", "stationNear": "えきだ。ゆっくり！", "complete": "おいかけっこ、できたね！" }
+    },
+    {
+      "id": "m2",
+      "type": "pickup",
+      "title": "ドアを あけて まつ ためし",
+      "steps": [
+        {
+          "stationId": "t-shima-eki",
+          "welcome": {
+            "actor": "sakasa",
+            "model": "amanojaku-lantern",
+            "seat": { "railId": "t-shima", "at": 78, "lateral": -5.5 },
+            "beats": [
+              { "beat": "look", "seconds": 1 },
+              { "beat": "stand", "seconds": 1 },
+              { "beat": "walk", "seconds": 1 },
+              { "beat": "peek", "seconds": 1 },
+              { "beat": "board", "seconds": 1 }
+            ]
+          }
+        }
+      ],
+      "junctions": { "t-wakare": { "default": "left" } },
+      "lines": { "start": "こんどは しずかに まって あげよう\nサカサが じぶんで くるよ", "stationNear": "しまの えきだ。そーっと とまろう", "perfect": "ぴたっ… しーっ", "ok": "ぴたっ… しーっ" }
+    }
+  ],
+  "gimmicks": [],
+  "cutscenes": {
+    "opening": [{ "caption": "てすとの おいかけっこ", "seconds": 2 }],
+    "t-gyaku": [
+      { "say": "ぎゃくだ… にげる なら…", "emote": "tilt" },
+      { "say": "こっちが うしろへ いったら…？", "icon": "run-swirl" },
+      { "unlock": "reverse" },
+      { "say": "きりかえを うしろに して みて！" }
+    ],
+    "ending": [
+      { "say": "…こんにちは", "who": "amanojaku" },
+      { "say": "ちゃんと こんにちは だ！", "emote": "jump" },
+      { "crew": ["sakasa"] },
+      { "say": "いっしょに いこう！", "emote": "cheer" },
+      { "depart": { "to": 135, "seconds": 5 } }
+    ]
+  },
+  "opening": "opening",
+  "ending": "ending"
+}
