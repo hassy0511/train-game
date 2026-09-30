@@ -379,9 +379,19 @@ export function reverseLog(page: Page): Promise<ReverseRow[]> {
 export async function setDirection(page: Page, dir: 'front' | 'back', timeoutMs = 60_000): Promise<void> {
   const sw = page.locator('#reverse-switch');
   await expect(sw).toBeVisible();
-  if ((await sw.getAttribute('data-dir')) !== dir) {
-    await page.evaluate(() => document.getElementById('reverse-switch')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })));
-  }
+  // One press, once a turn in progress is over (the switch is locked for that half second): checked and pressed in
+  // the page in one go.
+  await page.waitForFunction(
+    (want) => {
+      const b = document.getElementById('reverse-switch');
+      if (!b || b.dataset.dir === want) return true;
+      if (document.getElementById('app')?.dataset.reverse === 'turning') return false;
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      return true;
+    },
+    dir,
+    { timeout: 30_000, polling: 'raf' },
+  );
   await expect(sw).toHaveAttribute('data-dir', dir, { timeout: timeoutMs });
   // The turn itself (half a second of game time) is over.
   await page.waitForFunction(() => document.getElementById('app')?.dataset.reverse !== 'turning', null, { timeout: 30_000 });
