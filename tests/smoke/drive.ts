@@ -16,8 +16,18 @@ export const FAST = 4;
 export async function tapUntil(page: Page, selector: string, timeoutMs = 90_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    // The line on show before looking: a tap only dismisses that same line, so a line the selector waits for that
+    // comes up between the look and the tap is never tapped away unseen.
+    const shown = await page.evaluate(() => document.getElementById('bubble')?.dataset.line ?? null);
     if (await page.locator(selector).isVisible()) return;
-    if (await page.locator('#bubble').isVisible()) await page.locator('#bubble').dispatchEvent('pointerdown');
+    if (shown !== null) {
+      await page.evaluate((line) => {
+        const bubble = document.getElementById('bubble');
+        if (bubble && !bubble.hidden && bubble.dataset.line === line) {
+          bubble.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+        }
+      }, shown);
+    }
     if (await page.locator('#caption').isVisible()) await page.locator('#caption').dispatchEvent('click');
     await page.waitForTimeout(150);
   }
