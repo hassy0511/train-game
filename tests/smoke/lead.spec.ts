@@ -194,7 +194,8 @@ test('0-6 おいかけっこ: "とまって" twice makes her run off, "ぎゃく
   await expect(app).toHaveAttribute('data-station-closed', '', { timeout: 10_000 });
   await expect.poll(async () => Number(await app.getAttribute('data-lead-gap')), { timeout: 20_000 }).toBeLessThanOrEqual(14);
   await page.screenshot({ path: `${OUT}/lead-met.png` });
-  // On to the station: past her, she goes home ("おしろの ほうへ いった…"); the station grades the stop again.
+  // On to the station: past her, she goes home ("おしろの ほうへ いった…"), or, when the station comes first, she goes
+  // home at the stop and the line follows the grade; the station grades the stop again.
   await setNotch(page, NORMAL);
   await stopAt(page, 't-wa', EKI);
   await expect(app).toHaveAttribute('data-lead', 'gone');

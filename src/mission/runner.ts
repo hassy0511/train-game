@@ -3239,9 +3239,7 @@ export class MissionRunner {
         break;
       case 'gone':
         this.events.post({ type: 'lead:gone', id });
-        // Said at once: a queued line could still be waiting when the train stops at the station, and the station's
-        // grade (sayNow) would drop it unseen.
-        this.ports.sayNow(this.leadLines('leadGone')[0]);
+        this.ports.sayAsync(this.leadLines('leadGone')[0]);
         this.spawnLeadHome(lead.def);
         break;
     }
@@ -3277,8 +3275,11 @@ export class MissionRunner {
     this.train.setSpeedCap('lead-learn', null);
     const running = lead.phase !== 'armed' && lead.phase !== 'met' && lead.phase !== 'gone';
     const out = lead.phase !== 'armed';
+    const met = lead.phase === 'met';
     if (lead.finish() && out) {
       this.events.post({ type: 'lead:gone', id: lead.def.id });
+      // The train stopped at the station before passing her: she goes home now, and Piko says so after the grade.
+      if (met) this.ports.sayAsync(this.leadLines('leadGone')[0]);
       this.spawnLeadHome(lead.def);
     }
     if (running && lead.def.music) this.ports.music(null);
