@@ -104,7 +104,10 @@ test('0-6 おいかけっこ backing up on the switch: she turns round and follo
   await expect.poll(lines, { timeout: 10_000 }).toContain('まえに もどして えきへ！');
   const log = await page.evaluate(() => (window as unknown as { __leadLog: LeadRow[] }).__leadLog);
   const follow = log.filter((e) => e.lead === 'follow').map((e) => e.gap);
+  console.log(`lead: the gap following ${follow.join(' → ')} m`);
   expect(follow.length).toBeGreaterThan(0);
+  // She comes nearer as the train backs up (PHASE9 第 7 部 §16.2), never nearer than 12 m (± 1).
+  expect(Math.min(...follow)).toBeLessThan(follow[0]);
   expect(Math.min(...follow)).toBeGreaterThanOrEqual(11);
   await standStill(page);
   await setDirection(page, 'front');
