@@ -2,7 +2,7 @@ import { BoxGeometry, BufferGeometry, CylinderGeometry, Group } from 'three';
 import { part, solid } from './placeholder-kit';
 
 /**
- * v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A8.3, ticket 0021): stand-ins drawn in code for うしろむき's things until their
+ * v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A8.3, ticket 0023): stand-ins drawn in code for うしろむき's things until their
  * models are built: the swirl post ("reverse-post") the loader stands by each back junction's point, 3.2 m out on the
  * side away from its siding: a round sign on a pole with a pink swirl on both faces (a hint: "a way to reverse into is
  * here", nothing to press). "reverse-post-off" is the same post in grey (shown until うしろむき is learned). About

@@ -25,6 +25,7 @@ import {
   validateWaterLayout,
 } from './validate';
 import { computeWaterSpans, diveForkSide } from './water';
+import { validateLeadLayout } from './validate-lead';
 
 // One chunk per stage file; stages load lazily.
 const stageModules = import.meta.glob('../stages/*.json');
@@ -113,6 +114,8 @@ export function prepareStage(raw: unknown): StageData {
   const ironProps = ironPropsFor(file, network, magnets);
   // v1.11 (5-3): the mirror world, phantoms and glass; glass has no base under it.
   validateMirrorWorld(file, network);
+  // v1.11 (6-1): the lead's ring, the welcome's platform, where crew and depart may be.
+  validateLeadLayout(file, network, magnets);
   addGlassSkips(file);
   const groundY = file.environment.ground?.y ?? null;
 

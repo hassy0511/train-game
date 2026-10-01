@@ -2021,7 +2021,7 @@ export class ReverseSystem {
 - `src/stages/0-0.json`: 本線の まっすぐな 所に うしろむきの わき道 `ura`（60 m）と `requires: "reverse"` の 記録 1 つ、切れ目の 手前で 止まる ための うしろむきの 区間（§0.8）。ことば・「能力 なし」・巻き戻し・駅の いきすぎは ミッションの ある **0-5 てすとの うしろむき**（§0.8）で。
 - `scripts/probe-budget.mjs`: わき道を うしろむきで 10 m ごと（カメラ `rear` と `chase-rev`）。`scripts/probe-consist.mjs`（新）: A5.5。
 - `tests/smoke/drive.ts`: `setDirection(page, 'front' | 'back')`（ページの 中で `#reverse-switch` に `pointerdown`、`data-dir` が かわるまで。走って いれば `pending` の あいだ 2 回め は 押さない）、`waitReverseStop(page, why)`、`waitTail(page, railId, at)`、`backArrow(page, side)`（`#junction[data-back="1"]` の 矢印を 押す）。
-- `scripts/layout-1-3-ura.mjs`（新、PR9）: A12.2。`src/view/three/sky-placeholders.ts`: `upside-flower`。`reverse-post` の 仮の 形は 6-1 の チケット 0021（`assets/models.json` の `_pending`）。
+- `scripts/layout-1-3-ura.mjs`（新、PR9）: A12.2。`src/view/three/sky-placeholders.ts`: `upside-flower`。`reverse-post` の 仮の 形は チケット 0023 うしろむきの しかけ（`assets/models.json` の `_pending`。6-1 の 0021 と わけた）。
 
 ## A17. テスト用の しるし
 - `#reverse-switch` の `data-dir`（`front`／`back`）・`data-pending`（`1`／`0`）・`data-glow`・`hidden`。
@@ -4964,7 +4964,7 @@ class Train {
 | 記録③ | `ura` 12 の 左 2 m・上 0.8（おくから 12 m）。車止めで 止まった とき いちばん うしろの 車両の まん中（`ura` 6.5）から 5.5 m |
 | 時間（うしろむき） | 先頭の はし 3290 ごろで 止まって うしろへ 約 22 秒、まえへ もどって 口まで 約 8 秒。より道 ぜんぶで 約 40 秒 |
 - **PR6b** では わき道（ふつうの 線路、ガラス。おわりは main 3250 へ 合流）と 記録③ と 車止め（`buffer-stop` を `props` で。**PR8a で この `props` を けす**。§0.9 の 22）だけ を 入れる。分かれ道が まだ ないので だれも 入れない（記録は 図鑑で 灰色の うしろむきの 絵）。かがみ m-ura に ガラスの わき道が ふつうの レールで うつる（「？」の なぞかけ）。
-- **PR9**（うしろむきの 土台 PR8a の あと）で うしろむきの 分かれ道 `ura-guchi` を `junctions` に 足す（柱 `reverse-post` は ローダーが 立てる。チケット 0021）。
+- **PR9**（うしろむきの 土台 PR8a の あと）で うしろむきの 分かれ道 `ura-guchi` を `junctions` に 足す（柱 `reverse-post` は ローダーが 立てる。チケット 0023）。
 
 ### 5.4 駅
 | 駅 | 線路・s | ホーム | メモ |
@@ -5514,7 +5514,7 @@ class Train {
 **PR9 で 足す 5-3 の 分（第 3 部 A12.3、うしろむきの 土台 PR7・PR8a の あと）**
 - `scripts/layout-5-3.mjs`: うしろむきの 分かれ道 `ura-guchi`（main 3250、`back: true`、`left: "ura"`）→ JSON
 - `tests/smoke/stage-5-3-full.spec.ts`: うしろむきの ③ の テスト
-- 柱の 形は 0021（第 3 部）
+- 柱の 形は 0023（第 3 部）
 
 ---
 

@@ -1,0 +1,10 @@
+{
+  "_expect": "on Sakasa's side",
+  "_base": "0-6",
+  "_edit": [
+    {
+      "path": "stations.0.platformSide",
+      "value": "left"
+    }
+  ]
+}

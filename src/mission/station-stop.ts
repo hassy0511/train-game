@@ -41,6 +41,8 @@ export class StopMonitor {
   private gaugeAnnounced = false;
   private shortTimer = 0;
   private done = false;
+  /** v1.11 (6-1): the station is closed for now (no gauge, no lines, no grading, no fail passing it). */
+  private held = false;
 
   constructor(
     private readonly train: Train,
@@ -63,6 +65,20 @@ export class StopMonitor {
     this.gauge.visible = false;
   }
 
+  /**
+   * v1.11 (6-1, PHASE9_CHAPTER5_6 第 7 部 §4.1): closes the station (`on`) while the lead runs ahead: no gauge, no
+   * "near" line, no grading, and passing it is no fail. Opened again, it watches afresh (reset).
+   */
+  hold(on: boolean): void {
+    if (on === this.held) return;
+    this.held = on;
+    this.reset();
+  }
+
+  get isHeld(): boolean {
+    return this.held;
+  }
+
   /** True once the stop has been graded (or failed). */
   get finished(): boolean {
     return this.done;
@@ -70,6 +86,10 @@ export class StopMonitor {
 
   update(dt: number): StopOutcome | null {
     if (this.done) return null;
+    if (this.held) {
+      this.gauge.visible = false;
+      return null;
+    }
     const st = this.train.state;
     if (st.railId !== this.station.railId) {
       // Off on another line (a side track, a wrong turn): no gauge until back on the station's line.

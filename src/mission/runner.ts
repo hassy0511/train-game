@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { Vector3, type Quaternion } from 'three';
 import type { Whistle } from '../actions/whistle';
 import { CatActor } from '../actors/cat';
 import { Parade } from '../actors/parade';
@@ -22,6 +22,9 @@ import type { MirrorSystem } from '../gimmick/mirror';
 import type { SlopeSystem, SlopeZone } from '../gimmick/slope';
 import { Countdown, type CountdownView } from './countdown';
 import { SnowWave, type SnowWaveView } from './chase';
+import { LeadRunner, NO_REVERSE, type LeadOutcome, type LeadPhase, type LeadPose } from './lead';
+import { Welcome, type WelcomeOutcome, type WelcomeState } from './welcome';
+import { resolvePlacement } from '../stage/loader';
 import type { TunnelSystem } from '../gimmick/tunnel';
 import type { MagnetSystem } from '../gimmick/magnet';
 import type { IronProps } from '../gimmick/iron-props';
@@ -32,7 +35,11 @@ import type { StageEvent, StageEventBus } from '../core/stage-events';
 import { CutsceneSkip, fastForwardCutscene, runCutscene, type CutscenePorts } from '../cutscene/runner';
 import type {
   AbilityId,
+  BubbleIcon,
   GapDef,
+  LeadDef,
+  LeadLine,
+  WelcomeLine,
   JunctionDef,
   MissionDef,
   MissionLines,
@@ -54,6 +61,7 @@ import {
   GLARE,
   HUSH,
   JUMP,
+  LEAD,
   LEVER_NOTCHES,
   LIGHT,
   LURE,
@@ -67,6 +75,8 @@ import {
   REWIND_DISTANCE,
   SLOPE,
   SNOW_WAVE,
+  STOP_NOTCH,
+  WELCOME,
   WINDUP,
 } from '../train/params';
 import type { JunctionSide, Train } from '../train/train';
@@ -89,8 +99,11 @@ export interface MissionPorts extends CutscenePorts {
   sayAsync(text: string, who?: Speaker): void;
   /** Drop every line still queued or showing (something more urgent is about to be said). */
   hush(): void;
-  /** v1.7: say this now, dropping the lines still queued or showing (a cue that is only useful on time). */
-  sayNow(text: string): void;
+  /**
+   * v1.7: say this now, dropping the lines still queued or showing (a cue that is only useful on time). v1.11 (6-1)
+   * `icon`: a little picture on the bubble ("とまって〜！" with an open hand).
+   */
+  sayNow(text: string, icon?: BubbleIcon): void;
   toast(text: string, kind: StopGrade): void;
   /** The stage's clear card, with what went well this run (PHASE7_FINISH §4 item 10). */
   clearCard(title: string, button: string, rewards: ClearRewards): Promise<void>;
@@ -115,6 +128,8 @@ export interface MissionPorts extends CutscenePorts {
   music(id: string | null): void;
   /** v1.11 (PR5): say this only when nothing is being said or waiting (a hint that may as well not come). */
   sayIfQuiet(text: string): boolean;
+  /** v1.11 (6-1): the music's loudness times `gain` (0..1), over `seconds` (welcome.musicGain while waiting at the door). */
+  musicGain(gain: number, seconds: number): void;
 }
 
 /** v1.7: the rocket and the slopes (made by the caller: they also work on the test course, without a runner). */
@@ -135,7 +150,10 @@ export interface MissionSystems {
   /** v1.11 (PR5): the magnet light's targets, and the iron odds and ends by the line (made by the caller). */
   magnet?: MagnetSystem;
   iron?: IronProps;
-  /** v1.11 (PR8a): うしろむき's glow and lines (made by the caller). */
+  /**
+   * v1.11 (PR8a): うしろむき's glow and lines (made by the caller). It is also how the runner (and the lead, 6-1 M2,
+   * PR8b's ReverseReader) knows the train runs backwards. Omitted: never (NO_REVERSE).
+   */
   reverse?: ReverseSystem;
 }
 
@@ -271,7 +289,10 @@ type DefaultLine =
   // v1.11 (5-3 かがみの せかい)
   | MirrorWorldLine
   // v1.11 (PR8a うしろむき)
-  | Exclude<keyof typeof REVERSE_LINES, 'needAbility'>;
+  | Exclude<keyof typeof REVERSE_LINES, 'needAbility'>
+  // v1.11 (6-1 おいかけっこ・ドアを あけて まつ)
+  | LeadLine
+  | WelcomeLine;
 
 /** v1.11 (5-3): the mirror world's lines (PHASE9_CHAPTER5_6 第 6 部 §4.8). */
 export type MirrorWorldLine = 'flipIn' | 'flipOut' | 'mirrorGateNear' | 'mirrorGateOpen' | 'mirrorGateBump' | 'mirrorGateAfter';
@@ -429,6 +450,26 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   backUp: REVERSE_LINES.backUp,
   refuseRocketBack: REVERSE_LINES.refuseRocketBack,
   reverseOops: REVERSE_LINES.reverseOops,
+  // v1.11 (6-1 おいかけっこ, PHASE9_CHAPTER5_6 第 7 部 §4.8). Every one within 20 letters. leadStart is Sakasa's.
+  leadStart: 'さようなら〜！',
+  leadStartReply: 'でた！ まてまて〜！',
+  leadPrompt: 'きてきで よんで みよう！',
+  leadCall: 'とまって〜！',
+  leadRun: 'あれれ？ もっと にげた！',
+  leadAgain: 'もう いっかい！',
+  leadFlip: 'ぎゃくだ！\nサカサは なんでも ぎゃく なんだ',
+  leadBackRemind: 'うしろへ さがって みよう！',
+  leadFollow: 'ついて きた！\nほんとに ぎゃく だったんだ！',
+  leadMet: 'まえに もどして えきへ！',
+  leadAutoCall: 'とまって〜！',
+  leadAutoFollow: 'あれ？ もどって きた！',
+  leadGone: 'おしろの ほうへ いった…',
+  stationClosed: 'えきは あとで！ サカサを おいかけよう',
+  // v1.11 (6-1 ドアを あけて まつ)
+  welcomeAsk: 'ドアを あけて、まって みよう',
+  welcomeFlinch: 'しーっ… なにも いわないで まとう',
+  welcomeFlinchAgain: 'しーっ',
+  welcomeCalm: 'まつ だけで いいよ',
 };
 
 /**
@@ -468,8 +509,16 @@ export const ABILITY_NAMES: Partial<Record<AbilityId, string>> = {
   plow: 'ゆきかき',
   // Chapter 5's ability (5-3): the third records of chapters 3–5 wait for it.
   magnetLight: 'じしゃくライト',
-  // v1.11 (PR8a): chapter 6's (6-1 M2, PR8b/PR9): 1-3's, 5-3's and 6-1's third records wait for it.
+  // v1.11 (PR8a; 6-1 M2 gives it, PHASE9 §0.11 の 7): chapter 6's: 1-3's, 5-3's and 6-1's third records wait for it.
   reverse: 'うしろむき',
+};
+
+/**
+ * v1.11 (6-1): an ability whose "learned" card says more than "<name>を おぼえた！" (PHASE9 §0.11 の 7:
+ * "うしろむき うんてんを／おぼえた！").
+ */
+export const ABILITY_CARD_TITLES: Partial<Record<AbilityId, string>> = {
+  reverse: 'うしろむき うんてんを\nおぼえた！',
 };
 
 /**
@@ -662,6 +711,17 @@ export class MissionRunner {
   private backUpSaidFor: string | null = null;
   /** v1.11 (PR8a, B6.3): the step drives to a reverse platform: arriving is stopping at its siding's buffer. */
   private reverseArrival: StationDef | null = null;
+  /** v1.11 (6-1): "おいかけっこ" of the step being driven (kept after it for the test hooks). */
+  private lead: LeadRunner | null = null;
+  /** v1.11 (6-1): the mid-step cutscene playing now (a lead's `learn`), or "". */
+  inlineCutscene = '';
+  /** v1.11 (6-1): "えきは あとで！" was said at the closed station on this lap. */
+  private stationClosedSaid = false;
+  /** v1.11 (6-1): "ドアを あけて まつ" of the station stood at now (kept after it for the test hooks). */
+  private welcome: Welcome | null = null;
+  private welcomeCalmSaid = false;
+  /** v1.11 (6-1): the figures on the stage now (cutscenes', a lead's home) by id, with their model. */
+  private readonly figures = new Map<string, string>();
 
   constructor(
     private readonly stage: StageData,
@@ -685,6 +745,11 @@ export class MissionRunner {
       const st = this.reverseArrival;
       if (!st || this.phase !== 'driving' || why !== 'buffer' || train.state.railId !== st.railId) return;
       this.finishDrive({ kind: 'stopped', grade: 'perfect' });
+    });
+    // v1.11 (6-1): who stands on the stage (a guest at the door is brought on if a skipped cutscene left her out).
+    events.on('event', (e) => {
+      if (e.type === 'actor:spawn') this.figures.set(e.id, e.model);
+      if (e.type === 'actor:remove') this.figures.delete(e.id);
     });
     this.listenMagnet();
     // v1.10 (4-3): "トンネルだ！ ライトを つけよう" (only useful now: said at once), unless the light is on already.
@@ -1164,7 +1229,8 @@ export class MissionRunner {
 
   /** The hush mark on the whistle button (a hush or a whistle-reversed stretch; a hint only: it still sounds). */
   get whistleMark(): boolean {
-    return this.hush.mark || this.reversed.current !== null;
+    // v1.11 (6-1): and while the doors stand open for the guest ("なにも いわないで まとう").
+    return this.hush.mark || this.reversed.current !== null || this.welcoming;
   }
 
   /** The light button glows "dim" (press = off): the light is on near or in a hush stretch. */
@@ -1394,6 +1460,12 @@ export class MissionRunner {
     if (fog && (fog.params as { glow?: boolean } | undefined)?.glow === true) return true;
     // v1.10 (4-3): a tunnel close ahead, or the train in one.
     if (this.tunnel?.lightHint(false)) return true;
+    // v1.11 (6-1): a reversed sign with `glow` glows from where its line is said (80 m) until it is seen through.
+    for (const j of this.stage.file.junctions) {
+      if (j.glow !== true || !j.signReversed || j.turn || this.revealed.has(j.id)) continue;
+      const d = this.train.distanceAhead(j.railId, j.at);
+      if (d !== null && d > 0 && d <= 80) return true;
+    }
     for (const id of this.wrongTurns) {
       const j = this.stage.file.junctions.find((x) => x.id === id);
       // v1.11 (PR5/5-3): only the magnet helps at a turned-away mirror's fork (its glow is green): no yellow glow there.
@@ -1699,6 +1771,11 @@ export class MissionRunner {
         if (step.parcel) parcel = step.parcel === 'load';
         if (step.board) this.boarded.set(step.stationId, (this.boarded.get(step.stationId) ?? 0) + step.board);
       }
+      // v1.11 (6-1): a lead's mid-step cutscene (its `learn`: the ability it teaches) and where the lead went home.
+      for (const step of file.missions[i].steps) {
+        if (step.lead?.learn) this.fastForward(step.lead.learn);
+        if (step.lead) this.spawnLeadHome(step.lead);
+      }
       const done = file.missions[i].onComplete;
       if (done) this.fastForward(done);
     }
@@ -1796,6 +1873,8 @@ export class MissionRunner {
       this.zoneLines.clear();
       this.nightMission.clear();
       this.reverse?.newMission();
+      // v1.11 (6-1): this mission's own junction rules (a lock hides the arrows; a default is chosen from the start).
+      this.train.setJunctionRules(mission.junctions ?? null);
       await this.ports.card(`ミッション ${i + 1}\n${mission.title}`, 'スタート');
       if (this.lines.start) for (const line of this.lines.start.split('\n')) await this.ports.say(line, 'partner');
 
@@ -1805,6 +1884,7 @@ export class MissionRunner {
       }
 
       this.events.post({ type: 'goal', stationId: null });
+      this.train.setJunctionRules(null);
       if (this.lines.complete) this.ports.sayAsync(this.lines.complete);
       this.events.post({ type: 'partner:emote', kind: 'cheer' });
       await this.ports.card('できた！', 'つぎへ');
@@ -1840,10 +1920,12 @@ export class MissionRunner {
   /** Per-frame monitoring while driving. */
   update(dt: number): void {
     if (this.safeLeft > 0) this.safeLeft = Math.max(0, this.safeLeft - dt);
+    if (this.phase === 'doors' && this.welcome) this.updateWelcome(dt);
     if (this.phase !== 'driving') return;
     this.clock += dt;
     if (this.updateCountdown(dt)) return;
     if (this.updateChase(dt)) return;
+    if (this.updateLead(dt)) return;
     if (this.stop) this.ports.gauge(this.stop.gauge);
     if (!this.movingSaid && this.train.state.speed > 0) {
       this.movingSaid = true;
@@ -2322,6 +2404,8 @@ export class MissionRunner {
     // v1.11 (5-2): the unwound band in calling reach, a spinning fork pointing the good way.
     if (this.parades.some((p) => p.callable)) glow = true;
     if (this.spins.glow) glow = true;
+    // v1.11 (6-1): Sakasa teasing ahead, once the partner asked for the call.
+    if (this.lead?.whistleGlow) glow = true;
     // Never in a whistle-reversed stretch (the hush mark says "しーっ" there instead).
     if (this.reversed.current) glow = false;
     this.ports.whistleHint(glow);
@@ -2624,7 +2708,18 @@ export class MissionRunner {
   }
 
   private onWhistle(): void {
+    // v1.11 (6-1): calling out while the guest comes to the open door: she flinches back (or only giggles).
+    if (this.phase === 'doors' && this.welcome) {
+      this.onWelcomeWhistle();
+      return;
+    }
     if (this.phase !== 'driving') return;
+    // v1.11 (6-1): "とまって〜！" to Sakasa teasing ahead: she runs off further.
+    if (this.lead) {
+      const r = this.lead.onWhistle();
+      if (r === 'call' && this.lead.lastCall) this.onLeadOutcome(this.lead.lastCall);
+      else if (r === 'hop') this.events.post({ type: 'lead:hop', id: this.lead.def.id });
+    }
     // v1.11 (PR8a, 第 3 部 A7): the animals passed already do not stir (reversing, retracing).
     if (this.train.stillGimmicks) return;
     // v1.11 (5-1): in a whistle-reversed stretch the tanukis come (decided before anything else there reacts).
@@ -2751,6 +2846,12 @@ export class MissionRunner {
       this.chase = new SnowWave(step.chase, this.train);
       this.chaseRocketSaid = false;
     }
+    // v1.11 (6-1): Sakasa comes out once the train front passes the lead's `from`.
+    if (step.lead && !alreadyHere) {
+      const rules = this.currentMission?.junctions;
+      this.lead = new LeadRunner(step.lead, this.train, this.stage.network, this.stage.file.junctions, rules, this.reverse ?? NO_REVERSE);
+      this.stationClosedSaid = false;
+    }
     // Drive until a graded stop; fails rewind and retry the same step.
     while (!alreadyHere) {
       this.events.post({ type: 'goal', stationId: station.id });
@@ -2768,9 +2869,11 @@ export class MissionRunner {
     }
     this.endCountdown();
     this.endChase();
+    this.endLead();
     this.lastStop = { railId: station.railId, at: station.at };
     this.lastStationId = station.id;
-    if ((step.board ?? 0) > 0 || (step.alight ?? 0) > 0 || step.parcel) await this.doors(step, station);
+    if (step.welcome) await this.welcomeDoors(step, station);
+    else if ((step.board ?? 0) > 0 || (step.alight ?? 0) > 0 || step.parcel) await this.doors(step, station);
   }
 
   /** v1.7: "かざんが むずむず してる！" — then the time runs while driving to this step's station. */
@@ -2932,6 +3035,11 @@ export class MissionRunner {
       else c.restoreAt(target);
       this.events.post({ type: 'countdown', state: 'run' });
     }
+    // v1.11 (6-1): Sakasa is put back before the train (waiting again where she was in the story).
+    if (this.lead && this.lead.phase !== 'gone') {
+      this.lead.afterRewind();
+      this.train.setSpeedCap('lead-learn', null);
+    }
     // v1.10 (4-3): the snow wave waits behind the train put back (slower after a catch).
     if (this.chase?.active) {
       this.chase.afterRewind(reason === 'snow');
@@ -3026,6 +3134,358 @@ export class MissionRunner {
     // Stay put until the next drive() unlocks: a train rolling between missions has no one watching it.
     this.phase = 'stopped';
     this.train.lockInput('stopped');
+  }
+
+  // ---- v1.11 (6-1) おいかけっこ (steps[].lead) and ドアを あけて まつ (steps[].welcome) ----
+
+  /** A lead or welcome line: the mission's own, else the default (one per "\n"). */
+  private leadLines(key: LeadLine | WelcomeLine): string[] {
+    return (this.lines[key] ?? DEFAULT_LINES[key]).split('\n');
+  }
+
+  /**
+   * v1.11 (6-1): the lead of this step, each driving frame: its outcomes (lines, events, the learn cutscene), the train
+   * braked to a stop for "ぎゃくだ！", and the step's station closed until Sakasa stopped before the train (then opened
+   * when the train can still stop there: `openMargin` m or more before its stop zone, or standing on its stop line).
+   */
+  private updateLead(dt: number): boolean {
+    const lead = this.lead;
+    if (!lead || lead.phase === 'gone') return false;
+    for (const o of lead.update(dt)) this.onLeadOutcome(o);
+    this.train.setSpeedCap('lead-learn', lead.holdTrain ? { max: 0 } : null);
+    const stop = this.stop;
+    if (!stop || !lead.stationClosed) return false;
+    if (lead.stationOpenWanted && this.canOpenStation(stop)) {
+      lead.opened();
+      stop.hold(false);
+      this.events.post({ type: 'station:open', stationId: stop.station.id });
+      return false;
+    }
+    stop.hold(true);
+    // Standing at the closed station while she runs ahead (not the stop for "ぎゃくだ！"): "えきは あとで！ サカサを
+    // おいかけよう" (once a lap).
+    const st = stop.station;
+    const chasing = lead.phase === 'tease' || lead.phase === 'dash' || lead.phase === 'follow';
+    if (this.phase !== 'driving' || !chasing || this.train.state.railId !== st.railId) return false;
+    const offset = this.train.offsetTo(st.at);
+    if (Math.abs(offset) > 100) this.stationClosedSaid = false;
+    else if (!this.stationClosedSaid && Math.abs(this.train.state.speed) < 0.05 && offset <= stop.rule.zone && offset >= -40) {
+      this.stationClosedSaid = true;
+      this.ports.sayNow(this.leadLines('stationClosed')[0]);
+    }
+    return false;
+  }
+
+  /** v1.11 (6-1): the closed station can open now (the train can still stop there, or stands at it, not past it). */
+  private canOpenStation(stop: StopMonitor): boolean {
+    const st = stop.station;
+    if (this.train.state.railId !== st.railId) return false;
+    const offset = this.train.offsetTo(st.at);
+    if (offset > stop.rule.zone + LEAD.openMargin) return true;
+    // Standing on its line (the stop counts at once), or short of it in its zone ("もうちょっと まえ！", then on to it).
+    return Math.abs(this.train.state.speed) < 0.05 && offset >= -stop.rule.ok && offset <= stop.rule.zone + LEAD.openMargin;
+  }
+
+  /** v1.11 (6-1): what the lead did: its lines (Sakasa's own "さようなら〜！"), its events, the learn cutscene. */
+  private onLeadOutcome(o: LeadOutcome): void {
+    const lead = this.lead;
+    if (!lead) return;
+    const id = lead.def.id;
+    switch (o.kind) {
+      case 'start':
+        this.events.post({ type: 'lead:start', id });
+        for (const line of this.leadLines('leadStart')) this.ports.sayAsync(line, 'amanojaku');
+        for (const line of this.leadLines('leadStartReply')) this.ports.sayAsync(line);
+        if (lead.def.music) this.ports.music(lead.def.music);
+        break;
+      case 'prompt':
+        this.ports.sayNow(this.leadLines('leadPrompt')[0]);
+        break;
+      case 'call':
+        // "とまって〜！" with an open hand, the moment the whistle sounds (the partner's own call too: its whistle plays).
+        this.events.post({ type: 'lead:call', id, n: o.n, auto: o.auto });
+        this.ports.sayNow(this.leadLines(o.auto ? 'leadAutoCall' : 'leadCall')[0], 'hand-stop');
+        break;
+      case 'run':
+        for (const line of this.leadLines(o.last ? 'leadFlip' : 'leadRun')) this.ports.sayAsync(line);
+        if (o.last) this.events.post({ type: 'partner:emote', kind: 'jump' });
+        break;
+      case 'again':
+        this.ports.sayAsync(this.leadLines('leadAgain')[0]);
+        break;
+      case 'learn':
+        // Stood still: the lever back to "とまる" (nothing rolls in the cutscene), then "ぎゃくだ… にげる なら…".
+        this.events.post({ type: 'lead:learn', id });
+        this.train.setNotch(STOP_NOTCH);
+        this.ports.resetLever();
+        void this.runLeadLearn(lead);
+        break;
+      case 'remind':
+        this.ports.sayNow(this.leadLines('leadBackRemind')[0]);
+        break;
+      case 'follow': {
+        this.events.post({ type: 'lead:follow', id, auto: o.auto });
+        const lines = this.leadLines(o.auto ? 'leadAutoFollow' : 'leadFollow');
+        this.ports.sayNow(lines[0]);
+        for (const line of lines.slice(1)) this.ports.sayAsync(line);
+        this.events.post({ type: 'partner:emote', kind: o.auto ? 'tilt' : 'cheer' });
+        break;
+      }
+      case 'met':
+        this.events.post({ type: 'lead:met', id, auto: o.auto });
+        // Back to "まえ" (the switch glows): said only when the train came back reversing.
+        if (!o.auto) this.ports.sayAsync(this.leadLines('leadMet')[0]);
+        if (lead.def.music) this.ports.music(null);
+        break;
+      case 'gone':
+        this.events.post({ type: 'lead:gone', id });
+        this.ports.sayAsync(this.leadLines('leadGone')[0]);
+        this.spawnLeadHome(lead.def);
+        break;
+    }
+  }
+
+  /** v1.11 (6-1): the lead's `learn` cutscene (standing), then Sakasa waits for the train to back up. */
+  private async runLeadLearn(lead: LeadRunner): Promise<void> {
+    if (lead.def.learn) await this.playInlineCutscene(lead.def.learn);
+    this.train.setSpeedCap('lead-learn', null);
+    if (this.lead === lead) lead.learned();
+  }
+
+  /**
+   * v1.11 (6-1, 第 7 部 §4.2): a cutscene in the middle of a step's drive (the train standing): the controls locked, the
+   * cutscene's own cameras, then back to driving the same step. Its `unlock` is saved at once (runner.grant).
+   */
+  async playInlineCutscene(name: string): Promise<void> {
+    if (this.phase !== 'driving') return;
+    this.inlineCutscene = name;
+    this.ports.hush();
+    this.ports.whistleHint(false);
+    this.ports.gauge({ ...(this.stop?.gauge ?? { offset: 0, range: 1, ok: 1, perfect: 1, tooFast: false }), visible: false });
+    await this.cutscene(name);
+    this.inlineCutscene = '';
+    this.phase = 'driving';
+    this.train.unlockInput();
+  }
+
+  /** v1.11 (6-1): the step is over: Sakasa goes home if she has not (before any cutscene), the song comes back. */
+  private endLead(): void {
+    const lead = this.lead;
+    if (!lead) return;
+    this.train.setSpeedCap('lead-learn', null);
+    const running = lead.phase !== 'armed' && lead.phase !== 'met' && lead.phase !== 'gone';
+    const out = lead.phase !== 'armed';
+    if (lead.finish() && out) {
+      this.events.post({ type: 'lead:gone', id: lead.def.id });
+      this.spawnLeadHome(lead.def);
+    }
+    if (running && lead.def.music) this.ports.music(null);
+  }
+
+  /** v1.11 (6-1): the lead at its `home` (sat on the bench), a figure cutscenes and a welcome know by its id. */
+  private spawnLeadHome(def: LeadDef): void {
+    const h = def.home;
+    if (!h) return;
+    const lateral = h.lateral ?? 0;
+    const t = resolvePlacement(
+      { onRail: { railId: h.railId, at: h.at, lateral, heightFromRail: h.heightFromRail ?? 0 }, rotationY: h.rotationY ?? (lateral < 0 ? -90 : 90) },
+      this.stage.network,
+      this.groundY,
+    );
+    this.events.post({ type: 'actor:spawn', id: def.id, model: h.model ?? 'amanojaku-sit', position: t.position, quaternion: t.quaternion });
+  }
+
+  /** v1.11 (6-1): a point on the platform `lateral` m right of `at` on `railId` (a station's platform height). */
+  private platformPoint(railId: string, at: number, lateral: number): Vector3 {
+    const frame = this.stage.network.getRail(railId).frameAt(at);
+    return frame.position.clone().addScaledVector(frame.right, lateral).addScaledVector(frame.up, WELCOME.platformHeight);
+  }
+
+  /** v1.11 (6-1): the guest's look along the platform (towards the train when `lateral` is its side). */
+  private guestQuaternion(railId: string, at: number, lateral: number): Quaternion {
+    return resolvePlacement({ onRail: { railId, at, lateral, heightFromRail: 0 }, rotationY: lateral < 0 ? -90 : 90 }, this.stage.network, null).quaternion;
+  }
+
+  private resolveBoarded: (() => void) | null = null;
+
+  /**
+   * v1.11 (6-1, 第 7 部 §4.3): "ドアを あけて まつ" instead of the usual doors: the door button (its own line, no "のって
+   * のって！"), then the doors stay open while the guest comes aboard by herself; the song softer, the whistle marked
+   * "しーっ", no button glowing. One more rider; the doors close WELCOME.closeAfter s after she is in.
+   */
+  private async welcomeDoors(step: MissionStep, station: StationDef): Promise<void> {
+    const def = step.welcome;
+    if (!def) return;
+    this.phase = 'doors';
+    this.doorsOpen = false;
+    this.train.lockInput('doors');
+    this.ports.whistleHint(false);
+    const w = new Welcome(def, station, (r, a, l) => this.platformPoint(r, a, l));
+    this.welcome = w;
+    this.welcomeCalmSaid = false;
+    this.events.post({ type: 'welcome:beat', beat: 'ask' });
+    // She sits on her bench (brought on there if a skipped cutscene or a resume left her out).
+    if (!this.figures.has(def.actor)) {
+      const q = this.guestQuaternion(def.seat.railId, def.seat.at, def.seat.lateral);
+      this.events.post({ type: 'actor:spawn', id: def.actor, model: 'amanojaku-sit', position: w.seat, quaternion: q });
+    }
+    const ask = this.leadLines('welcomeAsk')[0];
+    let pressed = false;
+    const press = new Promise<void>((resolve) =>
+      this.ports.showDoorButton(() => {
+        pressed = true;
+        resolve();
+      }),
+    );
+    this.ports.sayAsync(ask);
+    void (async () => {
+      while (!pressed) {
+        await this.ports.wait(DOOR_REMIND_SECONDS);
+        if (!pressed) this.ports.sayAsync(ask);
+      }
+    })();
+    await press;
+    this.ports.hush();
+    this.doorsOpen = true;
+    this.ports.hideDoorButton();
+    if (def.camera) this.ports.fixedCamera(def.camera.at, def.camera.lookAt, def.camera.reach);
+    else this.ports.autoCamera('side');
+    this.events.post({ type: 'door', open: true, stationId: station.id });
+    this.ports.musicGain(w.musicGain, 0.8);
+    const boarded = new Promise<void>((resolve) => {
+      this.resolveBoarded = resolve;
+    });
+    for (const o of w.doorOpened()) this.onWelcomeOutcome(o);
+    await boarded;
+    this.resolveBoarded = null;
+    this.passengers += 1;
+    this.ports.setCargo(this.passengers, this.parcel);
+    this.events.post({ type: 'partner:emote', kind: 'cheer' });
+    await this.ports.wait(WELCOME.closeAfter);
+    this.events.post({ type: 'door', open: false, stationId: station.id });
+    this.ports.musicGain(1, 0.8);
+    await this.ports.wait(0.4);
+    this.ports.fixedCamera(null);
+    this.ports.autoCamera(null);
+    this.doorsOpen = false;
+    this.phase = 'stopped';
+    this.train.lockInput('stopped');
+  }
+
+  /** v1.11 (6-1): the guest's beats while the doors stand open. */
+  private updateWelcome(dt: number): void {
+    const w = this.welcome;
+    if (!w || !this.doorsOpen) return;
+    for (const o of w.update(dt)) this.onWelcomeOutcome(o);
+  }
+
+  /** v1.11 (6-1): the guest's model for a beat: sitting until she stands up, then with her lantern. */
+  private guestModel(beat: string): string {
+    const def = this.welcome?.def;
+    if (beat === 'look' || beat === 'ask') return 'amanojaku-sit';
+    return def?.model ?? 'amanojaku-lantern';
+  }
+
+  private onWelcomeOutcome(o: WelcomeOutcome): void {
+    const w = this.welcome;
+    if (!w) return;
+    const def = w.def;
+    if (o.kind === 'step') {
+      this.events.post({ type: 'welcome:step' });
+      return;
+    }
+    if (o.kind === 'board') {
+      this.events.post({ type: 'actor:remove', id: def.actor });
+      this.events.post({ type: 'welcome:board' });
+      this.resolveBoarded?.();
+      return;
+    }
+    this.events.post({ type: 'welcome:beat', beat: o.beat });
+    const q = this.guestQuaternion(def.seat.railId, def.seat.at, def.seat.lateral);
+    const model = this.guestModel(o.beat);
+    if (this.figures.get(def.actor) !== model) this.events.post({ type: 'actor:spawn', id: def.actor, model, position: o.from, quaternion: q });
+    // Standing up she takes her lantern off the bench.
+    if (o.beat === 'stand' && def.pickup) this.events.post({ type: 'actor:remove', id: def.pickup });
+    if (o.from.distanceTo(o.to) > 0.05) this.events.post({ type: 'actor:move', id: def.actor, position: o.to, seconds: o.seconds });
+  }
+
+  /** v1.11 (6-1): a whistle while the guest comes: she flinches one beat back ("ぴゃっ"), or only giggles. */
+  private onWelcomeWhistle(): void {
+    const w = this.welcome;
+    if (!w || w.state === 'done') return;
+    const r = w.onWhistle();
+    const def = w.def;
+    if (r.kind === 'flinch') {
+      this.events.post({ type: 'welcome:flinch', n: r.n });
+      const q = this.guestQuaternion(def.seat.railId, def.seat.at, def.seat.lateral);
+      // Shy for a moment where the beat goes back to ("ぴょんと もどる"); the beat starting again puts her model back.
+      this.events.post({ type: 'actor:spawn', id: def.actor, model: r.beat === 'look' ? 'amanojaku-sit' : 'amanojaku-shy', position: r.to, quaternion: q });
+      this.ports.sayNow(this.leadLines(r.n === 1 ? 'welcomeFlinch' : 'welcomeFlinchAgain')[0]);
+    } else if (r.kind === 'giggle') {
+      this.events.post({ type: 'welcome:giggle', n: r.n });
+      if (!this.welcomeCalmSaid) {
+        this.welcomeCalmSaid = true;
+        this.ports.sayNow(this.leadLines('welcomeCalm')[0]);
+      }
+    } else if (r.kind === 'shy') this.events.post({ type: 'welcome:shy' });
+  }
+
+  // ---- v1.11 (6-1) test hooks and the view ----
+
+  /** "" | armed | tease | dash | learn | backup | follow | met | gone. */
+  get leadPhase(): LeadPhase | '' {
+    return this.lead?.phase ?? '';
+  }
+
+  get leadCalls(): number {
+    return this.lead?.calls ?? 0;
+  }
+
+  get leadAutoCalls(): number {
+    return this.lead?.autoCalls ?? 0;
+  }
+
+  /** Metres from the train front to Sakasa (rounded; 0 when she is not out). */
+  get leadGap(): number {
+    return this.lead?.active ? Math.round(this.lead.gap) : 0;
+  }
+
+  /** Metres backed up while she followed (rounded). */
+  get leadBack(): number {
+    return Math.round(this.lead?.reversedBy ?? 0);
+  }
+
+  /** Where Sakasa runs now (the view), or null. */
+  get leadPose(): LeadPose | null {
+    return this.lead?.pose ?? null;
+  }
+
+  /** The closed station's id, or "". */
+  get closedStation(): string {
+    return this.phase === 'driving' && this.lead && this.lead.stationClosed && this.lead.phase !== 'gone' ? (this.stop?.station.id ?? '') : '';
+  }
+
+  /** The forward/back switch glows (a hint: back up to have Sakasa follow; met while reversing: forward again). */
+  get switchGlow(): boolean {
+    return this.phase === 'driving' && (this.lead?.switchGlow ?? false);
+  }
+
+  /** "" | ask | look | stand | walk | peek | board | done. */
+  get welcomeState(): WelcomeState | '' {
+    return this.welcome?.state ?? '';
+  }
+
+  get welcomeFlinches(): number {
+    return this.welcome?.flinches ?? 0;
+  }
+
+  get welcomeGiggles(): number {
+    return this.welcome?.giggles ?? 0;
+  }
+
+  /** The doors stand open for the guest (the whistle's "しーっ" mark). */
+  get welcoming(): boolean {
+    return this.phase === 'doors' && this.doorsOpen && this.welcome !== null && this.welcome.state !== 'done';
   }
 
   private async cutscene(id: string): Promise<void> {

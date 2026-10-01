@@ -42,6 +42,9 @@ import { iceZones, thinIceZones } from '../../gimmick/ice';
 import { slopeZones } from '../../gimmick/slope';
 import { REVERSE_POST, type EnvironmentDef, type RailBaseDef, type ResolvedProp } from '../../stage/types';
 import { ActorLayer } from './actors';
+import { addCrewSeat, LeadFigure } from './lead';
+import { LandmarkBoard } from './landmark';
+import type { LeadPose } from '../../mission/lead';
 import { bakeModel } from './bake';
 import { CAMERA_FAR, EnvironmentState, FOG_CULL_MARGIN, snowBeds } from './environment-state';
 import { ModelLibrary } from './models';
@@ -148,6 +151,11 @@ export class ThreeSceneView implements SceneView {
   /** v1.11 (PR8a): the last car's two white lamps while reversing (made the first time). */
   private rearLamps: Mesh | null = null;
   private jumpDevice: Object3D | null = null;
+  /** v1.11 (6-1): Sakasa in "おいかけっこ", and sitting behind the driver's seat (crew). */
+  private lead: LeadFigure | null = null;
+  private crewSeat: Object3D | null = null;
+  /** v1.11 (6-1): environment.landmark, the faraway shadow beyond the fog. */
+  private landmark: LandmarkBoard | null = null;
   private clock = 0;
   /** v1.7: a cutscene camera standing still. */
   private fixedCamera: { at: Vector3; lookAt: Vector3; reach: number } | null = null;
@@ -339,6 +347,7 @@ export class ThreeSceneView implements SceneView {
       this.toy?.init(this.models),
       this.mirrorWorld?.init(this.models),
     ]);
+    this.setLandmark(stage.file.environment);
     this.lookChanged();
     // After the lights and the fog are all in (it dims them in a tunnel).
     await this.snow?.init(this.models);
@@ -445,6 +454,13 @@ export class ThreeSceneView implements SceneView {
       }
     }
     if (event.type === 'reverse') this.setReversing(event.on);
+    // v1.11 (6-1): Sakasa rides along behind the driver's seat (once).
+    if (event.type === 'crew' && event.ids.includes('sakasa') && !this.crewSeat) {
+      this.crewSeat = new Object3D();
+      void addCrewSeat(this.models, this.train).then((sit) => {
+        this.crewSeat = sit;
+      });
+    }
     if (event.type === 'rocket') this.fovTarget = event.state === 'burn' && !this.calm ? ROCKET_FOV : 0;
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
     if (event.type === 'sign:reset') this.signs?.reset(event.junctionId);
@@ -619,6 +635,7 @@ export class ThreeSceneView implements SceneView {
    */
   applyEnvironment(env: EnvironmentDef): void {
     this.environment.apply(env);
+    this.setLandmark(env);
     // Under water the view had kept the look above the surface to come back to: it takes the new one next frame.
     this.aboveWater = null;
     this.widenFar();
@@ -631,6 +648,14 @@ export class ThreeSceneView implements SceneView {
    * v1.11 (5-1): what follows the look's lighting: at night the cars' windows glow, and the light's beam fades out
    * along its length (no bright wedge against the dark sky; by day it is drawn as it always was).
    */
+  /** v1.11 (6-1): the faraway landmark's board for this look (a 6-2 section may have another, or none). */
+  private setLandmark(env: EnvironmentDef): void {
+    this.landmark?.mesh.removeFromParent();
+    this.landmark?.dispose();
+    this.landmark = env.landmark ? new LandmarkBoard(env.landmark) : null;
+    if (this.landmark) this.scene.add(this.landmark.mesh);
+  }
+
   private lookChanged(): void {
     const night = this.environment.lighting === 'night';
     this.night?.setNight(night);
@@ -759,6 +784,8 @@ export class ThreeSceneView implements SceneView {
     this.village?.update(dt);
     this.night?.update(dt);
     this.toy?.update(dt);
+    this.lead?.update(dt);
+    this.landmark?.update(this.camera);
     if (this.magnet) {
       this.magnet.trainSpeed = pose.speed;
       this.magnet.cabView = cab;
@@ -809,6 +836,16 @@ export class ThreeSceneView implements SceneView {
 
   setSnowWave(wave: { railId: string; s: number; speed: number; state: string } | null): void {
     this.snow?.setWave(wave);
+  }
+
+  /** v1.11 (6-1): Sakasa in "おいかけっこ" (drawn from the first time she is out). */
+  setLead(pose: LeadPose | null): void {
+    if (!pose && !this.lead) return;
+    if (!this.lead && this.stage && this.network) {
+      this.lead = new LeadFigure(this.models, this.network, this.stage.file.environment.ground?.y ?? null);
+      this.scene.add(this.lead.group);
+    }
+    this.lead?.set(pose);
   }
 
   setSubmerged(on: boolean): void {

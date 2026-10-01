@@ -436,12 +436,14 @@ export const PLOW = {
 } as const;
 
 /** v1.10: floaters by look: default length along the rail (m) and how deep they reach under the surface (m). */
-export const FLOATER: Record<'log' | 'raft' | 'lily' | 'wave' | 'ice', { length: number; draft: number }> = {
+export const FLOATER: Record<'log' | 'raft' | 'lily' | 'wave' | 'ice' | 'umbrella', { length: number; draft: number }> = {
   log: { length: 2.4, draft: 0.6 },
   raft: { length: 6, draft: 0.5 },
   lily: { length: 4, draft: 0.2 },
   wave: { length: 5, draft: 0.8 },
   ice: { length: 4, draft: 0.7 },
+  // v1.11 (6-1): an upside-down umbrella boat (さかさの かさの ふね).
+  umbrella: { length: 4, draft: 0.4 },
 };
 
 /**
@@ -728,3 +730,35 @@ export const PARADE = {
  * the other side it waits on the good side.
  */
 export const SPIN = { range: 120, stay: 4, turn: 1, minGlow: 12, lockAt: 5, holdAfter: 40, mercy: 1 } as const;
+
+/**
+ * v1.11 (6-1, PHASE9_CHAPTER5_6 第 7 部 §4.7): the lead ("おいかけっこ"). Someone runs `keep` m ahead of the train front
+ * along its route, `lateral` m aside, aiming at train speed + `follow` × (target − gap) (0..`speedMax`, `accel`), never
+ * nearer than `min`. A whistle while teasing is a call: a `dashSeconds` dash to `dash` m. After `calls` calls the train
+ * is braked to a stop (`learnBrake`) and the step's `learn` cutscene plays (the partner works it out; "reverse" is
+ * learned). Then the runner waits; once the train reverses it turns round and follows to `followGap` m, and after
+ * `followBack` m reversed (or `metStandSeconds` s standing) it stops `metGap` m ahead and the station opens. Helpers: an
+ * automatic call after `autoCallAfter` s, reminders every `remindEvery` s and the runner coming back by itself after
+ * `autoFollowAfter` s (at `followSpeed` m/s, twice that while further than `followGap`; seconds counted while driving
+ * or standing). `iconLead`: it starts to run
+ * this long after a call's picture shows ("hand-stop"), as if it saw it.
+ */
+export const LEAD = {
+  keep: 45, min: 25, dash: 90, dashSeconds: 3, follow: 0.6, speedMax: 32, accel: 8, learnBrake: 3,
+  promptAfter: 4, runLineAfter: 1, againAfter: 3, autoCallAfter: 20, remindEvery: 12, autoFollowAfter: 45,
+  followGap: 25, metGap: 12, followBack: 20, metStandSeconds: 3, followSpeed: 3, turnSeconds: 0.4,
+  goneBehind: 30, lateral: -6, openMargin: 10, hopSeconds: 0.45, iconLead: 0.3, maxPath: 2000,
+} as const;
+/** v1.11 (6-1): waiting with the door open. Beats in seconds; a whistle sends the guest one beat back and pauses. */
+export const WELCOME = {
+  beats: { look: 2, stand: 2, walk: 3, peek: 2, board: 1.5 }, flinchPause: 2, maxFlinches: 2, calmAfter: 3,
+  boardBy: 30, rushBeatSeconds: 1, giggleSeconds: 0.4, closeAfter: 1.0,
+  musicGain: 0.3, doorBack: 30.5, doorLateral: 2.8, walkStop: 2, stepSound: 0.5, askFlinch: 2, platformHeight: 1,
+} as const;
+/** v1.11 (6-1): a cutscene "depart" roll (m/s; m/s² to start and to stop). */
+export const DEPART = { maxSpeed: 8, accel: 1.5, brake: 2 } as const;
+/**
+ * v1.11 (6-1): environment.landmark, the faraway castle's shadow beyond the fog: shown further than `near` m, fading
+ * out over `fade` m nearer than that.
+ */
+export const LANDMARK = { near: 600, fade: 100 } as const;

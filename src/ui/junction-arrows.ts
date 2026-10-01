@@ -16,6 +16,8 @@ export interface JunctionArrows {
     bubbles?: BubbleForkDef;
     /** v1.11 (PR8a): a back junction's arrows (reversing; `#junction[data-back="1"]`, pink rims). */
     back?: boolean;
+    /** v1.11 (6-1): the mission's own default: chosen and glowing from the start (`#junction[data-preset]`). */
+    preset?: JunctionSide;
   }): void;
   markSelected(side: JunctionSide): void;
   /** The light showed the true way: highlight it instead of the (reversed) sign's. */
@@ -90,6 +92,11 @@ export function createJunctionArrows(root: HTMLElement, onSelect: (side: Junctio
         else delete b.dataset.bubbles;
       }
       box.dataset.back = options.back ? '1' : '0';
+      // v1.11 (6-1): a mission's own default is chosen from the start (the child may change it).
+      if (options.preset) {
+        box.dataset.preset = options.preset;
+        markSelected(options.preset);
+      } else delete box.dataset.preset;
       box.hidden = false;
     },
     markSelected,

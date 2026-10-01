@@ -441,3 +441,36 @@ export async function backArrow(page: Page, side: 'left' | 'right', timeoutMs = 
   );
   expect(await tapped.jsonValue()).toBe(true);
 }
+
+/**
+ * v1.11 (6-1, PHASE9_CHAPTER5_6 第 7 部 §16.4): waits until #app[data-lead] is `phase` (the lead's stage: armed, tease,
+ * dash, learn, backup, follow, met, gone). Lines and cards are left alone (a learn cutscene waits for its card).
+ */
+export async function waitLead(page: Page, phase: string, timeoutMs = 90_000): Promise<void> {
+  await page.waitForFunction((p) => document.getElementById('app')?.dataset.lead === p, phase, { timeout: timeoutMs, polling: 'raf' });
+}
+
+/** v1.11 (6-1): waits until #app[data-welcome] is `beat` (ask, look, stand, walk, peek, board, done). */
+export async function waitWelcome(page: Page, beat: string, timeoutMs = 60_000): Promise<void> {
+  await page.waitForFunction((b) => document.getElementById('app')?.dataset.welcome === b, beat, { timeout: timeoutMs, polling: 'raf' });
+}
+
+/**
+ * v1.11 (6-1): presses `id` (pointerdown) in the page on the first frame `cond` holds (a JS expression over `d`, the
+ * #app dataset): a short state is not missed at 10 fps.
+ */
+export async function pressWhen(page: Page, id: string, cond: string, timeoutMs = 90_000): Promise<void> {
+  const pressed = await page.waitForFunction(
+    ([bid, src]) => {
+      const app = document.getElementById('app');
+      const b = document.getElementById(bid);
+      if (!app || !b) return false;
+      if (!(new Function('d', `return (${src});`)(app.dataset) as boolean)) return false;
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      return true;
+    },
+    [id, cond] as const,
+    { timeout: timeoutMs, polling: 'raf' },
+  );
+  expect(await pressed.jsonValue()).toBe(true);
+}

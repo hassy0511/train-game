@@ -3,6 +3,7 @@ import type { JunctionDef, LineDef, StageData, StationDef } from '../stage/types
 import { RECORD, REVERSE, STOP_NOTCH } from '../train/params';
 import type { ReverseStop } from '../train/consist';
 import type { Train } from '../train/train';
+import type { ReverseReader } from '../mission/lead';
 
 /**
  * v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A14): the partner's lines for うしろむき (a mission's lines win; every one within
@@ -39,7 +40,7 @@ export type ReversePhase = 'driving' | 'stopped' | 'doors' | 'cutscene' | 'faili
  * to go forward again), and the partner's lines (a glow starting, the first back arrows, standing reversed with the
  * lever at "とまる", the stop points, a record's end lines at the buffer, without うしろむき by a post).
  */
-export class ReverseSystem {
+export class ReverseSystem implements ReverseReader {
   readonly events = new Emitter<{ line: ReverseLine; near: { junction: JunctionDef } }>();
   /** The child has うしろむき (the switch shows). */
   enabled = false;
@@ -91,6 +92,11 @@ export class ReverseSystem {
       this.backUpStation = null;
       this.standReversed = 0;
     });
+  }
+
+  /** PR8b's ReverseReader (the lead, 6-1 M2, follows a train backing up): the train runs backwards now. */
+  isReversing(): boolean {
+    return this.train.reversing;
   }
 
   /** The switch glows now (a hint only). */

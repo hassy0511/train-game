@@ -1460,7 +1460,7 @@ type LineKey = /* v1.11 (5-3) */ 'flipIn' | 'flipOut' | 'mirrorGateNear' | 'mirr
 - **左右は うしろむきに すすむ ときの 左右**（うしろの まどから 見た 左右）
 - 前に 通りすぎて（3 両 ぜんぶ）から うしろへ 下がると、いちばん うしろの はしが 40 m 手前で 矢印（`#junction[data-back="1"]`、5 m 手前で きまる）。わき道から 出て きた ときは 出ない
 - `line`（なくて よい、`null` で 言わない）: 切りかえが 光りはじめた ときの ひとこと（なければ ミッションの `backNear`）
-- `glow`（既定 `"auto"`）: 通りすぎた あと 80 m まで 切りかえを 光らせる とき。`"auto"` ＝ わき道に まだ とって いない 記録か、いまの ステップの 駅（`stations[].reverse`）が ある。`true` いつも、`false` 光らせない
+- `glow`（既定 `"auto"`）: 通りすぎた あと 80 m まで 切りかえを 光らせる とき。`"auto"` ＝ わき道に まだ とって いない 記録か、いまの ステップの 駅（`stations[].reverse`）が ある。`true` いつも、`false` 光らせない。型は `signReversed` の 分かれ道の `glow`（§23）と 同じ 1 つ（`boolean | "auto"`）
 - ポイントの よこ 3.2 m（わき道と 反対がわ）に ローダーが ぐるぐるの 柱（`reverse-post`、覚える まえは 灰色 `reverse-post-off`）を 立てる。覚えて いない 子が 柱の そばで 止まると「うしろむきに はしれたら…」（ステージで 1 回）
 - ローダーは `back` の 分かれ道を `junctions` から ぬいて `StageData.backJunctions` に わける（前向きの しくみは 見ない）
 
@@ -1485,7 +1485,7 @@ type LineKey = /* v1.11 (PR8a) */ 'backNear' | 'backArrows' | 'reverseNudge' | '
 - しっぱいの 理由に `reverse`（念のため。ふだんは 起きない）
 
 ### 読み込み時の 検査（`validate.ts` の 形の 検査 ＋ `validateBackJunctions`）
-- `back: true` の 分かれ道: 左右 両方、1 つが 自分の `railId`、`default` は その 側。`dive`・`bubbles`・`needs`・`signReversed`・`fireflies`・`spin`・`phantom` と いっしょに 書かない。`line`・`glow` は `back` の 分かれ道 だけ
+- `back: true` の 分かれ道: 左右 両方、1 つが 自分の `railId`、`default` は その 側。`dive`・`bubbles`・`needs`・`signReversed`・`fireflies`・`spin`・`phantom` と いっしょに 書かない。`line` は `back` の 分かれ道 だけ（`glow` は `back` と `signReversed` の 分かれ道 だけ。§23）
 - わき道: `end` が `merge` で 分かれ道の (`railId`, `at`)（0.5 m 以内）、はじまりに 分かれ道も 合流も ない、長さ 46〜150 m、口で わき道の おわりの 向きと 線路の +s の 角が 30° 以下、形が 左右と 合う（口から 20 m の 点）。わき道に 切れ目・水・`plow-wall`・`slope`・`ice`・`thin-ice`・`camera`・`jump-pad`・`updraft`・`bough`・`flower-bridge`・`fragile`・`magnet`・`mirror-flip`・うきもの・線路の 上の 役者・分かれ道・ふつうの 駅 なし
 - 口の まわり（線路の `at − 40`〜`at + 60`）に ほかの 分かれ道・合流・切れ目・水の はし・`plow-wall`・じしゃくの `bridge`／`gate` なし、駅の 停止線から 40 m 以上、ゆきの なみの 道の 上で ない
 - `stations[].reverse`: わき道の 上、`at` ≤ 1、ミッションの さいごの ステップで ない
@@ -1498,3 +1498,67 @@ type LineKey = /* v1.11 (PR8a) */ 'backNear' | 'backArrows' | 'reverseNudge' | '
 - `#app` の `data-direction`（`1`／`-1`）・`data-reverse`（空／`pending`／`turning`／`on`／`stop`）・`data-reverse-stop`（さいごに 止まった わけ: `gap`・`air`・`dive`・`station`・`floor`・`buffer`）・`data-retracing`・`data-tail-rail`・`data-tail-s`（いちばん うしろの 車両の まん中）・`data-trail-m`（通った 道の 長さ）・`data-reverse-toggles`（向きが かわった 回数。ふえる だけ）・`data-back-arrows`・`data-hop`・`data-camera="rear"`／`"chase-rev"`、PR7 の `data-car-gap`・`data-car-lift-err`
 - できごと: `reverse`（`on`）・`reverse:stop`・`reverse:siding`・`reverse:backup`。本番に デバッグの 口は 足さない（テストは `addInitScript` の 記録係 `window.__reverseLog`。開発だけ キー `r` で 切りかえ、`__debugTrain.reverseAt(railId, s)`）
 
+## 23. v1.11 の追加（6-1「さかさまのしろ」の しくみ: おいかけっこ・ドアを あけて まつ・ミッションの 分かれ道・寸劇の crew／depart、2026-09-30 PR8b）
+設計: `docs/PHASE9_CHAPTER5_6.md` 第 7 部 §4（PHASE9_0 §6 が 先に きく）。`schemaVersion` は 1 の まま、ぜんぶ 省略可。うしろむきの しくみは §22。ためしの ステージ **0-6**「てすとの おいかけっこ」（`scripts/layout-0-6.mjs` が 作る。手で なおさない）。
+
+### おいかけっこ（`missions[].steps[].lead`）
+```json
+{ "stationId": "horibata",
+  "lead": { "id": "sakasa", "model": "amanojaku", "railId": "wa", "from": 60, "lateral": -6,
+            "keep": 45, "dash": 90, "calls": 2, "learn": "gyaku",
+            "home": { "railId": "shiro", "at": 80, "lateral": -5.5, "heightFromRail": 1, "model": "amanojaku-sit", "rotationY": 90 },
+            "music": "oikake" } }
+```
+- 先頭が `from` を こえると 役者 `id`（寸劇の 役者と 同じ 名前の 表。あとの 寸劇で `move`・`remove`・同じ id の `spawn` で おきかえ できる）が、先頭の `keep` m 前・`lateral` m よこ（既定 −6 ＝ 左）を 電車の 道に そって はしる（ゴムひも。`min` より 近く ならない、ロケットでも ぬかれない）。当たり判定は ない
+- 段階（`#app[data-lead]`）: `armed` → `tease`（`promptAfter` 4 秒で「きてきで よんで みよう！」、きてきが 光る）→ きてき ＝「とまって〜！」（吹き出しに ひらいた ての 絵）→ `dash`（0.3 秒 あとに `dash` m まで 3 秒 にげる）→ `calls` 回（既定 2）で `learn`（電車は ブレーキで 止まる、速さの ふた `lead-learn`）→ 止まったら ステップの とちゅうの 寸劇 `learn`（`unlock: "reverse"` を つかう）、レバーは「とまる」に もどる → `backup`（切りかえが 光る、`remindEvery` 秒ごとに「うしろへ さがって みよう！」）→ うしろむきで うごくと `follow`（くるっ と ふりむいて ついて くる）→ `followBack` m 下がる／止まって 3 秒／まえに もどす と `met`（先頭の 12 m 前で 止まる。駅が あく）→ まえへ 通りすぎて 最後の 車両の うしろの はしが 30 m はなれると `gone`（`home` に すわる 形で おく）
+- たすけ: `tease` の まま `autoCallAfter` 秒（既定 20）→ ピコが かわりに「とまって〜！」（きてきの 音も。1 回 よんだ ことに する）。`backup` で `autoFollowAfter` 秒（既定 45）→ サカサから もどって きて `met`（「あれ？ もどって きた！」。25 m より 遠い あいだは 6 m/s、近くは 3 m/s）。秒は 運転中と 止まって いる あいだ だけ
+- **しまった 駅**（`closeStation`、既定 true）: `met` まで ステップの 駅は しまって いる（ゲージ・近づきの ことば・採点 なし、通りすぎても しっぱいに しない。止まると「えきは あとで！ サカサを おいかけよう」を 1 まわりに 1 回）。`met` で、先頭が 停止ゾーンより 10 m 以上 手前なら すぐ あく。止まって いて ok の はんいなら その場で「とまれた」。それ いがいは つぎに 10 m 以上 手前に 来た とき
+- `lead.music` は 曲の 名前（`met` で もとの 曲へ）。`learn` の あとの きてきは サカサが ちょっと はねる だけ（数えない）
+- **うしろむき（PR8a）との つなぎ**: `MissionRunner` は `MissionSystems.reverse: ReverseReader`（`isReversing(): boolean`）で うしろむきを 知る。`main.ts` が `{ isReversing: () => train.reversing }` を わたす（§22 の 切りかえ）。サカサは 電車の 速さの 符号を 見ず、道に そって 電車が じっさいに どう うごいたかで ついて くる
+- 検査: `min < keep < dash ≤ 120`、`calls` 1〜3、`|lateral|` 4〜10、`music` は 曲、`learn` は ある 寸劇（ドア・`depart`・`crew` を 使わない）、`home` は 線路の 中、`chase`・`countdown` と いっしょに 書かない。**道**（`from` から ミッションの きめと 既定で たどる）は `from` に もどる わ（2,000 m まで）、ステップの 駅が 道の 上、駅の ホームは サカサと 反対の 側、`from` から 駅まで `calls × 60 + 60` m 以上。道の 上（`from − 20` から）に 切れ目・水・雪の かべ・ジャンプだい・坂・こおり・しーっ・さかさ きてき・糸の はし・花の はし・えだ・じしゃくの `bridge`／`gate`・うきもの・線路に 置いた 役者・うしろむきの 分かれ道 を 置かない。道の 上の 分かれ道は ミッションの `lock` か、既定が わの 側（いきどまり・`signReversed`・`spin`・`fireflies`・`dive` なら `lock` が いる）
+
+### ドアを あけて まつ（`missions[].steps[].welcome`）
+```json
+{ "stationId": "oshiro",
+  "welcome": { "actor": "sakasa", "model": "amanojaku-lantern", "pickup": "chochin",
+               "seat": { "railId": "shiro", "at": 80, "lateral": -5.5 },
+               "beats": [ { "beat": "look", "seconds": 2 }, { "beat": "stand", "seconds": 2 },
+                          { "beat": "walk", "seconds": 3 }, { "beat": "peek", "seconds": 2 }, { "beat": "board", "seconds": 1.5 } ],
+               "flinchPause": 2, "maxFlinches": 2, "boardBy": 30, "musicGain": 0.3,
+               "camera": { "at": [371.4, 6, 1934.1], "lookAt": [367.9, 2.5, 1951.3], "reach": 1 } } }
+```
+- ふつうの ドアの かわり（`board`・`alight`・`parcel` は 書かない）。ドアの 丸（ことば `welcomeAsk`「ドアを あけて、まって みよう」）→ 押すと ドアが あいた まま、曲は `musicGain` 倍、きてきに「しーっ」の しるし、どの ボタンも 光らない。`actor` が いなければ `seat` に すわった 形（`amanojaku-sit`）で 出す。`look` → `stand`（`model` に かわり、`pickup` を けす）→ `walk`（`door` の 2 m 手前へ、足音）→ `peek` → `board`（中へ、「ぽろろん」）→ のる 人 ＋1、1 秒 あとに ドアが しまる
+- `door` の 既定: 停止線の 30.5 m うしろ、ホームの 側 2.8 m（いちばん うしろの 車両の うしろの ドア）。人は ホームの 高さ（線路から 1 m 上）
+- きてき（こえを かけた）: 1 つ まえの 間の はじめへ ぴょんと もどり、`flinchPause` 秒 うごかない（「しーっ… なにも いわないで まとう」／2 回めから「しーっ」）。`maxFlinches` 回（既定 2）の あとは くすっと わらう だけ（3 回めに 1 回「まつ だけで いいよ」）。ドアが あいて `boardBy` 秒で どこに いても のこりの 間を 1 秒ずつに して のる（しっぱい・時間切れ なし）。ドアを あける まえの きてきは かおを かくす だけ
+- 検査: `seat`・`door` は 駅の 線路の `at − 45`〜`at`、ホームの 側。`door.at` は `at − 34`〜`at − 27`。`beats` は 5 つ この 順、どれも 0.5〜6 秒。`flinchPause` 1〜5、`maxFlinches` 0〜3、`boardBy` は 間の 合計 ＋5〜60、`musicGain` 0〜1（`music` は ない）
+
+### ミッションごとの 分かれ道（`missions[].junctions`）
+```json
+"junctions": { "shiro-wakare": { "lock": "right" } }      // M2
+"junctions": { "shiro-wakare": { "default": "left" } }    // M3
+```
+- `lock`: その ミッションの あいだ いつも その 側、矢印は 出ない（道の たどり方も その 側）。`default`: その 側が はじめから えらばれて 光る（`#junction[data-preset]`、子どもは かえられる）。ミッションの はじめ（つづきも）に 入り、おわりに もどる。しっぱいでも そのまま
+- 検査: 分かれ道が ある、`lock` か `default` の どちらか 1 つ、その 側に 線路、`lock` は `signReversed`・`fireflies`・`spin`・`dive`・`needs` の 分かれ道には 書かない
+
+### 寸劇の 足し
+- `{ "crew": ["sakasa"] }`: ここから ステージの おわりまで サカサが 運転席の うしろに すわる（`amanojaku-sit`。`#app[data-crew]`）。早送りでも 入る。`["sakasa"]` だけ
+- `{ "depart": { "to": 145, "seconds": 5 } }`: 電車が いまの 線路の `to` まで 自分で うごく（さいこう 8 m/s、やさしく 止まる。`#app[data-depart]` が `rolling` → `done`）。ステージの `ending` だけ、`to` は さいごの 駅より 先で 車止めの 手前（線路の 長さ − 7.5 m より 前）、`seconds` 2〜10。早送りでは とばす
+- `spawn` の 同じ id: もう いる 役者を おきかえる（`lead` の `home` に いる サカサを 寸劇で 出しなおせる）
+- ステップの とちゅうの 寸劇（`lead.learn`）: 止まって いる 電車の まま 流れ、おわると 同じ ステップの 運転に もどる（`#app[data-inline-cutscene]`）。`unlock` は すぐ 保存。つづき（あとの ミッション から）では 早送りで 入る
+- `say` の `icon`: `"ride"`（§21）に `"hand-stop"`（ひらいた て）・`"run-swirl"`（はしる あし ＋ うしろへ まがる 矢印）を 足した（`LineDef.icon` も 同じ 3 つ。第 3 部 A13）
+
+### 小さな 足し
+- `junctions[].glow: true`（`signReversed` の 分かれ道。`true`／`false` だけ）: ライトの 段で なければ 80 m 手前から 見やぶるまで ライトの ボタンが 黄色く 光る（まちがえる 前から）。`glow` の 型は 1 つ（`boolean | "auto"`）で、書ける のは `signReversed` の 分かれ道と うしろむきの 分かれ道（`back`、§22。`"auto"` も 書ける）だけ。1 つの 分かれ道で 両方に は ならない（`back` には かんばんが ない）
+- `floaters[].look: "umbrella"`（さかさの かさの ふね。長さ 4、深さ 0.4）
+- `plow-wall` の `params.look: "hanging"`（さかさ やねの アーチから たれた ゆき。判定は ゆきの まま。アーチの 形は チケット 0021）
+- `waterfall` の `params.up: true`（下から 上へ ながれる。見た目と 音だけ）
+- `environment.landmark`: `{ "model": "sakasa-castle-far", "position": [x, y, z], "height": 40, "near": 600 }`。霧の 先でも かくれない うすい かげ（板 1 まい、描く 回数 1、ほんとうの 見かけの 大きさ）。`near` m より 近いと 100 m で きえる。`near` は 霧の `far` より 小さい。形は 0021 が できるまで コードの 絵
+
+### せりふの キー（v1.11 の 6-1 の 分。どれも 既定 あり）
+`leadStart`（サカサ）「さようなら〜！」・`leadStartReply`「でた！ まてまて〜！」・`leadPrompt`「きてきで よんで みよう！」・`leadCall`「とまって〜！」（ひらいた て）・`leadRun`「あれれ？ もっと にげた！」・`leadAgain`「もう いっかい！」・`leadFlip`「ぎゃくだ！／サカサは なんでも ぎゃく なんだ」・`leadBackRemind`「うしろへ さがって みよう！」・`leadFollow`「ついて きた！／ほんとに ぎゃく だったんだ！」・`leadMet`「まえに もどして えきへ！」・`leadAutoCall`「とまって〜！」・`leadAutoFollow`「あれ？ もどって きた！」・`leadGone`「おしろの ほうへ いった…」・`stationClosed`「えきは あとで！ サカサを おいかけよう」・`welcomeAsk`「ドアを あけて、まって みよう」・`welcomeFlinch`「しーっ… なにも いわないで まとう」・`welcomeFlinchAgain`「しーっ」・`welcomeCalm`「まつ だけで いいよ」。能力の 札は `reverse` だけ「うしろむき うんてんを／おぼえた！」
+
+### テスト用の しるし・できごと
+- `#app` の `data-lead`・`data-lead-calls`（自動も。ふえる だけ）・`data-lead-auto`・`data-lead-gap`（整数 m）・`data-lead-back`・`data-station-closed`・`data-inline-cutscene`・`data-welcome`（`ask`／`look`／`stand`／`walk`／`peek`／`board`／`done`）・`data-welcome-flinches`・`data-welcome-giggles`・`data-music-gain`・`data-crew`・`data-depart`。`#whistle[data-mark="hush"]`（まつ あいだ）。`#junction[data-preset]`。`#bubble[data-icon]`。`#reverse-switch[data-glow]`（§22 の 切りかえ。光るのは うしろむきの しくみ〈§22〉か おいかけっこの `backup` の どちらか）
+- できごと: `lead:start`・`lead:call`（`{ n, auto }`）・`lead:learn`・`lead:follow`（`{ auto }`）・`lead:met`（`{ auto }`）・`lead:gone`・`lead:hop`、`station:open`、`welcome:beat`・`welcome:flinch`・`welcome:giggle`・`welcome:board`・`welcome:step`・`welcome:shy`、`crew`、`depart`
+- わざと まちがえた 形: `tests/stages-bad/lead-*.json`・`welcome-*.json`・`mission-junction-*.json`・`depart-*.json`
+- 本番に デバッグの 口は 足さない（テストは `addInitScript` の 記録係 `window.__leadLog`・`window.__welcomeLog`）

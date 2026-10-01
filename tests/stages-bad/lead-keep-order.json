@@ -1,0 +1,10 @@
+{
+  "_expect": "min < keep < dash",
+  "_base": "0-6",
+  "_edit": [
+    {
+      "path": "missions.0.steps.0.lead.keep",
+      "value": 90
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import type { CameraMode, OrbitCamera } from './camera-rig';
 import type { RailNetwork } from '../rail/types';
 import type { EnvironmentDef, StageData } from '../stage/types';
 import type { TrainPose } from '../train/types';
+import type { LeadPose } from '../mission/lead';
 
 /** Per-frame camera effects, 0..1 each. `dip` lowers the camera (emergency stop), `shake` jitters it. */
 export interface CameraFx {
@@ -41,6 +42,8 @@ export interface SceneView {
    * its state (null: none out).
    */
   setSnowWave(wave: { railId: string; s: number; speed: number; state: string } | null): void;
+  /** v1.11 (6-1): where Sakasa runs in "おいかけっこ" now (null: not out), every frame. Optional. */
+  setLead?(pose: LeadPose | null): void;
   /** v1.11 (5-2): how each spinning fork looks now (the side its flag points, turning, glowing the good way). Optional. */
   setSpinLooks?(looks: { id: string; side: 'left' | 'right'; turning: boolean; good: boolean }[]): void;
   /**

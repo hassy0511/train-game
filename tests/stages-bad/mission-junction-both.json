@@ -1,0 +1,13 @@
+{
+  "_expect": "exactly one",
+  "_base": "0-6",
+  "_edit": [
+    {
+      "path": "missions.0.junctions.t-wakare",
+      "value": {
+        "lock": "right",
+        "default": "right"
+      }
+    }
+  ]
+}

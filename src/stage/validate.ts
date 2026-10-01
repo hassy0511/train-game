@@ -40,6 +40,7 @@ import {
 import { inArea, openWaterAt } from './water';
 import { AMBIENCE_KINDS, CAT_LOOKS, type JunctionDef, FLOATER_LOOKS, IRON_LOOKS, MAGNET_KINDS, MAGNET_LOOKS, WATER_LOOKS, type AmbienceKind, type CatLook, type FloaterLook, type IronLook, type MagnetKind, type MagnetLook, type MagnetTarget, type Placement, type StageFile, type WaterDef, type WaterLook } from './types';
 import { paradeSetup } from '../actors/parade';
+import { checkBubbleIcon, checkCrewDepartStep, checkLandmark, checkLeadShapes } from './validate-lead';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
 const ABILITIES = ['whistle', 'light', 'jump', 'rocket', 'dive', 'plow', 'magnetLight', 'reverse'];
@@ -111,7 +112,8 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
   } else if ('say' in st) {
     if (!isString(st.say)) fail(`${where}: "say" must be text`);
     if (st.name !== undefined && !isString(st.name)) fail(`${where}: "name" must be text`);
-    if (st.icon !== undefined && st.icon !== 'ride') fail(`${where}: "icon" must be "ride"`);
+    // v1.11 (5-3) "ride"; (6-1) "hand-stop", "run-swirl".
+    checkBubbleIcon(st.icon, where);
   } else if ('spawn' in st) {
     if (!isString(st.spawn) || !isString(st.model) || !MODEL_NAME.test(st.model) || !onRailOk(st.onRail)) {
       fail(`${where}: spawn needs id, model and onRail`);
@@ -170,6 +172,9 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
     if (!isObject(st.environment)) fail(`${where}: "environment" must be an object (the fields to change; {} = the stage's own)`);
     checkEnvironmentParts(st.environment, `${where} environment`, true);
     if (st.seconds !== undefined && !(isNumber(st.seconds) && st.seconds >= 0)) fail(`${where}: "seconds" must be >= 0`);
+  } else if ('crew' in st || 'depart' in st) {
+    // v1.11 (6-1): friends ride along; the train rolls off.
+    checkCrewDepartStep(st, where);
   } else {
     fail(`${where}: unknown step`);
   }
@@ -214,6 +219,8 @@ function checkEnvironmentParts(env: Record<string, unknown>, where: string, step
   for (const k of ['water', 'snow', 'festival', 'cloudSea'] as const) {
     if (step && env[k] !== undefined) fail(`${where}: "${k}" belongs to the stage's own environment (a look change keeps it)`);
   }
+  // v1.11 (6-1): the faraway landmark's shadow beyond the fog.
+  checkLandmark(env.landmark, where, isObject(env.fog) && isNumber(env.fog.far) ? env.fog.far : null);
 }
 
 /** Structural validation of a stage file. Range checks that need rail lengths happen in the loader. */
@@ -373,7 +380,8 @@ export function validateStageFile(raw: unknown): StageFile {
       const line = j.line;
       if (line !== undefined && line !== null && !isString(line) && !(isObject(line) && isString(line.text))) fail(`junction "${j.id}": "line" must be text, a line ({ text }) or null`);
       if (j.glow !== undefined && j.glow !== 'auto' && typeof j.glow !== 'boolean') fail(`junction "${j.id}": "glow" must be "auto", true or false`);
-    } else if (j.line !== undefined || j.glow !== undefined) fail(`junction "${j.id}": "line" and "glow" are for back junctions ("back": true)`);
+    } else if (j.line !== undefined) fail(`junction "${j.id}": "line" is for back junctions ("back": true)`);
+    // (Other junctions' "glow" is the reversed sign's, checked with 6-1's shapes: checkLeadShapes.)
     if (j[j.default] === undefined) fail(`junction "${j.id}": default side "${j.default}" has no target`);
     if (j.diveSide !== undefined) fail(`junction "${j.id}": "diveSide" is set by the loader (write "dive": true)`);
     if (j.dive !== undefined) {
@@ -737,7 +745,7 @@ export function validateStageFile(raw: unknown): StageFile {
       const where = `gimmicks[${i}] plow-wall`;
       if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`${where}: needs a known railId and "from"`);
       if (g.to !== undefined && !(isNumber(g.to) && g.to >= (g.from as number) + PLOW.wallDepth)) fail(`${where}: "to" must be at least ${PLOW.wallDepth} m after "from"`);
-      if (p.look !== undefined && !['snow', 'sand', 'foam'].includes(String(p.look))) fail(`${where}: params.look must be snow, sand or foam`);
+      if (p.look !== undefined && !['snow', 'sand', 'foam', 'hanging'].includes(String(p.look))) fail(`${where}: params.look must be snow, sand, foam or hanging`);
       if (p.line !== undefined && p.line !== null && !isString(p.line)) fail(`${where}: params.line must be text or null`);
       const rw = p.rewind;
       if (rw !== undefined && !(isObject(rw) && isString(rw.railId) && railIds.has(rw.railId) && isNumber(rw.at))) fail(`${where}: params.rewind needs a known railId and at`);
@@ -805,6 +813,8 @@ export function validateStageFile(raw: unknown): StageFile {
   // v1.11 (PR5): the magnet light's targets, the iron odds and ends.
   checkMagnetShapes(raw, railIds);
 
+  // v1.11 (6-1): おいかけっこ, ドアを あけて まつ, the missions' own junction rules, junctions[].glow.
+  checkLeadShapes(raw);
   return raw as unknown as StageFile;
 }
 
@@ -984,6 +994,8 @@ function checkWaterfall(p: Record<string, unknown>, where: string, waters: Recor
   if (p.throw !== undefined && !(isNumber(p.throw) && p.throw >= 0 && p.throw <= 20)) fail(`${where}: params.throw must be 0–20`);
   if (p.lip !== undefined && !(isNumber(p.lip) && p.lip >= 0 && p.lip <= 5)) fail(`${where}: params.lip must be 0–5`);
   if (p.rainbow !== undefined && typeof p.rainbow !== 'boolean') fail(`${where}: params.rainbow must be true or false`);
+  // v1.11 (6-1): an upward fall (looks only).
+  if (p.up !== undefined && typeof p.up !== 'boolean') fail(`${where}: params.up must be true or false`);
   const into = waters.find((w) => isNumber(w.y) && Math.abs((w.y as number) - (p.bottom as number)) <= 0.1);
   if (!into) fail(`${where}: params.bottom must be the height of a water (environment.water[].y)`);
   const from = p.from as [number, number];

@@ -1,12 +1,13 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { Emitter } from '../core/events';
 import type { Rail, RailNetwork } from '../rail/types';
-import type { FloaterDef, GapDef, JunctionDef, PlowSpan, StartDef, WaterDef, WaterSpan } from '../stage/types';
+import type { FloaterDef, GapDef, JunctionDef, MissionJunctionRule, PlowSpan, StartDef, WaterDef, WaterSpan } from '../stage/types';
 import { spanAt } from '../stage/water';
 import {
   ACCELERATION,
   BRAKING,
   BUFFER_MARGIN,
+  DEPART,
   DIVE,
   EMERGENCY_STOP_SECONDS,
   FALL,
@@ -52,6 +53,8 @@ export interface JunctionApproach {
   left: boolean;
   right: boolean;
   default: JunctionSide;
+  /** v1.11 (6-1): the mission's own default for it (`missions[].junctions`): chosen and glowing from the start. */
+  preset?: JunctionSide;
 }
 
 export interface TrainEvents extends Record<string, unknown> {
@@ -322,6 +325,10 @@ export class Train {
   private blockBump: { t: number; from: number; id: string } | null = null;
   /** v1.11 (5-3): mirror blocks bumped this try: held before them until they are gone. */
   private readonly held = new Set<string>();
+  /** v1.11 (6-1): the mission's own junction rules (lock a side, or preset the default), by junction id. */
+  private junctionRules: Record<string, MissionJunctionRule> | null = null;
+  /** v1.11 (6-1): a cutscene's roll ("depart") going on: where to, since when, and who waits for its end. */
+  private departing: { railId: string; to: number; t: number; limit: number; resolve: () => void } | null = null;
 
   /** v1.11 (PR7): the way the train has come (every car is placed along it). */
   readonly trail: Trail;
@@ -1031,7 +1038,49 @@ export class Train {
   private routeSide(j: JunctionDef): JunctionSide {
     if (j.spin && this.spinSides) return this.spinSides(j);
     if (j.dive && j.diveSide) return this.diving ? j.diveSide : j.diveSide === 'left' ? 'right' : 'left';
-    return j === this.announced && this.choice ? this.choice : j.default;
+    const rule = this.junctionRules?.[j.id];
+    if (rule?.lock) return rule.lock;
+    return j === this.announced && this.choice ? this.choice : rule?.default ?? j.default;
+  }
+
+  /**
+   * v1.11 (6-1): the mission's own junction rules (`missions[].junctions`; null: none). "lock": that side always, and
+   * no arrows; "default": that side is chosen and glows from the start (the child may change it). Set at a mission's
+   * start (and a resume), cleared at its end; a fail keeps them.
+   */
+  setJunctionRules(rules: Record<string, MissionJunctionRule> | null): void {
+    this.junctionRules = rules && Object.keys(rules).length > 0 ? rules : null;
+  }
+
+  /**
+   * v1.11 (6-1): a cutscene's roll ("depart"): the train sets off by itself along its rail (up to DEPART.maxSpeed) and
+   * stops gently with its front at `to`. Resolves once it stands there (or after `seconds` + 8 s whatever happens).
+   */
+  depart(to: number, seconds: number): Promise<void> {
+    this.departing?.resolve();
+    return new Promise((resolve) => {
+      const railId = this.state.railId;
+      this.departing = { railId, to, t: 0, limit: seconds + 8, resolve };
+      this.setSpeedCap('depart', { holdAt: { railId, s: to } });
+    });
+  }
+
+  /** v1.11 (6-1): a cutscene's roll is going on. */
+  get isDeparting(): boolean {
+    return this.departing !== null;
+  }
+
+  private updateDepart(dt: number): void {
+    const d = this.departing;
+    if (!d) return;
+    d.t += dt;
+    const left = this.routeDistance(d.railId, d.to);
+    const there = left === null || left <= 1.5;
+    if ((d.t > 0.5 && this.state.speed < 0.05 && there) || d.t > d.limit) {
+      this.departing = null;
+      this.setSpeedCap('depart', null);
+      d.resolve();
+    }
   }
 
   /** Signed distance from the car FRONT to `at` on the current rail (loop-aware). */
@@ -1130,6 +1179,11 @@ export class Train {
     const notch = LEVER_NOTCHES[st.notch];
     let target: number = notch.speed * this.speedScale;
     let brake: number = notch.brake * this.grip;
+    // v1.11 (6-1): a cutscene's roll goes by itself (its "depart" cap stops it at its place).
+    if (this.departing) {
+      target = DEPART.maxSpeed;
+      brake = BRAKING;
+    }
     const stopAt = this.stopDistance(rail);
     if (stopAt !== null) {
       const remaining = stopAt - st.s;
@@ -1309,6 +1363,7 @@ export class Train {
     this.markTrail();
     // v1.11 (PR8a): pressed while moving: once it stands (and nothing is going on), it turns round.
     if (this.switchWant !== null && st.speed <= 1e-3 && !this.switchBusy && !this.falling && !this.emergency) this.turnTo(this.switchWant);
+    this.updateDepart(dt);
     this.computePose();
   }
 
@@ -1972,17 +2027,21 @@ export class Train {
 
     // v1.11 (PR8a): retracing, a fork goes the way the train came (no arrows until the retracing is over).
     const retracing = this.trail.hasGhost;
-    // v1.10: a dive fork shows no arrows (diving or not picks the way).
-    if (!this.announced && !j.dive && !retracing && st.s >= j.at - JUNCTION_ARROW_DISTANCE) {
+    // v1.10: a dive fork shows no arrows (diving or not picks the way). v1.11 (6-1): nor does one the mission locks.
+    const rule = this.junctionRules?.[j.id];
+    if (!this.announced && !j.dive && !rule?.lock && !retracing && st.s >= j.at - JUNCTION_ARROW_DISTANCE) {
       this.announced = j;
       const preferred = this.preferred.get(j.id);
-      this.choice = preferred !== undefined && j[preferred] !== undefined ? preferred : null;
+      // v1.11 (6-1): the mission's own default is chosen from the start.
+      const preset = rule?.default !== undefined && j[rule.default] !== undefined ? rule.default : undefined;
+      this.choice = preferred !== undefined && j[preferred] !== undefined ? preferred : preset ?? null;
       this.locked = false;
       this.events.emit('junctionApproach', {
         junction: j,
         left: j.left !== undefined,
         right: j.right !== undefined,
-        default: j.default,
+        default: preset ?? j.default,
+        ...(preset ? { preset } : {}),
       });
     }
     if (this.announced && !this.locked && st.s >= j.at - JUNCTION_LOCK_DISTANCE) {
@@ -1990,7 +2049,8 @@ export class Train {
       this.events.emit('junctionLocked');
     }
     if (st.s >= j.at) {
-      let side = (j.dive && j.diveSide) || (j.spin && this.spinSides) ? this.routeSide(j) : this.choice ?? j.default;
+      let side =
+        (j.dive && j.diveSide) || (j.spin && this.spinSides) ? this.routeSide(j) : rule?.lock ?? this.choice ?? rule?.default ?? j.default;
       if (retracing) {
         const next = this.trail.ghostAfter(st.railId);
         const came = (['left', 'right'] as const).find((k) => j[k] !== undefined && j[k] === next);
