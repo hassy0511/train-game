@@ -617,6 +617,13 @@ export interface LeadDef {
   remindEvery?: number;
   autoFollowAfter?: number;
   followBack?: number;
+  /**
+   * v1.11 (PR8a × 6-1): the camera while she follows a train backing up and stands before it (phases "follow" and
+   * "met", while the train still runs backwards). "front" (default): the view
+   * the child picked stays as it is (she is in front of the train, so the rear window would not show her); "rear": the
+   * rear window as anywhere else reversing.
+   */
+  followCamera?: 'front' | 'rear';
 }
 
 /** v1.11 (6-1): the beats of a guest coming aboard by herself (WelcomeDef.beats). */

@@ -115,6 +115,7 @@ function checkLead(v: unknown, where: string, railIds: Set<string>, raw: Record<
   const lateral = v.lateral ?? LEAD.lateral;
   if (!isNumber(lateral) || Math.abs(lateral) < 4 || Math.abs(lateral) > 10) fail(`${where}: "lateral" must be 4–10 m either side`);
   if (v.music !== undefined && (!isString(v.music) || !(v.music in SONGS))) fail(`${where}: "music" must be a song in src/audio/songs.ts`);
+  if (v.followCamera !== undefined && v.followCamera !== 'front' && v.followCamera !== 'rear') fail(`${where}: "followCamera" must be "front" or "rear"`);
   if (v.closeStation !== undefined && typeof v.closeStation !== 'boolean') fail(`${where}: "closeStation" must be true or false`);
   for (const [k, lo, hi] of [
     ['autoCallAfter', 3, 60],

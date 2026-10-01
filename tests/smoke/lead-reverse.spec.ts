@@ -93,11 +93,22 @@ test('0-6 おいかけっこ backing up on the switch: she turns round and follo
   await expect(sw).toHaveAttribute('data-glow', '1', { timeout: 10_000 });
   // "うしろ" and the lever up: she turns round ("くるっ") and follows ("ついて きた！"), then stops before the train.
   await setDirection(page, 'back');
+  // Turned round (standing): the rear window.
+  await expect(app).toHaveAttribute('data-camera', 'rear', { timeout: 10_000 });
   await setNotch(page, SLOW);
+  // Reversing, but while she follows the view stays the one picked (the cab, looking ahead at her), not the rear window.
   await waitLead(page, 'follow', 30_000);
+  await expect(app).toHaveAttribute('data-camera-hold', 'lead', { timeout: 10_000 });
+  await expect(app).toHaveAttribute('data-camera', 'cab');
+  await expect(app).toHaveAttribute('data-direction', '-1');
   await expect.poll(lines, { timeout: 10_000 }).toContain('ついて きた！');
   await waitLead(page, 'met', 60_000);
   expect(Number(await app.getAttribute('data-lead-back'))).toBeGreaterThanOrEqual(14);
+  // Met: the train stops (still reversing); she walks up and stops 12 m before it, the view still looking ahead at her.
+  await standStill(page);
+  await page.waitForFunction(() => Number(document.getElementById('app')?.dataset.leadGap) <= 14, null, { timeout: 30_000 });
+  await expect(app).toHaveAttribute('data-camera-hold', 'lead');
+  await expect(app).toHaveAttribute('data-camera', 'cab');
   await page.screenshot({ path: `${OUT}/lead-follow.png` });
   // Met while reversing: the switch glows to go forward again ("まえに もどして えきへ！").
   await expect(sw).toHaveAttribute('data-glow', '1', { timeout: 5_000 });
@@ -111,6 +122,8 @@ test('0-6 おいかけっこ backing up on the switch: she turns round and follo
   expect(Math.min(...follow)).toBeGreaterThanOrEqual(11);
   await standStill(page);
   await setDirection(page, 'front');
+  await expect(app).toHaveAttribute('data-camera-hold', '');
+  await expect(app).toHaveAttribute('data-camera', 'cab');
   await expect(app).toHaveAttribute('data-station-closed', '', { timeout: 10_000 });
   await setNotch(page, NORMAL);
   await stopAt(page, 't-wa', EKI);

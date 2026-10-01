@@ -3433,6 +3433,16 @@ export class MissionRunner {
   // ---- v1.11 (6-1) test hooks and the view ----
 
   /** "" | armed | tease | dash | learn | backup | follow | met | gone. */
+  /**
+   * v1.11 (PR8a × 6-1): the lead follows a train backing up (and then stands before it, "met", until it goes forward)
+   * and wants the child's own view kept (`followCamera`, default "front"): the rear window would not show her, she is
+   * in front of the train.
+   */
+  get leadHoldsFront(): boolean {
+    const phase = this.lead?.phase;
+    return (phase === 'follow' || phase === 'met') && (this.lead?.def.followCamera ?? 'front') === 'front';
+  }
+
   get leadPhase(): LeadPhase | '' {
     return this.lead?.phase ?? '';
   }

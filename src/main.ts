@@ -653,10 +653,13 @@ async function boot(): Promise<void> {
   let fixedCamera: { at: Vec3; lookAt: Vec3; reach?: number } | null = null;
   // The title screen's camera circling the train (set while the title is up).
   let orbiting = false;
+  // v1.11 (PR8a × 6-1): Sakasa following a train backing up keeps the view the child picked (#app[data-camera-hold]).
+  let leadHoldsFront = false;
+  app.dataset.cameraHold = '';
   const applyCamera = (snap = false): void => {
     const picked = cameraOverride ?? zoneCamera ?? userCamera;
     // v1.11 (PR8a, A10): reversing, the cab turns into the rear window and "うしろから" into the view from ahead.
-    const mode = train.reversing ? reversedCamera(picked) : picked;
+    const mode = train.reversing && !leadHoldsFront ? reversedCamera(picked) : picked;
     view.setCamera(mode, snap);
     view.setFixedCamera(fixedCamera);
     app.dataset.camera = fixedCamera ? 'fixed' : orbiting ? 'orbit' : mode;
@@ -1422,6 +1425,13 @@ async function boot(): Promise<void> {
     const reversePhase: ReversePhase = runner ? runner.phase : testCourseFailing || train.isFalling ? 'failing' : train.state.speed < 0.05 ? 'stopped' : 'driving';
     reverse.update(dt, reversePhase);
     reverseSwitch.set(train.direction, train.switchPending !== null);
+    // v1.11 (PR8a × 6-1): while Sakasa follows the train backing up, the view stays the one picked (she is in front).
+    const holdFront = train.reversing && (runner?.leadHoldsFront ?? false);
+    if (holdFront !== leadHoldsFront) {
+      leadHoldsFront = holdFront;
+      app.dataset.cameraHold = holdFront ? 'lead' : '';
+      applyCamera();
+    }
     // The switch glows for うしろむき's own hints (A3) or for the lead waiting to be backed up to (6-1 M2, `backup`).
     reverseSwitch.setGlow(reverse.glow || (runner?.switchGlow ?? false));
     if (train.switchPending !== null) {
