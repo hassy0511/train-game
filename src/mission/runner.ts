@@ -3239,7 +3239,9 @@ export class MissionRunner {
         break;
       case 'gone':
         this.events.post({ type: 'lead:gone', id });
-        this.ports.sayAsync(this.leadLines('leadGone')[0]);
+        // Said at once: a queued line could still be waiting when the train stops at the station, and the station's
+        // grade (sayNow) would drop it unseen.
+        this.ports.sayNow(this.leadLines('leadGone')[0]);
         this.spawnLeadHome(lead.def);
         break;
     }
