@@ -163,9 +163,11 @@ def main() -> None:
                                        ((0.105, 0.985, -0.050), (0.200, 0.915, -0.060), 0.042))):
             add(HAIR, k.add_tapered_segment, f"flick-{side}-{i}", (s * a[0], a[1], a[2]), (s * b[0], b[1], b[2]),
                 r, 0.008, clay_mat, 14)
+        # The arm runs on through the cuff into the palm (the wrist), so the hand comes straight out of the cuff.
         add(SKIN, k.add_swept_tube, f"arm-{side}",
-            [(s * 0.050, 0.872, 0.0), (s * 0.082, 0.866, 0.0), (s * 0.180, 0.735, 0.012), (s * 0.255, 0.600, 0.022)],
-            [0.030, 0.030, 0.023, 0.020], [clay_mat] * 3, 14)
+            [(s * 0.050, 0.872, 0.0), (s * 0.082, 0.866, 0.0), (s * 0.180, 0.735, 0.012), (s * 0.255, 0.600, 0.022),
+             (s * 0.283, 0.548, 0.027)],
+            [0.030, 0.030, 0.023, 0.020, 0.019], [clay_mat] * 4, 14)
         add(SKIN, E, f"shoulder-{side}", (0.062, 0.058, 0.056), (s * 0.080, 0.866, 0.0), clay_mat, 14, 7)
         add(PURPLE, k.add_tapered_segment, f"cuff-{side}", (s * 0.233, 0.640, 0.018), (s * 0.262, 0.586, 0.024),
             0.038, 0.039, clay_mat, 16)
