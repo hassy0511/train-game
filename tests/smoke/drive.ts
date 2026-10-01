@@ -99,11 +99,13 @@ export async function pressOnGlowBefore(page: Page, id: 'jump' | 'dive' | 'plow'
       const app = document.getElementById('app');
       const button = document.getElementById(bid);
       if (!app || !button) return false;
-      if (app.dataset.rail === r && Number(app.dataset.s) >= Number(t)) return 'late';
+      // The glow first: it says a press works now (a jump takes off from the lead bogie, 4 m behind the front, so the
+      // front may already be a little past `latest`). At a few frames a second the glow's window can be one frame.
       if (button.dataset.glow === '1' && app.dataset.phase === 'driving') {
         button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
         return 'pressed';
       }
+      if (app.dataset.rail === r && Number(app.dataset.s) >= Number(t)) return 'late';
       return false;
     },
     [id, rail, latest - FRONT] as const,

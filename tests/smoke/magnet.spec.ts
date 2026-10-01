@@ -245,15 +245,19 @@ test('0-0 jishaku: three steps, the green hint, the pull, mashing, the gap (in t
   // The odds and ends (jishaku 300–560: the scattered ones and the sign's bell at 450): "びよん" … "からん", no fail,
   // no slowing below the light's.
   await setNotch(page, NORMAL);
-  await waitFront(page, 'jishaku', 560);
+  await waitFront(page, 'jishaku', 530);
   expect(Number(await app.getAttribute('data-iron'))).toBeGreaterThanOrEqual(1);
   log = await magnetLog(page);
   expect(log.fails).toEqual([]);
   expect(log.maxSpeedInIron).toBeLessThanOrEqual(7.05);
   await page.screenshot({ path: resolve(OUT, 'magnet-iron.png') });
 
-  // The record (jishaku 620, 12 right, 6 up) is not found by passing it with the light.
+  // The record (jishaku 620, 12 right, 6 up) is not found by passing it with the light. Back to the light well before
+  // the magnet's reach (50 m, so 570): slowly, as the two presses (magnet → off → light) take a moment on a slow CI.
+  await setNotch(page, SLOW);
   await lightTo(page, 'light');
+  expect(Number(await app.getAttribute('data-s')) + FRONT).toBeLessThan(570);
+  await setNotch(page, NORMAL);
   await waitFront(page, 'jishaku', 640);
   expect((await app.getAttribute('data-records')) ?? '').not.toContain('test-bell');
   const b = await budget(page);
