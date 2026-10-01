@@ -51,7 +51,7 @@ export async function loadAllRecords(): Promise<{ stageId: string; stageTitle: s
 /** Title and required stages of a stage, without building it. */
 export async function peekStage(
   id: string,
-): Promise<(Pick<StageFile, 'id' | 'title' | 'unlock' | 'unlocks' | 'records'> & { missionCount: number; openingUnlocks: AbilityId[] }) | null> {
+): Promise<(Pick<StageFile, 'id' | 'title' | 'unlock' | 'unlocks' | 'records'> & { missionCount: number; missionTitles: string[]; openingUnlocks: AbilityId[] }) | null> {
   const load = stageModules[`../stages/${id}.json`];
   if (!load) return null;
   const file = ((await load()) as { default: StageFile }).default;
@@ -63,6 +63,8 @@ export async function peekStage(
     unlocks: file.unlocks,
     records: file.records,
     missionCount: file.missions.length,
+    // The check mode's stage list (src/ui/kakunin.ts) shows them.
+    missionTitles: file.missions.map((m) => m.title),
     // v1.11: the abilities the stage gives in its opening (so the child has them from its start: the map's badges).
     openingUnlocks: opening.flatMap((st) => ('unlock' in st ? [st.unlock] : [])),
   };
