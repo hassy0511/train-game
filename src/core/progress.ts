@@ -37,8 +37,21 @@ export interface Resume {
 
 const empty = (): Progress => ({ schema: SCHEMA, cleared: [], abilities: [], records: [], mapLinks: [] });
 
+/**
+ * 「かくにん モード」 (src/core/kakunin.ts): a sandbox run keeps the progress in memory, copied from the save when it
+ * starts. Everything reads and writes that copy as usual (clears, records, abilities, the resume, the map's rails),
+ * and nothing reaches localStorage, so the child's save stays byte for byte as it was. A new page load starts clean.
+ */
+let sandbox: Progress | null = null;
+
+/** From now on the progress is an in-memory copy of the save and nothing is written (until the page is left). */
+export function startSandbox(): void {
+  sandbox = loadProgress();
+}
+
 /** Reads the saved progress. Storage can be missing or blocked (private mode); then it starts empty. */
 export function loadProgress(): Progress {
+  if (sandbox) return structuredClone(sandbox);
   try {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return empty();
@@ -58,6 +71,10 @@ export function loadProgress(): Progress {
 }
 
 export function saveProgress(progress: Progress): void {
+  if (sandbox) {
+    sandbox = structuredClone(progress);
+    return;
+  }
   askPersistence();
   try {
     window.localStorage.setItem(KEY, JSON.stringify(progress));
@@ -125,6 +142,7 @@ export function advanceResume(resume: Resume): boolean {
 
 /** Forgets the whole progress (the parents' page, "きろくを ぜんぶ けす"). Settings are kept apart and stay. */
 export function clearProgress(): void {
+  if (sandbox) return;
   try {
     window.localStorage.removeItem(KEY);
   } catch {

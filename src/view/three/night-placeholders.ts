@@ -615,22 +615,41 @@ function fireflySwarm(name: string, r: number, n: number): () => Group {
 }
 
 /**
- * Sakasa carrying 4-2's paper lantern (for 5-1's cutscenes): the built amanojaku with a short stick in its hand and a
- * round warm lantern hanging from it (`lit` false: out, the ending under the great tree).
+ * Sakasa carrying 4-2's paper lantern (for 5-1's cutscenes): the built amanojaku, her arm already posed by the caller
+ * (src/view/three/models.ts), with a short stick held in her fist and a round warm lantern hanging from its far end on
+ * a cord (`lit` false: out, the ending under the great tree). `grip` is the middle of the fist, `along` the stick's
+ * direction out of it (forward and up); the stick's near end shows a little below the fist.
  */
-export function addHandLantern(model: Group, lit: boolean): Group {
+export function addHandLantern(model: Group, lit: boolean, grip: Vector3, along: Vector3): Group {
   const out = model.clone(true);
   out.name = lit ? 'amanojaku-lantern' : 'amanojaku-lantern-off';
-  const stick = new Mesh(new CylinderGeometry(0.012, 0.012, 0.45, 4), new MeshLambertMaterial({ color: TRUNK }));
-  stick.position.set(0.3, 0.82, 0.12);
-  stick.rotation.x = Math.PI / 3;
+  const wood = new MeshLambertMaterial({ color: TRUNK });
+  const rod = (from: Vector3, to: Vector3, r: number): Mesh => {
+    const d = to.clone().sub(from);
+    const m = new Mesh(new CylinderGeometry(r, r, d.length(), 6), wood);
+    m.position.copy(from).addScaledVector(d, 0.5);
+    m.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), d.normalize());
+    return m;
+  };
+  const dir = along.clone().normalize();
+  const tip = grip.clone().addScaledVector(dir, 0.4);
+  const stick = rod(grip.clone().addScaledVector(dir, -0.05), tip, 0.011);
+  const CORD = 0.05;
+  const HALF = 0.125; // the paper's half height (a 0.1 m sphere stretched 1.25 tall)
+  const cord = rod(tip, tip.clone().setY(tip.y - CORD - 0.01), 0.004);
   const paper = new Mesh(
     new SphereGeometry(0.1, 10, 8),
     new MeshLambertMaterial({ color: lit ? '#ffd07a' : '#c9a06a', emissive: new Color('#ffb04a'), emissiveIntensity: lit ? 1 : 0 }),
   );
   paper.scale.set(1, 1.25, 1);
-  paper.position.set(0.3, 0.8, 0.36);
-  out.add(stick, paper);
+  paper.position.set(tip.x, tip.y - CORD - HALF, tip.z);
+  // Dark rims top and bottom, as on a real paper lantern.
+  const rim = (y: number): Mesh => {
+    const m = new Mesh(new CylinderGeometry(0.05, 0.05, 0.018, 10), wood);
+    m.position.set(tip.x, y, tip.z);
+    return m;
+  };
+  out.add(stick, cord, paper, rim(tip.y - CORD - 0.004), rim(tip.y - CORD - 2 * HALF + 0.004));
   return out;
 }
 

@@ -1,9 +1,10 @@
 """サカサ (amanojaku) (Claude Code).
 
 Follows `assets/concepts/character-turnaround-c-sakasa.png`: slim lilac body, purple bob with flicks,
-tall striped hat curling to the side with a pompom, cape with gold lining and trim that flares to a point
-at the back, gold brooch and sash, purple wrist cuffs, purple boots with gold bands. Scaled to 1.40 m.
-Run: python3 scripts/run-bpy.py assets/blender/amanojaku-k.py
+tall striped hat curling to the side with a pompom, cape over the back and sides (behind the arms) with gold
+lining and trim that flares to a point at the back, gold brooch and sash, purple wrist cuffs, purple boots with
+gold bands. Scaled to 1.40 m.
+Run: python3 scripts/run-bpy.py assets/blender/amanojaku.py
 """
 from __future__ import annotations
 
@@ -78,18 +79,27 @@ def build_hat(solids, purple, gold):
     k.add_ellipsoid(solids, "hat-pompom", (0.100, 0.100, 0.100), (tip.x, tip.y - 0.045, tip.z), gold, 16, 8)
 
 
+CAPE_EDGE = math.radians(114)   # the front edges: behind the shoulders, so the arms hang in front of the cape
+CAPE_RX, CAPE_SIDE, CAPE_BACK = 0.226, 0.600, 0.455   # hem half-width; hem height at the side corners, at the point
+
+
 def build_cape(solids, purple, gold):
-    theta0, theta1, cols, rows = math.radians(72), math.radians(288), 26, 9
+    """Cape over the back and sides only (concept: the arms hang in front of it, its gold lining shows between arm
+    and body). Its front edges run from behind the shoulders to corners at the hip, behind the arms, never at the
+    hands; the hem falls to a point at the back. No pompoms on it: at the corners they sat by the hands, and one at
+    the point shows between the legs from the front."""
+    theta0, theta1, cols, rows = CAPE_EDGE, 2 * math.pi - CAPE_EDGE, 26, 9
     verts, faces = [], []
     for r in range(rows + 1):
-        v = r / (rows - 1 + 1)
+        v = r / rows
         for c in range(cols + 1):
             th = theta0 + (theta1 - theta0) * c / cols
             back = max(0.0, -math.cos(th)) ** 1.6
-            hem = 0.525 + (0.445 - 0.525) * back
+            side = abs(th - math.pi) / (math.pi - theta0)
+            hem = CAPE_BACK + (CAPE_SIDE - CAPE_BACK) * side
             y = 0.905 + (hem - 0.905) * v
             ease = v ** 0.72
-            rx = 0.104 + (0.250 - 0.104) * ease
+            rx = 0.104 + (CAPE_RX - 0.104) * ease
             rz = 0.074 + (0.200 + 0.110 * back - 0.074) * ease
             verts.append((math.sin(th) * rx, y, math.cos(th) * rz))
     for r in range(rows):
@@ -105,9 +115,25 @@ def build_cape(solids, purple, gold):
     bpy.ops.object.mode_set(mode="OBJECT")
     k.apply_modifier(cape, "SOLIDIFY", thickness=0.012, offset=-1.0, material_offset=1, material_offset_rim=1)
     k.set_smooth(cape)
-    for c in (0, cols // 2, cols):
-        x, y, z = verts[rows * (cols + 1) + c]
-        k.add_ellipsoid(solids, f"cape-pompom-{c}", (0.058, 0.058, 0.058), (x, y - 0.018, z), gold, 14, 7)
+    return cape
+
+
+def check_clearance(cape, body, least: float = 0.010) -> None:
+    """The cape must not touch the arms, hands or body below the collar (it hangs behind them): no triangle of one
+    crosses the other, and every cape vertex below the shoulders keeps `least` metres off the clay."""
+    bpy.context.view_layer.update()
+    cape_tree, body_tree = k.world_tree(cape), k.world_tree(body)
+    crossing = cape_tree.overlap(body_tree)
+    nearest = math.inf
+    for vertex in cape.data.vertices:
+        co = cape.matrix_world @ vertex.co
+        if co.z < 0.86:   # Blender Z = glTF Y; above that the cape meets the collar at the neck on purpose
+            hit = body_tree.find_nearest(co)
+            if hit[3] is not None:
+                nearest = min(nearest, hit[3])
+    print(f"CAPE_CLEARANCE crossing={len(crossing)} nearest={nearest:.4f}")
+    if crossing or nearest < least:
+        raise RuntimeError(f"cape touches the body: {len(crossing)} crossing faces, nearest {nearest:.4f} m")
 
 
 def main() -> None:
@@ -170,7 +196,8 @@ def main() -> None:
     gold = k.mat("Sakasa gold", GOLD, 0.45)
     solids: list = []
     build_hat(solids, purple, gold)
-    build_cape(solids, purple, gold)
+    cape = build_cape(solids, purple, gold)
+    check_clearance(cape, body)
     bpy.ops.mesh.primitive_torus_add(major_radius=0.074, minor_radius=0.030, major_segments=20, minor_segments=10,
                                      location=k.to_blender((0, 0.902, -0.004)))
     collar = bpy.context.object
