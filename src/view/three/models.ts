@@ -59,7 +59,10 @@ export class ModelLibrary {
 
     // v1.11 (5-1): Sakasa with 4-2's paper lantern (lit, or out), made from the built amanojaku (ticket 0018).
     if ((name === 'amanojaku-lantern' || name === 'amanojaku-lantern-off') && !this.available.has(name)) {
-      const held = this.load('amanojaku').then((m) => addHandLantern(m, name === 'amanojaku-lantern'));
+      const held = this.load('amanojaku').then((m) => {
+        const { posed, grip, along } = holdStick(m);
+        return addHandLantern(posed, name === 'amanojaku-lantern', grip, along);
+      });
       this.cache.set(name, held);
       return held;
     }
@@ -144,7 +147,11 @@ function addBlush(model: Group): Group {
  * v1.11 (5-3): Sakasa posed without bones (the built model is one clay mesh): the vertices of an arm (away from the
  * torso, between hip and shoulder) turn about the shoulder, blended in near it so nothing tears. "amanojaku-wave": her
  * right arm raised high (the view sways her as she waves); "amanojaku-shy": both hands brought together in front and her
- * head (hair and hat with it) tilted 10°. Model metres (assets/blender/amanojaku.py): shoulders at (±0.08, 0.866, 0).
+ * head (hair and hat with it) tilted 10°. Model metres (assets/blender/amanojaku.py): shoulders at (±0.08, 0.866) from
+ * the body's axis, which the export puts a few centimetres off the origin (it centres the bounding box), so it is
+ * measured on the waist (bodyAxis). Only the clay (the skin texture: body, arms, cuffs) turns with an arm; the cape,
+ * collar and hat (their own flat materials) stay where they are, so the cape keeps hanging behind the arms and never
+ * follows a hand.
  */
 function poseAmanojaku(model: Group, name: 'amanojaku-wave' | 'amanojaku-shy'): Group {
   const out = model.clone(true);
@@ -164,22 +171,25 @@ function poseAmanojaku(model: Group, name: 'amanojaku-wave' | 'amanojaku-shy'): 
     v.lerp(moved, w);
     at.copy(v);
   };
+  const axis = bodyAxis(out);
   out.traverse((o) => {
     const mesh = o as Mesh;
     if (!mesh.isMesh) return;
     mesh.geometry = mesh.geometry.clone();
     const pos = mesh.geometry.getAttribute('position') as BufferAttribute;
     const at = new Vector3();
+    const clay = isClay(mesh);
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i);
       at.copy(v);
-      // The arms (clay only lies out there; the cape is behind them).
-      for (const side of [-1, 1]) {
-        const armW = smooth(0.1, 0.14, side * v.x) * smooth(0.42, 0.47, v.y) * (1 - smooth(0.86, 0.9, v.y)) * smooth(-0.06, -0.03, v.z);
+      // The arms: clay only (the cape hangs behind them and stays).
+      for (const side of clay ? [-1, 1] : []) {
+        const armW = armWeight(v, side, axis.x);
         if (armW <= 0) continue;
-        pivot.set(side * 0.08, 0.866, 0);
+        pivot.set(axis.x + side * 0.08, 0.866, axis.z);
         if (name === 'amanojaku-wave' && side === -1) {
-          q.setFromAxisAngle(Z, side * 2.3);
+          // Up and out (about 45° off upright) and a little forward: 2 cm clear of the hat brim and the hair's flicks.
+          q.setFromAxisAngle(X, 0.55).multiply(new Quaternion().setFromAxisAngle(Z, side * 1.85));
           turnAbout(at, q, armW);
         } else if (name === 'amanojaku-shy') {
           q.setFromAxisAngle(X, -0.9).multiply(new Quaternion().setFromAxisAngle(Z, -side * 0.35));
@@ -189,7 +199,7 @@ function poseAmanojaku(model: Group, name: 'amanojaku-wave' | 'amanojaku-shy'): 
       if (name === 'amanojaku-shy') {
         const headW = smooth(0.9, 0.97, v.y);
         if (headW > 0) {
-          pivot.set(0, 0.93, 0);
+          pivot.set(axis.x, 0.93, axis.z);
           q.setFromAxisAngle(Z, 0.17);
           turnAbout(at, q, headW);
         }
@@ -205,9 +215,9 @@ function poseAmanojaku(model: Group, name: 'amanojaku-wave' | 'amanojaku-shy'): 
 
 /**
  * v1.11 (6-1): "amanojaku-sit": Sakasa sitting, posed without bones from the built amanojaku (one clay mesh): the legs
- * (below the hip, in front of the cape) turn forward about the hip, what hangs behind (the cape's hem) gathers at the
- * seat, and the whole figure comes down so the seat (her bottom) is the origin. Model metres (assets/blender/amanojaku.py):
- * the hip at y 0.44. About 1.0 m tall sitting, legs 0.4 m out in front (+Z).
+ * (the clay below the hip) turn forward about the hip, what hangs behind (the cape's hem) gathers at the seat, and
+ * the whole figure comes down so the seat (her bottom) is the origin. Model metres (assets/blender/amanojaku.py): the
+ * hip at y 0.44. About 1.0 m tall sitting, legs 0.4 m out in front (+Z).
  */
 function sitAmanojaku(model: Group): Group {
   const out = model.clone(true);
@@ -217,25 +227,31 @@ function sitAmanojaku(model: Group): Group {
     const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
     return t * t * (3 - 2 * t);
   };
-  const q = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2);
-  const pivot = new Vector3(0, HIP, 0.02);
+  const X = new Vector3(1, 0, 0);
+  const q = new Quaternion();
+  // 5.5 cm behind the body's axis: the legs' underside comes out level with the seat.
+  const axis = bodyAxis(out);
+  const pivot = new Vector3(0, HIP, axis.z - 0.055);
   const v = new Vector3();
   out.traverse((o) => {
     const mesh = o as Mesh;
     if (!mesh.isMesh) return;
     mesh.geometry = mesh.geometry.clone();
     const pos = mesh.geometry.getAttribute('position') as BufferAttribute;
+    const clay = isClay(mesh);
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i);
-      const below = 1 - smooth(HIP - 0.04, HIP + 0.02, v.y);
+      const below = 1 - smooth(HIP - 0.06, HIP + 0.06, v.y);
       if (below > 0) {
-        const front = smooth(-0.06, -0.01, v.z);
-        if (front > 0) {
-          const turned = v.clone().sub(pivot).applyQuaternion(q).add(pivot);
-          v.lerp(turned, below * front);
+        if (clay) {
+          // The legs, whole down to the boot heels (the hands hang further out, |x| > 0.22, and stay). In the blend
+          // the turn is partial (not a straight line to the turned place), so the knee bends round instead of folding.
+          const leg = below * (1 - smooth(0.19, 0.21, Math.abs(v.x - axis.x)));
+          if (leg > 0) v.sub(pivot).applyQuaternion(q.setFromAxisAngle(X, (-Math.PI / 2) * leg)).add(pivot);
+        } else {
+          // What hangs behind (the cape's point) gathers under her at the seat.
+          v.y = v.y + (HIP + (v.y - HIP) * 0.08 - v.y) * below;
         }
-        // What hangs behind gathers under her at the seat.
-        if (front < 1) v.y = v.y + (HIP + (v.y - HIP) * 0.08 - v.y) * below * (1 - front);
       }
       pos.setXYZ(i, v.x, v.y - HIP, v.z);
     }
@@ -244,6 +260,126 @@ function sitAmanojaku(model: Group): Group {
     mesh.geometry.computeBoundingSphere();
   });
   return out;
+}
+
+/**
+ * v1.11 (5-1): Sakasa's right arm (-X; the clay only, blended in at the shoulder as in poseAmanojaku) turned about its
+ * own length so the palm faces her leg, then brought a little forward, as if her fist holds a stick. Returns the posed
+ * copy, the middle of the fist and the stick's direction out of it: across the palm (forward) and up 40°, so the stick
+ * lies in the closed hand between thumb and fingers rather than through the palm.
+ */
+function holdStick(model: Group): { posed: Group; grip: Vector3; along: Vector3 } {
+  const SIDE = -1;
+  const out = model.clone(true);
+  const axis = bodyAxis(out);
+  const pivot = new Vector3(axis.x + SIDE * 0.08, 0.866, axis.z);
+  // Palm and fingertips as built (model metres, assets/blender/amanojaku.py: palm at y 0.52, fingertips at 0.46).
+  const palm = new Vector3();
+  const tips = new Vector3();
+  let nPalm = 0;
+  let nTips = 0;
+  const p = new Vector3();
+  out.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh || !isClay(mesh)) return;
+    const pos = mesh.geometry.getAttribute('position') as BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      p.fromBufferAttribute(pos, i);
+      if (SIDE * (p.x - axis.x) < 0.24) continue;
+      if (p.y > 0.5 && p.y < 0.56) {
+        palm.add(p);
+        nPalm++;
+      } else if (p.y < 0.48) {
+        tips.add(p);
+        nTips++;
+      }
+    }
+  });
+  palm.divideScalar(Math.max(1, nPalm));
+  tips.divideScalar(Math.max(1, nTips));
+  const arm = palm.clone().sub(pivot).normalize();
+  const q = new Quaternion()
+    .setFromAxisAngle(new Vector3(1, 0, 0), -0.45)
+    .multiply(new Quaternion().setFromAxisAngle(arm, (SIDE * Math.PI) / 2));
+  // The fingers (below the knuckles, y 0.49) curl towards the palm side (+Z as built) into a fist, more the further
+  // down, so they wrap round the stick, which runs across the hand just inside them.
+  const KNUCKLE = 0.49;
+  const knuckle = new Vector3(0, KNUCKLE, palm.z);
+  const curl = new Quaternion();
+  const smooth = (a: number, b: number, x: number): number => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  const v = new Vector3();
+  out.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh || !isClay(mesh)) return;
+    mesh.geometry = mesh.geometry.clone();
+    const pos = mesh.geometry.getAttribute('position') as BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      const w = armWeight(v, SIDE, axis.x);
+      if (w <= 0) continue;
+      if (SIDE * (v.x - axis.x) > 0.22 && v.y < KNUCKLE + 0.005) {
+        knuckle.x = v.x;
+        curl.setFromAxisAngle(new Vector3(1, 0, 0), -2.5 * smooth(KNUCKLE + 0.005, KNUCKLE - 0.03, v.y));
+        v.sub(knuckle).applyQuaternion(curl).add(knuckle);
+      }
+      v.lerp(v.clone().sub(pivot).applyQuaternion(q).add(pivot), w);
+      pos.setXYZ(i, v.x, v.y, v.z);
+    }
+    pos.needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+    mesh.geometry.computeBoundingSphere();
+  });
+  const grip = new Vector3(palm.x, KNUCKLE, palm.z + 0.012).sub(pivot).applyQuaternion(q).add(pivot);
+  const fingers = tips.clone().sub(palm).applyQuaternion(q).normalize();
+  const across = new Vector3(1, 0, 0).applyQuaternion(q);
+  across.addScaledVector(fingers, -across.dot(fingers)).normalize();
+  if (across.z < 0) across.negate();
+  // Tilt the stick up within the hand's plane (towards the wrist) until it rises 40°.
+  let along = across.clone();
+  for (let t = 0; t <= Math.PI / 2; t += 0.01) {
+    along = across.clone().multiplyScalar(Math.cos(t)).addScaledVector(fingers, -Math.sin(t));
+    if (along.y >= Math.sin((40 * Math.PI) / 180)) break;
+  }
+  return { posed: out, grip, along: along.normalize() };
+}
+
+/** How much a vertex of Sakasa's clay moves with the arm on `side` (shared by her arm poses). */
+function armWeight(v: Vector3, side: number, axisX: number): number {
+  const smooth = (a: number, b: number, x: number): number => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  // Whole hand down to the fingertips (y 0.45); below the hip a little further out, clear of the legs (x < 0.113).
+  const inner = 0.1 + 0.015 * (1 - smooth(0.6, 0.66, v.y));
+  return smooth(inner, inner + 0.04, side * (v.x - axisX)) * smooth(0.36, 0.4, v.y) * (1 - smooth(0.86, 0.9, v.y));
+}
+
+/** Where Sakasa's body axis stands (x, z): the middle of her waist (y 0.70–0.76, |x| < 0.1: the arms come to 0.11). */
+function bodyAxis(model: Group): { x: number; z: number } {
+  const lo = new Vector3(Infinity, 0, Infinity);
+  const hi = new Vector3(-Infinity, 0, -Infinity);
+  const p = new Vector3();
+  model.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh || !isClay(mesh)) return;
+    const pos = mesh.geometry.getAttribute('position') as BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      p.fromBufferAttribute(pos, i);
+      if (p.y < 0.7 || p.y > 0.76 || Math.abs(p.x) > 0.1) continue;
+      lo.min(p);
+      hi.max(p);
+    }
+  });
+  return Number.isFinite(lo.x) ? { x: (lo.x + hi.x) / 2, z: (lo.z + hi.z) / 2 } : { x: 0, z: 0 };
+}
+
+/** Sakasa's clay body (one baked skin texture) as against her solids (cape, collar, hat, brooch) and face decals. */
+function isClay(mesh: Mesh): boolean {
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  return materials.some((m) => m.name.endsWith(' skin'));
 }
 
 function makePlaceholder(name: string): Group {
