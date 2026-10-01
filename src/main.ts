@@ -3,7 +3,8 @@ import { Whistle } from './actions/whistle';
 import { AudioEngine } from './audio/audio';
 import { GAME_TITLE, GAME_TITLE_LINES, PARTNER_NAME } from './config';
 import { StageEventBus } from './core/stage-events';
-import { addToProgress, loadProgress, setResume, type Resume } from './core/progress';
+import { addToProgress, loadProgress, setResume, startSandbox, type Resume } from './core/progress';
+import { abilitiesTaughtBefore, kakuninMission, kakuninRunAllowed, stageBounces } from './core/kakunin';
 import { ABILITY_CARD_TITLES, ABILITY_NAMES, abilityInUse, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
 import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/loader';
@@ -74,6 +75,7 @@ import { showZukan } from './ui/zukan';
 import { loadSettings, saveSettings, VOLUME_GAIN, type Settings } from './core/settings';
 import { showSettings } from './ui/settings';
 import { showParents } from './ui/parents';
+import { createKakuninBadge, showKakuninList } from './ui/kakunin';
 import { createPause } from './ui/pause';
 import { showMap, type MapChoice, type MapFinale, type MapIsland, type MapTeaser } from './ui/map';
 import world from './world/world.json';
@@ -311,7 +313,15 @@ const SKIP_CARD_GUARD_SECONDS = 0.8;
 
 async function boot(): Promise<void> {
   const params = new URLSearchParams(location.search);
+  // The `?stage=` lock (src/core/kakunin.ts): a kid's address bar cannot open a test stage or one the save has not opened.
+  if (await stageBounces(params, loadProgress(), peekStage)) {
+    location.replace(location.pathname);
+    return;
+  }
   const stageId = params.get('stage') ?? '1-1';
+  // 「かくにん モード」: the run plays in memory only; nothing reaches the progress save.
+  const kakunin = params.get('kakunin') === '1' && kakuninRunAllowed();
+  if (kakunin) startSandbox();
 
   const [stage, physics] = await Promise.all([loadStage(stageId), PhysicsWorld.create()]);
   for (const rail of stage.file.rails) railLooks.set(rail.id, rail.look);
@@ -319,9 +329,16 @@ async function boot(): Promise<void> {
   // The hidden test course has every button, so the jump, the light, the rocket and diving can be tried there.
   // v1.11 (PR5): and the magnet light (the light button's third step), for its side way "jishaku".
   // v1.11 (PR8a): and うしろむき (the まえ／うしろ switch), for its back siding "ura".
+  // A check run starts at mission `mission=` with every ability the stage needs there (what its opening and the
+  // missions before taught, besides the save's and the stages before's).
+  const kakuninFrom = kakunin ? kakuninMission(params, stage.file.missions.length) : 0;
   const abilities = new Set<AbilityId>(
     hasMissions
-      ? [...loadProgress().abilities, ...(await inheritedAbilities(stageId))]
+      ? [
+          ...loadProgress().abilities,
+          ...(await inheritedAbilities(stageId)),
+          ...(kakunin ? abilitiesTaughtBefore(stage.file, kakuninFrom) : []),
+        ]
       : ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'magnetLight', 'reverse'],
   );
   const train = new Train(stage.network, stage.file.junctions, stage.file.start, {
@@ -569,6 +586,7 @@ async function boot(): Promise<void> {
   });
   const showAbility = (ability: AbilityId): void => {
     abilities.add(ability);
+    app.dataset.abilities = [...abilities].sort().join(',');
     if (ability === 'jump') jumpButton.show();
     if (ability === 'dive') {
       dive.enabled = true;
@@ -1224,6 +1242,16 @@ async function boot(): Promise<void> {
     ? (await import('./debug')).installDebug({ train, whistle, audio, view, network: stage.network, uiRoot: uiEl })
     : null;
 
+  // The small 「かくにん」 mark while a check run goes on; a tap opens the stage list over the game (held still).
+  if (kakunin) {
+    app.dataset.kakunin = '1';
+    createKakuninBadge(uiEl, () => {
+      const was = paused;
+      paused = true;
+      showKakuninList(uiEl, { open: stageId, onClose: () => (paused = was) });
+    });
+  }
+
   // The title shows the stage behind it, the camera circling the train at its start (PHASE7_FINISH §4 item 6).
   const titleShown = hasMissions && !params.has('go');
   if (titleShown) {
@@ -1684,8 +1712,9 @@ async function boot(): Promise<void> {
   const progress = loadProgress();
   const next = await nextStage(progress.cleared);
   // "つづきから" (PHASE7_FINISH §4 item 3): a mission to go on from wins over the next stage.
-  const resume = await savedResume();
-  let resumeFrom = params.get('resume') === '1' && resume?.stage === stageId ? resume.mission : 0;
+  // A check run never goes on from the save's place: it starts at `mission=`.
+  const resume = kakunin ? null : await savedResume();
+  let resumeFrom = kakunin ? kakuninFrom : params.get('resume') === '1' && resume?.stage === stageId ? resume.mission : 0;
   if (titleShown) {
     // The title's music box (it starts with the first tap: iPad keeps sound locked until then).
     audio.playMusic('title');
@@ -2113,7 +2142,13 @@ async function boot(): Promise<void> {
       paused = p;
       audio.setMusicPaused(p);
     },
+    mapLabel: kakunin ? 'かくにんの いちらん' : undefined,
     onMap: async () => {
+      if (kakunin) {
+        // The check mode has no map to go back to: the stage list.
+        await new Promise<void>((resolve) => showKakuninList(uiEl, { open: stageId, onClose: resolve }));
+        return;
+      }
       const choice = await openMap(uiEl, audio, { next: next?.id, closeLabel: 'もどる' });
       if (choice.kind === 'stage') goToStage(choice.id, choice.resume);
     },
@@ -2137,6 +2172,12 @@ async function boot(): Promise<void> {
   }
   await runner.run(resumeFrom);
   pause.hide();
+  if (kakunin) {
+    // After the clear card: back to the stage list (this stage opened), not the map. Nothing was saved.
+    audio.playMusic('title');
+    showKakuninList(uiEl, { open: stage.file.id, onClose: () => (location.href = location.pathname) });
+    return;
+  }
   addToProgress('cleared', [stage.file.id]);
   if (loadProgress().resume?.stage === stage.file.id) setResume(null);
   addToProgress('abilities', stage.file.unlocks);

@@ -2569,6 +2569,268 @@ body {
   margin-bottom: 14px;
 }
 
+/* ---- 「かくにん モード」 (src/ui/kakunin.ts): the number pad, the stage list and the small mark during a check run ---- */
+.overlay.kakunin {
+  z-index: 40;
+  background: #f6f3ea;
+  color: var(--ink);
+  justify-content: flex-start;
+  gap: 12px;
+  padding: calc(var(--safe-top) + 20px) calc(var(--safe-right) + 20px) calc(var(--safe-bottom) + 20px) calc(var(--safe-left) + 20px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.overlay.kakunin h1 {
+  font-size: 30px;
+}
+
+.overlay.kakunin .kakunin-note {
+  font-size: 16px;
+  line-height: 1.6;
+  color: #55616f;
+}
+
+/* A way out stays in the top corner, whatever the scroll. */
+.kakunin-close {
+  position: fixed;
+  top: calc(var(--safe-top) + 14px);
+  right: calc(var(--safe-right) + 16px);
+  z-index: 1;
+  min-height: 48px;
+  margin: 0;
+  background: #fff;
+}
+
+.kakunin-pad-overlay {
+  align-items: center;
+}
+
+.kakunin-pad-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: auto 0;
+}
+
+.kakunin-pad-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.kakunin-dots {
+  display: flex;
+  gap: 18px;
+  padding: 6px 0;
+}
+
+.kakunin-dot {
+  width: 22px;
+  height: 22px;
+  border: 3px solid #3fa7d6;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.kakunin-dot.is-filled {
+  background: #3fa7d6;
+}
+
+.kakunin-dots.is-shaking {
+  animation: kakunin-shake 0.45s ease-in-out;
+}
+
+@keyframes kakunin-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-10px);
+  }
+  40% {
+    transform: translateX(9px);
+  }
+  60% {
+    transform: translateX(-6px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+.overlay.kakunin .kakunin-message {
+  min-height: 1.6em;
+  margin: 0;
+  color: #b3401f;
+}
+
+/* Big keys (an iPad has no keyboard here); on a short phone they shrink with the height. */
+.kakunin-keys {
+  --key: min(88px, 12.5vh);
+  display: grid;
+  grid-template-columns: repeat(3, var(--key));
+  gap: calc(var(--key) / 6);
+  touch-action: manipulation;
+}
+
+.kakunin-key {
+  height: var(--key);
+  border: 2px solid #3fa7d6;
+  border-radius: 18px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: calc(var(--key) * 0.42);
+  font-weight: 700;
+  touch-action: manipulation;
+}
+
+.kakunin-key.is-small {
+  font-size: calc(var(--key) * 0.24);
+  color: #55616f;
+}
+
+.kakunin-key:active {
+  background: #dbe9f7;
+}
+
+/* A short landscape screen (a phone): the head on the left, the keys on the right, all in view. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .kakunin-pad-panel {
+    flex-direction: row;
+    gap: 28px;
+  }
+
+  .overlay.kakunin h1 {
+    font-size: 24px;
+  }
+
+  .kakunin-keys {
+    --key: min(64px, 17vh);
+  }
+
+  /* The keys are on the right here: the way out goes to the other corner. */
+  .kakunin-pad-overlay .kakunin-close {
+    right: auto;
+    left: calc(var(--safe-left) + 16px);
+  }
+}
+
+.kakunin-inner {
+  width: min(760px, 100%);
+  text-align: left;
+}
+
+.kakunin-inner h1 {
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.kakunin-chapter {
+  margin: 14px 0;
+  padding: 12px 14px 14px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.kakunin-chapter h2 {
+  margin: 0 0 8px;
+  font-size: 19px;
+}
+
+.kakunin-stage-row {
+  margin: 6px 0;
+}
+
+.kakunin-stage {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 16px;
+  border: 2px solid #c8cfd8;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.kakunin-stage:disabled {
+  color: #9aa4af;
+  background: #f1f3f5;
+}
+
+.kakunin-stage-row.is-open > .kakunin-stage {
+  border-color: #3fa7d6;
+  background: #eef6fc;
+}
+
+.kakunin-stage-id {
+  min-width: 2.6em;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.kakunin-missions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 4px 18px;
+}
+
+.kakunin-mission {
+  min-height: 52px;
+  padding: 8px 16px;
+  border: 2px solid #3fa7d6;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.kakunin-mission.is-first {
+  background: #ffe9b5;
+  border-color: #ff9f1c;
+}
+
+.kakunin-mission:active {
+  background: #dbe9f7;
+}
+
+/* Small and quiet, bottom centre: clear of the lever, the round buttons, the corner buttons and the cargo strip
+   (a bubble sits higher, left of the buttons), also with the layout swapped. */
+.kakunin-badge {
+  position: absolute;
+  bottom: calc(var(--safe-bottom) + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 2px 12px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(31, 42, 68, 0.55);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  opacity: 0.8;
+  touch-action: manipulation;
+}
+
 /* ---- left-handed layout ("レバーの ばしょ: みぎ"): everything thumb-driven swaps sides ---- */
 #app.is-left-handed .lever {
   left: auto;

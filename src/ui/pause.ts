@@ -8,6 +8,8 @@ export interface PauseHandlers {
   onPause(paused: boolean): void;
   /** "ちずに もどる": resolves when the map was closed again (the menu comes back). */
   onMap(): Promise<void>;
+  /** The label of the map button (the check mode's: "かくにんの いちらん"). */
+  mapLabel?: string;
 }
 
 const ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg>`;
@@ -42,7 +44,7 @@ export function createPause(root: HTMLElement, handlers: PauseHandlers): PauseCo
     map.type = 'button';
     map.id = 'pause-map';
     map.className = 'big-button is-secondary';
-    map.textContent = 'ちずに もどる';
+    map.textContent = handlers.mapLabel ?? 'ちずに もどる';
     map.addEventListener('click', () => {
       el.hidden = true;
       void handlers.onMap().then(() => {

@@ -8,6 +8,8 @@ import {
   storagePersisted,
   type PasscodeError,
 } from '../core/progress';
+import { forgetKakunin, kakuninUnlocked } from '../core/kakunin';
+import { showKakuninList, showKakuninPad } from './kakunin';
 
 export interface ParentsOptions {
   /** The build id shown at the bottom (the title's "build …"). */
@@ -170,6 +172,52 @@ export function showParents(root: HTMLElement, options: ParentsOptions): void {
     });
   });
   erase.appendChild(eraseButton);
+
+  // かくにん モード: every stage and mission, played in a sandbox (nothing is saved). Behind a 4-digit number; once it
+  // was right the device remembers it until 「やめる」.
+  const kakunin = section(
+    'かくにん モード',
+    'ゲームを 作る人・確かめる人 向けです。すべてのステージを、好きなミッションから 試せます。遊んだ記録は 変わりません。',
+    '使うには 4けたの 番号が 必要です。',
+  );
+  const kakuninState = document.createElement('p');
+  kakuninState.id = 'parents-kakunin-state';
+  kakuninState.className = 'parents-note';
+  const kakuninOpen = document.createElement('button');
+  kakuninOpen.type = 'button';
+  kakuninOpen.id = 'parents-kakunin';
+  kakuninOpen.className = 'parents-button';
+  kakuninOpen.textContent = 'かくにん モード';
+  const kakuninOff = document.createElement('button');
+  kakuninOff.type = 'button';
+  kakuninOff.id = 'parents-kakunin-off';
+  kakuninOff.className = 'parents-button is-danger';
+  kakuninOff.textContent = 'かくにん モードを やめる';
+  const drawKakunin = (): void => {
+    const on = kakuninUnlocked();
+    kakuninOff.hidden = !on;
+    kakuninState.textContent = on ? 'この端末では 番号なしで 使えます。' : '';
+  };
+  const openKakuninList = (): void => showKakuninList(root, { onClose: () => undefined });
+  kakuninOpen.addEventListener('click', () => {
+    if (kakuninUnlocked()) openKakuninList();
+    else
+      showKakuninPad(root, {
+        onOk: () => {
+          drawKakunin();
+          openKakuninList();
+        },
+        onClose: () => undefined,
+      });
+  });
+  kakuninOff.addEventListener('click', () => {
+    confirm(el, 'かくにん モードを やめますか？\nまた 使うときは、番号を 入れます。', 'やめる', () => {
+      forgetKakunin();
+      drawKakunin();
+    });
+  });
+  drawKakunin();
+  kakunin.append(kakuninOpen, kakuninOff, kakuninState);
 
   const build = document.createElement('p');
   build.id = 'parents-build';
