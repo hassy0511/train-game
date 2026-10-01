@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import type { RailDef, StageFile, Vec3 } from '../stage/types';
 import { Rail } from './rail';
-import type { RailNetwork } from './types';
+import type { RailNetwork, RailPoint } from './types';
 
 const JOIN_TOLERANCE = 0.5;
 const PHANTOM_DISTANCE = 8;
@@ -76,8 +76,23 @@ export function buildRailNetwork(file: StageFile): RailNetwork {
     rails.set(def.id, makeRail(def, leadIn, leadOut));
   }
 
+  // v1.11: where each rail comes from (the consist's trail traces back through these, 第 3 部 A5.2).
+  const feeders = new Map<string, RailPoint>();
+  const mergers = new Map<string, RailPoint[]>();
+  for (const def of file.rails) {
+    const feeder = file.junctions.find((j) => j.railId !== def.id && (j.left === def.id || j.right === def.id));
+    if (feeder) feeders.set(def.id, { railId: feeder.railId, at: feeder.at });
+    if (def.end.type === 'merge') {
+      const list = mergers.get(def.end.railId) ?? [];
+      list.push({ railId: def.id, at: def.end.at });
+      mergers.set(def.end.railId, list);
+    }
+  }
+
   return {
     rails,
+    feeder: (id) => feeders.get(id) ?? null,
+    mergesInto: (id) => mergers.get(id) ?? [],
     getRail(id: string): Rail {
       const rail = rails.get(id);
       if (!rail) throw new Error(`Unknown rail "${id}"`);

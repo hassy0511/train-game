@@ -1,0 +1,15 @@
+{
+  "_expect": "runs over a gap",
+  "_base": "0-6",
+  "_edit": [
+    {
+      "path": "rails.0.gaps",
+      "value": [
+        {
+          "from": 150,
+          "to": 156
+        }
+      ]
+    }
+  ]
+}

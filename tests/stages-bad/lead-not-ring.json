@@ -1,0 +1,12 @@
+{
+  "_expect": "must be a ring",
+  "_base": "0-6",
+  "_edit": [
+    {
+      "path": "missions.0.junctions.t-wakare",
+      "value": {
+        "default": "left"
+      }
+    }
+  ]
+}

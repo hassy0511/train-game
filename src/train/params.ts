@@ -17,6 +17,59 @@ export const TRAIN = {
 } as const;
 
 /**
+ * v1.11 (PR7, PHASE9_CHAPTER5_6 第 3 部 A5): the trail the train has come along (src/train/consist.ts). Each car sits
+ * `TRAIN.carSpacing × i` m behind the lead car centre along it, on the right rail also across a junction or a merge.
+ * `back`: how far behind the lead car centre a fresh trail (the start, a rewind) is traced through the rails (the tail
+ * end, 31 m, plus 2 m). `max`: the longest it gets (older pieces are dropped).
+ */
+export const TRAIL = { back: 33, max: 2000 } as const;
+
+/**
+ * v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A4, PHASE9_0 §5): "うしろむき". The switch beside the lever turns the train
+ * round when it stands (`turnSeconds`); pressed while moving it first brakes to a stop at `switchBrake` (a second press
+ * cancels). Reversing, any running notch asks for `maxSpeed` (accel `accel`, brake `brake`), and the train retraces its
+ * trail. It stops gently (the last `creepBefore` m at `creepSpeed`) where its rear end reaches a stop point: `gapStop` m
+ * before a gap or a stretch it flew or dived through, `bufferGap` m before a siding's buffer, exactly at the trail's
+ * floor (the last station passed, the stage start, the rewind point, or TRAIL.max m back). A back junction shows arrows
+ * `arrowDistance` m before (locked `lockDistance` m before); the switch glows for `glowAfter` m past one worth it.
+ * `nudgeSeconds`: reversed with the lever at "とまる" this long, the partner says to raise it. `stopLineEvery`: past a
+ * station and standing, "うしろで もどって" again this often. Sidings are `spurMin`–`spurMax` m long; at the mouth the
+ * siding's end and the rail's +s differ by `mouthAngleMax`° at most; the mouth keeps `mouthBefore` m before and
+ * `mouthAfter` m after it clear, `mouthStation` m from a stop line, `mouthPortal` m from a portal. An overshot station
+ * stays to back up to until `overshootGiveUp` m past. The rear window camera is `rearCamOut` m behind the rear end. A
+ * jump reversing is a hop of `hopHeight` m for `hopSeconds` s.
+ */
+export const REVERSE = {
+  maxSpeed: 5,
+  accel: 1.5,
+  brake: 3,
+  switchBrake: 3,
+  turnSeconds: 0.5,
+  creepBefore: 2,
+  creepSpeed: 0.5,
+  gapStop: 1.0,
+  bufferGap: 0.5,
+  arrowDistance: 40,
+  lockDistance: 5,
+  glowAfter: 80,
+  nudgeSeconds: 6,
+  stopLineEvery: 20,
+  spurMin: 46,
+  spurMax: 150,
+  mouthAngleMax: 30,
+  mouthBefore: 40,
+  mouthAfter: 60,
+  mouthStation: 40,
+  mouthPortal: 80,
+  overshootGiveUp: 60,
+  rearCamOut: 0.3,
+  hopHeight: 0.3,
+  hopSeconds: 0.35,
+  /** The rear end of the train, back from the lead car centre (m): half a car and two spacings. */
+  tail: 6 + 12.5 * 2,
+} as const;
+
+/**
  * Master controller notches, bottom to top. `speed` is the target (m/s); `brake` is the
  * deceleration used while the lever sits on that notch and the train is faster than the target.
  */
@@ -383,12 +436,14 @@ export const PLOW = {
 } as const;
 
 /** v1.10: floaters by look: default length along the rail (m) and how deep they reach under the surface (m). */
-export const FLOATER: Record<'log' | 'raft' | 'lily' | 'wave' | 'ice', { length: number; draft: number }> = {
+export const FLOATER: Record<'log' | 'raft' | 'lily' | 'wave' | 'ice' | 'umbrella', { length: number; draft: number }> = {
   log: { length: 2.4, draft: 0.6 },
   raft: { length: 6, draft: 0.5 },
   lily: { length: 4, draft: 0.2 },
   wave: { length: 5, draft: 0.8 },
   ice: { length: 4, draft: 0.7 },
+  // v1.11 (6-1): an upside-down umbrella boat (さかさの かさの ふね).
+  umbrella: { length: 4, draft: 0.4 },
 };
 
 /**
@@ -675,3 +730,35 @@ export const PARADE = {
  * the other side it waits on the good side.
  */
 export const SPIN = { range: 120, stay: 4, turn: 1, minGlow: 12, lockAt: 5, holdAfter: 40, mercy: 1 } as const;
+
+/**
+ * v1.11 (6-1, PHASE9_CHAPTER5_6 第 7 部 §4.7): the lead ("おいかけっこ"). Someone runs `keep` m ahead of the train front
+ * along its route, `lateral` m aside, aiming at train speed + `follow` × (target − gap) (0..`speedMax`, `accel`), never
+ * nearer than `min`. A whistle while teasing is a call: a `dashSeconds` dash to `dash` m. After `calls` calls the train
+ * is braked to a stop (`learnBrake`) and the step's `learn` cutscene plays (the partner works it out; "reverse" is
+ * learned). Then the runner waits; once the train reverses it turns round and follows to `followGap` m, and after
+ * `followBack` m reversed (or `metStandSeconds` s standing) it stops `metGap` m ahead and the station opens. Helpers: an
+ * automatic call after `autoCallAfter` s, reminders every `remindEvery` s and the runner coming back by itself after
+ * `autoFollowAfter` s (at `followSpeed` m/s, twice that while further than `followGap`; seconds counted while driving
+ * or standing). `iconLead`: it starts to run
+ * this long after a call's picture shows ("hand-stop"), as if it saw it.
+ */
+export const LEAD = {
+  keep: 45, min: 25, dash: 90, dashSeconds: 3, follow: 0.6, speedMax: 32, accel: 8, learnBrake: 3,
+  promptAfter: 4, runLineAfter: 1, againAfter: 3, autoCallAfter: 20, remindEvery: 12, autoFollowAfter: 45,
+  followGap: 25, metGap: 12, followBack: 20, metStandSeconds: 3, followSpeed: 3, turnSeconds: 0.4,
+  goneBehind: 30, lateral: -6, openMargin: 10, hopSeconds: 0.45, iconLead: 0.3, maxPath: 2000,
+} as const;
+/** v1.11 (6-1): waiting with the door open. Beats in seconds; a whistle sends the guest one beat back and pauses. */
+export const WELCOME = {
+  beats: { look: 2, stand: 2, walk: 3, peek: 2, board: 1.5 }, flinchPause: 2, maxFlinches: 2, calmAfter: 3,
+  boardBy: 30, rushBeatSeconds: 1, giggleSeconds: 0.4, closeAfter: 1.0,
+  musicGain: 0.3, doorBack: 30.5, doorLateral: 2.8, walkStop: 2, stepSound: 0.5, askFlinch: 2, platformHeight: 1,
+} as const;
+/** v1.11 (6-1): a cutscene "depart" roll (m/s; m/s² to start and to stop). */
+export const DEPART = { maxSpeed: 8, accel: 1.5, brake: 2 } as const;
+/**
+ * v1.11 (6-1): environment.landmark, the faraway castle's shadow beyond the fog: shown further than `near` m, fading
+ * out over `fade` m nearer than that.
+ */
+export const LANDMARK = { near: 600, fade: 100 } as const;

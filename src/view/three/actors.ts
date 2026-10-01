@@ -177,7 +177,8 @@ interface StationFrame {
 }
 
 function stationFrame(station: ResolvedStation): StationFrame {
-  const sideSign = station.def.platformSide === 'right' ? -1 : 1;
+  // v1.11 (PR8a): a reverse platform's frame faces −s, but its platformSide is along +s.
+  const sideSign = (station.def.platformSide === 'right' ? -1 : 1) * (station.def.reverse ? -1 : 1);
   return {
     station,
     side: new Vector3(sideSign, 0, 0).applyQuaternion(station.quaternion),
@@ -372,7 +373,7 @@ export class ActorLayer {
 
     const signQuaternion = station.quaternion
       .clone()
-      .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), station.def.platformSide === 'left' ? -Math.PI / 2 : Math.PI / 2));
+      .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), (station.def.platformSide === 'left') !== !!station.def.reverse ? -Math.PI / 2 : Math.PI / 2));
     placements.push({
       model: 'station-sign',
       position: station.position
@@ -520,7 +521,7 @@ export class ActorLayer {
 
   private orientPassenger(passenger: Object3D, frame: StationFrame): void {
     passenger.quaternion.copy(frame.station.quaternion);
-    passenger.rotateY(frame.station.def.platformSide === 'left' ? -Math.PI / 2 : Math.PI / 2);
+    passenger.rotateY((frame.station.def.platformSide === 'left') !== !!frame.station.def.reverse ? -Math.PI / 2 : Math.PI / 2);
   }
 
   private removePassenger(passenger: Object3D): void {

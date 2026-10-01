@@ -14,7 +14,7 @@
  *      the big mirror (the mirror Sakasa: "ほんとうは のりたい"; Sakasa turns the mirror over, never breaks it; the notes
  *      held up to a mirror read "のせて").
  *   Record ③ waits behind a glass side way `ura` (its backwards fork comes with PR9, 第 3 部 A12.3): PR6b lays the side
- *   way (it merges into main at 3250), the record and a buffer stop (a prop; PR8a takes it away again, §0.9 の 22).
+ *   way (it merges into main at 3250) and the record; its buffer stop is the rail mesh's (PR8a, §0.9 の 22).
  *
  *   node scripts/layout-5-3.mjs         write src/stages/5-3.json and print the checks
  *   node scripts/layout-5-3.mjs --dry   print the checks only
@@ -519,9 +519,8 @@ addOnRail('cloud-a', 'main', (GAP.from + GAP.to) / 2, { height: -7 });
 addOnRail('cloud-b', 'main', GAP.from - 8, { lateral: 6, height: -9 });
 // The platform's little mirror at おおかがみえき (the ending's scene 3).
 addOnRail('mirror-stand-small', 'main', STAND.at, { lateral: STAND.lateral, height: STAND.height });
-// The glass side way's end stop (§0.9 の 22: a prop until PR8a, whose rail-mesh.ts draws it; PR8a takes this one away).
-// The mirror world's own lavender cushion (as at the false ways' ends): a buffer stop is drawn only by the rail mesh.
-addOnRail('mirror-cushion', 'ura', 0, { rotationY: 180 });
+// The glass side way's end stop: since PR8a rail-mesh.ts draws a buffer at the start of a rail that joins nothing
+// (§0.9 の 22), so no prop here any more.
 
 /** The lavender mirror lake under the glass bridge. */
 const lake = [];

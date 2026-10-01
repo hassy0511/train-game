@@ -20,6 +20,7 @@ import type { StageData } from '../../stage/types';
 import { TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
 import type { CameraFx, SceneView } from '../SceneView';
+import { startsNowhere } from '../three/rail-mesh';
 import { cameraTarget, makeCameraTarget, smoothCamera, type CameraMode } from '../camera-rig';
 
 const RAIL_HALF_GAUGE = 0.75;
@@ -168,6 +169,15 @@ export class WireSceneView implements SceneView {
       const stop = new Mesh(new BoxGeometry(w, h, d), new MeshBasicMaterial({ color: 0xd64545, wireframe: true }));
       stop.position.copy(f.position).addScaledVector(f.up, h / 2);
       stop.lookAt(stop.position.clone().add(f.tangent));
+      group.add(stop);
+    }
+    // v1.11 (PR8a): a rail starting nowhere (a back siding) has its buffer at its start, facing −s (as rail-mesh.ts).
+    if (this.network && startsNowhere(this.network, rail.id) && rail.id !== this.stage?.file.start.railId) {
+      const f = rail.frameAt(0);
+      const [w, h, d] = boxFor('buffer-stop');
+      const stop = new Mesh(new BoxGeometry(w, h, d), new MeshBasicMaterial({ color: 0xd64545, wireframe: true }));
+      stop.position.copy(f.position).addScaledVector(f.up, h / 2);
+      stop.lookAt(stop.position.clone().sub(f.tangent));
       group.add(stop);
     }
     return group;

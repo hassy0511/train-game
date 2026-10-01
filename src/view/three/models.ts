@@ -15,6 +15,7 @@ import { buildSnowPlaceholder } from './snow-placeholders';
 import { buildToyPlaceholder } from './toy-placeholders';
 import { buildMagnetPlaceholder } from './magnet-placeholders';
 import { buildMirrorPlaceholder } from './mirror-placeholders';
+import { buildReversePlaceholder } from './reverse-placeholders';
 import { buildVolcanoPlaceholder } from './volcano-placeholders';
 
 const PLACEHOLDER_COLORS: Record<string, number> = {
@@ -71,6 +72,14 @@ export class ModelLibrary {
       return posed;
     }
 
+    // v1.11 (6-1, PR8b): Sakasa sitting (the bench, the friends' seat behind the driver), posed from the built amanojaku
+    // until ticket 0021 builds it.
+    if (name === 'amanojaku-sit' && !this.available.has(name)) {
+      const sat = this.load('amanojaku').then(sitAmanojaku);
+      this.cache.set(name, sat);
+      return sat;
+    }
+
     // Models that are not built yet (pending Blender tickets) get a flat box of the right size,
     // so stages stay playable and no 404 requests are made.
     if (!this.available.has(name)) {
@@ -89,6 +98,7 @@ export class ModelLibrary {
         buildToyPlaceholder(name) ??
         buildMagnetPlaceholder(name) ??
         buildMirrorPlaceholder(name) ??
+        buildReversePlaceholder(name) ??
         buildRecordPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(drawn ?? makePlaceholder(name));
@@ -185,6 +195,49 @@ function poseAmanojaku(model: Group, name: 'amanojaku-wave' | 'amanojaku-shy'): 
         }
       }
       pos.setXYZ(i, at.x, at.y, at.z);
+    }
+    pos.needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+    mesh.geometry.computeBoundingSphere();
+  });
+  return out;
+}
+
+/**
+ * v1.11 (6-1): "amanojaku-sit": Sakasa sitting, posed without bones from the built amanojaku (one clay mesh): the legs
+ * (below the hip, in front of the cape) turn forward about the hip, what hangs behind (the cape's hem) gathers at the
+ * seat, and the whole figure comes down so the seat (her bottom) is the origin. Model metres (assets/blender/amanojaku.py):
+ * the hip at y 0.44. About 1.0 m tall sitting, legs 0.4 m out in front (+Z).
+ */
+function sitAmanojaku(model: Group): Group {
+  const out = model.clone(true);
+  out.name = 'amanojaku-sit';
+  const HIP = 0.44;
+  const smooth = (a: number, b: number, x: number): number => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  const q = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2);
+  const pivot = new Vector3(0, HIP, 0.02);
+  const v = new Vector3();
+  out.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    mesh.geometry = mesh.geometry.clone();
+    const pos = mesh.geometry.getAttribute('position') as BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      const below = 1 - smooth(HIP - 0.04, HIP + 0.02, v.y);
+      if (below > 0) {
+        const front = smooth(-0.06, -0.01, v.z);
+        if (front > 0) {
+          const turned = v.clone().sub(pivot).applyQuaternion(q).add(pivot);
+          v.lerp(turned, below * front);
+        }
+        // What hangs behind gathers under her at the seat.
+        if (front < 1) v.y = v.y + (HIP + (v.y - HIP) * 0.08 - v.y) * below * (1 - front);
+      }
+      pos.setXYZ(i, v.x, v.y - HIP, v.z);
     }
     pos.needsUpdate = true;
     mesh.geometry.computeVertexNormals();

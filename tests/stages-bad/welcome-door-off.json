@@ -1,0 +1,14 @@
+{
+  "_expect": "27–34 m behind",
+  "_base": "0-6",
+  "_edit": [
+    {
+      "path": "missions.1.steps.0.welcome.door",
+      "value": {
+        "railId": "t-shima",
+        "at": 90,
+        "lateral": -2.8
+      }
+    }
+  ]
+}

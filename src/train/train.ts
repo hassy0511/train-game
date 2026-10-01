@@ -1,12 +1,13 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { Emitter } from '../core/events';
 import type { Rail, RailNetwork } from '../rail/types';
-import type { FloaterDef, GapDef, JunctionDef, PlowSpan, StartDef, WaterDef, WaterSpan } from '../stage/types';
+import type { FloaterDef, GapDef, JunctionDef, MissionJunctionRule, PlowSpan, StartDef, WaterDef, WaterSpan } from '../stage/types';
 import { spanAt } from '../stage/water';
 import {
   ACCELERATION,
   BRAKING,
   BUFFER_MARGIN,
+  DEPART,
   DIVE,
   EMERGENCY_STOP_SECONDS,
   FALL,
@@ -21,6 +22,7 @@ import {
   LEVER_NOTCHES,
   MIRROR_WORLD,
   PARADE,
+  REVERSE,
   ROCKET,
   SLOPE,
   SPEED_NOTCHES,
@@ -28,6 +30,7 @@ import {
   TRAIN,
 } from './params';
 import type { TrainPose, TrainState } from './types';
+import { Trail, type ReverseStop } from './consist';
 
 export type JunctionSide = 'left' | 'right';
 
@@ -50,6 +53,8 @@ export interface JunctionApproach {
   left: boolean;
   right: boolean;
   default: JunctionSide;
+  /** v1.11 (6-1): the mission's own default for it (`missions[].junctions`): chosen and glowing from the start. */
+  preset?: JunctionSide;
 }
 
 export interface TrainEvents extends Record<string, unknown> {
@@ -104,7 +109,29 @@ export interface TrainEvents extends Record<string, unknown> {
   magnetBounce: { railId: string; s: number; id: string; kind: TrainBlock['kind'] };
   /** v1.11 (5-3): "ぽよん" off a shut mirror gate (block `id`); `airborne`: it was in the air (the jump ends there). */
   mirrorBump: { id: string; railId: string; s: number; airborne: boolean };
+  /**
+   * v1.11 (PR8a, うしろむき): the switch was pressed while moving: the train brakes to a stop first (`on`), or that was
+   * cancelled / done (`on` false).
+   */
+  switchPending: { on: boolean };
+  /** v1.11 (PR8a): the train turned round ("ぐるりん", REVERSE.turnSeconds): now reversing (`reverseOn`) or forward again. */
+  reverseOn: { instant: boolean };
+  /** `instant`: put forward by a rewind (no "ぐるりん"). */
+  reverseOff: { instant: boolean };
+  /** v1.11 (PR8a): reversing, it came to rest at a stop point ("おっとっと", A6). */
+  reverseStop: { why: ReverseStop; railId: string; s: number };
+  /** v1.11 (PR8a): reversing, the rear end nears a back junction: its arrows (sides as seen from the rear window). */
+  backArrows: JunctionApproach;
+  backLocked: void;
+  backPassed: void;
+  /** v1.11 (PR8a): reversing, the rear end went into back junction `junction`'s siding. */
+  backSiding: { junction: JunctionDef };
+  /** v1.11 (PR8a): a jump pressed while reversing: a little hop where it is ("ぴょこっ"). */
+  hopped: void;
 }
+
+/** v1.11 (PR8a): what a press of the まえ／うしろ switch did. */
+export type SwitchResult = 'turned' | 'pending' | 'cancelled' | 'locked';
 
 /**
  * v1.11 (PR5, PHASE9_CHAPTER5_6 第 2 部 M6): one cap on the lever's target speed. `scale` multiplies it; `max` (m/s)
@@ -128,13 +155,12 @@ export type PlowResult = 'ok' | 'on' | 'play' | 'locked';
 export type DiveResult = 'ok' | 'bob' | 'diving' | 'cooldown' | 'air' | 'locked';
 
 /**
- * v1.10: a dive, a jump arc upside down: bogies between `from` and `from + length` on `railId` go down, `depth` m in
- * the middle. `baseY` is the rail top where it started: where the rail itself goes down (into the water), that much
- * of the lowering is the rail's. Held (the train went on under water), from `holdAt` on it stays `holdDepth` deep
- * until the rail is deeper.
+ * v1.10: a dive, a jump arc upside down: bogies between `from` and `from + length` go down, `depth` m in the middle.
+ * `baseY` is the rail top where it started: where the rail itself goes down (into the water), that much of the
+ * lowering is the rail's. Held (the train went on under water), from `holdAt` on it stays `holdDepth` deep until the
+ * rail is deeper. v1.11 (PR7): `from` and `holdAt` are trail distances (Trail), not rail positions.
  */
 interface DiveArc {
-  railId: string;
   from: number;
   length: number;
   depth: number;
@@ -143,7 +169,7 @@ interface DiveArc {
   holdDepth: number;
 }
 
-/** Lowering (m) of a dive arc at bogie position `s` (the rail's own drop not taken off). */
+/** Lowering (m) of a dive arc at bogie trail distance `s` (the rail's own drop not taken off). */
 function diveDepth(arc: DiveArc, s: number): number {
   if (arc.holdAt !== null && s >= arc.holdAt) return arc.holdDepth;
   const u = (s - arc.from) / arc.length;
@@ -166,20 +192,25 @@ export interface SlopeUnder {
 }
 
 /** "busy" (PHASE9_0 §3): diving, under water or digging in on land (the jump waits). */
-export type JumpResult = 'ok' | 'stopped' | 'cooldown' | 'air' | 'locked' | 'bough' | 'busy';
+export type JumpResult = 'ok' | 'stopped' | 'cooldown' | 'air' | 'locked' | 'bough' | 'busy' | 'hop';
 
-/** A jump arc in space: bogies between `from` and `from + length` on `railId` are lifted. */
+/**
+ * A jump arc in space: bogies between `from` and `from + length` are lifted. v1.11 (PR7): trail distances (Trail), so
+ * every car rides it where the lead car did, also past a junction or a merge.
+ */
 interface JumpArc {
-  railId: string;
   from: number;
   length: number;
   height: number;
 }
 
+/** v1.11 (PR7): spacing (m) of the lead car's heights kept for Train.carLiftErr. */
+const LIFT_STEP = 0.25;
+
 /** Share of the arc's slope the car body shows while in the air (0 = stays level). */
 const JUMP_PITCH = 0.3;
 
-/** Height (m) of an arc at bogie position `s`; 0 outside it. */
+/** Height (m) of an arc at bogie trail distance `s`; 0 outside it. */
 function arcHeight(arc: JumpArc, s: number): number {
   const u = (s - arc.from) / arc.length;
   if (u <= 0 || u >= 1) return 0;
@@ -294,6 +325,41 @@ export class Train {
   private blockBump: { t: number; from: number; id: string } | null = null;
   /** v1.11 (5-3): mirror blocks bumped this try: held before them until they are gone. */
   private readonly held = new Set<string>();
+  /** v1.11 (6-1): the mission's own junction rules (lock a side, or preset the default), by junction id. */
+  private junctionRules: Record<string, MissionJunctionRule> | null = null;
+  /** v1.11 (6-1): a cutscene's roll ("depart") going on: where to, since when, and who waits for its end. */
+  private departing: { railId: string; to: number; t: number; limit: number; resolve: () => void } | null = null;
+
+  /** v1.11 (PR7): the way the train has come (every car is placed along it). */
+  readonly trail: Trail;
+  /** v1.11 (PR8a): the back junctions (switchbacks: only reversing; the loader keeps them apart from the forward ones). */
+  private backJunctions: JunctionDef[] = [];
+  /** v1.11 (PR8a): the switch was pressed while moving: the direction to take once stopped. */
+  private switchWant: 1 | -1 | null = null;
+  /** v1.11 (PR8a): seconds into turning round (−1: not turning). */
+  private turnT = -1;
+  /** v1.11 (PR8a): seconds into a hop while reversing (−1: none). */
+  private hopT = -1;
+  /** v1.11 (PR8a): the stop lines the trail's floor moves up to (every station). */
+  private stationLines: { railId: string; at: number }[] = [];
+  /** v1.11 (PR8a): the back junction whose arrows show (reversing), its point's trail distance and the side chosen. */
+  private backAhead: { junction: JunctionDef; x: number; choice: JunctionSide | null; locked: boolean } | null = null;
+  /** v1.11 (PR8a): the side a mission picks at a back junction before its arrows show (missions[].junctions, 6-2). */
+  private readonly backPreferred = new Map<string, JunctionSide>();
+  /** v1.11 (PR8a): reversing, standing at a stop point now (its "おっとっと" came), and why the last one stopped it. */
+  private atStop = false;
+  lastReverseStop: ReverseStop | null = null;
+  /** v1.11 (PR8a): the lead bogie's trail distance last frame (for the flown and dived marks). */
+  private markFrom: number | null = null;
+  /**
+   * v1.11 (PR7): the lead car's height at trail distances it passed (the last 60 m or so), to see the cars behind ride
+   * the same heights there (carLiftErr, the test hook data-car-lift-err).
+   */
+  private readonly liftTrack: { x: number; y: number }[] = [];
+  private liftErr = 0;
+  private readonly liftPos = new Vector3();
+  private readonly liftQuat = new Quaternion();
+  private gap: number = TRAIN.carSpacing;
 
   private readonly pose: TrainPose;
   private readonly front = new Vector3();
@@ -322,10 +388,34 @@ export class Train {
       position: new Vector3(),
       quaternion: new Quaternion(),
       cars: Array.from({ length: TRAIN.carCount - 1 }, () => ({ position: new Vector3(), quaternion: new Quaternion() })),
+      tail: { position: new Vector3(), quaternion: new Quaternion() },
     };
+    this.pose.tail = this.pose.cars[this.pose.cars.length - 1] ?? this.pose.tail;
+    this.trail = new Trail(network);
+    this.trail.rebuild(this.state.railId, this.state.s);
+    // The train always starts facing forward (the start's `direction` is the rail's way, kept for the view).
+    this.state.direction = 1;
     this.refreshPending();
     this.resetDive();
     this.computePose();
+  }
+
+  /** v1.11 (PR7): trail distance of `s` on the current rail. */
+  private odo(s: number): number {
+    return this.trail.odo(s);
+  }
+
+  /** v1.11 (PR7): the distance (m) between the lead car's centre and the next car's (the test hook data-car-gap). */
+  get carGap(): number {
+    return this.gap;
+  }
+
+  /**
+   * v1.11 (PR7): how far (m) up or down any car behind is now from where the lead car was at the same trail distance
+   * (the test hook data-car-lift-err; 0 where the lead car's heights are not known, e.g. right after a rewind).
+   */
+  get carLiftErr(): number {
+    return this.liftErr;
   }
 
   get currentRail(): Rail {
@@ -351,6 +441,216 @@ export class Train {
     this.lockReason = reason;
   }
 
+  // ---- v1.11 (PR8a): うしろむき (PHASE9_CHAPTER5_6 第 3 部 第 A 部, PHASE9_0 §5) -------------------------------------
+
+  /** 1 forward, −1 reversing (the switch's side; a turn going on counts as the side it turns to). */
+  get direction(): 1 | -1 {
+    return this.state.direction;
+  }
+
+  /** Reversing (the switch on "うしろ"). */
+  get reversing(): boolean {
+    return this.state.direction === -1;
+  }
+
+  /** Forward again over the part of the trail it reversed along (the gimmicks there stay as they are, A7). */
+  get retracing(): boolean {
+    return this.state.direction === 1 && this.trail.hasGhost;
+  }
+
+  /** A7: the gimmicks, animals and hints the train passes now do nothing (reversing, or retracing). */
+  get stillGimmicks(): boolean {
+    return this.reversing || this.retracing;
+  }
+
+  /** The direction the switch waits to turn to once the train stands (pressed while moving), or null. */
+  get switchPending(): 1 | -1 | null {
+    return this.switchWant;
+  }
+
+  /** Turning round now ("ぐるりん", REVERSE.turnSeconds): nothing moves. */
+  get turning(): boolean {
+    return this.turnT >= 0;
+  }
+
+  /** The little hop's height now (m; reversing, A11). */
+  get hopLift(): number {
+    return this.hopT >= 0 ? REVERSE.hopHeight * Math.sin((Math.PI * this.hopT) / REVERSE.hopSeconds) : 0;
+  }
+
+  /** Reversing and standing at a stop point (its "おっとっと" came). */
+  get atReverseStop(): boolean {
+    return this.reversing && this.atStop;
+  }
+
+  /** The stations' stop lines (the trail's floor moves up to the rear end as the front passes one, A5.2). */
+  setStationLines(lines: { railId: string; at: number }[]): void {
+    this.stationLines = lines;
+  }
+
+  /** The back junctions (the loader keeps them apart from `junctions`). */
+  setBackJunctions(list: JunctionDef[]): void {
+    this.backJunctions = list;
+  }
+
+  /** The back junction whose arrows show now (reversing), or null. */
+  get backJunction(): JunctionDef | null {
+    return this.backAhead?.junction ?? null;
+  }
+
+  /** The way to take at back junction `id` when its arrows show (a mission's choice); null forgets it. */
+  preferBack(id: string, side: JunctionSide | null): void {
+    if (side === null) this.backPreferred.delete(id);
+    else this.backPreferred.set(id, side);
+  }
+
+  /** The rear end's trail distance (the lead car centre's less REVERSE.tail). */
+  private get tailX(): number {
+    return this.odo(this.state.s) - REVERSE.tail;
+  }
+
+  /** The tail car's centre: its rail and s (records reversing, the rear window). */
+  tailFrame(): { railId: string; s: number } {
+    return this.trail.at(this.odo(this.state.s) - TRAIN.carSpacing * (TRAIN.carCount - 1));
+  }
+
+  /**
+   * Where the view looks from along the rails (A10): the lead car's front going forward, the tail car's centre
+   * reversing (the rear window). Zones that change what is seen or heard use it.
+   */
+  get viewAnchor(): { railId: string; s: number } {
+    return this.reversing ? this.tailFrame() : { railId: this.state.railId, s: this.frontS };
+  }
+
+  /**
+   * The まえ／うしろ switch (A3): standing, the train turns round at once (REVERSE.turnSeconds); moving (or in the air,
+   * diving, burning, slipping, bouncing), it brakes to a stop first and turns then; a press while it waits cancels.
+   * Locked while the controls are (doors, cutscenes, fails) and while turning.
+   */
+  pressSwitch(): SwitchResult {
+    if (this.lockReason !== null || this.falling || this.emergency || this.turnT >= 0) return 'locked';
+    if (this.switchWant !== null) {
+      this.switchWant = null;
+      this.events.emit('switchPending', { on: false });
+      return 'cancelled';
+    }
+    const want: 1 | -1 = this.state.direction === 1 ? -1 : 1;
+    if (this.state.speed < 0.05 && !this.switchBusy) {
+      this.turnTo(want);
+      return 'turned';
+    }
+    this.switchWant = want;
+    this.events.emit('switchPending', { on: true });
+    return 'pending';
+  }
+
+  /** Something that must end before the train may turn round. */
+  private get switchBusy(): boolean {
+    return this.airborne || this.leadInDive || this.domeLatch > 0 || this.rocketLeft > 0 || !!this.slipping || !!this.bouncing || !!this.bumping || !!this.blockBump;
+  }
+
+  /** Turns round now ("ぐるりん"): the train stands for REVERSE.turnSeconds; the lever is kept. */
+  private turnTo(dir: 1 | -1): void {
+    const st = this.state;
+    st.direction = dir;
+    st.speed = 0;
+    this.turnT = 0;
+    this.ended = false;
+    this.atStop = false;
+    this.backAhead = null;
+    if (this.announced) {
+      // Forward arrows showing: gone (the train goes the other way now).
+      this.announced = null;
+      this.locked = false;
+      this.choice = null;
+      this.events.emit('junctionLocked');
+    }
+    if (dir === 1) this.refreshPending();
+    this.markFrom = null;
+    if (this.switchWant !== null) {
+      this.switchWant = null;
+      this.events.emit('switchPending', { on: false });
+    }
+    this.events.emit(dir === -1 ? 'reverseOn' : 'reverseOff', { instant: false });
+  }
+
+  /** A5.4, A6, A8.2: one frame reversing: the speed (ゆっくり at most, the stop points' braking) and the trail. */
+  private updateReverse(dt: number): void {
+    const st = this.state;
+    const notch = LEVER_NOTCHES[st.notch];
+    let target = notch.speed > 0 ? REVERSE.maxSpeed * this.speedScale : 0;
+    for (const cap of this.speedCaps.values()) if (cap.max !== undefined) target = Math.min(target, cap.max);
+    if (this.switchWant !== null || this.emergency || this.lockReason !== null) target = 0;
+    const tail = this.tailX;
+    const stop = this.trail.nextStop(tail);
+    // Brake to the creeping speed REVERSE.creepBefore m before the stop point, creep the rest, stop right on it.
+    const allowed = stop.distance <= 1e-6 ? 0 : Math.sqrt(2 * REVERSE.brake * Math.max(0, stop.distance - REVERSE.creepBefore)) + REVERSE.creepSpeed;
+    target = Math.min(target, allowed);
+    const brake = Math.max(notch.brake, this.switchWant !== null ? REVERSE.switchBrake : REVERSE.brake, this.emergency ? 8 : 0);
+    if (st.speed < target) st.speed = Math.min(target, st.speed + REVERSE.accel * dt);
+    else st.speed = Math.max(target, st.speed - brake * dt);
+    let ds = st.speed * dt;
+    let arrived = false;
+    if (ds >= stop.distance - 1e-6 && (ds > 0 || stop.distance <= 1e-6)) {
+      ds = stop.distance;
+      if (st.speed > 0 || ds > 0) arrived = true;
+      st.speed = 0;
+    }
+    if (ds > 0) this.atStop = false;
+    const changed = ds > 0 ? this.trail.retreat(ds) : false;
+    const head = this.trail.list[this.trail.list.length - 1];
+    st.railId = head.railId;
+    st.s = head.to;
+    if (changed) {
+      this.enteredRail(st.railId);
+      this.events.emit('railChanged', { railId: st.railId });
+    }
+    this.handleBackJunctions();
+    if (arrived && !this.atStop) {
+      this.atStop = true;
+      this.lastReverseStop = stop.why;
+      this.events.emit('reverseStop', { why: stop.why, railId: st.railId, s: this.frontS });
+    }
+    // Pressed while moving: once it stands, it turns round (to まえ).
+    if (this.switchWant !== null && st.speed <= 1e-3) this.turnTo(this.switchWant);
+  }
+
+  /** A8.2: reversing, a back junction behind the rear end: its arrows, then the siding or on along the trail. */
+  private handleBackJunctions(): void {
+    const tail = this.tailX;
+    if (!this.backAhead) {
+      const next = this.trail.nextBackJunction(tail, this.backJunctions);
+      if (!next || next.distance > REVERSE.arrowDistance || next.distance <= REVERSE.lockDistance) return;
+      const j = next.junction;
+      const preferred = this.backPreferred.get(j.id);
+      this.backAhead = { junction: j, x: next.x, choice: preferred !== undefined && j[preferred] !== undefined ? preferred : null, locked: false };
+      this.events.emit('backArrows', { junction: j, left: j.left !== undefined, right: j.right !== undefined, default: this.backAhead.choice ?? j.default });
+      return;
+    }
+    const a = this.backAhead;
+    if (!a.locked && tail <= a.x + REVERSE.lockDistance) {
+      a.locked = true;
+      this.events.emit('backLocked');
+    }
+    if (tail > a.x + 1e-6) return;
+    const j = a.junction;
+    const side = a.choice ?? this.backPreferred.get(j.id) ?? j.default;
+    const to = j[side];
+    this.backAhead = null;
+    if (to !== undefined && to !== j.railId) {
+      this.trail.enterSiding(j, to, a.x);
+      this.events.emit('backSiding', { junction: j });
+    }
+    this.events.emit('backPassed');
+  }
+
+  /** v1.11 (PR8a): the back junction's arrow tapped (reversing). */
+  chooseBack(side: JunctionSide): void {
+    const a = this.backAhead;
+    if (!a || a.locked || a.junction[side] === undefined) return;
+    a.choice = side;
+  }
+
   unlockInput(): void {
     this.lockReason = null;
   }
@@ -358,8 +658,8 @@ export class Train {
   /** True while the lead bogie is in the air. */
   get airborne(): boolean {
     const arc = this.arcs[this.arcs.length - 1];
-    const b = this.bogieS;
-    return !!arc && arc.railId === this.state.railId && b > arc.from && b < arc.from + arc.length;
+    const b = this.odo(this.bogieS);
+    return !!arc && b > arc.from && b < arc.from + arc.length;
   }
 
   get isFalling(): boolean {
@@ -413,6 +713,8 @@ export class Train {
    */
   startRocket(): boolean {
     if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping || this.blockBump) return false;
+    // v1.11 (PR8a, A11): not reversing (the caller says "うしろでは つかえないよ").
+    if (this.state.direction === -1 || this.turnT >= 0) return false;
     if (this.airborne || this.rocketLeft > 0) return false;
     this.rocketLeft = ROCKET.burn;
     this.settling = false;
@@ -485,13 +787,21 @@ export class Train {
   /** Starts a jump. Distance = speed × air time; the lever does nothing until the lead car lands. */
   jump(): JumpResult {
     if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping || this.blockBump) return 'locked';
+    // v1.11 (PR8a, A11): reversing (or turning round), a little hop where it is ("ぴょこっ"): no arc, no gap cleared.
+    if (this.state.direction === -1 || this.turnT >= 0) {
+      if (this.state.speed < JUMP.minSpeed) return 'stopped';
+      if (this.hopT >= 0) return 'cooldown';
+      this.hopT = 0;
+      this.events.emit('hopped');
+      return 'hop';
+    }
     if (this.airborne) return 'air';
     if (this.leadInDive || this.domeLatch > 0 || this.submerged || this.bobT >= 0) return 'busy';
     if (this.jumpCooldown > 0) return 'cooldown';
     if (this.jumpBlocked) return 'bough';
     if (this.state.speed < JUMP.minSpeed) return 'stopped';
     const distance = this.jumpDistance();
-    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length: distance, height: this.jumpBoost?.height ?? JUMP.height });
+    this.arcs.push({ from: this.odo(this.bogieS), length: distance, height: this.jumpBoost?.height ?? JUMP.height });
     this.events.emit('jumped', { distance });
     return 'ok';
   }
@@ -506,7 +816,7 @@ export class Train {
     const gap = this.nextGap(plain + 40);
     const needed = gap ? gap.to + JUMP.landingMargin + PAD_JUMP.extra - this.bogieS : 0;
     const distance = Math.max(plain, needed);
-    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length: distance, height: PAD_JUMP.height });
+    this.arcs.push({ from: this.odo(this.bogieS), length: distance, height: PAD_JUMP.height });
     this.events.emit('jumped', { distance });
     return true;
   }
@@ -517,7 +827,7 @@ export class Train {
    */
   launch(length: number, height: number): boolean {
     if (this.ended || this.emergency || this.falling || this.airborne || this.state.speed < JUMP.minSpeed) return false;
-    this.arcs.push({ railId: this.state.railId, from: this.bogieS, length, height });
+    this.arcs.push({ from: this.odo(this.bogieS), length, height });
     this.events.emit('jumped', { distance: length });
     return true;
   }
@@ -567,6 +877,20 @@ export class Train {
     st.notch = STOP_NOTCH;
     this.emergency = false;
     this.ended = false;
+    this.trail.rebuild(st.railId, st.s);
+    this.liftTrack.length = 0;
+    // v1.11 (PR8a): put back facing forward (A18: a fail's rewind), no turn or switch waiting, no hop.
+    if (st.direction !== 1 || this.switchWant !== null) {
+      const was = st.direction;
+      st.direction = 1;
+      this.switchWant = null;
+      if (was === -1) this.events.emit('reverseOff', { instant: true });
+    }
+    this.turnT = -1;
+    this.hopT = -1;
+    this.backAhead = null;
+    this.atStop = false;
+    this.markFrom = null;
     this.refreshPending();
     this.resetDive();
     this.resetPlow();
@@ -714,7 +1038,49 @@ export class Train {
   private routeSide(j: JunctionDef): JunctionSide {
     if (j.spin && this.spinSides) return this.spinSides(j);
     if (j.dive && j.diveSide) return this.diving ? j.diveSide : j.diveSide === 'left' ? 'right' : 'left';
-    return j === this.announced && this.choice ? this.choice : j.default;
+    const rule = this.junctionRules?.[j.id];
+    if (rule?.lock) return rule.lock;
+    return j === this.announced && this.choice ? this.choice : rule?.default ?? j.default;
+  }
+
+  /**
+   * v1.11 (6-1): the mission's own junction rules (`missions[].junctions`; null: none). "lock": that side always, and
+   * no arrows; "default": that side is chosen and glows from the start (the child may change it). Set at a mission's
+   * start (and a resume), cleared at its end; a fail keeps them.
+   */
+  setJunctionRules(rules: Record<string, MissionJunctionRule> | null): void {
+    this.junctionRules = rules && Object.keys(rules).length > 0 ? rules : null;
+  }
+
+  /**
+   * v1.11 (6-1): a cutscene's roll ("depart"): the train sets off by itself along its rail (up to DEPART.maxSpeed) and
+   * stops gently with its front at `to`. Resolves once it stands there (or after `seconds` + 8 s whatever happens).
+   */
+  depart(to: number, seconds: number): Promise<void> {
+    this.departing?.resolve();
+    return new Promise((resolve) => {
+      const railId = this.state.railId;
+      this.departing = { railId, to, t: 0, limit: seconds + 8, resolve };
+      this.setSpeedCap('depart', { holdAt: { railId, s: to } });
+    });
+  }
+
+  /** v1.11 (6-1): a cutscene's roll is going on. */
+  get isDeparting(): boolean {
+    return this.departing !== null;
+  }
+
+  private updateDepart(dt: number): void {
+    const d = this.departing;
+    if (!d) return;
+    d.t += dt;
+    const left = this.routeDistance(d.railId, d.to);
+    const there = left === null || left <= 1.5;
+    if ((d.t > 0.5 && this.state.speed < 0.05 && there) || d.t > d.limit) {
+      this.departing = null;
+      this.setSpeedCap('depart', null);
+      d.resolve();
+    }
   }
 
   /** Signed distance from the car FRONT to `at` on the current rail (loop-aware). */
@@ -813,6 +1179,11 @@ export class Train {
     const notch = LEVER_NOTCHES[st.notch];
     let target: number = notch.speed * this.speedScale;
     let brake: number = notch.brake * this.grip;
+    // v1.11 (6-1): a cutscene's roll goes by itself (its "depart" cap stops it at its place).
+    if (this.departing) {
+      target = DEPART.maxSpeed;
+      brake = BRAKING;
+    }
     const stopAt = this.stopDistance(rail);
     if (stopAt !== null) {
       const remaining = stopAt - st.s;
@@ -841,6 +1212,11 @@ export class Train {
       target = hold;
       brake = Math.max(brake, BRAKING);
     }
+    // v1.11 (PR8a): the switch pressed while moving: an ordinary stop first.
+    if (this.switchWant !== null) {
+      target = 0;
+      brake = Math.max(brake, REVERSE.switchBrake);
+    }
     return { target, brake };
   }
 
@@ -856,6 +1232,27 @@ export class Train {
 
   update(dt: number): void {
     const st = this.state;
+    // v1.11 (PR8a): turning round ("ぐるりん"): nothing moves; reversing: along the trail (updateReverse).
+    if (this.hopT >= 0) {
+      this.hopT += dt;
+      if (this.hopT >= REVERSE.hopSeconds) this.hopT = -1;
+    }
+    if (this.turnT >= 0) {
+      this.turnT += dt;
+      if (this.turnT >= REVERSE.turnSeconds) this.turnT = -1;
+      st.speed = 0;
+      this.handleDive(dt);
+      this.handlePlow(dt);
+      this.computePose();
+      return;
+    }
+    if (st.direction === -1) {
+      this.updateReverse(dt);
+      this.handleDive(dt);
+      this.handlePlow(dt);
+      this.computePose();
+      return;
+    }
     let rail = this.currentRail;
     const wasAirborne = this.airborne;
 
@@ -947,7 +1344,7 @@ export class Train {
 
     const frontBefore = this.frontS;
     const railBefore = st.railId;
-    st.s += st.speed * dt * st.direction;
+    st.s += st.speed * dt;
     this.handleMirrorBlocks(frontBefore, railBefore);
 
     this.handleJunctions();
@@ -957,7 +1354,27 @@ export class Train {
     this.handleDive(dt);
     this.handlePlow(dt);
     this.handleMagnetBlocks();
+    // v1.11 (PR8a): the trail's floor moves up as the front passes a stop line; the flown and dived stretches are marked.
+    if (st.railId === railBefore) {
+      for (const line of this.stationLines) {
+        if (line.railId === st.railId && frontBefore < line.at && this.frontS >= line.at) this.trail.cutAt(this.odo(st.s) - (this.frontS - line.at) - REVERSE.tail);
+      }
+    }
+    this.markTrail();
+    // v1.11 (PR8a): pressed while moving: once it stands (and nothing is going on), it turns round.
+    if (this.switchWant !== null && st.speed <= 1e-3 && !this.switchBusy && !this.falling && !this.emergency) this.turnTo(this.switchWant);
+    this.updateDepart(dt);
     this.computePose();
+  }
+
+  /** v1.11 (PR8a): marks the stretch the lead bogie went along this frame when it was in the air or diving. */
+  private markTrail(): void {
+    const b = this.odo(this.bogieS);
+    const from = this.markFrom;
+    this.markFrom = b;
+    if (from === null || b <= from || b - from > 20) return;
+    if (this.airborne) this.trail.mark('air', from, b);
+    else if (this.leadInDive || this.domeLatch > 0 || this.waterAt('dives', this.bogieS) !== null) this.trail.mark('dive', from, b);
   }
 
   /**
@@ -995,7 +1412,8 @@ export class Train {
   plow(): PlowResult {
     if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping) return 'locked';
     if (this.blade) return 'on';
-    const play = this.nextPlowWall(PLOW.approach) === null;
+    // v1.11 (PR8a, A11): reversing, it is the play sweep (petals) wherever it is.
+    const play = this.reversing || this.nextPlowWall(PLOW.approach) === null;
     this.blade = true;
     this.bladePlay = play ? PLOW.playSeconds : 0;
     this.events.emit('bladeDown', { instant: false });
@@ -1089,7 +1507,7 @@ export class Train {
     const last = this.plowFront;
     this.plowFront = { railId: rail.id, s: f };
     if (this.bumping || this.falling) return;
-    const before = last && last.railId === rail.id ? last.s : f;
+    const before = last && last.railId === rail.id && !this.reversing ? last.s : f;
     for (const sp of rail.plows) {
       if (!this.plowBurst.has(sp.index) && before < sp.from && f >= sp.from) {
         if (this.blade) {
@@ -1223,9 +1641,8 @@ export class Train {
   }
 
   private get leadInDive(): boolean {
-    const b = this.bogieS;
-    const id = this.state.railId;
-    return this.diveArcs.some((a) => a.railId === id && b > a.from && (a.holdAt !== null || b < a.from + a.length));
+    const b = this.odo(this.bogieS);
+    return this.diveArcs.some((a) => b > a.from && (a.holdAt !== null || b < a.from + a.length));
   }
 
   /**
@@ -1236,7 +1653,8 @@ export class Train {
   dive(): DiveResult {
     if (this.ended || this.lockReason !== null || this.emergency || this.falling || this.slipping || this.bouncing || this.bumping) return 'locked';
     if (this.airborne) return 'air';
-    const surface = this.onWaterSurface;
+    // v1.11 (PR8a, A11): reversing, it is the mole's dig on land wherever it is (no dive arc).
+    const surface = this.onWaterSurface && !this.reversing && this.turnT < 0;
     if (surface && (this.leadInDive || this.domeLatch > 0)) return 'diving';
     if (surface && this.diveCooldown > 0) return 'cooldown';
     const length = surface && this.state.speed >= DIVE.minSpeed && !this.submerged ? this.diveLength() : null;
@@ -1244,14 +1662,13 @@ export class Train {
       // One bob at a time (a press while bobbing does nothing). On land (PHASE9_0 §3) it digs in like a mole, deeper.
       if (this.bobT >= 0) return 'cooldown';
       this.bobT = 0;
-      this.bobLand = !surface && !this.submerged && this.waterAt('dives', this.bogieS) === null;
+      this.bobLand = this.reversing || (!surface && !this.submerged && this.waterAt('dives', this.bogieS) === null);
       this.events.emit('bob', { land: this.bobLand });
       return 'bob';
     }
     const b = this.bogieS;
     this.diveArcs.push({
-      railId: this.state.railId,
-      from: b,
+      from: this.odo(b),
       length,
       depth: DIVE.depth,
       baseY: this.currentRail.frameAt(b).position.y,
@@ -1330,9 +1747,10 @@ export class Train {
   private passesUnder(f: FloaterDef): boolean {
     const half = floaterLength(f) / 2;
     const need = this.floaterNeed(f) - 1e-6;
+    // (`f` is on the current rail: its ends by trail distance.)
     const depthAt = (s: number): number => {
       let d = 0;
-      for (const a of this.diveArcs) if (a.railId === f.railId) d = Math.max(d, diveDepth(a, s));
+      for (const a of this.diveArcs) d = Math.max(d, diveDepth(a, this.odo(s)));
       return d;
     };
     return depthAt(f.at - half) >= need && depthAt(f.at + half) >= need;
@@ -1423,7 +1841,8 @@ export class Train {
     const b = this.bogieS;
     if (this.domeLatch > 0) this.domeLatch = Math.max(0, this.domeLatch - st.speed * dt);
     const inDive = this.leadInDive;
-    if (!this.bouncing && !this.falling) {
+    // v1.11 (PR8a): reversing, the water ahead is not reached (the train stops before a dived stretch, A6).
+    if (!this.bouncing && !this.falling && !this.reversing && this.turnT < 0) {
       // Reaching water: with the dome the train goes on under (a dive going on keeps its depth), without it "ぽよん".
       const under = this.waterAt('dives', b);
       if (under && !this.leadWasUnder) {
@@ -1454,21 +1873,21 @@ export class Train {
     }
     this.wasInDive = nowInDive;
     // Forget dives the last car has left behind; a held one once the rail under the last car is deeper than it.
-    const last = st.s - TRAIN.carSpacing * (TRAIN.carCount - 1) - TRAIN.bogieOffset;
+    const last = this.odo(st.s) - TRAIN.carSpacing * (TRAIN.carCount - 1) - TRAIN.bogieOffset;
     this.diveArcs = this.diveArcs.filter((a) => {
-      if (a.railId !== st.railId) return true;
       if (a.holdAt === null) return a.from + a.length > last;
       if (last <= a.holdAt) return true;
-      const drop = a.baseY - this.frameOnRail(last).position.y;
+      const drop = a.baseY - this.trail.frameAt(last).position.y;
       return drop < a.holdDepth - 0.05 && last < a.holdAt + 150;
     });
     this.updateDome(false);
   }
 
   /** The train goes on under water in the middle of a dive: the dive keeps its depth from here until the rail is deeper. */
-  private holdDives(b: number): void {
+  private holdDives(bogie: number): void {
+    const b = this.odo(bogie);
     for (const a of this.diveArcs) {
-      if (a.railId !== this.state.railId || a.holdAt !== null || b <= a.from) continue;
+      if (a.holdAt !== null || b <= a.from) continue;
       const at = Math.max(b, a.from + a.length / 2);
       a.holdDepth = diveDepth(a, at);
       a.holdAt = at;
@@ -1491,10 +1910,13 @@ export class Train {
     return 0.4 * Math.sin(Math.PI * Math.min(1, this.bouncing.t / (DIVE.bounceStop + DIVE.bounceSeconds)));
   }
 
-  /** Some car's middle is under water. */
+  /** Some car's middle is under water (each on the rail it is on: PR7). */
   private carsUnder(): boolean {
-    const dives = this.currentRail.dives;
-    for (let i = 0; i < TRAIN.carCount; i++) if (spanAt(dives, this.state.s - TRAIN.carSpacing * i)) return true;
+    const head = this.odo(this.state.s);
+    for (let i = 0; i < TRAIN.carCount; i++) {
+      const at = this.trail.at(head - TRAIN.carSpacing * i);
+      if (spanAt(this.network.getRail(at.railId).dives, at.s)) return true;
+    }
     return false;
   }
 
@@ -1531,11 +1953,10 @@ export class Train {
     this.events.emit('dome', { on: under, instant: true });
   }
 
-  /** Lowering (m) of the car at bogie position `s` from the dives, less what the rail itself has gone down since. */
+  /** Lowering (m) of the car at bogie trail distance `s` from the dives, less what the rail itself has gone down since. */
   private diveLower(s: number, railY: number): number {
     let h = 0;
     for (const a of this.diveArcs) {
-      if (a.railId !== this.state.railId) continue;
       const d = diveDepth(a, s);
       if (d > 0) h = Math.max(h, d - Math.max(0, a.baseY - railY));
     }
@@ -1551,13 +1972,13 @@ export class Train {
     }
     if (!airborne && this.jumpCooldown > 0) this.jumpCooldown = Math.max(0, this.jumpCooldown - dt);
     // Forget arcs the last car has left behind.
-    const lastBogie = this.state.s - TRAIN.carSpacing * (TRAIN.carCount - 1) - TRAIN.bogieOffset;
-    this.arcs = this.arcs.filter((a) => a.railId !== this.state.railId || a.from + a.length > lastBogie);
+    const lastBogie = this.odo(this.state.s) - TRAIN.carSpacing * (TRAIN.carCount - 1) - TRAIN.bogieOffset;
+    this.arcs = this.arcs.filter((a) => a.from + a.length > lastBogie);
     if (airborne || this.falling) return;
     const b = this.bogieS;
     const gap = (this.currentRail.gaps as GapDef[]).find((g) => b >= g.from && b <= g.to);
     if (!gap) return;
-    const short = this.arcs.some((a) => a.railId === this.state.railId && a.from + a.length > gap.from - 12);
+    const short = this.arcs.some((a) => a.from + a.length > this.odo(gap.from) - 12);
     this.falling = { t: 0 };
     this.stopRocket();
     this.events.emit('fell', { gap, railId: this.state.railId, short });
@@ -1577,15 +1998,6 @@ export class Train {
     this.slipping = { t: 0, from: st.s };
     this.settling = false;
     this.events.emit('slipped', { railId: st.railId, s: this.frontS });
-  }
-
-  /** Shifts jump arcs when the train's s is re-based (junction or merge). */
-  private shiftArcs(delta: number, railId: string): void {
-    for (const a of [...this.arcs, ...this.diveArcs]) {
-      a.from += delta;
-      a.railId = railId;
-    }
-    for (const a of this.diveArcs) if (a.holdAt !== null) a.holdAt += delta;
   }
 
   getPose(): TrainPose {
@@ -1613,17 +2025,23 @@ export class Train {
     const j = this.pending[0];
     if (!j) return;
 
-    // v1.10: a dive fork shows no arrows (diving or not picks the way).
-    if (!this.announced && !j.dive && st.s >= j.at - JUNCTION_ARROW_DISTANCE) {
+    // v1.11 (PR8a): retracing, a fork goes the way the train came (no arrows until the retracing is over).
+    const retracing = this.trail.hasGhost;
+    // v1.10: a dive fork shows no arrows (diving or not picks the way). v1.11 (6-1): nor does one the mission locks.
+    const rule = this.junctionRules?.[j.id];
+    if (!this.announced && !j.dive && !rule?.lock && !retracing && st.s >= j.at - JUNCTION_ARROW_DISTANCE) {
       this.announced = j;
       const preferred = this.preferred.get(j.id);
-      this.choice = preferred !== undefined && j[preferred] !== undefined ? preferred : null;
+      // v1.11 (6-1): the mission's own default is chosen from the start.
+      const preset = rule?.default !== undefined && j[rule.default] !== undefined ? rule.default : undefined;
+      this.choice = preferred !== undefined && j[preferred] !== undefined ? preferred : preset ?? null;
       this.locked = false;
       this.events.emit('junctionApproach', {
         junction: j,
         left: j.left !== undefined,
         right: j.right !== undefined,
-        default: j.default,
+        default: preset ?? j.default,
+        ...(preset ? { preset } : {}),
       });
     }
     if (this.announced && !this.locked && st.s >= j.at - JUNCTION_LOCK_DISTANCE) {
@@ -1631,7 +2049,13 @@ export class Train {
       this.events.emit('junctionLocked');
     }
     if (st.s >= j.at) {
-      const side = (j.dive && j.diveSide) || (j.spin && this.spinSides) ? this.routeSide(j) : this.choice ?? j.default;
+      let side =
+        (j.dive && j.diveSide) || (j.spin && this.spinSides) ? this.routeSide(j) : rule?.lock ?? this.choice ?? rule?.default ?? j.default;
+      if (retracing) {
+        const next = this.trail.ghostAfter(st.railId);
+        const came = (['left', 'right'] as const).find((k) => j[k] !== undefined && j[k] === next);
+        side = came ?? (j.left === st.railId ? 'left' : j.right === st.railId ? 'right' : side);
+      }
       const targetId = j[side] ?? st.railId;
       // Down into the water at a dive fork: the dome stays on until the water takes over.
       if (j.dive && side === j.diveSide) {
@@ -1644,8 +2068,9 @@ export class Train {
       this.locked = false;
       this.choice = null;
       if (targetId !== st.railId) {
+        // (The arcs are kept by trail distance: they need no shifting. PR7.)
+        this.trail.switchRail(j.at, targetId, 0);
         st.s -= j.at;
-        this.shiftArcs(-j.at, targetId);
         st.railId = targetId;
         this.enteredRail(targetId);
         this.refreshPending();
@@ -1659,8 +2084,8 @@ export class Train {
     const st = this.state;
     if (rail.end.type === 'merge') {
       if (st.s >= rail.length) {
+        this.trail.switchRail(rail.length, rail.end.railId, rail.end.at);
         st.s = rail.end.at + (st.s - rail.length);
-        this.shiftArcs(rail.end.at - rail.length, rail.end.railId);
         st.railId = rail.end.railId;
         this.enteredRail(st.railId);
         this.refreshPending();
@@ -1680,15 +2105,10 @@ export class Train {
     }
   }
 
-  /** Frame on the current rail; wraps on loops, extrapolates at the ends otherwise. */
-  private frameOnRail(s: number) {
-    return this.currentRail.frameAt(this.onLoop ? this.wrap(s) : s);
-  }
-
-  /** Lift (m) from jump arcs at position `s`. */
+  /** Lift (m) from jump arcs at trail distance `s`. */
   private arcLift(s: number): number {
     let h = 0;
-    for (const a of this.arcs) if (a.railId === this.state.railId) h = Math.max(h, arcHeight(a, s));
+    for (const a of this.arcs) h = Math.max(h, arcHeight(a, s));
     return h;
   }
 
@@ -1699,24 +2119,34 @@ export class Train {
     return FALL.depth * k * k * (front ? 1.25 : 0.85);
   }
 
-  /** Writes the body transform of a car centered at `s` into `position`/`quaternion`. */
-  private carPose(s: number, position: Vector3, quaternion: Quaternion): void {
-    const front = this.frameOnRail(s + TRAIN.bogieOffset);
-    const rear = this.frameOnRail(s - TRAIN.bogieOffset);
+  /**
+   * Writes the body transform of the car centred `back` m behind the lead car centre (along the trail) into
+   * `position`/`quaternion`. v1.11 (PR7): each bogie on the rail the trail has there; lifts and dips by trail distance.
+   */
+  private carPose(back: number, position: Vector3, quaternion: Quaternion): void {
+    const x = this.odo(this.state.s) - back;
+    const xf = x + TRAIN.bogieOffset;
+    const xr = x - TRAIN.bogieOffset;
+    const atFront = this.trail.at(xf);
+    const atRear = this.trail.at(xr);
+    const front = this.trail.frameAt(xf);
+    const rear = this.trail.frameAt(xr);
     // The car rides the arc at its center and keeps only a hint of the arc's slope, so the cab view
     // stays on the horizon ("ぴょん" like a toy, not a ski jump). Falling tips it forward.
     // v1.10: a dive lowers the car the same way (at its middle, with a hint of the arc's slope).
-    const hc = this.arcLift(s) - this.diveLower(s, (front.position.y + rear.position.y) / 2);
-    const hFront = this.arcLift(s + TRAIN.bogieOffset) - this.diveLower(s + TRAIN.bogieOffset, front.position.y);
-    const hRear = this.arcLift(s - TRAIN.bogieOffset) - this.diveLower(s - TRAIN.bogieOffset, rear.position.y);
-    const sag = this.sagAt;
-    const id = this.state.railId;
-    const sf = sag ? sag(id, s + TRAIN.bogieOffset) : 0;
-    const sr = sag ? sag(id, s - TRAIN.bogieOffset) : 0;
+    const hc = this.arcLift(x) - this.diveLower(x, (front.position.y + rear.position.y) / 2);
+    const hFront = this.arcLift(xf) - this.diveLower(xf, front.position.y);
+    const hRear = this.arcLift(xr) - this.diveLower(xr, rear.position.y);
+    // v1.11 (PR8a, A7): a bough passed stays still (reversing, retracing).
+    const sag = this.stillGimmicks ? null : this.sagAt;
+    const sf = sag ? sag(atFront.railId, atFront.s) : 0;
+    const sr = sag ? sag(atRear.railId, atRear.s) : 0;
     const bob = this.bobT >= 0 ? (this.bobLand ? DIVE.digDepth : DIVE.bobDepth) * Math.sin((Math.PI * this.bobT) / DIVE.bobSeconds) : 0;
     const dip = this.bounceDip();
-    const hf = hc + JUMP_PITCH * (hFront - hc) - this.fallDrop(true) - sf - bob - dip;
-    const hr = hc + JUMP_PITCH * (hRear - hc) - this.fallDrop(false) - sr - bob - dip * 0.4;
+    // v1.11 (PR8a): the little hop reversing ("ぴょこっ"), the whole car level.
+    const hop = this.hopT >= 0 ? REVERSE.hopHeight * Math.sin((Math.PI * this.hopT) / REVERSE.hopSeconds) : 0;
+    const hf = hc + JUMP_PITCH * (hFront - hc) - this.fallDrop(true) - sf - bob - dip + hop;
+    const hr = hc + JUMP_PITCH * (hRear - hc) - this.fallDrop(false) - sr - bob - dip * 0.4 + hop;
     this.front.copy(front.position).addScaledVector(front.up, hf);
     this.rear.copy(rear.position).addScaledVector(rear.up, hr);
     position.addVectors(this.front, this.rear).multiplyScalar(0.5);
@@ -1731,11 +2161,49 @@ export class Train {
   private computePose(): void {
     const st = this.state;
     const pose = this.pose;
+    if (st.direction === 1) this.trail.moveTo(st.s);
     pose.railId = st.railId;
     pose.s = st.s;
     pose.speed = st.speed;
     pose.direction = st.direction;
-    this.carPose(st.s, pose.position, pose.quaternion);
-    pose.cars.forEach((car, i) => this.carPose(st.s - TRAIN.carSpacing * (i + 1), car.position, car.quaternion));
+    this.carPose(0, pose.position, pose.quaternion);
+    pose.cars.forEach((car, i) => this.carPose(TRAIN.carSpacing * (i + 1), car.position, car.quaternion));
+    this.trackLift();
+  }
+
+  /**
+   * v1.11 (PR7): the test hooks' numbers: the gap between the first two cars, and how far the cars behind are from the
+   * lead car's height at the same trail distance (liftTrack keeps the lead car's heights every 0.25 m it went on).
+   */
+  private trackLift(): void {
+    const pose = this.pose;
+    const head = this.trail.head;
+    const track = this.liftTrack;
+    const lastX = track.length > 0 ? track[track.length - 1].x : -Infinity;
+    if (head < lastX - 1e-6 || head > lastX + 40) track.length = 0;
+    if (track.length === 0) track.push({ x: head, y: pose.position.y });
+    else if (head >= lastX + LIFT_STEP) {
+      // A long frame (a slow device, a fast train): the lead car's heights in between, as it is now, every LIFT_STEP m
+      // (a straight line across an arc's end would be off by more than the check allows).
+      for (let x = lastX + LIFT_STEP; x < head - 1e-6; x += LIFT_STEP) {
+        this.carPose(head - x, this.liftPos, this.liftQuat);
+        track.push({ x, y: this.liftPos.y });
+      }
+      track.push({ x: head, y: pose.position.y });
+    }
+    while (track.length > 2 && track[1].x < head - TRAIN.carSpacing * TRAIN.carCount - 20) track.shift();
+    this.gap = pose.cars.length > 0 ? pose.position.distanceTo(pose.cars[0].position) : TRAIN.carSpacing;
+    let err = 0;
+    pose.cars.forEach((car, i) => {
+      const x = head - TRAIN.carSpacing * (i + 1);
+      if (track.length < 2 || x < track[0].x || x > track[track.length - 1].x) return;
+      let k = track.length - 1;
+      while (k > 0 && track[k - 1].x > x) k--;
+      const a = track[Math.max(0, k - 1)];
+      const b = track[k];
+      const y = b.x - a.x > 1e-9 ? a.y + ((b.y - a.y) * (x - a.x)) / (b.x - a.x) : b.y;
+      err = Math.max(err, Math.abs(car.position.y - y));
+    });
+    this.liftErr = err;
   }
 }

@@ -3997,3 +3997,242 @@ body {
     animation-duration: 0.01s;
   }
 }
+
+/* ---- v1.11 (PR8a): うしろむき (PHASE9_CHAPTER5_6 第 3 部 A3, A10) ---- */
+/* The まえ／うしろ switch beside the lever: its screen-middle side, level with the lever's lower half and right of its
+   longest word ("きゅうブレーキ"); on a short phone it sits higher, over the door's height (the door comes up left of
+   the round buttons). Left-handed it goes over to the right with the lever. A tentative place (PHASE9_0 §2). */
+.reverse-switch {
+  --rs-w: 64px;
+  --rs-h: 112px;
+  position: absolute;
+  left: calc(var(--safe-left) + 216px);
+  bottom: calc(var(--safe-bottom) + 24px);
+  width: var(--rs-w);
+  height: var(--rs-h);
+  padding: 0;
+  border: none;
+  border-radius: calc(var(--rs-w) / 2);
+  background: rgba(20, 30, 50, 0.45);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.7), 0 4px 10px rgba(0, 0, 0, 0.3);
+  font-family: inherit;
+  touch-action: manipulation;
+  cursor: pointer;
+  overflow: visible;
+}
+
+.reverse-switch[hidden] {
+  display: none;
+}
+
+.rs-half {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+.rs-front {
+  top: 0;
+}
+
+.rs-back {
+  bottom: 0;
+}
+
+.rs-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.rs-word {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  line-height: 1;
+}
+
+/* The knob: the side it is on, yellow for まえ, pink for うしろ (its half's picture and word sit on it). */
+.rs-knob {
+  position: absolute;
+  left: 4px;
+  width: calc(var(--rs-w) - 8px);
+  height: calc(var(--rs-h) / 2 - 6px);
+  top: 4px;
+  border-radius: calc(var(--rs-w) / 2 - 4px);
+  background: linear-gradient(#ffd166, #f2b632);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35), inset 0 -3px 0 rgba(0, 0, 0, 0.12);
+  transition: top 0.25s ease-in-out, background 0.25s;
+  z-index: 0;
+}
+
+.rs-half {
+  z-index: 1;
+}
+
+.reverse-switch[data-dir='front'] .rs-front,
+.reverse-switch[data-dir='back'] .rs-back {
+  opacity: 1;
+}
+
+.reverse-switch[data-dir='back'] .rs-knob {
+  top: calc(var(--rs-h) / 2 + 2px);
+  background: linear-gradient(#f27db8, #e75ba0);
+}
+
+/* Waiting to turn (braking to a stop first): the knob blinks where it will go. */
+.reverse-switch[data-pending='1'] .rs-knob {
+  animation: rs-pending 0.5s ease-in-out infinite alternate;
+}
+
+.reverse-switch[data-pending='1'][data-dir='front'] .rs-knob {
+  top: calc(var(--rs-h) / 2 + 2px);
+  background: linear-gradient(#f27db8, #e75ba0);
+}
+
+.reverse-switch[data-pending='1'][data-dir='back'] .rs-knob {
+  top: 4px;
+  background: linear-gradient(#ffd166, #f2b632);
+}
+
+@keyframes rs-pending {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
+  }
+}
+
+/* A hint (the child decides): a soft pink ring breathing round it. */
+.reverse-switch[data-glow='1'] {
+  animation: rs-glow 1.1s ease-in-out infinite;
+}
+
+@keyframes rs-glow {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.9), 0 0 0 3px rgba(231, 91, 160, 0.55), 0 0 14px 4px rgba(231, 91, 160, 0.45);
+  }
+  50% {
+    box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.9), 0 0 0 6px rgba(231, 91, 160, 0.8), 0 0 24px 10px rgba(231, 91, 160, 0.55);
+  }
+}
+
+#app.is-left-handed .reverse-switch {
+  left: auto;
+  right: calc(var(--safe-right) + 216px);
+}
+
+@media (max-height: 500px) {
+  .reverse-switch {
+    --rs-w: 56px;
+    --rs-h: 96px;
+    bottom: calc(var(--safe-bottom) + 104px);
+  }
+  .rs-icon {
+    width: 20px;
+    height: 20px;
+  }
+  .rs-word {
+    font-size: 12px;
+  }
+}
+
+/* The rear window (A10, "うしろの まど"): a rounded white frame round the screen edge, a little pink swirl on top. It
+   makes the view a little harder to see, never darker, never shaking, never red. */
+.rear-window {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+}
+
+#app[data-camera='rear'] .rear-window {
+  display: block;
+}
+
+.rear-window::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12vmin;
+  box-shadow: inset 0 0 0 5vmin rgba(250, 248, 242, 0.92), inset 0 0 0 calc(5vmin + 4px) rgba(120, 130, 150, 0.35);
+}
+
+.rear-window svg {
+  position: absolute;
+  top: 1vmin;
+  left: 50%;
+  width: 4vmin;
+  height: 4vmin;
+  transform: translateX(-50%);
+}
+
+/* Turning round ("ぐるりん"): a pink swirl crosses the screen in half a second. */
+.reverse-swirl {
+  position: absolute;
+  top: 50%;
+  left: -30vmin;
+  width: 26vmin;
+  height: 26vmin;
+  margin-top: -13vmin;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.reverse-swirl.is-on {
+  animation: reverse-swirl 0.5s ease-in-out;
+}
+
+@keyframes reverse-swirl {
+  0% {
+    opacity: 0;
+    transform: translateX(0) rotate(0deg);
+  }
+  20% {
+    opacity: 0.9;
+  }
+  80% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(calc(100vw + 60vmin)) rotate(-540deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reverse-switch[data-pending='1'] .rs-knob,
+  .reverse-switch[data-glow='1'] {
+    animation: none;
+  }
+  .reverse-swirl.is-on {
+    animation: reverse-swirl-calm 0.2s linear;
+    left: 50%;
+    margin-left: -13vmin;
+  }
+}
+
+@keyframes reverse-swirl-calm {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* The junction arrows of a back junction (reversing): pink rims. */
+.junction[data-back='1'] .arrow {
+  box-shadow: 0 0 0 4px rgba(231, 91, 160, 0.75), 0 4px 10px rgba(0, 0, 0, 0.3);
+}

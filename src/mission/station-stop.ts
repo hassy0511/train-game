@@ -1,5 +1,5 @@
 import type { StationDef, StopRule } from '../stage/types';
-import { GAUGE_DISTANCE, STOP_RULE } from '../train/params';
+import { GAUGE_DISTANCE, REVERSE, STOP_RULE } from '../train/params';
 import type { Train } from '../train/train';
 
 export type StopGrade = 'perfect' | 'ok';
@@ -10,7 +10,12 @@ export type StopOutcome =
   | { kind: 'stopped'; grade: StopGrade; offset: number }
   | { kind: 'short'; offset: number }
   | { kind: 'near' }
-  | { kind: 'gaugeShown' };
+  | { kind: 'gaugeShown' }
+  /**
+   * v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A9): past the line with うしろむき learned: no fail (every frame while so;
+   * the runner says "うしろで もどって" once, again when the train just stands there).
+   */
+  | { kind: 'backUp'; offset: number; stationId: string };
 
 /** What the stop gauge should show this frame. `offset` is stop line minus train front (m). */
 export interface GaugeState {
@@ -36,12 +41,16 @@ export class StopMonitor {
   private gaugeAnnounced = false;
   private shortTimer = 0;
   private done = false;
+  /** v1.11 (6-1): the station is closed for now (no gauge, no lines, no grading, no fail passing it). */
+  private held = false;
 
   constructor(
     private readonly train: Train,
     readonly station: StationDef,
     /** Distance at which to announce the station (hint), in meters. */
     private readonly nearDistance = 120,
+    /** v1.11 (PR8a, A9): うしろむき is learned: past the line (up to REVERSE.overshootGiveUp m) the train may back up. */
+    private readonly canBackUp: () => boolean = () => false,
   ) {
     this.rule = { ...STOP_RULE, ...(station.stop ?? {}) };
     this.gauge = { visible: false, offset: GAUGE_DISTANCE, range: GAUGE_DISTANCE, ok: this.rule.ok, perfect: this.rule.perfect, tooFast: false };
@@ -56,6 +65,20 @@ export class StopMonitor {
     this.gauge.visible = false;
   }
 
+  /**
+   * v1.11 (6-1, PHASE9_CHAPTER5_6 第 7 部 §4.1): closes the station (`on`) while the lead runs ahead: no gauge, no
+   * "near" line, no grading, and passing it is no fail. Opened again, it watches afresh (reset).
+   */
+  hold(on: boolean): void {
+    if (on === this.held) return;
+    this.held = on;
+    this.reset();
+  }
+
+  get isHeld(): boolean {
+    return this.held;
+  }
+
   /** True once the stop has been graded (or failed). */
   get finished(): boolean {
     return this.done;
@@ -63,6 +86,10 @@ export class StopMonitor {
 
   update(dt: number): StopOutcome | null {
     if (this.done) return null;
+    if (this.held) {
+      this.gauge.visible = false;
+      return null;
+    }
     const st = this.train.state;
     if (st.railId !== this.station.railId) {
       // Off on another line (a side track, a wrong turn): no gauge until back on the station's line.
@@ -73,7 +100,8 @@ export class StopMonitor {
     const { zone, ok, perfect, maxSpeed } = this.rule;
 
     this.gauge.offset = offset;
-    this.gauge.visible = offset <= GAUGE_DISTANCE && offset > -GAUGE_DISTANCE / 4;
+    const backUp = this.canBackUp();
+    this.gauge.visible = offset <= GAUGE_DISTANCE && offset > (backUp ? -REVERSE.overshootGiveUp : -GAUGE_DISTANCE / 4);
     this.gauge.tooFast = this.gauge.visible && st.speed > maxSpeed;
     if (this.gauge.visible && !this.gaugeAnnounced) {
       this.gaugeAnnounced = true;
@@ -86,6 +114,19 @@ export class StopMonitor {
     }
 
     if (offset < -ok) {
+      // v1.11 (PR8a, A9): with うしろむき, overshooting is not a fail until REVERSE.overshootGiveUp m past; backing up
+      // to the line (the trail's floor is there) and standing is a stop graded as always. Too fast is still too fast.
+      if (backUp && offset >= -REVERSE.overshootGiveUp) {
+        if (!this.zoneEntered && offset <= zone) {
+          this.zoneEntered = true;
+          if (st.speed > maxSpeed) {
+            this.done = true;
+            this.gauge.visible = false;
+            return { kind: 'tooFast', speed: st.speed };
+          }
+        }
+        return { kind: 'backUp', offset, stationId: this.station.id };
+      }
       this.done = true;
       this.gauge.visible = false;
       return { kind: 'overshoot', offset };

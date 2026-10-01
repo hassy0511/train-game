@@ -17,6 +17,8 @@ export interface TrainPose {
   quaternion: Quaternion;
   /** Trailing cars, nearest first (visual only). */
   cars: CarPose[];
+  /** v1.11 (PR8a): the last car (the same object as the last of `cars`): the rear window camera, the rear lamps. */
+  tail: CarPose;
 }
 
 export interface TrainState {

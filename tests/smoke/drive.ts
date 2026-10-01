@@ -318,3 +318,159 @@ export async function magnetRecordRun(page: Page, run: MagnetRecordRun, out: str
   if (run.riddle) expect(await lines()).not.toContain(run.riddle);
   expect(errors).toEqual([]);
 }
+
+/**
+ * v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A16, A17): keeps what the まえ／うしろ switch and the train did in the page
+ * (window.__reverseLog): a row each time the direction, the switch state (#app[data-reverse]), the last stop point, the
+ * back arrows or the tail car's rail change, with the time, the front (rail, s) and the tail car (rail, s). At 10 fps
+ * the half-second turn still leaves its "turning" row.
+ */
+export interface ReverseRow {
+  t: number;
+  direction: string;
+  reverse: string;
+  stop: string;
+  arrows: string;
+  rail: string;
+  front: number;
+  tailRail: string;
+  tailS: number;
+  speed: number;
+  junction: boolean;
+}
+
+export async function recordReverse(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const log: ReverseRow[] = [];
+    (window as unknown as { __reverseLog: ReverseRow[] }).__reverseLog = log;
+    let last = '';
+    new MutationObserver(() => {
+      const d = document.getElementById('app')?.dataset;
+      if (!d) return;
+      const box = document.getElementById('junction');
+      const junction = !!box && !box.hidden;
+      const key = `${d.direction}|${d.reverse}|${d.reverseStop}|${d.backArrows}|${d.tailRail}|${junction}`;
+      if (key === last) return;
+      last = key;
+      log.push({
+        t: Number(d.time),
+        direction: d.direction ?? '',
+        reverse: d.reverse ?? '',
+        stop: d.reverseStop ?? '',
+        arrows: d.backArrows ?? '',
+        rail: d.rail ?? '',
+        front: Number(d.s) + 6,
+        tailRail: d.tailRail ?? '',
+        tailS: Number(d.tailS),
+        speed: Number(d.speed),
+        junction,
+      });
+    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-direction', 'data-reverse', 'data-reverse-stop', 'data-back-arrows', 'data-tail-rail', 'hidden'] });
+  });
+}
+
+export function reverseLog(page: Page): Promise<ReverseRow[]> {
+  return page.evaluate(() => (window as unknown as { __reverseLog: ReverseRow[] }).__reverseLog ?? []);
+}
+
+/**
+ * v1.11 (PR8a): turns the switch to `dir` ("front" | "back"): one pointerdown on #reverse-switch (in the page), then
+ * waits until #reverse-switch[data-dir] is `dir` (moving, the train first brakes to a stop: no second press while it
+ * waits, that would cancel it). Fails when it is locked.
+ */
+export async function setDirection(page: Page, dir: 'front' | 'back', timeoutMs = 60_000): Promise<void> {
+  const sw = page.locator('#reverse-switch');
+  await expect(sw).toBeVisible();
+  // One press, once a turn in progress is over (the switch is locked for that half second): checked and pressed in
+  // the page in one go.
+  await page.waitForFunction(
+    (want) => {
+      const b = document.getElementById('reverse-switch');
+      if (!b || b.dataset.dir === want) return true;
+      if (document.getElementById('app')?.dataset.reverse === 'turning') return false;
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      return true;
+    },
+    dir,
+    { timeout: 30_000, polling: 'raf' },
+  );
+  await expect(sw).toHaveAttribute('data-dir', dir, { timeout: timeoutMs });
+  // The turn itself (half a second of game time) is over.
+  await page.waitForFunction(() => document.getElementById('app')?.dataset.reverse !== 'turning', null, { timeout: 30_000 });
+}
+
+/** v1.11 (PR8a): waits until the train, reversing, stands at a stop point for `why` (#app[data-reverse-stop]). */
+export async function waitReverseStop(page: Page, why: string, timeoutMs = 180_000): Promise<void> {
+  await page.waitForFunction(
+    (w) => {
+      const d = document.getElementById('app')?.dataset;
+      return d?.reverse === 'stop' && d.reverseStop === w;
+    },
+    why,
+    { timeout: timeoutMs },
+  );
+}
+
+/** v1.11 (PR8a): waits until the tail car's centre is on `railId` at `at` or before it (reversing: it goes down). */
+export async function waitTail(page: Page, railId: string, at: number, timeoutMs = 180_000): Promise<void> {
+  await page.waitForFunction(
+    ([r, t]) => {
+      const d = document.getElementById('app')?.dataset;
+      return d?.tailRail === r && Number(d.tailS) <= Number(t);
+    },
+    [railId, at] as const,
+    { timeout: timeoutMs },
+  );
+}
+
+/**
+ * v1.11 (PR8a): taps the `side` arrow of a back junction the moment its arrows show (#junction[data-back="1"]; checked
+ * and tapped in the same page callback).
+ */
+export async function backArrow(page: Page, side: 'left' | 'right', timeoutMs = 180_000): Promise<void> {
+  const tapped = await page.waitForFunction(
+    (sd) => {
+      const box = document.getElementById('junction');
+      const b = box?.querySelector<HTMLElement>(`.arrow[data-side="${sd}"]`);
+      if (!box || box.hidden || box.dataset.back !== '1' || !b || b.hidden) return false;
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      return true;
+    },
+    side,
+    { timeout: timeoutMs, polling: 'raf' },
+  );
+  expect(await tapped.jsonValue()).toBe(true);
+}
+
+/**
+ * v1.11 (6-1, PHASE9_CHAPTER5_6 第 7 部 §16.4): waits until #app[data-lead] is `phase` (the lead's stage: armed, tease,
+ * dash, learn, backup, follow, met, gone). Lines and cards are left alone (a learn cutscene waits for its card).
+ */
+export async function waitLead(page: Page, phase: string, timeoutMs = 90_000): Promise<void> {
+  await page.waitForFunction((p) => document.getElementById('app')?.dataset.lead === p, phase, { timeout: timeoutMs, polling: 'raf' });
+}
+
+/** v1.11 (6-1): waits until #app[data-welcome] is `beat` (ask, look, stand, walk, peek, board, done). */
+export async function waitWelcome(page: Page, beat: string, timeoutMs = 60_000): Promise<void> {
+  await page.waitForFunction((b) => document.getElementById('app')?.dataset.welcome === b, beat, { timeout: timeoutMs, polling: 'raf' });
+}
+
+/**
+ * v1.11 (6-1): presses `id` (pointerdown) in the page on the first frame `cond` holds (a JS expression over `d`, the
+ * #app dataset): a short state is not missed at 10 fps.
+ */
+export async function pressWhen(page: Page, id: string, cond: string, timeoutMs = 90_000): Promise<void> {
+  const pressed = await page.waitForFunction(
+    ([bid, src]) => {
+      const app = document.getElementById('app');
+      const b = document.getElementById(bid);
+      if (!app || !b) return false;
+      if (!(new Function('d', `return (${src});`)(app.dataset) as boolean)) return false;
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      return true;
+    },
+    [id, cond] as const,
+    { timeout: timeoutMs, polling: 'raf' },
+  );
+  expect(await pressed.jsonValue()).toBe(true);
+}

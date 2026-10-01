@@ -55,7 +55,9 @@ export type StageEvent =
         // v1.11 (5-1): little tanukis dancing on the rail, "ききっ" (soft)
         | 'lure'
         // v1.11 (PR5): "ぽよん" off an unopened magnet gap's soap film or an iron gate (soft)
-        | 'magnet';
+        | 'magnet'
+        // v1.11 (PR8a): just in case something goes wrong reversing (never meant to happen; soft)
+        | 'reverse';
       /** v1.11 (5-2): a soft fail (a small dip, no shake): a wind-up toy, a ball pit, the snow… (a test hook). */
       soft?: boolean;
     }
@@ -66,6 +68,17 @@ export type StageEvent =
   | { type: 'rewind'; boarded?: Record<string, number> }
   /** The player has this ability (at load and when it is learned). */
   | { type: 'ability'; id: AbilityId }
+  /**
+   * v1.11 (PR8a, うしろむき): the train turned round: reversing (`on`) or forward again. The view moves the light's beam
+   * to the last car and lights its two white rear lamps.
+   */
+  | { type: 'reverse'; on: boolean }
+  /** v1.11 (PR8a, A17): reversing, stopped at a stop point (A6). */
+  | { type: 'reverse:stop'; why: 'gap' | 'air' | 'dive' | 'station' | 'floor' | 'portal' | 'buffer' }
+  /** v1.11 (PR8a): reversing, the rear went into back junction `junction`'s siding. */
+  | { type: 'reverse:siding'; junction: string }
+  /** v1.11 (PR8a, A9): the train overshot station `stationId` with うしろむき learned ("うしろで もどって"). */
+  | { type: 'reverse:backup'; stationId: string }
   | { type: 'light'; on: boolean }
   /**
    * v1.11 (PR5, PHASE9_CHAPTER5_6 第 2 部 M15): the light button's step (the beam's colour, the lamp's rim). `light`
@@ -275,6 +288,35 @@ export type StageEvent =
   | { type: 'mirror:turn'; id: string; face: 'front' | 'back'; seconds: number; instant?: boolean }
   /** v1.11 (5-3): the train front went onto a glass stretch (the first time this mission: "しゃららん"). */
   | { type: 'glass'; on: boolean }
+  /** v1.11 (6-1): friends riding along from now on (cutscene "crew"; Sakasa sits behind the driver's seat). */
+  | { type: 'crew'; ids: string[] }
+  /** v1.11 (6-1): a cutscene's roll ("depart") started or ended. */
+  | { type: 'depart'; state: 'rolling' | 'done' }
+  /**
+   * v1.11 (6-1, PHASE9_CHAPTER5_6 第 7 部 §4.10): "おいかけっこ": Sakasa came out ("start"), was called (`n` calls so far,
+   * `auto`: the partner's), the train stopped to work it out ("learn"), she turned round to follow ("follow"), stopped
+   * before the train ("met", `auto`: she came back by herself), went home ("gone"); a call later only makes her hop.
+   */
+  | { type: 'lead:start'; id: string }
+  | { type: 'lead:call'; id: string; n: number; auto: boolean }
+  | { type: 'lead:learn'; id: string }
+  | { type: 'lead:follow'; id: string; auto: boolean }
+  | { type: 'lead:met'; id: string; auto: boolean }
+  | { type: 'lead:gone'; id: string }
+  | { type: 'lead:hop'; id: string }
+  /** v1.11 (6-1): a closed station (the lead's) opened. */
+  | { type: 'station:open'; stationId: string }
+  /**
+   * v1.11 (6-1): "ドアを あけて まつ": the guest's beat started (`beat`), she flinched back (`n` times so far), giggled,
+   * boarded; the step started ("ask") and ended ("done").
+   */
+  | { type: 'welcome:beat'; beat: string }
+  | { type: 'welcome:flinch'; n: number }
+  | { type: 'welcome:giggle'; n: number }
+  | { type: 'welcome:board' }
+  /** v1.11 (6-1): her footstep while she walks ("とこ"), and her hiding her face (a whistle before the doors open). */
+  | { type: 'welcome:step' }
+  | { type: 'welcome:shy' }
   /** v1.7: a countdown started ("run"), got low, was beaten ("safe"), ran out ("up") or was put away ("off"). */
   | { type: 'countdown'; state: 'run' | 'low' | 'safe' | 'up' | 'off' };
 

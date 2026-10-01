@@ -4,7 +4,7 @@ import { AudioEngine } from './audio/audio';
 import { GAME_TITLE, GAME_TITLE_LINES, PARTNER_NAME } from './config';
 import { StageEventBus } from './core/stage-events';
 import { addToProgress, loadProgress, setResume, type Resume } from './core/progress';
-import { ABILITY_NAMES, abilityInUse, MissionRunner, type MissionPorts } from './mission/runner';
+import { ABILITY_CARD_TITLES, ABILITY_NAMES, abilityInUse, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
 import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/loader';
 import type { AbilityId, EnvironmentDef, GimmickDef, Vec3 } from './stage/types';
@@ -18,6 +18,7 @@ import {
   MAGNET,
   MIRROR_WORLD,
   PLOW,
+  LEAD,
   RECORD,
   WINDUP,
   SNOW_WAVE,
@@ -45,6 +46,9 @@ import { BoughSystem } from './gimmick/bough';
 import { showTitle } from './ui/title';
 import { createToast } from './ui/toast';
 import { CAMERA_LABELS, CAMERA_MODES, createSceneView, type CameraFx, type CameraMode } from './view';
+import { reversedCamera } from './view/camera-rig';
+import { REVERSE_LINES, ReverseSystem, type ReverseLine, type ReversePhase } from './gimmick/reverse';
+import { createReverseSwitch } from './ui/reverse-switch';
 import { createCameraButton } from './ui/camera-button';
 import { createStopGauge } from './ui/stop-gauge';
 import { createDiveButton, createJumpButton, createLightButton, createPlowButton, createRocketButton } from './ui/ability-buttons';
@@ -314,15 +318,19 @@ async function boot(): Promise<void> {
   const hasMissions = stage.file.missions.length > 0;
   // The hidden test course has every button, so the jump, the light, the rocket and diving can be tried there.
   // v1.11 (PR5): and the magnet light (the light button's third step), for its side way "jishaku".
+  // v1.11 (PR8a): and うしろむき (the まえ／うしろ switch), for its back siding "ura".
   const abilities = new Set<AbilityId>(
     hasMissions
       ? [...loadProgress().abilities, ...(await inheritedAbilities(stageId))]
-      : ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'magnetLight'],
+      : ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'magnetLight', 'reverse'],
   );
   const train = new Train(stage.network, stage.file.junctions, stage.file.start, {
     waters: stage.file.environment.water ?? [],
     floaters: stage.file.floaters ?? [],
   });
+  // v1.11 (PR8a): the back junctions (switchbacks), and the stop lines the trail's floor moves up to (A5.2).
+  train.setBackJunctions(stage.backJunctions);
+  train.setStationLines(stage.file.stations.map((st) => ({ railId: st.railId, at: st.at })));
   // 2-3: slopes and the rocket also work on the test course (no mission runner there).
   const slopes = new SlopeSystem(stage.file.gimmicks, train);
   const rocket = new RocketSystem(stage.file.gimmicks, train, slopes);
@@ -352,6 +360,8 @@ async function boot(): Promise<void> {
   // v1.11 (PR5): the magnet light's iron targets (unopened gaps and gates stop the train: "ぽよん") and the iron odds
   // and ends by the line. Both do nothing until the magnet light is learned (showAbility).
   const magnet = new MagnetSystem(stage.magnets, train, stage.file.junctions, (id) => foundRecords.has(id));
+  // v1.11 (PR8a): うしろむき: the switch's glow and the partner's lines (nothing until it is learned: showAbility).
+  const reverse = new ReverseSystem(stage, train, { found: (id) => foundRecords.has(id), stepStation: () => runner?.stepStation ?? null });
   // The shut whistle gates (5-3) and the unopened magnet gaps and gates: "ぽよん" before them.
   train.setBlocks(() => [...flip.blocks(), ...magnet.blocks()]);
   const ironProps = new IronProps(stage.ironProps, train);
@@ -362,8 +372,16 @@ async function boot(): Promise<void> {
     stage.file.gimmicks.some((g) => g.type === 'hush' || g.type === 'whistle-reversed') ||
     stage.file.junctions.some((j) => j.fireflies) ||
     stage.file.actors.some((a) => a.type === 'lure' || (a.params as { glare?: boolean } | undefined)?.glare === true);
+  // v1.11 (6-1): a stage with "おいかけっこ", "ドアを あけて まつ" or the friends riding along (their test hooks).
+  const hasLeadHooks =
+    stage.file.missions.some((m) => m.steps.some((st) => st.lead || st.welcome)) ||
+    Object.values(stage.file.cutscenes ?? {}).some((steps) => steps.some((st) => 'crew' in st || 'depart' in st));
   const whistle = new Whistle();
   const audio = new AudioEngine();
+  if (hasLeadHooks) {
+    app.dataset.crew = '';
+    app.dataset.depart = '';
+  }
   // The island's quiet sound around the train (from the first tap on; under the title too). v1.10 (3-3): the sea's
   // faraway volcano only where there is a volcano.
   audio.setAmbience(stage.file.environment.ambience ?? null, stage.file.props.some((p) => p.model === 'volcano'));
@@ -446,6 +464,11 @@ async function boot(): Promise<void> {
       }
     },
     onJunction: (side) => {
+      // v1.11 (PR8a): a back junction's arrows (reversing).
+      if (train.backJunction) {
+        train.chooseBack(side);
+        return true;
+      }
       // v1.8: a side way that needs an ability the player does not have yet stays shut ("ロケットが あれば…").
       const j = train.announcedJunction;
       if (j?.needs && side !== j.default && !abilities.has(j.needs)) {
@@ -461,6 +484,11 @@ async function boot(): Promise<void> {
     audio.unlock();
     if (pressWanted('jump') !== null) return;
     const result = train.jump();
+    // v1.11 (PR8a, A11): reversing, a little hop where it is ("ぴょこっ").
+    if (result === 'hop') {
+      audio.playHopBack();
+      return;
+    }
     if (result === 'ok') {
       // With a grasshopper on the roof the jump goes "びよーん".
       if (train.jumpBoost) audio.playHopperJump();
@@ -518,7 +546,26 @@ async function boot(): Promise<void> {
     audio.unlock();
     if (pressWanted('rocket') !== null) return;
     const result = rocket.press();
-    if (!result.ok) runner?.onRocketRefused(result);
+    if (!result.ok) {
+      // v1.11 (PR8a, A11): reversing, "ぷすっ" and the partner says it does not work backwards.
+      if (result.why === 'reverse') {
+        audio.playPuff();
+        if (!runner && simTime - rocketBackSaidAt > 4) {
+          rocketBackSaidAt = simTime;
+          void bubbles.say(REVERSE_LINES.refuseRocketBack);
+        }
+      }
+      runner?.onRocketRefused(result);
+    }
+  });
+  let rocketBackSaidAt = -Infinity;
+  // v1.11 (PR8a, 第 3 部 A3): the まえ／うしろ switch beside the lever (shown once うしろむき is learned).
+  let reverseToggles = 0;
+  let pendingTickIn = 0;
+  const reverseSwitch = createReverseSwitch(uiEl, () => {
+    audio.unlock();
+    if (cutscenePress) return;
+    train.pressSwitch();
   });
   const showAbility = (ability: AbilityId): void => {
     abilities.add(ability);
@@ -542,6 +589,11 @@ async function boot(): Promise<void> {
       rocket.enabled = true;
       rocketButton.show();
       app.dataset.hasRocket = '1';
+    }
+    if (ability === 'reverse') {
+      reverse.enabled = true;
+      reverseSwitch.show();
+      app.dataset.hasReverse = '1';
     }
     events.post({ type: 'ability', id: ability });
   };
@@ -601,12 +653,17 @@ async function boot(): Promise<void> {
   let fixedCamera: { at: Vec3; lookAt: Vec3; reach?: number } | null = null;
   // The title screen's camera circling the train (set while the title is up).
   let orbiting = false;
+  // v1.11 (PR8a × 6-1): Sakasa following a train backing up keeps the view the child picked (#app[data-camera-hold]).
+  let leadHoldsFront = false;
+  app.dataset.cameraHold = '';
   const applyCamera = (snap = false): void => {
-    const mode = cameraOverride ?? zoneCamera ?? userCamera;
+    const picked = cameraOverride ?? zoneCamera ?? userCamera;
+    // v1.11 (PR8a, A10): reversing, the cab turns into the rear window and "うしろから" into the view from ahead.
+    const mode = train.reversing && !leadHoldsFront ? reversedCamera(picked) : picked;
     view.setCamera(mode, snap);
     view.setFixedCamera(fixedCamera);
     app.dataset.camera = fixedCamera ? 'fixed' : orbiting ? 'orbit' : mode;
-    cameraButton.setMode(mode);
+    cameraButton.setMode(picked);
   };
   // In the top corner beside the pause button (PHASE7 §1), for every stage.
   const cameraButton = createCameraButton(
@@ -1082,6 +1139,71 @@ async function boot(): Promise<void> {
   });
   train.events.on('junctionLocked', () => ui.junction.hide());
   train.events.on('junctionPassed', () => ui.junction.hide());
+
+  // ---- v1.11 (PR8a) うしろむき (PHASE9_CHAPTER5_6 第 3 部 第 A 部) ----------------------------------------------------
+  // The rear window's frame (CSS shows it by #app[data-camera="rear"]) and the swirl crossing the screen as it turns.
+  const rearWindow = document.createElement('div');
+  rearWindow.className = 'rear-window';
+  rearWindow.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12m-1.5 0a1.5 1.5 0 1 1 3 0a3.5 3.5 0 1 1-7 0a5.5 5.5 0 1 1 11 0a7.5 7.5 0 1 1-15 0" fill="none" stroke="#E75BA0" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+  uiEl.prepend(rearWindow);
+  const swirl = document.createElement('div');
+  swirl.className = 'reverse-swirl';
+  swirl.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12m-1.5 0a1.5 1.5 0 1 1 3 0a3.5 3.5 0 1 1-7 0a5.5 5.5 0 1 1 11 0a7.5 7.5 0 1 1-15 0a9.5 9.5 0 1 1 19 0" fill="none" stroke="#E75BA0" stroke-width="2" stroke-linecap="round"/></svg>`;
+  swirl.addEventListener('animationend', () => swirl.classList.remove('is-on'));
+  uiEl.prepend(swirl);
+  app.dataset.reverseToggles = '0';
+  app.dataset.reverseStop = '';
+  app.dataset.backArrows = '';
+  const turned = (on: boolean, instant: boolean): void => {
+    if (!instant) {
+      reverseToggles += 1;
+      app.dataset.reverseToggles = String(reverseToggles);
+      if (on) audio.playReverseOn();
+      else audio.playReverseOff();
+      swirl.classList.remove('is-on');
+      void swirl.offsetWidth;
+      swirl.classList.add('is-on');
+    }
+    app.dataset.reverseStop = '';
+    events.post({ type: 'reverse', on });
+    // The camera swaps during the turn (the swirl covers it).
+    applyCamera(true);
+  };
+  train.events.on('reverseOn', ({ instant }) => turned(true, instant));
+  train.events.on('reverseOff', ({ instant }) => turned(false, instant));
+  events.on('event', (e) => {
+    if (e.type === 'rewind') reverse.reset();
+  });
+  train.events.on('switchPending', ({ on }) => {
+    pendingTickIn = on ? 0 : Infinity;
+  });
+  train.events.on('reverseStop', ({ why }) => {
+    app.dataset.reverseStop = why;
+    if (why === 'buffer') audio.playReverseBump();
+    else audio.playReverseStop();
+    events.post({ type: 'reverse:stop', why });
+  });
+  train.events.on('backArrows', (e) => {
+    app.dataset.backArrows = e.junction.id;
+    ui.junction.spin(null);
+    ui.junction.show({ left: e.left, right: e.right, default: e.default, back: true });
+  });
+  const backArrowsOff = (): void => {
+    app.dataset.backArrows = '';
+    ui.junction.hide();
+  };
+  train.events.on('backLocked', backArrowsOff);
+  train.events.on('backPassed', backArrowsOff);
+  train.events.on('backSiding', ({ junction }) => events.post({ type: 'reverse:siding', junction: junction.id }));
+  // The lines (a mission's words through the runner; the test course's straight to the bubble).
+  reverse.events.on('line', (line: ReverseLine) => {
+    if (runner) {
+      runner.sayReverse(line);
+      return;
+    }
+    const own = line.own?.map((l) => (typeof l === 'string' ? l : l.text));
+    for (const text of own ?? [REVERSE_LINES[line.key]]) void bubbles.say(text);
+  });
   train.events.on('railChanged', ({ railId }) => console.info(`rail: now on ${railId}`));
   train.events.on('endOfLine', () => {
     if (!hasMissions) ui.overlays.showEnd();
@@ -1153,9 +1275,15 @@ async function boot(): Promise<void> {
   const findTestCourseRecords = (): void => {
     for (const record of stage.records) {
       if (foundRecords.has(record.def.id) || !abilityInUse(record.def.requires, train, lightOn)) continue;
-      const d = record.onRail
-        ? train.distanceAhead(record.onRail.railId, record.onRail.at)
-        : record.position.distanceTo(train.getPose().position);
+      // v1.11 (PR8a, §0.8): reversing, from the tail car.
+      const tail = train.reversing ? train.tailFrame() : null;
+      const d = tail
+        ? record.onRail && record.onRail.railId === tail.railId
+          ? record.onRail.at - tail.s
+          : record.position.distanceTo(train.getPose().tail.position)
+        : record.onRail
+          ? train.distanceAhead(record.onRail.railId, record.onRail.at)
+          : record.position.distanceTo(train.getPose().position);
       if (d === null || Math.abs(d) > RECORD.distance) continue;
       foundRecords.add(record.def.id);
       app.dataset.records = [...foundRecords].join(',');
@@ -1189,25 +1317,35 @@ async function boot(): Promise<void> {
     // Stage zones along the rail (front of the train): camera views and updrafts.
     const gimmicks = stage.file.gimmicks;
     const camZone = zoneAt(gimmicks, 'camera', train.state.railId, train.frontS);
-    const nextCamera = camZone ? (camZone.params?.mode as CameraMode) : null;
+    // v1.11 (PR8a, A7): no stage camera reversing (the rear window) nor retracing (seen once already).
+    const nextCamera = camZone && !train.stillGimmicks ? (camZone.params?.mode as CameraMode) : null;
     if (nextCamera !== zoneCamera) {
       zoneCamera = nextCamera;
       applyCamera();
     }
     // v1.10 (3-1): a whale's current pushes only while its whale swims along (the test course has no whales to greet).
-    const zone = zoneAt(gimmicks, 'updraft', train.state.railId, train.frontS);
+    const zone = train.stillGimmicks ? null : zoneAt(gimmicks, 'updraft', train.state.railId, train.frontS);
     const updraft = zone && (runner?.updraftOn(zone) ?? true) ? zone : null;
     train.boostSpeed = updraft ? param(updraft, 'speed', 28) : 0;
     app.dataset.updraft = updraft ? '1' : '0';
     // 2-3: the slope under the train front, and the rocket resting in quiet places (before the train moves).
-    slopes.update();
+    // v1.11 (PR8a, A7): reversing and retracing, the slopes are level and the ice holds (never "ずるずる", never
+    // "つるーん" on the way back), and the thin ice, the boughs and the mirrors passed stay as they are.
+    const still = train.stillGimmicks;
+    if (still) {
+      train.slope = null;
+      train.grip = 1;
+    } else {
+      slopes.update();
+      ice.update(dt);
+    }
     rocket.update();
-    ice.update(dt);
     // v1.11 (PR5): the magnet light pulls (its phase: the runner's; on the test course driving, stopped or failing),
     // the odds and ends by the line, and the speed caps (the light's and the magnet's 0.7, pulling 0.5).
     const magnetPhase = runner ? runner.phase : testCourseFailing || train.isBouncing || train.isFalling ? 'failing' : train.state.speed < 0.05 ? 'stopped' : 'driving';
-    magnet.update(dt, { mode: lightSwitch.mode, phase: magnetPhase, stopLine: runner?.stopLine ?? null });
-    ironProps.update(dt, { mode: lightSwitch.mode, pulling: magnet.pulling !== null, phase: magnetPhase });
+    // v1.11 (PR8a, A7): the magnet's targets passed stay as they are reversing (open ones stay open); no odds and ends.
+    magnet.update(dt, { mode: lightSwitch.mode, phase: still ? 'stopped' : magnetPhase, stopLine: runner?.stopLine ?? null });
+    ironProps.update(dt, { mode: still ? 'off' : lightSwitch.mode, pulling: magnet.pulling !== null, phase: magnetPhase });
     const pulling = magnet.pulling !== null;
     train.setSpeedCap('magnet', pulling ? { scale: MAGNET.pullScale } : null);
     train.setSpeedCap('light', lightSwitch.mode !== 'off' && !pulling ? { scale: LIGHT.speedScale } : null);
@@ -1234,11 +1372,13 @@ async function boot(): Promise<void> {
         audio.playPlowSpray(Math.abs(train.state.speed));
       }
     } else plowSprayIn = 0;
-    thinIce.update(dt);
-    mirrors.update();
+    if (!still) {
+      thinIce.update(dt);
+      mirrors.update();
+    }
     // v1.11 (5-3): the view is mirrored while the train front is between a stretch's gates (a box's CSS: no draw cost).
     flip.update();
-    phantoms.update({ lightOn });
+    if (!still) phantoms.update({ lightOn });
     updateGlass();
     viewEl.classList.toggle('is-flipped', flip.flipped);
     tunnels.update();
@@ -1262,23 +1402,45 @@ async function boot(): Promise<void> {
       target: train.targetSpeed,
       braking: train.targetSpeed < Math.abs(train.state.speed) - 0.3,
       airborne: train.airborne || train.isFalling,
-      surface: runSurface(gimmicks, train.currentRail.id, train.frontS, stage.file.environment.surface),
+      // v1.11 (PR8a, A10): where the view is (the rear window reversing).
+      surface: runSurface(gimmicks, train.viewAnchor.railId, train.viewAnchor.s, stage.file.environment.surface),
       rocket: train.rocketBurning,
       underwater: train.submerged,
       quiet: false,
     });
     app.dataset.runJoints = String(audio.runStats.joints);
     app.dataset.runReleases = String(audio.runStats.releases);
-    boughs.update(dt);
+    if (!still) boughs.update(dt);
     whistle.update(dt);
     ui.whistle.setProgress(whistle.progress);
     diveButton.setDiving(train.domeOn);
     plowButton.setPlowing(train.bladeDown, spraying);
-    const driving = runner === null || runner.phase === 'driving';
+    // v1.11 (PR8a): reversing, nothing ahead is to be jumped, dived or ploughed (the buttons work, no glow).
+    const driving = (runner === null || runner.phase === 'driving') && !train.reversing;
     diveButton.set(train.diveProgress, dive.glow && driving);
     // "ゆきかき" glows until the blade is down, and is never grey (it works standing too).
     plowButton.set(plowHint.glow && driving);
-    jumpButton.set(train.jumpProgress, train.jumpWouldClear || (runner?.jumpHint ?? false), train.state.speed < JUMP.minSpeed);
+    jumpButton.set(train.jumpProgress, !train.reversing && (train.jumpWouldClear || (runner?.jumpHint ?? false)), train.state.speed < JUMP.minSpeed);
+    // v1.11 (PR8a): うしろむき: the switch (its side, waiting to turn, its glow) and "ちっ ちっ" while it waits.
+    const reversePhase: ReversePhase = runner ? runner.phase : testCourseFailing || train.isFalling ? 'failing' : train.state.speed < 0.05 ? 'stopped' : 'driving';
+    reverse.update(dt, reversePhase);
+    reverseSwitch.set(train.direction, train.switchPending !== null);
+    // v1.11 (PR8a × 6-1): while Sakasa follows the train backing up, the view stays the one picked (she is in front).
+    const holdFront = train.reversing && (runner?.leadHoldsFront ?? false);
+    if (holdFront !== leadHoldsFront) {
+      leadHoldsFront = holdFront;
+      app.dataset.cameraHold = holdFront ? 'lead' : '';
+      applyCamera();
+    }
+    // The switch glows for うしろむき's own hints (A3) or for the lead waiting to be backed up to (6-1 M2, `backup`).
+    reverseSwitch.setGlow(reverse.glow || (runner?.switchGlow ?? false));
+    if (train.switchPending !== null) {
+      pendingTickIn -= dt;
+      if (pendingTickIn <= 0) {
+        pendingTickIn = 0.25;
+        audio.playSwitchPending();
+      }
+    }
     runner?.update(dt);
     if (!runner) findTestCourseRecords();
     // 2-3: the volcano's everyday smoke ring, more often while a countdown runs.
@@ -1334,7 +1496,7 @@ async function boot(): Promise<void> {
     rocketButton.set({
       pips: rocket.pips,
       burn: train.rocketRemaining,
-      glow: rocket.glow && (runner === null || runner.phase === 'driving'),
+      glow: rocket.glow && (runner === null || runner.phase === 'driving') && !train.reversing,
       idle: rocket.idle,
       why,
       mark: rocket.icon || (why === 'slide' || why === 'station' ? why : ''),
@@ -1393,6 +1555,19 @@ async function boot(): Promise<void> {
     app.dataset.s = train.state.s.toFixed(1);
     app.dataset.rail = train.state.railId;
     app.dataset.notch = String(train.state.notch);
+    // v1.11 (PR7, 第 3 部 A5.5): the cars along the trail: the first two cars' gap and the cars' height against the lead
+    // car's at the same trail distance.
+    app.dataset.carGap = train.carGap.toFixed(3);
+    app.dataset.carLiftErr = train.carLiftErr.toFixed(3);
+    // v1.11 (PR8a, 第 3 部 A17) test hooks.
+    app.dataset.direction = String(train.direction);
+    app.dataset.reverse = train.switchPending !== null ? 'pending' : train.turning ? 'turning' : train.atReverseStop ? 'stop' : train.reversing ? 'on' : '';
+    app.dataset.retracing = train.retracing ? '1' : '0';
+    const tail = train.tailFrame();
+    app.dataset.tailRail = tail.railId;
+    app.dataset.tailS = tail.s.toFixed(1);
+    app.dataset.trailM = train.trail.length.toFixed(1);
+    app.dataset.hop = train.hopLift.toFixed(2);
     app.dataset.air = train.airborne ? '1' : '0';
     app.dataset.speed = train.state.speed.toFixed(1);
     app.dataset.rocketPips = String(rocket.pips);
@@ -1478,6 +1653,21 @@ async function boot(): Promise<void> {
             audio.playBandStep(bandSteps % 4 === 0);
           }
         } else bandStepIn = 0;
+      }
+      // v1.11 (6-1): おいかけっこ and ドアを あけて まつ (PHASE9_CHAPTER5_6 第 7 部 §4.10). Counts only go up.
+      view.setLead?.(runner.leadPose);
+      if (hasLeadHooks) {
+        app.dataset.lead = runner.leadPhase;
+        app.dataset.leadCalls = String(runner.leadCalls);
+        app.dataset.leadAuto = String(runner.leadAutoCalls);
+        app.dataset.leadGap = String(runner.leadGap);
+        app.dataset.leadBack = String(runner.leadBack);
+        app.dataset.stationClosed = runner.closedStation;
+        app.dataset.inlineCutscene = runner.inlineCutscene;
+        app.dataset.welcome = runner.welcomeState;
+        app.dataset.welcomeFlinches = String(runner.welcomeFlinches);
+        app.dataset.welcomeGiggles = String(runner.welcomeGiggles);
+        app.dataset.musicGain = String(Math.round(audio.musicGain * 100) / 100);
       }
       // The hush mark (a moon and ZZZ): a hint only; both buttons work as always (PHASE9_0 §6).
       lightButton.setMark(runner.lightMark ? 'hush' : null);
@@ -1579,6 +1769,7 @@ async function boot(): Promise<void> {
   const fawns = new Set(stage.file.actors.filter((a) => a.type === 'dino-small' && lookOf(a) === 'fawn').map((a) => a.id));
   const hedgehogs = new Set(stage.file.actors.filter((a) => a.type === 'cat' && lookOf(a) === 'hedgehog').map((a) => a.id));
   let lastFailReason: string | null = null;
+  let welcomeSteps = 0;
   // v1.11 (5-2): windings so far (toys, the band, spinning forks, cutscene figures; only goes up), the town wound.
   let windups = 0;
   app.dataset.windups = '0';
@@ -1610,10 +1801,12 @@ async function boot(): Promise<void> {
       return true;
     },
     hush: () => bubbles.clear(),
-    sayNow: (text) => {
+    sayNow: (text, icon) => {
       bubbles.clear();
-      void bubbles.say(text);
+      void bubbles.say(text, 'partner', undefined, icon);
     },
+    musicGain: (gain, seconds) => audio.setMusicGain(gain, seconds),
+    depart: (to, seconds) => train.depart(to, seconds),
     card: (title, button, icon, mirror, notes) => {
       // v1.11 (5-3): the notes shown in a mirror ring "しゃらーん" as the words come out in it.
       if (mirror === 'reflect') audio.playLetterReflect();
@@ -1736,7 +1929,7 @@ async function boot(): Promise<void> {
     unlock: async (ability) => {
       showAbility(ability);
       audio.playCard();
-      await showCard(uiEl, `${ABILITY_NAMES[ability] ?? ability}を\nおぼえた！`, 'やったね！', 'badge');
+      await showCard(uiEl, ABILITY_CARD_TITLES[ability] ?? `${ABILITY_NAMES[ability] ?? ability}を\nおぼえた！`, 'やったね！', 'badge');
     },
     revealJunction: (side) => ui.junction.reveal(side),
     // v1.11 (5-3): a shut mirror gate close ahead lights it too (a hint: it opens on the whistle).
@@ -1884,6 +2077,27 @@ async function boot(): Promise<void> {
       }
     }
     if (e.type === 'parade:fanfare') audio.playBandFanfare();
+    // v1.11 (6-1): おいかけっこ ("ぴょこん", "しゅたたた〜", "くるっ"; the partner's own call blows the whistle too) and
+    // ドアを あけて まつ ("とこ とこ", "ぴゃっ", "ぽろろん"), the friends riding along, the train rolling off.
+    if (e.type === 'lead:start') audio.playLeadPop();
+    if (e.type === 'lead:call') {
+      if (e.auto) {
+        audio.playWhistle();
+        events.post({ type: 'whistle' });
+      }
+      void waitSeconds(LEAD.iconLead).then(() => audio.playLeadDash());
+    }
+    if (e.type === 'lead:follow' || e.type === 'lead:met') audio.playLeadTurn();
+    if (e.type === 'lead:hop') audio.playFlinch();
+    if (e.type === 'welcome:step') {
+      welcomeSteps += 1;
+      audio.playWelcomeStep(welcomeSteps % 2 === 0);
+    }
+    if (e.type === 'welcome:flinch' || e.type === 'welcome:shy') audio.playFlinch();
+    if (e.type === 'welcome:giggle') audio.playWelcomeStep(true);
+    if (e.type === 'welcome:board') audio.playBoardHarp();
+    if (e.type === 'crew') app.dataset.crew = e.ids.join(',');
+    if (e.type === 'depart') app.dataset.depart = e.state;
     if (e.type === 'spin' && e.state === 'turn') audio.playSpinTurn();
     if (e.type === 'spin' && e.state === 'good') audio.playSpinGood();
     if (e.type === 'actor:spawn') figureModels.set(e.id, e.model);
@@ -1909,7 +2123,7 @@ async function boot(): Promise<void> {
     if (runner?.skipCutscene()) skippedAt = performance.now();
   });
 
-  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, dive, ice, thinIce, mirrors, plow, plowHint, tunnel: tunnels, magnet, iron: ironProps });
+  runner = new MissionRunner(stage, train, whistle, events, ports, { rocket, slopes, dive, ice, thinIce, mirrors, plow, plowHint, tunnel: tunnels, magnet, iron: ironProps, reverse });
   runner.knowAbilities(abilities);
   runner.setLight(lightOn);
   if (resumeFrom > 0) {

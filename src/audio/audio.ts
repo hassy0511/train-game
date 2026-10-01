@@ -10,6 +10,8 @@ export class AudioEngine {
   /** The song asked for, started as soon as the context exists (iPad needs a tap first). */
   private song: string | null = null;
   private musicLevel = 1;
+  /** v1.11 (6-1): the music's loudness times this (0..1; welcome.musicGain while waiting at the door). */
+  private musicGainNow = 1;
   private musicPaused = false;
   private ctx: BaseAudioContext | null = null;
   /** The context that plays (the one made on the first tap); an offline one only renders. */
@@ -97,7 +99,7 @@ export class AudioEngine {
     if (!withMusic) return;
     this.setAmbience(this.ambienceKind);
     this.music = new MusicPlayer(ctx, master);
-    this.music.setVolume(this.musicLevel);
+    this.music.setVolume(this.musicLevel * this.musicGainNow);
     this.music.setPaused(this.musicPaused);
     if (this.song) this.music.play(this.song);
   }
@@ -140,7 +142,21 @@ export class AudioEngine {
   /** Music volume, 0..1 (0 = off). */
   setMusicVolume(gain: number): void {
     this.musicLevel = gain;
-    this.music?.setVolume(gain);
+    this.music?.setVolume(gain * this.musicGainNow);
+  }
+
+  /**
+   * v1.11 (6-1): the music's loudness times `gain` (0..1) over about `seconds` s (the settings' volume stays): 30% while
+   * the doors stand open for Sakasa (welcome.musicGain), back to 1 once she is aboard.
+   */
+  setMusicGain(gain: number, seconds = 0.8): void {
+    this.musicGainNow = Math.max(0, Math.min(1, gain));
+    this.music?.setVolume(this.musicLevel * this.musicGainNow, seconds / 3);
+  }
+
+  /** v1.11 (6-1): the music's loudness factor now (a test hook, #app[data-music-gain]). */
+  get musicGain(): number {
+    return this.musicGainNow;
   }
 
   /** Holds the music (the pause menu). */
@@ -532,6 +548,60 @@ export class AudioEngine {
 
   // ---- v1.11 (PR5) じしゃくライト (PHASE9_CHAPTER5_6 第 2 部 M13): soft and round; no zap, buzz, beam or creak ----------
 
+  // ---- v1.11 (6-1) さかさまの しろ (PHASE9_CHAPTER5_6 第 7 部 §10): light and playful; no door chime, no low bells -------
+
+  /** Sakasa pops out of the bushes: "ぴょこん" (a rising woodblock and a little bell). */
+  playLeadPop(): void {
+    const o = this.out(0.15, 1.3);
+    this.ping(800, 0, 0.06, 'triangle', 0.1, 1100, 0.002, o);
+    this.bell(1568, 0.03, 0.02 * 2.2, 0.35);
+  }
+
+  /** Her dash, "しゅたたた〜": eight quick woodblock steps and a rising whistle of wind. */
+  playLeadDash(): void {
+    const o = this.out(0.08, 1.3);
+    for (let i = 0; i < 8; i++) this.knock(900, i * 0.05, 0.045, o);
+    this.ping(600, 0, 0.4, 'sine', 0.03, 1200, 0.02, o);
+  }
+
+  /** She turns round, "くるっ": a woodblock slide up and a small bell. */
+  playLeadTurn(): void {
+    const o = this.out(0.12, 1.2);
+    this.ping(700, 0, 0.06, 'triangle', 0.08, 1000, 0.002, o);
+    this.bell(1319, 0.04, 0.015 * 2.2, 0.3);
+  }
+
+  /** Her footsteps at the door, "とこ": one soft wooden step (`high`: the other foot). */
+  playWelcomeStep(high = false, delay = 0): void {
+    const o = this.out(0.03, 1);
+    this.knock(high ? 600 : 500, delay, 0.05, o);
+  }
+
+  /** She flinches, shy ("ぴゃっ"): a quick soft rise. */
+  playFlinch(): void {
+    const o = this.out(0.1, 1.3);
+    this.ping(700, 0, 0.1, 'sine', 0.1, 1400, 0.004, o);
+  }
+
+  /** She is aboard, "ぽろろん": five bells up the pentatonic scale (never a two-note door chime). */
+  playBoardHarp(): void {
+    [587, 659, 784, 880, 1175].forEach((f, i) => this.bell(f, i * 0.07, 0.02 * 2.2, 0.7));
+  }
+
+  /** The upside-down clock, "こち こち": two wooden ticks that start soft and stop short. */
+  playClockBack(): void {
+    const o = this.out(0.08, 1.1);
+    this.ping(1200, 0, 0.05, 'triangle', 0.06, 1200, 0.04, o);
+    this.ping(900, 0.5, 0.05, 'triangle', 0.06, 900, 0.04, o);
+  }
+
+  /** The drawbridge comes down, "からから… かたん": the iron gate's rattle and a wooden knock. */
+  playDrawbridgeDown(): void {
+    const o = this.out(0.15, 1.2);
+    for (let i = 0; i < 6; i++) this.knock(1100, i * 0.07, 0.07, o);
+    this.knock(300, 0.55, 0.16, o);
+  }
+
   /** The light turns to the magnet step: two rising notes, "ぴろん" (lower than the spinning fork's "ぴこん"). */
   playMagnetOn(): void {
     const o = this.out(0.2, 1.2);
@@ -689,6 +759,78 @@ export class AudioEngine {
   playCard(): void {
     this.bell(523, 0, 0.13, 0.5);
     this.bell(784, 0.11, 0.13, 0.7);
+  }
+
+  // ---- v1.11 (PR8a) うしろむき (PHASE9_CHAPTER5_6 第 3 部 A15): light and round; no reversing buzzer ("ぴっ ぴっ") ----
+
+  /** A little "ぐるりん": a sine sliding up and back down (0.35 s) with two bells, falling (to うしろ) or rising (to まえ). */
+  private turnRound(toBack: boolean): void {
+    const ctx = this.ctx;
+    const o = this.out(0.25, 1.2);
+    if (!ctx || !o) return;
+    const at = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(660, at);
+    osc.frequency.exponentialRampToValueAtTime(990, at + 0.17);
+    osc.frequency.exponentialRampToValueAtTime(660, at + 0.35);
+    g.gain.value = 0.0001;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.04, at + 0.03);
+    g.gain.setValueAtTime(0.04, at + 0.28);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.38);
+    osc.connect(g);
+    g.connect(o);
+    osc.start(at);
+    osc.stop(at + 0.42);
+    const [a, b] = toBack ? [1568, 1047] : [1047, 1568];
+    this.bell(a, 0.3, 0.03, 0.5);
+    this.bell(b, 0.38, 0.03, 0.6);
+  }
+
+  /** The train turns round to うしろ: "ぐるりん" with the bells going down (G6 → C6). */
+  playReverseOn(): void {
+    this.turnRound(true);
+  }
+
+  /** The train turns round to まえ again: "ぐるりん" with the bells going up (C6 → G6). */
+  playReverseOff(): void {
+    this.turnRound(false);
+  }
+
+  /** Waiting to turn (braking first): one soft "ちっ" (the game plays it every 0.25 s until it stands). */
+  playSwitchPending(delay = 0): void {
+    this.knock(1400, delay, 0.07, this.out(0, 1.2));
+  }
+
+  /** Reversing, stopped gently at a stop point ("おっとっと"): "とととっ" on three falling woodblocks. */
+  playReverseStop(): void {
+    const o = this.out(0.1, 1.2);
+    [900, 800, 700].forEach((f, i) => this.knock(f, i * 0.06, 0.07, o));
+  }
+
+  /** Reversing, the rear touches a siding's buffer: a wooden "こつん" and a little springy "ぽよ". */
+  playReverseBump(): void {
+    const o = this.out(0.1, 1.2);
+    this.knock(700, 0, 0.08, o);
+    this.ping(300, 0.03, 0.12, 'sine', 0.05, 220, 0.004, o);
+  }
+
+  /** A jump reversing: a little hop where it is, "ぴょこっ" (the jump's sound, smaller and higher). */
+  playHopBack(): void {
+    const o = this.out(0.1, 0.5);
+    this.ping(495, 0, 0.16, 'sine', 0.1, 1320, 0.004, o);
+    this.ping(270, 0, 0.12, 'triangle', 0.06, 540, 0.004, o);
+    this.hiss({ seconds: 0.2, gain: 0.02, attack: 0.02, freq: 750, endFreq: 2700, q: 0.8, dest: o });
+  }
+
+  /** Sakasa hops to the rear window (6-2, later): "ぴょん", like the hop a little lower. */
+  playSakasaHop(): void {
+    const o = this.out(0.1, 0.5);
+    this.ping(429, 0, 0.18, 'sine', 0.1, 1144, 0.004, o);
+    this.ping(234, 0, 0.14, 'triangle', 0.06, 468, 0.004, o);
+    this.hiss({ seconds: 0.22, gain: 0.02, attack: 0.02, freq: 650, endFreq: 2300, q: 0.8, dest: o });
   }
 
   /** "ぴょん": a quick rising hop with a whoosh of air and a springy body. */

@@ -22,6 +22,8 @@ export interface Waterfall {
   throw: number;
   lip: number;
   rainbow: boolean;
+  /** v1.11 (6-1): it flows upwards (looks only: the streaks run up, the foam and spray are at the top). */
+  up: boolean;
 }
 
 /** The stage's waterfalls. */
@@ -53,6 +55,7 @@ export function waterfalls(gimmicks: GimmickDef[], waters: WaterDef[]): Waterfal
       throw: p.throw ?? WATERFALL.throw,
       lip: p.lip ?? WATERFALL.lip,
       rainbow: p.rainbow ?? WATERFALL.rainbow,
+      up: p.up === true,
     });
   });
   return out;

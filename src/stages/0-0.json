@@ -144,7 +144,14 @@
       ],
       "end": {
         "type": "buffer"
-      }
+      },
+      "gaps": [
+        {
+          "from": 620,
+          "to": 632,
+          "hint": "normal"
+        }
+      ]
     },
     {
       "id": "branch",
@@ -944,6 +951,46 @@
       "end": {
         "type": "buffer"
       }
+    },
+    {
+      "id": "ura",
+      "points": [
+        [
+          258,
+          0,
+          172
+        ],
+        [
+          270,
+          0,
+          172
+        ],
+        [
+          284,
+          0,
+          173.2
+        ],
+        [
+          296,
+          0,
+          175.6
+        ],
+        [
+          306,
+          0,
+          178.3
+        ],
+        [
+          315.76,
+          0,
+          180
+        ]
+      ],
+      "end": {
+        "type": "merge",
+        "railId": "main",
+        "at": 470
+      }
     }
   ],
   "junctions": [
@@ -980,6 +1027,16 @@
       "right": "jishaku",
       "default": "left",
       "needs": "magnetLight"
+    },
+    {
+      "id": "ura-guchi",
+      "railId": "main",
+      "at": 470,
+      "back": true,
+      "left": "main",
+      "right": "ura",
+      "default": "left",
+      "line": "うしろに わきみちが ある！"
     }
   ],
   "stations": [
@@ -1302,6 +1359,19 @@
         "at": 620,
         "lateral": 12,
         "heightFromRail": 6
+      }
+    },
+    {
+      "id": "test-ura",
+      "name": "うらの しおり（ためし）",
+      "requires": "reverse",
+      "model": "record-feather",
+      "note": "うしろむきで みつけた しおり",
+      "onRail": {
+        "railId": "ura",
+        "at": 12,
+        "lateral": -3,
+        "heightFromRail": 1.2
       }
     }
   ],

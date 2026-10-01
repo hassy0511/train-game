@@ -136,7 +136,8 @@ export class SnowWave {
     }
     const aim = this.target();
     this.speed = aim > this.speed ? Math.min(aim, this.speed + p.accel * dt) : aim;
-    this.gap -= (this.speed - t.state.speed) * dt;
+    // v1.11 (PR8a, 第 3 部 A7): reversing, the train runs back into it (caught as ever: soft, back before it).
+    this.gap -= (this.speed - t.state.speed * t.direction) * dt;
     if (this.gap <= 0 && !t.airborne && !t.isFalling) {
       this.gap = 0;
       this.state = 'caught';

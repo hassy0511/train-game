@@ -57,6 +57,21 @@ export interface EnvironmentDef {
    * ("びよん" … "からん"): `false` none; `every` (80–400 m, default IRON_PROPS.every) and `looks` (default all three).
    */
   ironProps?: false | { every?: number; looks?: IronLook[] };
+  /**
+   * v1.11 (6-1): a faraway landmark's shadow beyond the fog (the upside-down castle seen from the whole town): a pale
+   * board of `model` (drawn at its true apparent size, `height` m tall, its foot at `position`) that fog never hides,
+   * while the camera is further than `near` m from it; nearer, it fades out over 100 m (the real one is there).
+   */
+  landmark?: LandmarkDef;
+}
+
+/** v1.11 (6-1): environment.landmark (see EnvironmentDef.landmark). */
+export interface LandmarkDef {
+  model: string;
+  position: Vec3;
+  height: number;
+  /** Default LANDMARK.near (600). Less than the fog's far. */
+  near?: number;
 }
 
 /** v1.10 (4-1): falling snow: `count` flakes (0–2000) in a box `radius` m round the camera, falling `fall` m/s. */
@@ -112,8 +127,9 @@ export interface WaterSpan {
 }
 
 /** v1.10: something floating on the water over a surface rail, which the train must dive under. */
-export type FloaterLook = 'log' | 'raft' | 'lily' | 'wave' | 'ice';
-export const FLOATER_LOOKS: readonly FloaterLook[] = ['log', 'raft', 'lily', 'wave', 'ice'];
+/** v1.11 (6-1) "umbrella": an upside-down umbrella boat. */
+export type FloaterLook = 'log' | 'raft' | 'lily' | 'wave' | 'ice' | 'umbrella';
+export const FLOATER_LOOKS: readonly FloaterLook[] = ['log', 'raft', 'lily', 'wave', 'ice', 'umbrella'];
 
 export interface FloaterDef {
   id: string;
@@ -221,7 +237,11 @@ export interface RailDef {
   points: Vec3[];
   up?: Vec3;
   gaps?: GapDef[];
-  oneWay?: boolean;
+  /**
+   * The first plan's "逆走専用" rail. v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A8.6): not used any more: the loader refuses
+   * it ("use junctions[].back": a back siding is an ordinary rail).
+   */
+  oneWay?: never;
   /** v1.2: a wrong turn. Reaching its buffer puts the train back before the junction. */
   deadEnd?: boolean;
   /** v1.3: "follow" = up turns with the rail's bends (vertical loops, riding upside down). Default "fixed". */
@@ -294,12 +314,30 @@ export interface JunctionDef {
    */
   phantom?: boolean;
   /**
+   * v1.11 (PR8a, PHASE9_0 §5, 第 3 部 A8): a back junction (a switchback): it works only reversing. One side is a
+   * siding whose end merges into `railId` at `at` (its start, s = 0, is a buffer); the other side is `railId` itself
+   * (the default: without a choice the train stays on the rail it came along). Left and right are as seen reversing
+   * (from the rear window). The loader keeps back junctions apart (StageData.backJunctions); `junctions` in the rest of
+   * the game are the forward ones.
+   */
+  back?: boolean;
+  /** v1.11 (back only): said when the switch starts to glow past it (else the line "backNear"). */
+  line?: string | LineDef | null;
+  /**
    * v1.11 (5-3, set by the loader from a magnet "turn" target, never written): the target whose pull turns the mirror
    * that shows this fork's true way. No arrows show for it, the light alone does not see through it, and the light
    * button's yellow glow after a wrong turn stays off (only the magnet helps there). Without the target's `mirror`,
    * the magnet turns a code-drawn stand-in (PR5); with it, 5-3's framed mirror (`mirror:turn`).
    */
   turn?: string;
+  /**
+   * v1.11: a hint glow, on two kinds of junction only (never both on one: a back junction has no sign).
+   * - `back` (PR8a, PHASE9 第 3 部 A8.1): when the まえ／うしろ switch glows past it: "auto" (default) = the siding
+   *   has a record not found yet or the step's station; true = always; false = never.
+   * - `signReversed` (6-1): true = the light button glows yellow from the signNear distance (80 m) until the sign is
+   *   seen through, not only after a wrong turn (a hint; 6-1's review of every ability); false or absent = not.
+   */
+  glow?: boolean | 'auto';
 }
 
 /**
@@ -382,6 +420,12 @@ export interface StationDef {
    * (`plow-wall`): the platform and its sign are under snow until the snowplow clears it.
    */
   buried?: boolean;
+  /**
+   * v1.11 (PR8a, 第 3 部 B6.3): a platform at the end of a back siding ("うしろむきの ホーム"): `at` (≤ 1) is where the rear
+   * end stops (REVERSE.bufferGap from the buffer); the platform runs along +s from it. Arriving is stopping at the
+   * buffer reversing (always "ぴたっ！", no gauge). Never a mission's last step.
+   */
+  reverse?: boolean;
 }
 
 export interface WorldPlacement {
@@ -458,7 +502,22 @@ export type RecordDef = Placement & {
    * hidden and cannot be found this try.
    */
   hush?: boolean;
+  /**
+   * v1.11 (PR8a, 第 3 部 A12.1): said at the back siding's buffer once this record is found (once a mission; the lines
+   * of 6-1's library and 6-2's hideouts).
+   */
+  endLines?: LineDef[];
 };
+
+/** v1.11 (PR8a, 第 3 部 A8.3): the swirl posts the loader stands by back junctions (their tags, their place). */
+export const REVERSE_POST = { lateral: 3.2, tag: 'reverse-post', tagOff: 'reverse-post-off' } as const;
+
+/** v1.11 (PR8a): a line with its speaker (default the partner) and an optional little picture (PR8b). */
+export interface LineDef {
+  who?: 'partner' | 'amanojaku';
+  text: string;
+  icon?: 'hand-stop' | 'run-swirl' | 'ride';
+}
 
 /** v1.7 / v1.10: the countdown panel's picture, which also picks how a time-up looks. */
 export type CountdownIcon = 'volcano' | 'clock' | 'moon';
@@ -521,6 +580,84 @@ export interface MissionStep {
   say?: string;
   /** The partner's reply to `say`. */
   reply?: string;
+  /** v1.11 (6-1): "おいかけっこ" while driving to this station (Sakasa runs ahead; see LeadDef). */
+  lead?: LeadDef;
+  /** v1.11 (6-1): at this station the doors stay open and a guest comes aboard by herself (see WelcomeDef). */
+  welcome?: WelcomeDef;
+}
+
+/**
+ * v1.11 (6-1, PHASE9_CHAPTER5_6 第 7 部 §4.1): "おいかけっこ". Figure `id` (model `model`, default "amanojaku") runs
+ * along the train's way (the lead path: from `from` on `railId` through the mission's junction rules and the defaults,
+ * a ring back to `from`), `lateral` m aside (default −6, left), `keep` m ahead of the train front (a rubber band, never
+ * nearer than `min`). A whistle while it teases is a call: it dashes to `dash` m. After `calls` calls the train brakes
+ * to a stop and cutscene `learn` plays (the partner works out "ぎゃく"; the cutscene may `unlock` reverse). Then it
+ * waits; once the train backs up it turns and follows, and after `followBack` m it stops before the train (or it comes
+ * back by itself after `autoFollowAfter` s): the step's station opens (closed until then, `closeStation`). When the
+ * train drives on past it, it goes to `home` (sat down there, the model `home.model`). `music` plays while it runs.
+ */
+export interface LeadDef {
+  id: string;
+  model?: string;
+  railId: string;
+  from: number;
+  lateral?: number;
+  keep?: number;
+  min?: number;
+  dash?: number;
+  calls?: number;
+  /** The stage cutscene played (standing) after the last call: the partner works it out; "reverse" is learned there. */
+  learn?: string;
+  home?: { railId: string; at: number; lateral?: number; heightFromRail?: number; model?: string; rotationY?: number };
+  /** Default true. */
+  closeStation?: boolean;
+  /** A song (src/audio/songs.ts) from its start until it stops before the train. */
+  music?: string;
+  autoCallAfter?: number;
+  remindEvery?: number;
+  autoFollowAfter?: number;
+  followBack?: number;
+  /**
+   * v1.11 (PR8a × 6-1): the camera while she follows a train backing up and stands before it (phases "follow" and
+   * "met", while the train still runs backwards). "front" (default): the view
+   * the child picked stays as it is (she is in front of the train, so the rear window would not show her); "rear": the
+   * rear window as anywhere else reversing.
+   */
+  followCamera?: 'front' | 'rear';
+}
+
+/** v1.11 (6-1): the beats of a guest coming aboard by herself (WelcomeDef.beats). */
+export type WelcomeBeat = 'look' | 'stand' | 'walk' | 'peek' | 'board';
+export const WELCOME_BEATS: readonly WelcomeBeat[] = ['look', 'stand', 'walk', 'peek', 'board'];
+
+/**
+ * v1.11 (6-1, 第 7 部 §4.3): "ドアを あけて まつ". Instead of the usual doors: the doors open on the child's press and stay
+ * open; guest `actor` (sat on the bench at `seat`; brought on there, sitting, if not on yet) looks at the door, stands
+ * up (model `model`; figure `pickup` is taken up with her), walks to `door`, peeks in and boards (one more rider). A
+ * whistle ("calling out") sends her one beat back and she keeps still `flinchPause` s (at most `maxFlinches` times; then
+ * only a giggle); `boardBy` s after the doors opened she boards whatever happens. The music plays at `musicGain`.
+ */
+export interface WelcomeDef {
+  actor: string;
+  model?: string;
+  pickup?: string;
+  seat: { railId: string; at: number; lateral: number };
+  /** Default: WELCOME.doorBack m behind the stop line, WELCOME.doorLateral m out on the platform side. */
+  door?: { railId: string; at: number; lateral: number };
+  beats?: { beat: WelcomeBeat; seconds: number }[];
+  flinchPause?: number;
+  maxFlinches?: number;
+  boardBy?: number;
+  musicGain?: number;
+  camera?: { at: Vec3; lookAt: Vec3; reach?: number };
+}
+
+/** v1.11 (6-1): a mission's own rule for a junction (MissionDef.junctions). */
+export interface MissionJunctionRule {
+  /** Always this side during the mission; no arrows. */
+  lock?: 'left' | 'right';
+  /** This side is chosen (and glows) from the start; the arrows show and the child may change it. */
+  default?: 'left' | 'right';
 }
 
 /** A partner line said once when the train front passes `at` on `railId`. */
@@ -531,6 +668,25 @@ export interface HintDef {
   /** v1.11: not said when the player has this ability (a riddle about a record for a later ability). */
   unless?: AbilityId;
 }
+
+/** v1.11 (6-1, 第 7 部 §4.8): the lines of "おいかけっこ" (every one has a default). */
+export type LeadLine =
+  | 'leadStart'
+  | 'leadStartReply'
+  | 'leadPrompt'
+  | 'leadCall'
+  | 'leadRun'
+  | 'leadAgain'
+  | 'leadFlip'
+  | 'leadBackRemind'
+  | 'leadFollow'
+  | 'leadMet'
+  | 'leadAutoCall'
+  | 'leadAutoFollow'
+  | 'leadGone'
+  | 'stationClosed';
+/** v1.11 (6-1): the lines of "ドアを あけて まつ". */
+export type WelcomeLine = 'welcomeAsk' | 'welcomeFlinch' | 'welcomeFlinchAgain' | 'welcomeCalm';
 
 /** Partner lines keyed by situation. Missing keys mean the partner stays quiet. */
 export type MissionLines = Partial<
@@ -721,7 +877,20 @@ export type MissionLines = Partial<
     | 'mirrorGateNear'
     | 'mirrorGateOpen'
     | 'mirrorGateBump'
-    | 'mirrorGateAfter',
+    | 'mirrorGateAfter'
+    // v1.11 (PR8a うしろむき, PHASE9_CHAPTER5_6 第 3 部 A14)
+    | 'backNear'
+    | 'backArrows'
+    | 'reverseNudge'
+    | 'reverseStop'
+    | 'reverseStopGap'
+    | 'reverseEnd'
+    | 'backUp'
+    | 'refuseRocketBack'
+    | 'reverseOops'
+    // v1.11 (6-1 おいかけっこ・ドアを あけて まつ)
+    | LeadLine
+    | WelcomeLine,
     string
   >
 >;
@@ -738,13 +907,20 @@ export interface MissionDef {
   /** Cutscene id to play after completion. */
   onComplete?: string;
   params?: Record<string, unknown>;
+  /** v1.11 (6-1): junction rules for this mission only (by junction id): `lock` a side or preset the `default`. */
+  junctions?: Record<string, MissionJunctionRule>;
 }
 
 export type Speaker = 'partner' | 'amanojaku' | 'passenger';
 export type Emote = 'jump' | 'tilt' | 'cheer';
 
-/** v1.11 (5-3): the little pictures a bubble can carry (PHASE9_CHAPTER5_6 第 6 部 §12; 6-1 adds more). */
-export type BubbleIcon = 'ride';
+/**
+ * v1.11 (5-3): the little pictures a bubble can carry (PHASE9_CHAPTER5_6 第 6 部 §12). v1.11 (6-1, 第 7 部 §4.8)
+ * "hand-stop" (an open hand: "とまって〜！") and "run-swirl" (a running foot and an arrow bending back). The icon of
+ * `LineDef.icon` (第 3 部 A13).
+ */
+export type BubbleIcon = 'ride' | 'hand-stop' | 'run-swirl';
+export const BUBBLE_ICONS: readonly BubbleIcon[] = ['ride', 'hand-stop', 'run-swirl'];
 
 export type CutsceneStep =
   /** v1.6 `name`: the name shown on the bubble instead of the speaker's usual one (e.g. "くもさん"). */
@@ -852,7 +1028,17 @@ export type CutsceneStep =
    * fireflies and the sound around. `{}` goes back to the stage's own. `seconds`: through a short dusk-blue fade (0 = at
    * once). Day ⇄ night.
    */
-  | { environment: Partial<EnvironmentDef>; seconds?: number };
+  | { environment: Partial<EnvironmentDef>; seconds?: number }
+  /**
+   * v1.11 (6-1): from here to the end of the stage these friends ride along (Sakasa sits behind the driver's seat,
+   * "amanojaku-sit"). Kept by a fast-forward. Only ["sakasa"].
+   */
+  | { crew: 'sakasa'[] }
+  /**
+   * v1.11 (6-1): the train rolls by itself to `to` on its rail (slow start, at most DEPART.maxSpeed, a gentle stop) in
+   * about `seconds` s. Only in the stage's ending; skipped by a fast-forward.
+   */
+  | { depart: { to: number; seconds: number } };
 
 export interface GimmickDef {
   type: string;
@@ -868,8 +1054,11 @@ export interface GimmickDef {
  * PLOW.wallDepth m deep).
  */
 export interface PlowWallParams {
-  /** "snow" (default), "sand" or "foam": looks and sounds only. */
-  look?: 'snow' | 'sand' | 'foam';
+  /**
+   * "snow" (default), "sand" or "foam": looks and sounds only. v1.11 (6-1) "hanging": snow hanging down from an
+   * upside-down roof arch over the rail ("hanging-snow-arch"; bursts and bumps as snow).
+   */
+  look?: 'snow' | 'sand' | 'foam' | 'hanging';
   /** Said the first time the snowplow button glows for this wall (default the mission's plowNear). */
   line?: string | null;
   /** Where the train front goes back to after bumping it (default `from − PLOW.rewindBefore` on its rail). */
@@ -891,7 +1080,7 @@ export interface PlowSpan {
   to: number;
   rewind: { railId: string; at: number };
   line: string | null;
-  look: 'snow' | 'sand' | 'foam';
+  look: 'snow' | 'sand' | 'foam' | 'hanging';
   height: number;
   width: number;
   sign: boolean;
@@ -1116,6 +1305,8 @@ export interface WaterfallParams {
   throw?: number;
   lip?: number;
   rainbow?: boolean;
+  /** v1.11 (6-1): it flows upwards (the streaks run up, the spray is at the top). Looks and sound only. */
+  up?: boolean;
 }
 
 /** A prop with its placement resolved to a world transform. */
@@ -1181,6 +1372,8 @@ export interface StageData {
   magnets: MagnetTarget[];
   /** v1.11 (PR5): the iron odds and ends by the line (scattered, and the props with `iron`), by rail then `at`. */
   ironProps: IronProp[];
+  /** v1.11 (PR8a): the back junctions (taken out of `file.junctions`, which holds the forward ones only). */
+  backJunctions: JunctionDef[];
 }
 
 // ---- v1.11 (PR5): the magnet light (PHASE9_CHAPTER5_6 第 2 部 M9) ------------------------------------------------

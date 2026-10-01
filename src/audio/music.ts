@@ -81,8 +81,8 @@ export class MusicPlayer {
   }
 
   /** 0..1 ("けす" = 0 stops scheduling altogether). */
-  setVolume(gain: number): void {
-    this.out.gain.setTargetAtTime(gain * 0.5, this.ctx.currentTime, 0.05);
+  setVolume(gain: number, tau = 0.05): void {
+    this.out.gain.setTargetAtTime(gain * 0.5, this.ctx.currentTime, tau);
   }
 
   get current(): string | null {

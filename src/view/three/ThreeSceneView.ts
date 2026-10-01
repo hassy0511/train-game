@@ -17,13 +17,14 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { StageEvent } from '../../core/stage-events';
 import type { RailNetwork } from '../../rail/types';
 import type { StageData } from '../../stage/types';
 import { TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
 import type { CameraFx, SceneView } from '../SceneView';
-import { cameraTarget, makeCameraTarget, orbitAngle, orbitTarget, smoothCamera, type CameraMode, type OrbitCamera } from '../camera-rig';
+import { cameraTarget, makeCameraTarget, orbitAngle, orbitTarget, REAR_CAMERA, smoothCamera, type CameraMode, type OrbitCamera } from '../camera-rig';
 import { buildGapPits, buildJumpDevice, buildLightBeam, Flocks, JunctionSigns, SkyGimmicks } from './abilities';
 import { ForestGimmicks } from './forest';
 import { MeadowGimmicks } from './meadow';
@@ -39,8 +40,11 @@ import { MirrorWorldGimmicks, trainFrontOf } from './mirror-world';
 import { frameWave, SnowGimmicks } from './snow';
 import { iceZones, thinIceZones } from '../../gimmick/ice';
 import { slopeZones } from '../../gimmick/slope';
-import type { EnvironmentDef, RailBaseDef, ResolvedProp } from '../../stage/types';
+import { REVERSE_POST, type EnvironmentDef, type RailBaseDef, type ResolvedProp } from '../../stage/types';
 import { ActorLayer } from './actors';
+import { addCrewSeat, LeadFigure } from './lead';
+import { LandmarkBoard } from './landmark';
+import type { LeadPose } from '../../mission/lead';
 import { bakeModel } from './bake';
 import { CAMERA_FAR, EnvironmentState, FOG_CULL_MARGIN, snowBeds } from './environment-state';
 import { ModelLibrary } from './models';
@@ -144,7 +148,14 @@ export class ThreeSceneView implements SceneView {
   private boughSkips: { railId: string; from: number; to: number }[] = [];
   private railLooks: Record<string, TrackLook> = {};
   private readonly lightBeam = buildLightBeam();
+  /** v1.11 (PR8a): the last car's two white lamps while reversing (made the first time). */
+  private rearLamps: Mesh | null = null;
   private jumpDevice: Object3D | null = null;
+  /** v1.11 (6-1): Sakasa in "おいかけっこ", and sitting behind the driver's seat (crew). */
+  private lead: LeadFigure | null = null;
+  private crewSeat: Object3D | null = null;
+  /** v1.11 (6-1): environment.landmark, the faraway shadow beyond the fog. */
+  private landmark: LandmarkBoard | null = null;
   private clock = 0;
   /** v1.7: a cutscene camera standing still. */
   private fixedCamera: { at: Vector3; lookAt: Vector3; reach: number } | null = null;
@@ -202,7 +213,7 @@ export class ThreeSceneView implements SceneView {
       bases.size > 0 || slopes.length > 0 || beds.length > 0
         ? { bases, slopes, groundY: stage.file.environment.ground?.y ?? null, beds }
         : undefined;
-    const rails = buildRailScene(network, this.boughSkips, this.railLooks, this.trackLooks);
+    const rails = buildRailScene(network, this.boughSkips, this.railLooks, this.trackLooks, stage.file.start.railId);
     this.rails = rails.group;
     this.scene.add(rails.group);
 
@@ -307,6 +318,8 @@ export class ThreeSceneView implements SceneView {
       if (!prop.tag) continue;
       const group = new Group();
       group.name = `tag:${prop.tag}`;
+      // v1.11 (PR8a): a back junction's swirl post shows grey until うしろむき is learned (the 'ability' event swaps them).
+      if (prop.tag === REVERSE_POST.tag) group.visible = false;
       this.scene.add(group);
       this.taggedProps.push({ prop, group });
     }
@@ -334,6 +347,7 @@ export class ThreeSceneView implements SceneView {
       this.toy?.init(this.models),
       this.mirrorWorld?.init(this.models),
     ]);
+    this.setLandmark(stage.file.environment);
     this.lookChanged();
     // After the lights and the fog are all in (it dims them in a tunnel).
     await this.snow?.init(this.models);
@@ -403,7 +417,7 @@ export class ThreeSceneView implements SceneView {
       // Gaps were added to the rail; rebuild the track meshes without the cut piece.
       const oldRails = this.rails;
       oldRails.removeFromParent();
-      const rebuilt = buildRailScene(this.network, this.boughSkips, this.railLooks, this.trackLooks);
+      const rebuilt = buildRailScene(this.network, this.boughSkips, this.railLooks, this.trackLooks, this.stage?.file.start.railId);
       this.rails = rebuilt.group;
       this.scene.add(rebuilt.group);
       this.disposeDetachedObject(oldRails);
@@ -433,6 +447,20 @@ export class ThreeSceneView implements SceneView {
     this.toy?.onEvent(event);
     this.mirrorWorld?.onEvent(event);
     if (event.type === 'ability' && event.id === 'rocket') void this.volcano?.addRocketUnit(this.models);
+    if (event.type === 'ability' && event.id === 'reverse') {
+      for (const { prop, group } of this.taggedProps) {
+        if (prop.tag === REVERSE_POST.tag) group.visible = true;
+        if (prop.tag === REVERSE_POST.tagOff) group.visible = false;
+      }
+    }
+    if (event.type === 'reverse') this.setReversing(event.on);
+    // v1.11 (6-1): Sakasa rides along behind the driver's seat (once).
+    if (event.type === 'crew' && event.ids.includes('sakasa') && !this.crewSeat) {
+      this.crewSeat = new Object3D();
+      void addCrewSeat(this.models, this.train).then((sit) => {
+        this.crewSeat = sit;
+      });
+    }
     if (event.type === 'rocket') this.fovTarget = event.state === 'burn' && !this.calm ? ROCKET_FOV : 0;
     if (event.type === 'sign:reveal') this.signs?.reveal(event.junctionId);
     if (event.type === 'sign:reset') this.signs?.reset(event.junctionId);
@@ -559,6 +587,22 @@ export class ThreeSceneView implements SceneView {
     }
   }
 
+  /**
+   * v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A10): reversing, the light's beam shines back from the last car and two small
+   * white lamps light at its back (plain white light: no face).
+   */
+  private setReversing(on: boolean): void {
+    const tail = this.cars[this.cars.length - 1] ?? this.train;
+    if (on && !this.rearLamps) this.rearLamps = buildRearLamps();
+    if (this.rearLamps) {
+      if (this.rearLamps.parent !== tail) tail.add(this.rearLamps);
+      this.rearLamps.visible = on;
+    }
+    const holder = on ? tail : this.train;
+    if (this.lightBeam.parent !== holder) holder.add(this.lightBeam);
+    this.lightBeam.rotation.y = on ? Math.PI : 0;
+  }
+
   setCamera(mode: CameraMode, snap = false): void {
     this.cameraMode = mode;
     this.cameraSnap = this.cameraSnap || snap;
@@ -591,6 +635,7 @@ export class ThreeSceneView implements SceneView {
    */
   applyEnvironment(env: EnvironmentDef): void {
     this.environment.apply(env);
+    this.setLandmark(env);
     // Under water the view had kept the look above the surface to come back to: it takes the new one next frame.
     this.aboveWater = null;
     this.widenFar();
@@ -603,6 +648,14 @@ export class ThreeSceneView implements SceneView {
    * v1.11 (5-1): what follows the look's lighting: at night the cars' windows glow, and the light's beam fades out
    * along its length (no bright wedge against the dark sky; by day it is drawn as it always was).
    */
+  /** v1.11 (6-1): the faraway landmark's board for this look (a 6-2 section may have another, or none). */
+  private setLandmark(env: EnvironmentDef): void {
+    this.landmark?.mesh.removeFromParent();
+    this.landmark?.dispose();
+    this.landmark = env.landmark ? new LandmarkBoard(env.landmark) : null;
+    if (this.landmark) this.scene.add(this.landmark.mesh);
+  }
+
   private lookChanged(): void {
     const night = this.environment.lighting === 'night';
     this.night?.setNight(night);
@@ -685,7 +738,15 @@ export class ThreeSceneView implements SceneView {
     }
     // The cab view and the title's orbit are exact every frame (no easing toward them).
     const cab = this.cameraMode === 'cab' && !this.fixedCamera && !this.orbit;
-    smoothCamera(this.camCurrent, this.camTarget, dt, this.cameraSnap || cab || (!!this.orbit && !this.fixedCamera));
+    // v1.11 (PR8a): so is the rear window (うしろむき), with its own lens (a little narrower, a nearer near plane).
+    const rear = this.cameraMode === 'rear' && !this.fixedCamera && !this.orbit;
+    const near = rear ? REAR_CAMERA.near : 0.1;
+    if (this.camera.near !== near) {
+      this.camera.near = near;
+      this.camera.fov = (rear ? REAR_CAMERA.fovDeg : TRAIN.cabFovDeg) + this.fovBoost;
+      this.camera.updateProjectionMatrix();
+    }
+    smoothCamera(this.camCurrent, this.camTarget, dt, this.cameraSnap || cab || rear || (!!this.orbit && !this.fixedCamera));
     this.cameraSnap = false;
     this.camera.position.copy(this.camCurrent.position);
     this.camera.up.copy(this.camCurrent.up);
@@ -723,6 +784,8 @@ export class ThreeSceneView implements SceneView {
     this.village?.update(dt);
     this.night?.update(dt);
     this.toy?.update(dt);
+    this.lead?.update(dt);
+    this.landmark?.update(this.camera);
     if (this.magnet) {
       this.magnet.trainSpeed = pose.speed;
       this.magnet.cabView = cab;
@@ -735,7 +798,7 @@ export class ThreeSceneView implements SceneView {
     const fov = this.fovBoost + (this.fovTarget - this.fovBoost) * Math.min(1, dt * 4);
     if (Math.abs(fov - this.fovBoost) > 1e-3) {
       this.fovBoost = fov;
-      this.camera.fov = TRAIN.cabFovDeg + fov;
+      this.camera.fov = (rear ? REAR_CAMERA.fovDeg : TRAIN.cabFovDeg) + fov;
       this.camera.updateProjectionMatrix();
     }
     this.sky3?.update(dt, pose.railId, pose.s + TRAIN.length / 2, this.scene.fog as Fog | null, this.fogReach());
@@ -773,6 +836,16 @@ export class ThreeSceneView implements SceneView {
 
   setSnowWave(wave: { railId: string; s: number; speed: number; state: string } | null): void {
     this.snow?.setWave(wave);
+  }
+
+  /** v1.11 (6-1): Sakasa in "おいかけっこ" (drawn from the first time she is out). */
+  setLead(pose: LeadPose | null): void {
+    if (!pose && !this.lead) return;
+    if (!this.lead && this.stage && this.network) {
+      this.lead = new LeadFigure(this.models, this.network, this.stage.file.environment.ground?.y ?? null);
+      this.scene.add(this.lead.group);
+    }
+    this.lead?.set(pose);
   }
 
   setSubmerged(on: boolean): void {
@@ -872,4 +945,13 @@ export class ThreeSceneView implements SceneView {
     this.stage = null;
     this.scene.clear();
   }
+}
+
+/** v1.11 (PR8a): two small white lamps at the back of a car (one mesh), just outside its back wall. */
+function buildRearLamps(): Mesh {
+  const parts = [-0.95, 0.95].map((x) => new BoxGeometry(0.34, 0.26, 0.08).translate(x, 1.15, -TRAIN.length / 2 - 0.05));
+  const geometry = mergeGeometries(parts) ?? parts[0];
+  const mesh = new Mesh(geometry, new MeshBasicMaterial({ color: '#fffbe8' }));
+  mesh.name = 'rear-lamps';
+  return mesh;
 }
