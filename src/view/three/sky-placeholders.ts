@@ -155,7 +155,30 @@ function cloudCrystal(): Group {
   return g;
 }
 
+/**
+ * v1.11 (PR9, 第 3 部 A12.2, ticket 0021): 1-3's record ③ "さかさじまの うら": a pink flower blooming upside down under the
+ * upside-down island. Origin at the stem's root (the top), the flower hanging below it (0.6 × 0.8 × 0.6 m).
+ */
+function upsideFlower(): Group {
+  const g = new Group();
+  const stem = mesh(new CylinderGeometry(0.03, 0.035, 0.5, 6), '#5DAE4B', 0, -0.25);
+  const leaf = mesh(new SphereGeometry(0.09, 6, 4), '#7CC85E', 0.08, -0.22);
+  leaf.scale.set(1.4, 0.35, 0.8);
+  const cup = mesh(new ConeGeometry(0.22, 0.26, 10), '#E75BA0', 0, -0.6, 0, 0.25);
+  const heart = mesh(new SphereGeometry(0.08, 8, 5), '#FFE27A', 0, -0.5, 0, 0.3);
+  g.add(stem, leaf, cup, heart);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const petal = mesh(new SphereGeometry(0.12, 6, 4), '#F59AC6', Math.cos(a) * 0.17, -0.7, Math.sin(a) * 0.17, 0.2);
+    petal.scale.set(1, 0.45, 0.7);
+    petal.rotation.y = -a;
+    g.add(petal);
+  }
+  return g;
+}
+
 const BUILDERS: Record<string, () => Group> = {
+  'upside-flower': upsideFlower,
   'island-a': () => island(24, 12, 24, 1),
   'island-b': () => island(40, 16, 28, 2),
   'island-c': () => island(12, 8, 12, 3),

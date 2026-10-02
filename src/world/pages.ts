@@ -34,10 +34,19 @@ export function crossPages(world: WorldFile, key: string): { from: number; to: n
   return from !== undefined && to !== undefined && from !== to ? { from, to } : null;
 }
 
-/** A chapter is done when all its islands are cleared, and every island of its ring (the ring's rails exist). */
-export function chapterDone(world: WorldFile, chapter: WorldChapter, cleared: string[]): boolean {
-  const ids = world.islands.filter((i) => i.chapter === chapter.id).map((i) => i.id);
-  ids.push(...(chapter.finale?.ring ?? []));
+/**
+ * A chapter is done when all its islands are cleared, and every island of its ring (the ring's rails exist).
+ * v1.11 (PR9, docs/PHASE9_CHAPTER5_6.md 第 1 部 §3.4) guards, so a chapter whose islands are not all on the map yet
+ * never ends early (6-1 alone must not end chapter 6): with `count` (its planned number of stages) the chapter waits
+ * until the world has that many of its islands; and a chapter with a `finale` waits until the world has as many of
+ * its islands as there are stage files of the chapter (`stageIds`, "<chapter>-<n>", when the caller knows them). The
+ * islands an `after` holds back count like the others.
+ */
+export function chapterDone(world: WorldFile, chapter: WorldChapter, cleared: string[], stageIds?: string[]): boolean {
+  const own = world.islands.filter((i) => i.chapter === chapter.id).map((i) => i.id);
+  if (chapter.count !== undefined && own.length < chapter.count) return false;
+  if (chapter.finale && stageIds && stageIds.filter((id) => id.startsWith(`${chapter.id}-`)).length !== own.length) return false;
+  const ids = [...own, ...(chapter.finale?.ring ?? [])];
   return ids.length > 0 && ids.every((id) => cleared.includes(id));
 }
 
@@ -45,10 +54,10 @@ export function chapterDone(world: WorldFile, chapter: WorldChapter, cleared: st
  * The rails laid for these clears ("from>to"): a rail once its `from` is cleared, and a rail out of a chapter
  * (`afterChapter`) once that chapter is done. Never the dotted line to a "?" island.
  */
-export function laidLinks(world: WorldFile, cleared: string[]): string[] {
+export function laidLinks(world: WorldFile, cleared: string[], stageIds?: string[]): string[] {
   const done = (id: number): boolean => {
     const chapter = world.chapters.find((c) => c.id === id);
-    return !!chapter && chapterDone(world, chapter, cleared);
+    return !!chapter && chapterDone(world, chapter, cleared, stageIds);
   };
   return world.links
     .filter(([from, to, opts]) => !to.startsWith('teaser:') && cleared.includes(from) && (opts?.afterChapter === undefined || done(opts.afterChapter)))
@@ -64,12 +73,12 @@ export function laidLinks(world: WorldFile, cleared: string[]): string[] {
  * rail with an end on a later page, or the end of a chapter on a later page, is not seen yet, so a child typing in
  * a version 2 code still watches the rail grow through the gate to page 3 once.
  */
-export function seenMapLinks(world: WorldFile, cleared: string[], maxPage = Infinity): string[] {
-  const done = world.chapters.filter((c) => chapterDone(world, c, cleared));
+export function seenMapLinks(world: WorldFile, cleared: string[], maxPage = Infinity, stageIds?: string[]): string[] {
+  const done = world.chapters.filter((c) => chapterDone(world, c, cleared, stageIds));
   const waiting = new Set(world.chapters.filter((c) => c.finale?.link && !done.includes(c)).map((c) => c.finale?.link));
   const within = (key: string): boolean => key.split('>').every((id) => (nodePage(world, id) ?? Infinity) <= maxPage);
   return [
-    ...laidLinks(world, cleared).filter((key) => !waiting.has(key) && within(key)),
+    ...laidLinks(world, cleared, stageIds).filter((key) => !waiting.has(key) && within(key)),
     ...done.filter((c) => c.finale && !c.finale.link && c.page <= maxPage).map((c) => `finale:${c.id}`),
   ];
 }

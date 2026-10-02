@@ -36,6 +36,7 @@ import { buildSkyPlaceholder } from '../view/three/sky-placeholders';
 import { buildVolcanoPlaceholder } from '../view/three/volcano-placeholders';
 import { buildMagnetPlaceholder } from '../view/three/magnet-placeholders';
 import { buildReversePlaceholder } from '../view/three/reverse-placeholders';
+import { buildCastlePlaceholder } from '../view/three/castle-placeholders';
 
 const GROUPS: [string, RegExp][] = [
   ['のりもの', /^(train-|car-|rocket-unit)/],
@@ -43,6 +44,7 @@ const GROUPS: [string, RegExp][] = [
   ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird|squirrel|grasshopper|butterfly|spider|seabird|seal|snowbird|frog|duck|sea-turtle|lantern-jelly|snowman|snow-hare|bunny|fawn|hedgehog|tanuki|firefly-swarm|firefly-wait)/],
   ['じしゃく', /^(magnet-mark|rail-piece|iron-|crossing-bar-iron|turn-mirror-small|sign-bell)/],
   ['うしろむき', /^(reverse-post)/],
+  ['さかさまの しろ', /^(sakasa-castle|castle-|upside-|house-upside|tree-upside|lamp-upside|garden-topiary|chimney-upside|clock-|upward-falls|rainbow-|lectern|bench|promenade|up-raindrop|backward-book)/],
   ['えき・せんろ', /^(platform|station|stop|buffer|crossing|direction|jump|updraft|sky-buoy|sign-|old-bridge)/],
   ['たてもの', /^(house|shop|tower|hq|observatory|lighthouse|harbour-house|lodge)/],
   ['しぜん', /^(tree|rock|fern|cycad|cliff|boulder|island|cloud|canopy|branch|bough|leaf|grass|clover|meadow|water|dandelion|volcano|mesa|pumice|sandbar|reef|sand-island|palm|kelp|coral|spring-vent|snow|ice-|tunnel|reed|lily|water-weed|islet|rapids|river-|sea-arch|falls|stepping|kawa-rock|cape-rock|trench|glow-coral|firefly-grass|night-|glow-mushroom|moon-meadow|great-tree|big-stump|log-bridge|thicket|bell-branch)/],
@@ -102,6 +104,7 @@ const drawn = (name: string): Group | null =>
   buildMagnetPlaceholder(name) ??
   buildMirrorPlaceholder(name) ??
   buildReversePlaceholder(name) ??
+  buildCastlePlaceholder(name) ??
   buildRecordPlaceholder(name);
 /**
  * Stand-ins made from a built model (4-3's blushing Sakasa: the built one with pink cheeks; 5-3's waving and shy mirror

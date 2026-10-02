@@ -150,7 +150,8 @@
   "junctions": [
     { "id": "j-kagami1", "railId": "main", "at": 1500, "left": "kagami1", "right": "main", "default": "left", "signReversed": true, "phantom": true },
     { "id": "j-kagami2", "railId": "main", "at": 2000, "left": "main", "right": "kagami2", "default": "right", "signReversed": true, "phantom": true },
-    { "id": "j-kagami3", "railId": "main", "at": 3100, "left": "kagami3", "right": "main", "default": "left", "signReversed": true, "phantom": true }
+    { "id": "j-kagami3", "railId": "main", "at": 3100, "left": "kagami3", "right": "main", "default": "left", "signReversed": true, "phantom": true },
+    { "id": "ura-guchi", "railId": "main", "at": 3250, "back": true, "left": "ura", "right": "main", "default": "right", "line": "かがみの うしろに みちが ある！" }
   ],
   "stations": [
     { "id": "kagamiguchi", "name": "かがみぐちえき", "railId": "main", "at": 45, "platformSide": "left" },
