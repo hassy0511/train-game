@@ -1,0 +1,1 @@
+{"_expect": "a shot of a point [x, y, z] needs \"distance\"", "_base": "1-1", "_edit": [{"path": "cutscenes.opening.0", "value": {"shot": "wide", "target": [0, 0, 0]}}]}

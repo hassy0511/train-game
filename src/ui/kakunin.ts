@@ -1,5 +1,5 @@
-import { checkKakuninCode, KAKUNIN_DIGITS, kakuninSearch, rememberKakunin } from '../core/kakunin';
-import { listStageIds, peekStage } from '../stage/loader';
+import { checkKakuninCode, KAKUNIN_DIGITS, kakuninMovieSearch, kakuninSearch, rememberKakunin } from '../core/kakunin';
+import { listMovieIds, listStageIds, peekMovie, peekStage } from '../stage/loader';
 import world from '../world/world.json';
 import type { WorldFile } from '../world/types';
 
@@ -263,7 +263,39 @@ export function showKakuninList(root: HTMLElement, options: { open?: string; onC
       }
       body.appendChild(section);
     }
+    // v1.12 (えんしゅつ): the movies (src/movies/), each a tap away (「エンディング」).
+    void movieSection().then((section) => body.appendChild(section));
   });
+}
+
+/** v1.12: 「ムービー」: a button per movie; a tap plays it (`?movie=…&kakunin=1`; back to this list after its card). */
+async function movieSection(): Promise<HTMLElement> {
+  const section = document.createElement('section');
+  section.className = 'kakunin-chapter';
+  section.dataset.chapter = 'movie';
+  const h2 = document.createElement('h2');
+  h2.textContent = 'ムービー';
+  section.appendChild(h2);
+  for (const id of listMovieIds()) {
+    const movie = await peekMovie(id);
+    if (!movie) continue;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'kakunin-stage kakunin-movie';
+    b.dataset.movie = id;
+    const title = document.createElement('span');
+    title.className = 'kakunin-stage-title';
+    title.textContent = movie.title;
+    b.appendChild(title);
+    b.addEventListener('click', () => {
+      location.search = kakuninMovieSearch(id);
+    });
+    const row = document.createElement('div');
+    row.className = 'kakunin-stage-row';
+    row.appendChild(b);
+    section.appendChild(row);
+  }
+  return section;
 }
 
 /**

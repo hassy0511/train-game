@@ -1,0 +1,1 @@
+{"_expect": "a figure riding in a car moves with it", "_base": "1-1", "_edit": [{"path": "cutscenes.opening.0", "value": {"spawn": "x", "model": "amanojaku", "ride": {"car": 1, "at": [0, 1.5, 0]}}}, {"path": "cutscenes.opening.1", "value": {"move": "x", "position": [0, 0, 0], "seconds": 1}}]}

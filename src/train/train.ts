@@ -329,6 +329,8 @@ export class Train {
   private junctionRules: Record<string, MissionJunctionRule> | null = null;
   /** v1.11 (6-1): a cutscene's roll ("depart") going on: where to, since when, and who waits for its end. */
   private departing: { railId: string; to: number; t: number; limit: number; resolve: () => void } | null = null;
+  /** v1.12 (えんしゅつ): a cutscene's `drive`: the train runs by itself at `speed` m/s (the lever does nothing). */
+  private autoDrive: { speed: number } | null = null;
 
   /** v1.11 (PR7): the way the train has come (every car is placed along it). */
   readonly trail: Trail;
@@ -1065,6 +1067,26 @@ export class Train {
     });
   }
 
+  /**
+   * v1.12 (えんしゅつ): a cutscene's `drive`: the train runs by itself at `speed` m/s (0: a gentle stop where it is), or
+   * cruises (DEPART.maxSpeed unless `speed` says) to a gentle stop with its front at `stopAt` on its rail. Null gives it
+   * back to the lever (any stop place is forgotten).
+   */
+  setAutoDrive(order: { speed?: number; stopAt?: number } | null): void {
+    if (!order) {
+      this.autoDrive = null;
+      this.setSpeedCap('auto-drive', null);
+      return;
+    }
+    this.autoDrive = { speed: Math.max(0, order.speed ?? DEPART.maxSpeed) };
+    this.setSpeedCap('auto-drive', order.stopAt !== undefined ? { holdAt: { railId: this.state.railId, s: order.stopAt } } : null);
+  }
+
+  /** v1.12: a cutscene's `drive` is on. */
+  get autoDriving(): boolean {
+    return this.autoDrive !== null;
+  }
+
   /** v1.11 (6-1): a cutscene's roll is going on. */
   get isDeparting(): boolean {
     return this.departing !== null;
@@ -1182,6 +1204,11 @@ export class Train {
     // v1.11 (6-1): a cutscene's roll goes by itself (its "depart" cap stops it at its place).
     if (this.departing) {
       target = DEPART.maxSpeed;
+      brake = BRAKING;
+    }
+    // v1.12: a cutscene's drive goes by itself too (its stop place is a "hold" cap below).
+    if (this.autoDrive) {
+      target = this.autoDrive.speed;
       brake = BRAKING;
     }
     const stopAt = this.stopDistance(rail);

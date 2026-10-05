@@ -70,6 +70,33 @@ export async function peekStage(
   };
 }
 
+// v1.12 (えんしゅつ): the movies (src/movies/<id>.json): stage files with no missions, played by src/movie/player.ts.
+const movieModules = import.meta.glob('../movies/*.json');
+
+export function listMovieIds(): string[] {
+  return Object.keys(movieModules)
+    .map((k) => k.replace('../movies/', '').replace('.json', ''))
+    .sort();
+}
+
+/** A movie's title and the stages that open it (its `unlock.requires`), without building it; null: no such movie. */
+export async function peekMovie(id: string): Promise<{ id: string; title: string; unlock: { requires: string[] } } | null> {
+  const load = movieModules[`../movies/${id}.json`];
+  if (!load) return null;
+  const file = ((await load()) as { default: StageFile }).default;
+  return { id: file.id, title: file.title, unlock: file.unlock };
+}
+
+/** v1.12: a movie, built like a stage (the checks, the rail network, the props); it must say what it plays. */
+export async function loadMovie(id: string): Promise<StageData> {
+  const load = movieModules[`../movies/${id}.json`];
+  if (!load) throw new Error(`Unknown movie "${id}"`);
+  const mod = (await load()) as { default: unknown };
+  const data = prepareStage(mod.default);
+  if (!data.file.movie) throw new Error(`"${id}" is not a movie (no "movie")`);
+  return data;
+}
+
 export async function loadStage(id: string): Promise<StageData> {
   const load = stageModules[`../stages/${id}.json`];
   if (!load) throw new Error(`Unknown stage "${id}"`);

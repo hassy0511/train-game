@@ -151,6 +151,7 @@ const SONG_PLACES: Record<string, string> = {
   koori: '4-1',
   mura: '4-2',
   yuki: '4-3',
+  ending: 'エンディング',
 };
 const songButtons: HTMLButtonElement[] = [];
 const playSong = (id: string | null, pressed: HTMLButtonElement): void => {

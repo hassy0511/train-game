@@ -1,7 +1,9 @@
 import type { StageEvent, StageEventBus } from '../core/stage-events';
 import type { RailNetwork } from '../rail/types';
 import { resolvePlacement } from '../stage/loader';
-import type { AbilityId, BubbleIcon, CutsceneStep, Emote, Speaker, Vec3 } from '../stage/types';
+import type { AbilityId, BubbleIcon, CutsceneStep, Emote, ShotDef, Speaker, Vec3 } from '../stage/types';
+import { Quaternion, Vector3 } from 'three';
+import { actSeconds } from './acts';
 import { MIRROR_WORLD, WINDUP } from '../train/params';
 import type { CameraMode } from '../view/camera-rig';
 
@@ -53,7 +55,44 @@ export interface CutscenePorts {
    * cuts the wait short (the train still stops at its place).
    */
   depart(to: number, seconds: number): Promise<void>;
+  /**
+   * v1.12 (えんしゅつ): a camera shot (null = none: the usual camera, or the cutscene's `camera`). Resolves once its
+   * move from the shot before is done (at once for a cut).
+   */
+  shot(def: ShotDef | null): Promise<void>;
+  /** v1.12: the movie's black bars at the top and bottom, on or off. */
+  letterbox(on: boolean): void;
+  /** The screen fades to black (true) or back (false) over `seconds`; resolves when it is done. */
+  fade(toBlack: boolean, seconds: number): Promise<void>;
+  /**
+   * v1.12: the train runs by itself at `speed` m/s (0: stops gently), or stops gently with its front at `stopAt`; null
+   * gives it back to the lever (the cutscene's end).
+   */
+  drive(order: { speed?: number; stopAt?: number } | null): void;
+  /** v1.12: resolves when the train front passes `at` on its rail (or stands by it), or after `max` s. */
+  trainAt(at: number, max: number): Promise<void>;
+  /** v1.12: a named point in the cutscene (a test hook). */
+  beat(name: string): void;
 }
+
+/** v1.12: where a `spawn` or `move` step puts its figure: world (or, riding, the car's own) place and turn. */
+function figurePlace(
+  step: { onRail?: { railId: string; at: number; lateral?: number; heightFromRail?: number }; position?: Vec3; ride?: { car: number; at: Vec3 }; rotationY?: number },
+  network: RailNetwork,
+  groundY: number | null,
+): { position: Vector3; quaternion: Quaternion; car?: number } {
+  if (step.ride) {
+    const [x, y, z] = step.ride.at;
+    return { position: new Vector3(x, y, z), quaternion: new Quaternion().setFromAxisAngle(UP, ((step.rotationY ?? 0) * Math.PI) / 180), car: step.ride.car };
+  }
+  if (step.position) return resolvePlacement({ position: step.position, rotationY: step.rotationY }, network, groundY);
+  if (!step.onRail) throw new Error('a cutscene figure needs onRail, position or ride');
+  return resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail }, rotationY: step.rotationY }, network, groundY);
+}
+const UP = new Vector3(0, 1, 0);
+
+/** v1.12: how long a `trainAt` waits at most when the step does not say (s). */
+const TRAIN_AT_MAX = 40;
 
 /**
  * A request to skip the rest of a cutscene ("▶▶", PHASE7_FINISH §4 item 7). The waits in progress end at once and
@@ -121,11 +160,11 @@ export async function runCutscene(
       if (step.emote) events.post({ type: 'partner:emote', kind: step.emote });
       await race(ports.say(step.say, step.who ?? 'partner', step.name, step.icon));
     } else if ('spawn' in step) {
-      const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail }, rotationY: step.rotationY }, network, groundY);
-      events.post({ type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion, mirror: step.mirror });
+      const t = figurePlace(step, network, groundY);
+      events.post({ type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion, mirror: step.mirror, car: t.car, scale: step.scale });
     } else if ('move' in step) {
-      const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail } }, network, groundY);
-      events.post({ type: 'actor:move', id: step.move, position: t.position, seconds: step.seconds });
+      const t = figurePlace({ onRail: step.onRail, position: step.position }, network, groundY);
+      events.post({ type: 'actor:move', id: step.move, position: t.position, seconds: step.seconds, bob: step.bob, face: step.face });
       if (!step.nowait) await race(ports.wait(step.seconds));
     } else if ('remove' in step) {
       events.post({ type: 'actor:remove', id: step.remove });
@@ -138,7 +177,27 @@ export async function runCutscene(
       await race(ports.wait(style === 'fall' ? CUT_FALL_SECONDS : 1));
     } else if ('card' in step) {
       await ports.card(step.card.title, step.card.button, step.card.icon, step.card.mirror, step.card.notes);
+    } else if ('shot' in step) {
+      // v1.12: a camera shot framing a figure (a cut, or a move from the shot before).
+      const moving = ports.shot(step);
+      if (!step.nowait) await race(moving);
+    } else if ('act' in step) {
+      // v1.12: a figure's little motion.
+      events.post({ type: 'actor:act', id: step.id, act: step.act, times: step.times, seconds: step.seconds, toward: step.toward });
+      const seconds = actSeconds(step.act, step.times, step.seconds);
+      if (!step.nowait && seconds > 0) await race(ports.wait(seconds));
+    } else if ('letterbox' in step) {
+      ports.letterbox(step.letterbox);
+    } else if ('fade' in step) {
+      await race(ports.fade(step.fade === 'out', step.seconds ?? 1));
+    } else if ('drive' in step) {
+      ports.drive(step.drive);
+    } else if ('trainAt' in step) {
+      await race(ports.trainAt(step.trainAt, step.max ?? TRAIN_AT_MAX));
+    } else if ('beat' in step) {
+      ports.beat(step.beat);
     } else if ('camera' in step) {
+      void ports.shot(null);
       if (step.camera === 'fixed') {
         ports.fixedCamera(step.at, step.lookAt, step.reach);
         await race(ports.wait(0.3));
@@ -207,14 +266,19 @@ export function fastForwardCutscene(
   // drops it when a remove overtakes it.)
   const spawned = new Map<string, Extract<StageEvent, { type: 'actor:spawn' }>>();
   const windups: string[] = [];
+  // v1.12: the turns ("act" "turn") figures are left with, applied once they are on.
+  const turns = new Map<string, Extract<StageEvent, { type: 'actor:act' }>>();
   for (const step of steps) {
     if ('spawn' in step) {
-      const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail }, rotationY: step.rotationY }, network, groundY);
-      spawned.set(step.spawn, { type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion, mirror: step.mirror });
+      const t = figurePlace(step, network, groundY);
+      spawned.set(step.spawn, { type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion, mirror: step.mirror, car: t.car, scale: step.scale });
+      turns.delete(step.spawn);
+    } else if ('act' in step) {
+      if (step.act === 'turn') turns.set(step.id, { type: 'actor:act', id: step.id, act: 'turn', seconds: 0, toward: step.toward });
     } else if ('move' in step) {
-      const t = resolvePlacement({ onRail: { heightFromRail: 0, ...step.onRail } }, network, groundY);
+      const t = figurePlace({ onRail: step.onRail, position: step.position }, network, groundY);
       const own = spawned.get(step.move);
-      if (own) own.position = t.position;
+      if (own && own.car === undefined) own.position = t.position;
       else events.post({ type: 'actor:move', id: step.move, position: t.position, seconds: 0 });
     } else if ('remove' in step) {
       // Also posted for one brought on here: it may have been on screen already before a "▶▶".
@@ -251,6 +315,17 @@ export function fastForwardCutscene(
   }
   for (const spawn of spawned.values()) events.post(spawn);
   for (const target of windups) postWindup(events, target, models, true);
+  for (const [id, turn] of turns) if (!removed(steps, id)) events.post(turn);
+}
+
+/** v1.12: the figure is taken off at the end of these steps (after its last spawn). */
+function removed(steps: CutsceneStep[], id: string): boolean {
+  let gone = false;
+  for (const step of steps) {
+    if ('spawn' in step && step.spawn === id) gone = false;
+    if ('remove' in step && step.remove === id) gone = true;
+  }
+  return gone;
 }
 
 /** The model each figure a cutscene brings on has (its last spawn), by id. */

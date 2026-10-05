@@ -1,0 +1,1 @@
+{"_expect": "act \"wave\" takes no \"times\"", "_base": "1-1", "_edit": [{"path": "cutscenes.opening.0", "value": {"act": "wave", "id": "partner", "times": 2}}]}

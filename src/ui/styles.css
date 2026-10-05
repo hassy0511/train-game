@@ -4498,3 +4498,94 @@ body {
 .junction[data-back='1'] .arrow {
   box-shadow: 0 0 0 4px rgba(231, 91, 160, 0.75), 0 4px 10px rgba(0, 0, 0, 0.3);
 }
+
+/* ---- v1.12 えんしゅつ: the movie's letterbox (src/ui/letterbox.ts) and the movie screen (src/movie/player.ts) ---- */
+#app {
+  --letterbox: 11vh;
+}
+
+#ui > .letterbox {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.letterbox-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--letterbox);
+  background: #000;
+  transition: transform 0.7s ease-in-out;
+}
+
+.letterbox-bar.is-top {
+  top: 0;
+  transform: translateY(-101%);
+}
+
+.letterbox-bar.is-bottom {
+  bottom: 0;
+  transform: translateY(101%);
+}
+
+.letterbox.is-on .letterbox-bar {
+  transform: none;
+}
+
+/* The speech bubble sits above the bottom bar (never under it). */
+#app.is-letterbox .bubble {
+  bottom: calc(var(--letterbox) + 14px);
+}
+
+/* A movie has no driving controls: the bubble keeps its look, nearer the right edge. */
+#app.is-movie .bubble {
+  right: calc(var(--safe-right) + 56px);
+}
+
+/* "▶▶" in the movie: in the top bar's corner. */
+#app.is-movie .skip-button {
+  top: calc(max(var(--safe-top) + 8px, (var(--letterbox) - 52px) / 2));
+  right: calc(var(--safe-right) + 20px);
+}
+
+/* The start button of a movie opened by its address (iPad keeps the sound locked until a tap). */
+.movie-start {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: rgba(10, 16, 30, 0.55);
+  color: #fff;
+  z-index: 18;
+}
+
+.movie-start h1 {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: 0.1em;
+}
+
+.movie-start button {
+  min-width: 220px;
+  min-height: 72px;
+  padding: 12px 30px;
+  border: none;
+  border-radius: 36px;
+  background: #ffd166;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 26px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .letterbox-bar {
+    transition: none;
+  }
+}

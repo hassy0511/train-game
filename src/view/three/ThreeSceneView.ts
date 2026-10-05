@@ -1,4 +1,6 @@
 import {
+  BackSide,
+  Box3,
   BoxGeometry,
   BufferGeometry,
   Color,
@@ -11,6 +13,8 @@ import {
   NoToneMapping,
   Object3D,
   PerspectiveCamera,
+  Quaternion,
+  Raycaster,
   Scene,
   ShaderMaterial,
   SRGBColorSpace,
@@ -40,7 +44,10 @@ import { MirrorWorldGimmicks, trainFrontOf } from './mirror-world';
 import { frameWave, SnowGimmicks } from './snow';
 import { iceZones, thinIceZones } from '../../gimmick/ice';
 import { slopeZones } from '../../gimmick/slope';
-import { REVERSE_POST, type EnvironmentDef, type RailBaseDef, type ResolvedProp } from '../../stage/types';
+import { REVERSE_POST, type EnvironmentDef, type RailBaseDef, type ResolvedProp, type ShotDef, type ShotTarget } from '../../stage/types';
+import { ShotCamera, type ShotPose, type ShotSubject } from './shot-camera';
+import { clearWindowCar } from './clear-windows';
+import { RainbowGimmicks } from './rainbow';
 import { ActorLayer } from './actors';
 import { addCrewSeat, LeadFigure } from './lead';
 import { LandmarkBoard } from './landmark';
@@ -173,6 +180,17 @@ export class ThreeSceneView implements SceneView {
   private readonly zoneTint = new Color();
   /** v1.10: what the scene looked like above water, while the camera is under it. */
   private aboveWater: { background: Color | null; fog: Fog | null; fogColor: Color | null } | null = null;
+  /** v1.12 (えんしゅつ): the cutscene camera's shots (a shot wins over a fixed camera and the title's orbit). */
+  private readonly shots = new ShotCamera();
+  private readonly shotPose: ShotPose = { position: new Vector3(), lookAt: new Vector3(), fov: TRAIN.cabFovDeg };
+  private readonly ray = new Raycaster();
+  /** v1.12: the built lead car and car models (a car someone rides in is drawn again with see-through windows). */
+  private carTemplates: { lead: Group; car: Group } | null = null;
+  /** v1.12: each car's body as drawn (0 = the lead car), and the cars whose windows are see-through now. */
+  private readonly carBodies: Object3D[] = [];
+  private readonly clearCars = new Set<number>();
+  /** v1.12: a rainbow under a stretch of track (gimmick "rainbow"; null without one). */
+  private rainbow: RainbowGimmicks | null = null;
 
   async init(container: HTMLElement, stage: StageData, network: RailNetwork): Promise<void> {
     this.stage = stage;
@@ -237,6 +255,7 @@ export class ThreeSceneView implements SceneView {
 
     this.actors = new ActorLayer(this.models, stage.stations, stage.file.missions);
     this.actors.setTrain(this.train);
+    this.actors.setCars([this.train, ...this.cars]);
     this.scene.add(this.actors.group);
 
     this.scene.add(buildGapPits(network, stage.file.environment.ground?.y ?? null));
@@ -310,6 +329,10 @@ export class ThreeSceneView implements SceneView {
       this.mirrorWorld = new MirrorWorldGimmicks(stage);
       this.scene.add(this.mirrorWorld.group);
     }
+    if (RainbowGimmicks.wanted(stage)) {
+      this.rainbow = new RainbowGimmicks(stage, network);
+      this.scene.add(this.rainbow.group);
+    }
     // v1.11 (5-3): a false way ends in a lavender cushion (the mirror world's), not a buffer stop.
     const cushionEnds = MirrorWorldGimmicks.cushionRails(stage).map((id) => network.getRail(id).frameAt(network.getRail(id).length).position);
     const bufferStopsShown = rails.bufferStops.filter((b) => !cushionEnds.some((p) => p.distanceTo(b.position) < 0.5));
@@ -359,7 +382,13 @@ export class ThreeSceneView implements SceneView {
     trainInstance.name = 'train-proto';
     this.train.add(trainInstance);
     const carTemplate = bakeModel(carModel) ?? carModel;
-    for (const car of this.cars) car.add(carTemplate.clone(true));
+    this.carBodies.push(trainInstance);
+    for (const car of this.cars) {
+      const body = carTemplate.clone(true);
+      car.add(body);
+      this.carBodies.push(body);
+    }
+    this.carTemplates = { lead: trainModel, car: carModel };
 
     const partner = (bakeModel(partnerModel) ?? partnerModel).clone(true);
     partner.name = 'partner';
@@ -397,6 +426,14 @@ export class ThreeSceneView implements SceneView {
   }
 
   onStageEvent(event: StageEvent): void {
+    // v1.12: a figure riding in a car: that car's windows turn see-through.
+    if (event.type === 'actor:spawn' && event.car !== undefined) this.clearWindows(event.car);
+    // v1.12: a figure's little motion (what a "turn" faces is found here: the camera, the train, another figure).
+    if (event.type === 'actor:act') {
+      const toward = event.toward === undefined ? null : this.pointOf(event.toward);
+      void this.actors?.act(event.id, event.act, event.times, event.seconds, toward);
+      return;
+    }
     if (event.type === 'rail:cut' && this.network && this.rails) {
       if (event.style === 'fall') {
         if (event.instant) this.removeCutProps(event.railId, event.from, event.to, event.props);
@@ -603,6 +640,143 @@ export class ThreeSceneView implements SceneView {
     this.lightBeam.rotation.y = on ? Math.PI : 0;
   }
 
+  /** v1.12: car `index` (0 = the lead) drawn again with see-through windows and a plain inside (once). */
+  private clearWindows(index: number): void {
+    const body = this.carBodies[index];
+    if (!body || !this.carTemplates || this.clearCars.has(index)) return;
+    this.clearCars.add(index);
+    const clear = clearWindowCar(index === 0 ? this.carTemplates.lead : this.carTemplates.car, index === 0);
+    clear.name = body.name;
+    body.parent?.add(clear);
+    body.removeFromParent();
+    this.carBodies[index] = clear;
+  }
+
+  /**
+   * v1.12 (えんしゅつ): a camera shot (null: none). It wins over a fixed camera and the title's orbit; when it ends, the
+   * camera they or the mode want comes back at once.
+   */
+  setShot(def: ShotDef | null): void {
+    if (!def) {
+      if (!this.shots.active) return;
+      this.shots.stop();
+      this.cameraSnap = true;
+      this.camera.fov = TRAIN.cabFovDeg + this.fovBoost;
+      this.camera.updateProjectionMatrix();
+      return;
+    }
+    const subject = this.subjectOf(def.target);
+    this.shotPose.position.copy(this.camera.position);
+    this.shotPose.lookAt.copy(this.camCurrent.lookAt);
+    this.shotPose.fov = this.camera.fov;
+    this.shots.start(def, subject, this.shotPose);
+    this.widenFar();
+  }
+
+  /** v1.12: the movie's letterbox (the part of the height each bar covers): the shots frame inside it. */
+  setLetterbox(part: number): void {
+    this.shots.letterboxPart = part;
+  }
+
+  /** v1.12: prefers-reduced-motion: camera moves become cuts, no push-ins, the figures' motions half as big. */
+  setReducedMotion(on: boolean): void {
+    this.shots.reduced = on;
+    if (this.actors) this.actors.gentle = on;
+  }
+
+  /** v1.12: the shot on now (a test hook: its size and target), or null. */
+  get shotNow(): ShotDef | null {
+    return this.shots.shot;
+  }
+
+  /** v1.12: a shot target's object and its box in its own space (null: a point, or not there yet). */
+  private subjectObject(target: ShotTarget): { object: Object3D; box: Box3 } | null {
+    if (Array.isArray(target)) return null;
+    const car = /^car-(\d)$/.exec(target);
+    if (target === 'train' || car) {
+      const index = car ? Number(car[1]) : 0;
+      const object = index === 0 ? this.train : this.cars[index - 1];
+      if (!object) return null;
+      const half = TRAIN.length / 2;
+      const behind = target === 'train' ? TRAIN.carSpacing * (TRAIN.carCount - 1) : 0;
+      return { object, box: new Box3(new Vector3(-TRAIN.width / 2, 0.4, -half - behind), new Vector3(TRAIN.width / 2, 3.6, half)) };
+    }
+    const object = this.actors?.shotFigure(target) ?? null;
+    if (!object) return null;
+    let box = object.userData.shotBox as Box3 | undefined;
+    if (!box) {
+      // In its own space: measured with its turn and place taken off.
+      const saved = { p: object.position.clone(), q: object.quaternion.clone(), s: object.scale.clone(), parent: object.parent };
+      object.removeFromParent();
+      object.position.set(0, 0, 0);
+      object.quaternion.identity();
+      object.scale.set(1, 1, 1);
+      object.updateMatrixWorld(true);
+      box = new Box3().setFromObject(object);
+      if (box.isEmpty()) box.set(new Vector3(-0.5, 0, -0.5), new Vector3(0.5, 1, 0.5));
+      object.position.copy(saved.p);
+      object.quaternion.copy(saved.q);
+      object.scale.copy(saved.s);
+      saved.parent?.add(object);
+      object.updateMatrixWorld(true);
+      object.userData.shotBox = box;
+    }
+    return { object, box };
+  }
+
+  private subjectOf(target: ShotTarget): ShotSubject | null {
+    if (Array.isArray(target)) return { center: new Vector3(...target), size: 10, height: 0, yaw: 0 };
+    const found = this.subjectObject(target);
+    if (!found) return null;
+    const { object, box } = found;
+    // Where it is this frame (its car may have moved since the last render).
+    object.updateWorldMatrix(true, false);
+    const center = box.getCenter(new Vector3()).applyMatrix4(object.matrixWorld);
+    const scale = object.getWorldScale(new Vector3()).x;
+    const extent = box.getSize(new Vector3()).multiplyScalar(scale);
+    const forward = new Vector3(0, 0, 1).applyQuaternion(object.getWorldQuaternion(new Quaternion()));
+    const aspect = this.camera.aspect || 1;
+    return {
+      center,
+      size: Math.max(extent.y, Math.max(extent.x, extent.z) / aspect),
+      height: extent.y,
+      yaw: Math.atan2(forward.x, forward.z),
+    };
+  }
+
+  /** v1.12: a world point for a shot target or what a figure turns to face ("camera" too). */
+  private pointOf(target: ShotTarget): Vector3 | null {
+    if (target === 'camera') return this.camera.position.clone();
+    return this.subjectOf(target)?.center ?? null;
+  }
+
+  /**
+   * v1.12: how far from `target` towards `camera` the way is clear (m): the first solid thing in between, less a little.
+   * The shot's own subject (and a car it rides in) and see-through or effect meshes do not count.
+   */
+  private clearWay(target: Vector3, camera: Vector3, skip: Object3D[]): number {
+    const dir = camera.clone().sub(target);
+    const length = dir.length();
+    if (length < 1e-3) return length;
+    this.ray.camera = this.camera;
+    this.ray.set(target, dir.normalize());
+    this.ray.far = length;
+    this.ray.near = 0.05;
+    // Where everything stands this frame (a figure or car moved since the last render).
+    this.scene.updateMatrixWorld();
+    const roots = this.scene.children.filter((o) => o !== this.camera && o !== this.environment.sky && o.visible && !skip.includes(o));
+    for (const hit of this.ray.intersectObjects(roots, true)) {
+      const mesh = hit.object as Mesh;
+      if (!mesh.isMesh || !mesh.visible) continue;
+      if (skip.some((s) => isUnder(mesh, s))) continue;
+      const materials = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as Material[];
+      // See-through things, effects, and insides seen from within (a car's inside box) do not stop the camera.
+      if (materials.some((m) => !m.depthWrite || m.opacity < 0.5 || m.side === BackSide)) continue;
+      return Math.max(0, hit.distance - SHOT_CLEARANCE);
+    }
+    return length;
+  }
+
   setCamera(mode: CameraMode, snap = false): void {
     this.cameraMode = mode;
     this.cameraSnap = this.cameraSnap || snap;
@@ -617,11 +791,18 @@ export class ThreeSceneView implements SceneView {
     this.widenFar();
   }
 
-  /** While a fixed camera is on, the far plane reaches as far as its fog does. */
+  /** v1.12: how far a fixed camera or a shot sees (times the stage fog), or null for the usual camera. */
+  private get reach(): number | null {
+    if (this.shots.active) return this.shots.reach;
+    return this.fixedCamera?.reach ?? null;
+  }
+
+  /** While a fixed camera (v1.12: or a shot) is on, the far plane reaches as far as its fog does. */
   private widenFar(): void {
     const { baseFog, baseFar } = this.environment;
-    if (this.fixedCamera && baseFog && baseFar > 0) {
-      const far = Math.max(baseFar, baseFog.far * this.fixedCamera.reach + FOG_CULL_MARGIN);
+    const reach = this.reach;
+    if (reach !== null && baseFog && baseFar > 0) {
+      const far = Math.max(baseFar, baseFog.far * reach + FOG_CULL_MARGIN);
       if (far > this.camera.far) {
         this.camera.far = far;
         this.camera.updateProjectionMatrix();
@@ -679,7 +860,7 @@ export class ThreeSceneView implements SceneView {
   /** After a fixed camera: the far plane shrinks back with the fog as it eases in (to the usual reach at the end). */
   private easeFarBack(): void {
     const baseFar = this.environment.baseFar;
-    if (this.fixedCamera || baseFar <= 0 || this.camera.far <= baseFar) return;
+    if (this.reach !== null || baseFar <= 0 || this.camera.far <= baseFar) return;
     const fog = this.scene.fog as Fog | null;
     let far = Math.max(baseFar, (fog?.far ?? 0) + FOG_CULL_MARGIN);
     if (far - baseFar < 1) far = baseFar;
@@ -691,8 +872,8 @@ export class ThreeSceneView implements SceneView {
   /** The stage fog, reaching further while a fixed camera is on. */
   private fogReach(): { near: number; far: number } | null {
     const fog = this.environment.baseFog;
-    if (!fog || !this.fixedCamera) return fog;
-    const reach = this.fixedCamera.reach;
+    const reach = this.reach;
+    if (!fog || reach === null) return fog;
     return { near: fog.near * reach, far: fog.far * reach };
   }
 
@@ -720,7 +901,33 @@ export class ThreeSceneView implements SceneView {
     this.ice?.rideSink([this.train, ...this.cars]);
     silkDip.subVectors(this.train.position, silkDip);
 
-    if (this.fixedCamera) {
+    const shot = this.shots.shot;
+    if (shot) {
+      // v1.12: a cutscene shot (the subject may not be there yet: then the camera waits where it is).
+      const subject = this.subjectOf(shot.target);
+      if (subject) {
+        const found = this.subjectObject(shot.target);
+        const skip: Object3D[] = [];
+        if (found) {
+          skip.push(found.object);
+          // The train (or a car of it): the whole train, the subject's middle is inside it. A figure riding in a car:
+          // the car too (the camera looks in through its window).
+          const cars: Object3D[] = [this.train, ...this.cars];
+          if (cars.includes(found.object)) skip.push(...cars);
+          else for (const car of cars) if (isUnder(found.object, car)) skip.push(car);
+        }
+        // A world point (a wide view of the whole place) is not a thing the camera could be hidden from.
+        const clip = found ? (from: Vector3, to: Vector3): number => this.clearWay(from, to, skip) : (from: Vector3, to: Vector3): number => from.distanceTo(to);
+        this.shots.update(dt, subject, this.camera.aspect || 1, clip, this.stage?.file.environment.ground?.y ?? null, this.shotPose);
+        this.camTarget.position.copy(this.shotPose.position);
+        this.camTarget.lookAt.copy(this.shotPose.lookAt);
+        this.camTarget.up.set(0, 1, 0);
+        if (Math.abs(this.camera.fov - this.shotPose.fov) > 1e-3) {
+          this.camera.fov = this.shotPose.fov;
+          this.camera.updateProjectionMatrix();
+        }
+      }
+    } else if (this.fixedCamera) {
       this.camTarget.position.copy(this.fixedCamera.at);
       this.camTarget.lookAt.copy(this.fixedCamera.lookAt);
       this.camTarget.up.set(0, 1, 0);
@@ -737,16 +944,18 @@ export class ThreeSceneView implements SceneView {
       if (wave && (mode === 'side' || mode === 'chase')) frameWave(mode, pose, wave, this.camTarget);
     }
     // The cab view and the title's orbit are exact every frame (no easing toward them).
-    const cab = this.cameraMode === 'cab' && !this.fixedCamera && !this.orbit;
+    const shooting = this.shots.active;
+    const cab = this.cameraMode === 'cab' && !this.fixedCamera && !this.orbit && !shooting;
     // v1.11 (PR8a): so is the rear window (うしろむき), with its own lens (a little narrower, a nearer near plane).
-    const rear = this.cameraMode === 'rear' && !this.fixedCamera && !this.orbit;
+    const rear = this.cameraMode === 'rear' && !this.fixedCamera && !this.orbit && !shooting;
     const near = rear ? REAR_CAMERA.near : 0.1;
     if (this.camera.near !== near) {
       this.camera.near = near;
       this.camera.fov = (rear ? REAR_CAMERA.fovDeg : TRAIN.cabFovDeg) + this.fovBoost;
       this.camera.updateProjectionMatrix();
     }
-    smoothCamera(this.camCurrent, this.camTarget, dt, this.cameraSnap || cab || rear || (!!this.orbit && !this.fixedCamera));
+    // v1.12: a shot eases its own moves (exact every frame).
+    smoothCamera(this.camCurrent, this.camTarget, dt, this.cameraSnap || cab || rear || shooting || (!!this.orbit && !this.fixedCamera));
     this.cameraSnap = false;
     this.camera.position.copy(this.camCurrent.position);
     this.camera.up.copy(this.camCurrent.up);
@@ -793,10 +1002,11 @@ export class ThreeSceneView implements SceneView {
     }
     this.iron?.update(dt);
     this.mirrorWorld?.update(dt, trainFrontOf(pose));
+    this.rainbow?.update(dt);
     this.updateFalling(dt);
     // A little wider view while the rocket burns (not a shake).
     const fov = this.fovBoost + (this.fovTarget - this.fovBoost) * Math.min(1, dt * 4);
-    if (Math.abs(fov - this.fovBoost) > 1e-3) {
+    if (Math.abs(fov - this.fovBoost) > 1e-3 && !shooting) {
       this.fovBoost = fov;
       this.camera.fov = (rear ? REAR_CAMERA.fovDeg : TRAIN.cabFovDeg) + fov;
       this.camera.updateProjectionMatrix();
@@ -945,6 +1155,15 @@ export class ThreeSceneView implements SceneView {
     this.stage = null;
     this.scene.clear();
   }
+}
+
+/** v1.12: a shot's camera stops this far (m) in front of whatever stands between it and its subject. */
+const SHOT_CLEARANCE = 0.5;
+
+/** v1.12: `o` is `root` or inside it. */
+function isUnder(o: Object3D, root: Object3D): boolean {
+  for (let p: Object3D | null = o; p; p = p.parent) if (p === root) return true;
+  return false;
 }
 
 /** v1.11 (PR8a): two small white lamps at the back of a car (one mesh), just outside its back wall. */

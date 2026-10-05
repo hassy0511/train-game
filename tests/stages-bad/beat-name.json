@@ -1,0 +1,1 @@
+{"_expect": "\"beat\" must be a name", "_base": "1-1", "_edit": [{"path": "cutscenes.opening.0", "value": {"beat": "Ring 1"}}]}

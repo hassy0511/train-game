@@ -1,0 +1,1 @@
+{"_expect": "\"movie.card\" needs \"title\" and \"button\"", "_base": "ending", "_edit": [{"path": "movie.card.button", "delete": true}]}

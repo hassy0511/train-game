@@ -64,6 +64,21 @@ const KW_EmA = 'B3:1 E4:1 G4:1 B4:1 A4:1 E4:1 C#4:1 A3:1';
 // 4-1 koori: the pad's "ちゃっ ちゃっ" on beats 2 and 3 of a waltz bar.
 const KO = (note: string): string => `-:2 ${note}:1 -:1 ${note}:1 -:1`;
 
+// ---- v1.12 the ending movie ----------------------------------------------------------------------------------
+
+// "ending": one chord a bar (4/4, eighth steps), 32 bars: A (8), B (8), A again with a new end (8), the coda (8).
+const END_CHORDS = 'G D Em C G Am D G C D Bm Em Am D C D G D Em C G Am D G C D Em C C D G G'.split(' ');
+/** Per chord: the bass's root and fifth, and the pad's third and fifth (a soft close voicing). */
+const END_VOICING: Record<string, { root: string; fifth: string; third: string; top: string; bell: [string, string] }> = {
+  G: { root: 'G2', fifth: 'D3', third: 'B3', top: 'D4', bell: ['B6', 'D7'] },
+  D: { root: 'D2', fifth: 'A2', third: 'F#3', top: 'A3', bell: ['A6', 'F#6'] },
+  Em: { root: 'E2', fifth: 'B2', third: 'G3', top: 'B3', bell: ['G6', 'B6'] },
+  C: { root: 'C2', fifth: 'G2', third: 'E3', top: 'G3', bell: ['E6', 'G6'] },
+  Am: { root: 'A1', fifth: 'E2', third: 'C4', top: 'E4', bell: ['C7', 'A6'] },
+  Bm: { root: 'B1', fifth: 'F#2', third: 'D4', top: 'F#4', bell: ['D7', 'B6'] },
+};
+const endBars = (bar: (v: (typeof END_VOICING)[string], i: number) => string): string => END_CHORDS.map((c, i) => bar(END_VOICING[c], i)).join(' | ');
+
 export const SONGS: Record<string, Song> = {
   // Title and map: a small music box waltz.
   title: {
@@ -566,6 +581,45 @@ export const SONGS: Record<string, Song> = {
           'C3:1 -:1 G2:1 -:1 | G2:1 -:1 D3:1 -:1 | D3:1 -:1 A2:1 -:1 | C3:1 -:1 G2:1 -:1 | C3:1 -:1 G2:1 -:1 | F2:1 -:1 C3:1 -:1 | G2:1 -:1 D3:1 -:1 | C3:1 -:1 C2:1 -:1',
       },
       { voice: 'drums', gain: 0.35, notes: `${repeat('k:1 -:1 s:1 -:1', 15)} | k:1 s:1 k:1 -:1` },
+    ],
+  },
+
+  // v1.12 the ending movie「せかいの わ」: a warm, glad 4/4 in G at 100 (about 77 s, then again). The bell sings the tune
+  // (stepping up to the high G at the ends of its phrases: "やったね"), a soft trumpet doubles it from the third part
+  // on, a gentle bass walks root and fifth, two pads hold the chords, a high bell twinkles, soft drums keep time and
+  // fill at every eighth bar. Written for this game: its opening climbs the G chord and falls by step (no well-known
+  // tune, school song, birthday song, anthem or station melody starts so).
+  ending: {
+    id: 'ending',
+    title: 'せかいの わ',
+    bpm: 100,
+    stepsPerBeat: 2,
+    tracks: [
+      {
+        voice: 'bell',
+        notes:
+          'B4:2 D5:2 G5:3 F#5:1 | E5:2 D5:2 A4:4 | G4:2 B4:2 E5:3 D5:1 | C5:2 E5:2 G5:4 | G5:2 F#5:1 E5:1 D5:2 B4:2 | C5:2 E5:1 A5:1 G5:2 E5:2 | F#5:2 A5:2 D5:2 E5:1 F#5:1 | G5:6 -:2 | ' +
+          'E5:1 G5:1 C6:2 B5:2 G5:2 | A5:2 F#5:2 D5:4 | B4:1 D5:1 F#5:2 B5:2 A5:2 | G5:3 F#5:1 E5:4 | E5:2 A5:2 C6:2 B5:1 A5:1 | B5:2 A5:2 F#5:2 D5:2 | G5:2 B5:2 C6:2 E6:2 | D6:4 C6:1 B5:1 A5:2 | ' +
+          'B4:2 D5:2 G5:3 F#5:1 | E5:2 D5:2 A4:4 | G4:2 B4:2 E5:3 D5:1 | C5:2 E5:2 G5:4 | G5:2 F#5:1 E5:1 D5:2 B4:2 | C5:2 E5:1 A5:1 G5:2 E5:2 | F#5:2 A5:2 D6:2 C6:1 A5:1 | B5:2 A5:1 F#5:1 G5:4 | ' +
+          'E5:2 G5:2 C6:4 | D6:2 C6:2 A5:4 | B5:2 G5:2 E5:2 G5:2 | A5:3 G5:1 E5:4 | G5:2 A5:2 C6:2 E6:2 | D6:3 C6:1 A5:2 F#5:2 | G5:2 D5:2 B4:2 D5:2 | G5:6 -:2',
+      },
+      {
+        voice: 'lead',
+        gain: 0.35,
+        notes:
+          `${repeat('-:8', 16)} | ` +
+          'B4:2 D5:2 G5:3 F#5:1 | E5:2 D5:2 A4:4 | G4:2 B4:2 E5:3 D5:1 | C5:2 E5:2 G5:4 | G5:2 F#5:1 E5:1 D5:2 B4:2 | C5:2 E5:1 A5:1 G5:2 E5:2 | F#5:2 A5:2 D6:2 C6:1 A5:1 | B5:2 A5:1 F#5:1 G5:4 | ' +
+          'E5:2 G5:2 C6:4 | D6:2 C6:2 A5:4 | B5:2 G5:2 E5:2 G5:2 | A5:3 G5:1 E5:4 | G5:2 A5:2 C6:2 E6:2 | D6:3 C6:1 A5:2 F#5:2 | G5:2 D5:2 B4:2 D5:2 | G5:6 -:2',
+      },
+      { voice: 'bass', gain: 0.85, notes: endBars((v) => `${v.root}:2 ${v.fifth}:2 ${v.root}:1 ${v.root}:1 ${v.fifth}:2`) },
+      { voice: 'pad', gain: 0.45, notes: endBars((v) => `${v.third}:8`) },
+      { voice: 'pad', gain: 0.35, notes: endBars((v) => `${v.top}:8`) },
+      { voice: 'bell', gain: 0.25, notes: endBars((v, i) => (i % 2 === 1 ? `-:4 ${v.bell[0]}:1 -:1 ${v.bell[1]}:1 -:1` : '-:8')) },
+      {
+        voice: 'drums',
+        gain: 0.4,
+        notes: `${repeat('k:2 h:2 s:2 h:2', 7)} | k:2 h:1 h:1 s:1 s:1 s:2 | ${repeat('k:2 h:2 s:2 h:2', 7)} | k:2 h:1 h:1 s:1 s:1 s:2 | ${repeat('k:2 h:2 s:2 h:2', 7)} | k:2 h:1 h:1 s:1 s:1 s:2 | ${repeat('k:2 h:2 s:2 h:2', 7)} | k:2 s:2 k:2 -:2`,
+      },
     ],
   },
 

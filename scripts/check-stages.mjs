@@ -60,6 +60,18 @@ try {
     stages.push(raw);
   }
 
+  // 1b. v1.12 (えんしゅつ): the movies (src/movies/*.json): stage files that must say what they play ("movie").
+  for (const name of jsonFiles('src/movies')) {
+    const raw = readJson(resolve(root, 'src/movies', name));
+    const why = rejection(raw);
+    if (why !== null) fail(`src/movies/${name}: ${why}`);
+    if (raw.id !== basename(name, '.json')) fail(`src/movies/${name}: "id" is "${raw.id}" (the file name must be the id)`);
+    if (!raw.movie) fail(`src/movies/${name}: a movie file needs "movie" (what it plays and its card)`);
+    if (stages.some((s) => s.id === raw.id)) fail(`src/movies/${name}: "${raw.id}" is also a stage id`);
+    stages.push({ ...raw, _movie: true });
+  }
+  for (const s of stages) if (!s._movie && s.movie) fail(`src/stages/${s.id}.json: "movie" belongs in src/movies/`);
+
   // 2. The deliberately broken ones.
   const setPath = (target, path, value, remove) => {
     const keys = path.split('.');

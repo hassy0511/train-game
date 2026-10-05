@@ -21,7 +21,8 @@ import {
 import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { StageEvent } from '../../core/stage-events';
-import type { Emote, MissionDef, ResolvedActor, ResolvedRecord, ResolvedStation } from '../../stage/types';
+import type { ActKind, Emote, MissionDef, ResolvedActor, ResolvedRecord, ResolvedStation } from '../../stage/types';
+import { ACT, actSeconds, actTimes } from '../../cutscene/acts';
 import { NECK_DOWN, NECK_UP } from './abilities';
 import { bakeModel, bakeTogether } from './bake';
 import type { ModelLibrary } from './models';
@@ -29,6 +30,33 @@ import type { ModelLibrary } from './models';
 /** v1.11 (5-3): the waving sway's axis (the figure's forward) and a scratch quaternion. */
 const WAVE_AXIS = new Vector3(0, 0, 1);
 const WAVE_TILT = new Quaternion();
+const UP_AXIS = new Vector3(0, 1, 0);
+
+/**
+ * v1.12 (えんしゅつ): a figure's little motion going on (cutscene `act`). It moves the figure's "rig", a group holding
+ * its meshes, so it adds to where the figure stands and how it is turned (a move, a turn) without fighting them.
+ */
+interface ActMotion {
+  kind: Exclude<ActKind, 'turn'>;
+  rig: Object3D;
+  t: number;
+  /** One go (s) and how many; a wave goes on until the next act (`times` 0). */
+  each: number;
+  times: number;
+  /** The figure's height (m), for the hop's lift. */
+  height: number;
+  /** 1, or ACT.gentle with prefers-reduced-motion. */
+  scale: number;
+}
+
+/** v1.12: a figure turning to face something (it stays so). */
+interface ActTurn {
+  object: Object3D;
+  from: Quaternion;
+  to: Quaternion;
+  t: number;
+  seconds: number;
+}
 
 /**
  * v1.11 (5-3): cutscene fx "hearts": 24 little pink hearts and gold stars on a loose ring round a figure (0.6–2.2 m up),
@@ -256,6 +284,13 @@ export class ActorLayer {
   private readonly spawned = new Set<string>();
   /** v1.11 (5-1): figures that hop as they move (a fawn "ぴょこぴょこ"). */
   private readonly hoppers = new Set<string>();
+  /** v1.12: the train's cars (0 = the lead), for figures riding in them. */
+  private cars: Object3D[] = [];
+  /** v1.12: the little motions and turns going on, by figure id ("partner" too). */
+  private readonly motions = new Map<string, ActMotion>();
+  private readonly turns = new Map<string, ActTurn>();
+  /** v1.12: prefers-reduced-motion (every act half as big). */
+  gentle = false;
 
   constructor(
     private readonly models: ModelLibrary,
@@ -273,6 +308,11 @@ export class ActorLayer {
 
   setTrain(train: Object3D): void {
     this.train = train;
+  }
+
+  /** v1.12: the lead car and the cars behind it (figures can ride in them). */
+  setCars(cars: Object3D[]): void {
+    this.cars = cars;
   }
 
   setPartner(partner: Object3D): void {
@@ -573,7 +613,11 @@ export class ActorLayer {
   }
 
   /** Puts `model` in as `id` (replacing what is there). Resolves to null when a later place or a remove won. */
-  private async place(id: string, model: string, position: Vector3, quaternion: Quaternion): Promise<Object3D | null> {
+  /**
+   * v1.12 `parent`: what it stands in (a car it rides in; `position` and `quaternion` are then in the car's own space).
+   * Left out, a figure swapping its model stays where the old one was (in its car, say).
+   */
+  private async place(id: string, model: string, position: Vector3, quaternion: Quaternion, parent?: Object3D, scale?: number): Promise<Object3D | null> {
     const generation = this.bumpGeneration(id);
     // Actors move and swap models only as a whole, so an untextured one can be drawn baked.
     const template = await this.models.load(model);
@@ -582,18 +626,77 @@ export class ActorLayer {
     instance.name = id;
     instance.position.copy(position);
     instance.quaternion.copy(quaternion);
-    this.objects.get(id)?.removeFromParent();
+    const old = this.objects.get(id);
+    // v1.12: its size (a new model keeps the old one's).
+    instance.scale.setScalar(scale ?? old?.scale.x ?? 1);
+    const holder = parent ?? old?.parent ?? this.group;
+    old?.removeFromParent();
     this.objects.set(id, instance);
     this.objectModels.set(id, model);
-    this.group.add(instance);
+    holder.add(instance);
+    // A motion on the old model ends with it (a wave goes on with the new one: see act()).
+    const motion = this.motions.get(id);
+    if (motion && motion.rig.parent !== instance) this.motions.delete(id);
+    this.turns.delete(id);
     return instance;
   }
 
-  private move(id: string, to: Vector3, seconds: number, delay = 0): void {
+  /**
+   * v1.12 (えんしゅつ): a figure's little motion (cutscene `act`; ActDef). `toward`: where a "turn" faces (world). The
+   * partner's jump, tilt and cheer are its own emotes.
+   */
+  async act(id: string, kind: ActKind, times?: number, seconds?: number, toward?: Vector3 | null): Promise<void> {
+    if (id === 'partner' && (kind === 'jump' || kind === 'tilt' || kind === 'cheer')) {
+      this.startPartnerEmote(kind);
+      return;
+    }
+    const pending = this.pendingSpawns.get(id);
+    if (pending) await pending;
+    let object = id === 'partner' ? this.partner : this.objects.get(id);
+    if (!object) return;
+    if (kind === 'turn') {
+      if (!toward) return;
+      const at = object.getWorldPosition(new Vector3());
+      const yaw = Math.atan2(toward.x - at.x, toward.z - at.z);
+      // In the figure's parent's space (a car it rides in turns with the car).
+      const parentTurn = object.parent ? object.parent.getWorldQuaternion(new Quaternion()) : new Quaternion();
+      const to = parentTurn.invert().multiply(new Quaternion().setFromAxisAngle(UP_AXIS, yaw));
+      const time = seconds ?? ACT.turnSeconds;
+      if (time <= 0) {
+        object.quaternion.copy(to);
+        this.turns.delete(id);
+      } else {
+        this.turns.set(id, { object, from: object.quaternion.clone(), to, t: 0, seconds: time });
+      }
+      return;
+    }
+    // Sakasa waves her hand ("amanojaku-wave", posed from her model) and sways while she does.
+    const model = this.objectModels.get(id) ?? '';
+    if (kind === 'wave' && model.startsWith('amanojaku') && model !== 'amanojaku-wave') {
+      const placed = await this.place(id, 'amanojaku-wave', object.position.clone(), object.quaternion.clone());
+      if (!placed) return;
+      object = placed;
+    }
+    const old = this.motions.get(id);
+    if (old) resetRig(old.rig);
+    const rig = rigOf(object);
+    const each = kind === 'wave' ? 1 / ACT.waveRate : actSeconds(kind, 1);
+    const height = figureHeight(object);
+    this.motions.set(id, { kind, rig, t: 0, each, times: kind === 'wave' ? 0 : actTimes(kind, times), height, scale: this.gentle ? ACT.gentle : 1 });
+  }
+
+  /** v1.12: the figure drawn for `id` ("partner": the partner in the cab), for the camera's shots. */
+  shotFigure(id: string): Object3D | null {
+    return id === 'partner' ? this.partner : (this.objects.get(id) ?? null);
+  }
+
+  private move(id: string, to: Vector3, seconds: number, delay = 0, bob = false, face = false): void {
     const object = this.objects.get(id);
     if (!object) return;
     const oldMove = this.moving.findIndex((move) => move.id === id);
     if (oldMove >= 0) this.moving.splice(oldMove, 1);
+    // v1.12: it turns to the way it goes first (quickly, while it sets off).
+    if (face && object.position.distanceToSquared(to) > 1e-4) void this.act(id, 'turn', undefined, 0.3, object.parent ? object.parent.localToWorld(to.clone()) : to);
     if (seconds <= 0 && delay <= 0) {
       object.position.copy(to);
       return;
@@ -606,7 +709,7 @@ export class ActorLayer {
       elapsed: 0,
       seconds: Math.max(seconds, 1e-3),
       delay,
-      bob: (this.objectModels.get(id) ?? '').startsWith('amanojaku') || this.hoppers.has(id),
+      bob: bob || (this.objectModels.get(id) ?? '').startsWith('amanojaku') || this.hoppers.has(id),
       roll: this.rollers.has(id) || (this.objectModels.get(id) ?? '').startsWith('snowman') || this.objectModels.get(id) === 'snow-wave',
     });
   }
@@ -711,7 +814,9 @@ export class ActorLayer {
         // v1.11 (5-3): seen only in a mirror, or never in one.
         if (event.mirror) this.mirrorModes.set(event.id, event.mirror);
         else this.mirrorModes.delete(event.id);
-        const placing = this.place(event.id, event.model, event.position, event.quaternion);
+        // v1.12: riding in a car (its own space).
+        const car = event.car !== undefined ? this.cars[event.car] : undefined;
+        const placing = this.place(event.id, event.model, event.position, event.quaternion, car ?? this.group, event.scale ?? 1);
         this.pendingSpawns.set(event.id, placing);
         await placing;
         if (this.pendingSpawns.get(event.id) === placing) this.pendingSpawns.delete(event.id);
@@ -726,7 +831,7 @@ export class ActorLayer {
         // Right after its spawn the figure may still be loading: it moves once it is there (unless removed).
         const pending = this.pendingSpawns.get(event.id);
         if (pending) await pending;
-        this.move(event.id, event.position, event.seconds);
+        this.move(event.id, event.position, event.seconds, 0, event.bob, event.face);
         break;
       }
       case 'actor:state': {
@@ -772,6 +877,8 @@ export class ActorLayer {
         break;
       }
       case 'actor:remove':
+        this.motions.delete(event.id);
+        this.turns.delete(event.id);
         this.mirrorModes.delete(event.id);
         this.hearts.delete(event.id);
         this.wavers.delete(event.id);
@@ -825,6 +932,57 @@ export class ActorLayer {
     }
   }
 
+  /** v1.12: the little motions and turns (cutscene `act`), one frame. */
+  private updateActs(dt: number): void {
+    for (const [id, turning] of this.turns) {
+      turning.t += dt;
+      const k = Math.min(1, turning.t / turning.seconds);
+      turning.object.quaternion.slerpQuaternions(turning.from, turning.to, k * k * (3 - 2 * k));
+      if (k >= 1) this.turns.delete(id);
+    }
+    for (const [id, m] of this.motions) {
+      m.t += dt;
+      const rig = m.rig;
+      const total = m.times > 0 ? m.each * m.times : Infinity;
+      resetRig(rig);
+      if (m.t >= total) {
+        this.motions.delete(id);
+        continue;
+      }
+      const p = (m.t % m.each) / m.each;
+      const arc = Math.sin(Math.PI * p);
+      const a = m.scale;
+      switch (m.kind) {
+        case 'hop':
+        case 'jump': {
+          const part = m.kind === 'hop' ? ACT.hopLift : ACT.jumpLift;
+          const lift = Math.min(ACT.hopMax * (m.kind === 'jump' ? 1.4 : 1), Math.max(ACT.hopMin, part * m.height));
+          rig.position.y = lift * arc * a;
+          // Squashed a little on the ground, stretched in the air ("ぴょこん").
+          const sy = 1 + (0.1 * arc - 0.06) * a;
+          rig.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy));
+          break;
+        }
+        case 'nod':
+          rig.rotation.x = ACT.nodAngle * arc * a;
+          break;
+        case 'tilt':
+          rig.rotation.z = ACT.tiltAngle * arc * a;
+          break;
+        case 'cheer':
+          rig.position.y = Math.abs(Math.sin(p * Math.PI * 3)) * Math.min(0.35, 0.25 * m.height) * a;
+          rig.rotation.z = Math.sin(p * Math.PI * 4) * 0.14 * a;
+          break;
+        case 'wiggle':
+          rig.rotation.y = ACT.wiggleAngle * Math.sin(2 * Math.PI * p) * a;
+          break;
+        case 'wave':
+          rig.rotation.z = Math.sin(2 * Math.PI * p) * ACT.waveAngle * (this.objectModels.get(id) === 'amanojaku-wave' ? 1 : 1.5) * a;
+          break;
+      }
+    }
+  }
+
   /** v1.11 (5-1): the figure drawn for `id` (an actor, or "record:<id>"), or null (the night layer hides a sleeper). */
   figure(id: string): Object3D | null {
     return this.objects.get(id) ?? null;
@@ -861,6 +1019,7 @@ export class ActorLayer {
       h.mesh.position.y = Math.sin(h.t * 2.2) * 0.08;
       h.mesh.scale.setScalar(Math.min(1, h.t / 0.4));
     }
+    this.updateActs(dt);
     for (const w of this.wavers.values()) {
       w.t += dt;
       w.object.quaternion.copy(w.base).multiply(WAVE_TILT.setFromAxisAngle(WAVE_AXIS, Math.sin(w.t * Math.PI * 2 * 1.5) * 0.1));
@@ -937,4 +1096,38 @@ export class ActorLayer {
       if (t >= 1) this.clearSparkles();
     }
   }
+}
+
+/** v1.12: the group a figure's motions move: its meshes, gathered under one child the first time. */
+function rigOf(object: Object3D): Object3D {
+  const had = object.userData.rig as Object3D | undefined;
+  if (had && had.parent === object) return had;
+  const rig = new Group();
+  rig.name = 'rig';
+  for (const child of [...object.children]) rig.add(child);
+  object.add(rig);
+  object.userData.rig = rig;
+  return rig;
+}
+
+function resetRig(rig: Object3D): void {
+  rig.position.set(0, 0, 0);
+  rig.rotation.set(0, 0, 0);
+  rig.scale.set(1, 1, 1);
+}
+
+/** v1.12: a figure's height (m) as drawn (its own scale), kept once worked out. */
+function figureHeight(object: Object3D): number {
+  const known = object.userData.height as number | undefined;
+  if (known !== undefined) return known;
+  const box = new Box3();
+  const saved = object.quaternion.clone();
+  object.quaternion.identity();
+  object.updateMatrixWorld(true);
+  box.setFromObject(object);
+  object.quaternion.copy(saved);
+  object.updateMatrixWorld(true);
+  const h = box.isEmpty() ? 1 : box.max.y - box.min.y;
+  object.userData.height = h;
+  return h;
 }
