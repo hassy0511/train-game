@@ -148,7 +148,8 @@ function addBlush(model: Group): Group {
 /**
  * v1.11 (5-3): Sakasa posed without bones (the built model is one clay mesh): the vertices of an arm (away from the
  * torso, between hip and shoulder) turn about the shoulder, blended in near it so nothing tears. "amanojaku-wave": her
- * right arm raised high (the view sways her as she waves); "amanojaku-shy": both hands brought together in front and her
+ * right arm raised, bent at the elbow so the hand is up by her head (bendArm: upper arm and forearm turn separately,
+ * so the elbow bends the way an elbow does; the view sways her as she waves); "amanojaku-shy": both hands brought together in front and her
  * head (hair and hat with it) tilted 10°. Model metres (assets/blender/amanojaku.py): shoulders at (±0.08, 0.866) from
  * the body's axis, which the export puts a few centimetres off the origin (it centres the bounding box), so it is
  * measured on the waist (bodyAxis). Only the clay (the skin texture: body, arms, cuffs) turns with an arm; the cape,
@@ -174,6 +175,9 @@ function poseAmanojaku(model: Group, name: 'amanojaku-wave' | 'amanojaku-shy'): 
     at.copy(v);
   };
   const axis = bodyAxis(out);
+  // The wave: upper arm out to the side, a little above the shoulder and forward (clear of the hair's flicks); the
+  // forearm bends up at the elbow, towards the head, the hand above the elbow with the palm to the front.
+  const wave = armPose(axis, -1, new Vector3(-0.92, 0.25, 0.3), new Vector3(0.12, 1, 0.08));
   out.traverse((o) => {
     const mesh = o as Mesh;
     if (!mesh.isMesh) return;
@@ -190,9 +194,8 @@ function poseAmanojaku(model: Group, name: 'amanojaku-wave' | 'amanojaku-shy'): 
         if (armW <= 0) continue;
         pivot.set(axis.x + side * 0.08, 0.866, axis.z);
         if (name === 'amanojaku-wave' && side === -1) {
-          // Up and out (about 45° off upright) and a little forward: 2 cm clear of the hat brim and the hair's flicks.
-          q.setFromAxisAngle(X, 0.55).multiply(new Quaternion().setFromAxisAngle(Z, side * 1.85));
-          turnAbout(at, q, armW);
+          v.copy(bendArm(v, armW, wave));
+          at.copy(v);
         } else if (name === 'amanojaku-shy') {
           q.setFromAxisAngle(X, -0.9).multiply(new Quaternion().setFromAxisAngle(Z, -side * 0.35));
           turnAbout(at, q, armW);
@@ -265,16 +268,16 @@ function sitAmanojaku(model: Group): Group {
 }
 
 /**
- * v1.11 (5-1): Sakasa's right arm (-X; the clay only, blended in at the shoulder as in poseAmanojaku) turned about its
- * own length so the palm faces her leg, then brought a little forward, as if her fist holds a stick. Returns the posed
- * copy, the middle of the fist and the stick's direction out of it: across the palm (forward) and up 40°, so the stick
- * lies in the closed hand between thumb and fingers rather than through the palm.
+ * v1.11 (5-1): Sakasa's right arm (-X; the clay only, blended in at the shoulder as in poseAmanojaku) holding a stick
+ * out in front: the upper arm hangs a little forward, the elbow bends the forearm forward, and the forearm turns so the
+ * palm faces in (bendArm); the fingers curl into a fist. Returns the posed copy, the middle of the fist and the stick's
+ * direction out of it: across the fist, forward and up 40°, so the stick lies in the closed hand between thumb and
+ * fingers rather than through the palm.
  */
 function holdStick(model: Group): { posed: Group; grip: Vector3; along: Vector3 } {
   const SIDE = -1;
   const out = model.clone(true);
   const axis = bodyAxis(out);
-  const pivot = new Vector3(axis.x + SIDE * 0.08, 0.866, axis.z);
   // Palm and fingertips as built (model metres, assets/blender/amanojaku.py: palm at y 0.52, fingertips at 0.46).
   const palm = new Vector3();
   const tips = new Vector3();
@@ -299,10 +302,7 @@ function holdStick(model: Group): { posed: Group; grip: Vector3; along: Vector3 
   });
   palm.divideScalar(Math.max(1, nPalm));
   tips.divideScalar(Math.max(1, nTips));
-  const arm = palm.clone().sub(pivot).normalize();
-  const q = new Quaternion()
-    .setFromAxisAngle(new Vector3(1, 0, 0), -0.45)
-    .multiply(new Quaternion().setFromAxisAngle(arm, (SIDE * Math.PI) / 2));
+  const pose = armPose(axis, SIDE, new Vector3(SIDE * 0.35, -1, 0.25), new Vector3(SIDE * 0.1, -0.3, 1), 'in');
   // The fingers (below the knuckles, y 0.49) curl towards the palm side (+Z as built) into a fist, more the further
   // down, so they wrap round the stick, which runs across the hand just inside them.
   const KNUCKLE = 0.49;
@@ -327,25 +327,105 @@ function holdStick(model: Group): { posed: Group; grip: Vector3; along: Vector3 
         curl.setFromAxisAngle(new Vector3(1, 0, 0), -2.5 * smooth(KNUCKLE + 0.005, KNUCKLE - 0.03, v.y));
         v.sub(knuckle).applyQuaternion(curl).add(knuckle);
       }
-      v.lerp(v.clone().sub(pivot).applyQuaternion(q).add(pivot), w);
+      v.copy(bendArm(v, w, pose));
       pos.setXYZ(i, v.x, v.y, v.z);
     }
     pos.needsUpdate = true;
     mesh.geometry.computeVertexNormals();
     mesh.geometry.computeBoundingSphere();
   });
-  const grip = new Vector3(palm.x, KNUCKLE, palm.z + 0.012).sub(pivot).applyQuaternion(q).add(pivot);
-  const fingers = tips.clone().sub(palm).applyQuaternion(q).normalize();
-  const across = new Vector3(1, 0, 0).applyQuaternion(q);
+  const grip = bendArm(new Vector3(palm.x, KNUCKLE, palm.z + 0.012), 1, pose);
+  const fingers = bendArm(tips, 1, pose).sub(bendArm(palm, 1, pose)).normalize();
+  const across = new Vector3(1, 0, 0).applyQuaternion(pose.hand);
   across.addScaledVector(fingers, -across.dot(fingers)).normalize();
-  if (across.z < 0) across.negate();
-  // Tilt the stick up within the hand's plane (towards the wrist) until it rises 40°.
+  // The stick lies in the plane of across and fingers: of the directions there, the one rising 40° that reaches
+  // furthest forward.
+  const rise = Math.sin((40 * Math.PI) / 180);
   let along = across.clone();
-  for (let t = 0; t <= Math.PI / 2; t += 0.01) {
-    along = across.clone().multiplyScalar(Math.cos(t)).addScaledVector(fingers, -Math.sin(t));
-    if (along.y >= Math.sin((40 * Math.PI) / 180)) break;
+  let best = -Infinity;
+  for (let a = 0; a < Math.PI * 2; a += 0.005) {
+    const d = across.clone().multiplyScalar(Math.cos(a)).addScaledVector(fingers, Math.sin(a));
+    const score = d.z - 20 * Math.abs(d.y - rise);
+    if (score > best) {
+      best = score;
+      along = d;
+    }
   }
   return { posed: out, grip, along: along.normalize() };
+}
+
+/**
+ * Sakasa's arm on `side` as built (model metres, assets/blender/amanojaku.py scaled 0.98 to 1.40 m): shoulder, elbow
+ * and wrist on the arm's own line, and how to turn it: the upper arm to point along `upper`, the forearm along
+ * `fore` (both as posed, model axes), and for `palm` 'in' the forearm turned about its length until the palm faces
+ * her body. `hand` is the whole rotation the hand gets (for directions in it).
+ */
+interface ArmPose {
+  shoulder: Vector3;
+  elbow: Vector3;
+  wrist: Vector3;
+  upperLen: number;
+  foreAxis: Vector3;
+  turnShoulder: Quaternion;
+  turnElbow: Quaternion;
+  twist: Quaternion;
+  hand: Quaternion;
+}
+
+function armPose(axis: { x: number; z: number }, side: number, upper: Vector3, fore: Vector3, palm?: 'in'): ArmPose {
+  const S = 0.98;
+  const shoulder = new Vector3(axis.x + side * 0.082 * S, 0.866 * S, axis.z);
+  const elbow = new Vector3(axis.x + side * 0.18 * S, 0.735 * S, axis.z + 0.012 * S);
+  const wrist = new Vector3(axis.x + side * 0.27 * S, 0.565 * S, axis.z + 0.025 * S);
+  const u0 = elbow.clone().sub(shoulder);
+  const upperLen = u0.length();
+  u0.normalize();
+  const f0 = wrist.clone().sub(elbow).normalize();
+  const turnShoulder = new Quaternion().setFromUnitVectors(u0, upper.clone().normalize());
+  // The elbow turn is made as built (before the shoulder's), so the forearm ends up along `fore`.
+  const foreBuilt = fore.clone().normalize().applyQuaternion(turnShoulder.clone().invert());
+  const turnElbow = new Quaternion().setFromUnitVectors(f0, foreBuilt);
+  let twist = new Quaternion();
+  if (palm === 'in') {
+    // Of the turns about the forearm, the one that leaves the palm (+Z as built) facing her body the most.
+    let best = -Infinity;
+    for (let a = -Math.PI; a < Math.PI; a += 0.02) {
+      const t = new Quaternion().setFromAxisAngle(f0, a);
+      const n = new Vector3(0, 0, 1).applyQuaternion(t).applyQuaternion(turnElbow).applyQuaternion(turnShoulder);
+      const score = -side * n.x;
+      if (score > best) {
+        best = score;
+        twist = t;
+      }
+    }
+  }
+  const hand = turnShoulder.clone().multiply(turnElbow).multiply(twist);
+  return { shoulder, elbow, wrist, upperLen, foreAxis: f0, turnShoulder, turnElbow, twist, hand };
+}
+
+/**
+ * A point of Sakasa's arm as posed (`w`: its weight at the shoulder, armWeight). The forearm and hand (past the elbow
+ * along the upper arm's line, blended over ±15% of its length) first turn about the forearm (spread along it, as a
+ * forearm turns) and bend at the elbow; then the whole arm turns at the shoulder. Each turn is by a share of its
+ * angle in the blends, so the arm bends round at both joints instead of folding or shrinking.
+ */
+function bendArm(p: Vector3, w: number, pose: ArmPose): Vector3 {
+  const smooth = (a: number, b: number, x: number): number => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  const share = (q: Quaternion, k: number): Quaternion => new Quaternion().slerp(q, k);
+  const out = p.clone();
+  const along = out.clone().sub(pose.shoulder).dot(pose.elbow.clone().sub(pose.shoulder)) / pose.upperLen ** 2;
+  const fore = smooth(0.85, 1.15, along);
+  if (fore > 0) {
+    const down = out.clone().sub(pose.elbow).dot(pose.foreAxis) / pose.wrist.distanceTo(pose.elbow);
+    const twist = fore * smooth(0, 0.9, down);
+    out.sub(pose.elbow);
+    if (twist > 0) out.applyQuaternion(share(pose.twist, twist));
+    out.applyQuaternion(share(pose.turnElbow, fore)).add(pose.elbow);
+  }
+  return out.sub(pose.shoulder).applyQuaternion(share(pose.turnShoulder, w)).add(pose.shoulder);
 }
 
 /** How much a vertex of Sakasa's clay moves with the arm on `side` (shared by her arm poses). */
