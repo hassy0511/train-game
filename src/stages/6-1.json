@@ -663,7 +663,7 @@
     { "model": "upside-stairs", "onRail": { "railId": "shiro", "at": 128.1, "lateral": 8, "heightFromRail": 0 } },
     { "model": "bench", "onRail": { "railId": "shiro", "at": 108, "lateral": -5.5, "heightFromRail": 1 }, "rotationY": -90 },
     { "model": "rainbow-stub", "onRail": { "railId": "shiro", "at": 150 } },
-    { "model": "clock-tower", "onRail": { "railId": "main", "at": 1840, "lateral": -14 }, "rotationY": 90 },
+    { "model": "clock-tower", "onRail": { "railId": "main", "at": 1840, "lateral": -14 }, "rotationY": -90 },
     { "model": "chimney-upside", "onRail": { "railId": "main", "at": 1085, "lateral": 9 } },
     { "model": "upside-arch-bridge", "onRail": { "railId": "main", "at": 1335, "heightFromRail": 0 } },
     { "model": "cloud-a", "onRail": { "railId": "main", "at": 1336, "heightFromRail": -9 } },
@@ -875,7 +875,7 @@
       { "say": "きりかえを うしろに して みて！", "emote": "jump" }
     ],
     "suwaru": [
-      { "camera": "fixed", "at": [463.2, 6, 1923.2], "lookAt": [392.2, 6, 1947.9], "reach": 1.5 },
+      { "camera": "fixed", "at": [448.2, 7, 1905.2], "lookAt": [392.2, 4, 1947.9], "reach": 1.5 },
       {
         "spawn": "sakasa",
         "model": "amanojaku-sit",

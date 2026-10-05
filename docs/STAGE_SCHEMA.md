@@ -1441,7 +1441,7 @@ type LineKey = /* v1.11 (5-3) */ 'flipIn' | 'flipOut' | 'mirrorGateNear' | 'mirr
 - できごと（`src/core/stage-events.ts`）: `flip:in`・`flip:out`・`flip:gate`（`open`／`bump`）・`phantom`・`mirror:turn`・`glass`。本番に デバッグの 口は 足さない（テストは `addInitScript` の 記録係 `window.__mirror`）
 
 ## 22. v1.11 の追加（うしろむき `reverse` の しくみ: まえ／うしろ の 切りかえ・来た 道を もどる・うしろむきの わき道・うしろの ホーム、2026-09-30 PR8a）
-`schemaVersion` は 1 の まま、ぜんぶ 省略可。設計は `docs/PHASE9_CHAPTER5_6.md` 第 3 部 第 A 部（`docs/PHASE9_0_FREE_ABILITIES.md` §5 が 先に きく）。全ステージ共通の 数は `src/train/params.ts` の `REVERSE`・`TRAIL`。実例: テストコース `src/stages/0-0.json`（うしろむきの わき道 `ura`、記録 `test-ura`、切れ目 main 620–632）と ためしの ステージ `src/stages/0-5.json`（てすとの うしろむき、`hidden: true`・`chapter: 0`: 駅の いきすぎ・うしろの ホーム・ねこ・ゆきの なみの まね）。まだ だれも うしろむきを 覚えない（6-1 M2 で 覚える。PR8b／PR9）。
+`schemaVersion` は 1 の まま、ぜんぶ 省略可。設計は `docs/PHASE9_CHAPTER5_6.md` 第 3 部 第 A 部（`docs/PHASE9_0_FREE_ABILITIES.md` §5 が 先に きく）。全ステージ共通の 数は `src/train/params.ts` の `REVERSE`・`TRAIL`。実例: テストコース `src/stages/0-0.json`（うしろむきの わき道 `ura`、記録 `test-ura`、切れ目 main 620–632）と ためしの ステージ `src/stages/0-5.json`（てすとの うしろむき、`hidden: true`・`chapter: 0`: 駅の いきすぎ・うしろの ホーム・ねこ・ゆきの なみの まね）。うしろむきは 6-1 M2 の おいかけっこで 覚える（PR9）。ステージの うしろむきの わき道と 記録③: 1-3（`flip` 340 の `ura`、`scripts/layout-1-3-ura.mjs` が 書く。記録 `upside-island`）・5-3（main 3250 の `ura`、`ura-guchi`。記録 `sakasa-doodle`）・6-1（main 90 の `ura`。記録 `backward-book`、`endLines`）。
 
 ### しくみ（JSON には 書かない）
 - レバーの となりの「まえ／うしろ」切りかえ（`#reverse-switch`）。うしろむきを 覚えて いないと 出ない。止まって いれば すぐ「ぐるりん」（0.5 秒）、走って いれば ふつうの ブレーキで 止まって から（その あいだ もう 1 回で とりけし）

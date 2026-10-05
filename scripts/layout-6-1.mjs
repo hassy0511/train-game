@@ -408,7 +408,8 @@ const gyaku = [
 /** M2's end at ほりばたえき: across the moat, Sakasa alone on the castle station's bench with 4-2's lantern. */
 const benchAt = at(BENCH.at, BENCH.lateral, PLATFORM_Y + 0.8, shiro);
 const suwaru = [
-  cam(at(470 - 10, 6, 6, wa), [ISLAND.center[0] - 13, 6, ISLAND.center[1] - 4], 1.5),
+  // From the moat side of ほりばたえき (the train and the platform roof behind the camera, not in the way).
+  cam(at(478, -9, 7, wa), [ISLAND.center[0] - 13, 4, ISLAND.center[1] - 4], 1.5),
   { spawn: 'sakasa', model: 'amanojaku-sit', onRail: on('shiro', BENCH.at, BENCH.lateral, SEAT_Y), rotationY: -90 },
   { spawn: 'chochin', model: 'lantern', onRail: on('shiro', BENCH.at - 1, BENCH.lateral, round(PLATFORM_Y + 0.9, 2)) },
   { say: 'あっ… サカサ', emote: 'tilt' },
@@ -541,7 +542,8 @@ addOnRail('upside-stairs', 'shiro', ISLAND_AT + 3, { lateral: 8, height: 0 });
 addOnRail('bench', 'shiro', BENCH.at, { lateral: BENCH.lateral, height: PLATFORM_Y, rotationY: -90 });
 addOnRail('rainbow-stub', 'shiro', 150);
 // The town's landmarks.
-addOnRail('clock-tower', 'main', 1840, { lateral: -14, rotationY: 90 });
+// Its dial (−X in its own frame) turned to face the train coming up the line.
+addOnRail('clock-tower', 'main', 1840, { lateral: -14, rotationY: -90 });
 addOnRail('chimney-upside', 'main', TOP.at, { lateral: TOP.lateral });
 addOnRail('upside-arch-bridge', 'main', (BRIDGE.from + BRIDGE.to) / 2, { height: 0 });
 addOnRail('cloud-a', 'main', (GAP.from + GAP.to) / 2, { height: -9 });

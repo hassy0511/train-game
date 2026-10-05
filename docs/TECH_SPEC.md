@@ -116,6 +116,14 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
 
 - ステージ解放条件と課金フラグもデータ側に持つ（後付け対応）
 
+### 地図（`src/world/world.json`・`src/world/pages.ts`・`src/ui/map.ts`）
+- 島・線路・章の おわりの 置き方は world.json（`_doc`）。v1.11（PR9、2026-10-02）で 足した もの:
+  - `islands[].size`: 島の 幅 ＝ 25% × size（しろの 島 6-1 は 1.2）。重なりの テスト（`map-pages.spec.ts`）は 画面の 箱で 見る ので そのまま きく
+  - `chapters[].count`: その 章の ステージの 予定の 数。world.json に その 数だけ 島が そろうまで 章は おわらない（タイトルの ★、章の おわり。6章は 6-1 だけの あいだ ☆）。`chapterDone(world, chapter, cleared, stageIds?)` は さらに、`finale` の ある 章では world.json の 島の 数が その 章の ステージ ファイルの 数（`listStageIds()`）と 同じに なるまで おわらない（第 1 部 §3.4 の まもり）
+  - 5章の おわり（ほたる）の 大きな 光の 行き先 `finale.target` が 島（6-1）で、その 島が この おわりで ひらく とき: 島は ねむって いて（`is-asleep`）、光が つくと 目を さまし まどに 灯（`.map-window` 4 こ、0.8 秒、`playWindows`「ちりりん」、`#map[data-windows]`）。`5-3>6-1` は `afterChapter: 5` なので 札の あとに のびる
+  - おわりを もう 見た 子（`finale:5` が ある）には、新しい 線路 `5-3>6-1` が のび おわった ときに 同じく しろが 目を さます（`MapOptions.windows`）
+- 6-1 の とけいだいの はり（`src/view/three/castle.ts`、`CASTLE` in params.ts）は うしろへ 1 分で 1 まわり
+
 ### 進行セーブ
 - `unlockedStages`, `clearedMissions`, `abilities`, `records`, `settings`
 - スキーマにバージョン番号を持たせ、マイグレーション可能にする
