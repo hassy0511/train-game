@@ -83,8 +83,10 @@ const ura = new Line(
 );
 
 const BUFFER = ura.at(0);
-const UPSIDE_ISLAND = [round(BUFFER.x - 4, 1), 17, round(BUFFER.z, 1)];
-// The flower hangs right under the island's grass (A12.2 had it 3.5 m lower, in the air); its origin is the stem's root.
+// Out past the buffer (+X), a little above the rail: in the rear window's view at the buffer (A12.2 had it over the
+// siding's end, 11 m up: behind and above that camera). The flower hangs right under the island's grass (its origin is
+// the stem's root), not 3.5 m below it in the air.
+const UPSIDE_ISLAND = [round(BUFFER.x + 14, 1), 12, round(BUFFER.z, 1)];
 const RECORD = [UPSIDE_ISLAND[0], UPSIDE_ISLAND[1] - 0.1, UPSIDE_ISLAND[2]];
 const UNDER = [ura.point(24, 0, -1.2), ura.point(6, 0, -1)].map((q) => [round(q.x), round(q.y, 1), round(q.z)]);
 
@@ -109,7 +111,7 @@ check(Math.hypot(BUFFER.x - 54, BUFFER.z - 496) < 3 && Math.abs(BUFFER.y - 6) < 
   // The tail car's centre at the buffer (6.5 m in) to the record (25 m at most, RECORD).
   const tail = ura.at(6.5);
   const d = Math.hypot(tail.x - RECORD[0], tail.y - RECORD[1], tail.z - RECORD[2]);
-  check(d <= 25, `from the tail car at the buffer to the record ${d.toFixed(1)} m (25 m at most; A12.2: about 8)`);
+  check(d <= 25, `from the tail car at the buffer to the record ${d.toFixed(1)} m (25 m at most)`);
 }
 for (const st of stage.stations.filter((x) => x.railId === 'flip')) check(Math.abs(st.at - MOUTH) >= 40, `${st.id}'s stop line ${Math.abs(st.at - MOUTH)} m from the mouth (40 m at least)`);
 {

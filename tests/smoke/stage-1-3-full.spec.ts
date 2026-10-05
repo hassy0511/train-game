@@ -246,9 +246,21 @@ test('stage 1-3 M3 with うしろむき (6-1 learned): the back siding past さ�
   await setNotch(page, NORMAL);
   await expect(app).toHaveAttribute('data-rail', 'flip', { timeout: 60_000 });
   // On with M3 as ever: the updraft way at the fork, the fog with the light, かぜのえき.
-  await expect(page.locator('#junction')).toBeVisible({ timeout: 120_000 });
-  await page.locator('#junction .arrow[data-side="right"]').dispatchEvent('pointerdown');
+  // The right arrow of the fork on main2 the moment it shows (checked and tapped in one page callback).
+  await page.waitForFunction(
+    () => {
+      const box = document.getElementById('junction');
+      const b = box?.querySelector<HTMLElement>('.arrow[data-side="right"]');
+      const d = document.getElementById('app')?.dataset;
+      if (!box || box.hidden || box.dataset.back === '1' || !b || d?.rail !== 'main2') return false;
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      return true;
+    },
+    null,
+    { timeout: 180_000, polling: 'raf' },
+  );
   await expect(app).toHaveAttribute('data-rail', 'wind', { timeout: 60_000 });
+  await expect(app).toHaveAttribute('data-updraft', '1', { timeout: 60_000 });
   await page.waitForFunction(() => Number(document.getElementById('app')?.dataset.speed) > 25, null, { timeout: 30_000 });
   await jumpGap(page);
   await expect(app).toHaveAttribute('data-rail', 'main2', { timeout: 30_000 });

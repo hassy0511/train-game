@@ -106,6 +106,16 @@ const forkPoint = wa.at(FORK_AT);
 const SHIRO_LENGTH = 165;
 const shiro = new Line('shiro', walk(forkPoint.x, forkPoint.z, 0, [['L', 30, 90], ['S', SHIRO_LENGTH - 30 * 90 * RAD]], () => 0));
 const LINES = { main, uso, ura, wa, shiro };
+/**
+ * Record ③'s upside-down library: 16 m out past the siding's buffer, its front (+Z) to the buffer, so the rear window
+ * at the buffer looks at it (§5.3 had it at [−40, 26], beside the buffer: the rear window saw only a wall).
+ */
+const LIBRARY = (() => {
+  const b = ura.at(0);
+  const x = b.x - Math.sin(b.h) * 16;
+  const z = b.z - Math.cos(b.h) * 16;
+  return { x, z, rotationY: Math.round((Math.atan2(b.x - x, b.z - z) / RAD) * 10) / 10 };
+})();
 
 // ---------------------------------------------------------------------------------------------------------------
 // Places (§3, §5)
@@ -482,7 +492,9 @@ const reserved = [
   { x: ISLAND.center[0], z: ISLAND.center[1], r: 110 },
   { ...pointOf(main, 1690), r: 60 },
   { ...pointOf(main, (SLOPE.from + SLOPE.to) / 2, -16), r: 45 },
-  { x: -40, z: 26, r: 12 },
+  // The library out past the siding's buffer (in the rear window's view there), and the siding's end kept clear.
+  { x: LIBRARY.x, z: LIBRARY.z, r: 12 },
+  { ...pointOf(ura, 5), r: 12 },
   // The opening's camera, behind ぎゃくまちえき.
   { x: -12, z: 20, r: 14 },
   { ...pointOf(main, 1840, -14), r: 9 },
@@ -555,7 +567,7 @@ addOnRail('cloud-b', 'main', GAP.from - 8, { lateral: 6, height: -11 });
   addWorld('thicket', [end.x + Math.sin(end.h) * 4, 0, end.z + Math.cos(end.h) * 4], { rotationY: end.h / RAD });
 }
 // Record ③'s upside-down library at the back siding's far end, and its lectern.
-addWorld('upside-library', [-40, 0, 26], { rotationY: 230 });
+addWorld('upside-library', [LIBRARY.x, 0, LIBRARY.z], { rotationY: LIBRARY.rotationY });
 addOnRail('lectern', 'ura', 10, { lateral: 2.5 });
 // Iron odds and ends for the magnet's play, along the town (PHASE9_0 §3: "どこでも の 小物").
 for (const [s, lat, model] of [

@@ -841,7 +841,7 @@
       "model": "island-c",
       "position": [-19, 11, 1225]
     },
-    { "model": "island-c", "position": [49.7, 17, 495.2], "rotation": [0, 0, 180], "tag": "ura-1-3" },
+    { "model": "island-c", "position": [67.7, 12, 495.2], "rotation": [0, 0, 180], "tag": "ura-1-3" },
     { "model": "island-c", "position": [30.1, 3.8, 498.5], "tag": "ura-1-3" },
     { "model": "island-c", "position": [47.7, 5, 495.2], "rotationY": 70, "tag": "ura-1-3" }
   ],
@@ -869,7 +869,7 @@
       "note": "うしろむきに はしれたら いけるかも…",
       "requires": "reverse",
       "model": "upside-flower",
-      "position": [49.7, 16.9, 495.2]
+      "position": [67.7, 11.9, 495.2]
     }
   ],
   "missions": [

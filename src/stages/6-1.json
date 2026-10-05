@@ -670,7 +670,7 @@
     { "model": "cloud-b", "onRail": { "railId": "main", "at": 1322, "lateral": 6, "heightFromRail": -11 } },
     { "model": "house-upside-b", "position": [153.9, 0, 787.8], "rotationY": 205 },
     { "model": "thicket", "position": [150.5, 0, 780.6], "rotationY": 25 },
-    { "model": "upside-library", "position": [-40, 0, 26], "rotationY": 230 },
+    { "model": "upside-library", "position": [-49, 0, 20.9], "rotationY": 50 },
     { "model": "lectern", "onRail": { "railId": "ura", "at": 10, "lateral": 2.5 } },
     { "model": "iron-can", "onRail": { "railId": "main", "at": 600, "lateral": 6 }, "iron": "can" },
     { "model": "iron-bucket", "onRail": { "railId": "main", "at": 1490, "lateral": -6 }, "iron": "bucket" }
