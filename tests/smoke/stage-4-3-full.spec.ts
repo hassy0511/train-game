@@ -241,7 +241,9 @@ test('stage 4-3 full run: snowmen, the tunnel and the false exit, the snow wave,
   await expect.poll(chaseSeen, { timeout: 60_000 }).toContain('caught');
   await page.waitForTimeout(300);
   await page.screenshot({ path: resolve(OUT, '4-3-13-caught.png') });
-  await waitRewound(page, 'main', 1890);
+  // Back to the retry place at least SNOW_WAVE.retryBehind (30 m) behind the catch: 1880, or 2000 when the train ran
+  // past 2030 before the wave caught it (on a slow CI machine the stop above comes later).
+  await waitRewound(page, 'main', 2010);
   await waitDriving(page);
   await expect(app).toHaveAttribute('data-chase-catches', '1');
   expect(await saidSoFar()).toContain('もふっ！ ゆきまみれ〜');
