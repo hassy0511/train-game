@@ -201,9 +201,9 @@ test('before chapter 2 is done: page 1 alone, as it always was', async ({ page }
   const errors = watchErrors(page);
   await seed(page, { cleared: [...CH1, '2-1'], abilities: ABILITIES, mapLinks: RING.slice(0, 4) });
   await toTitle(page);
-  // Stars: chapters 3, 4 and 5 are there, faint (their first island is not open).
-  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ☆\s*3しょう ☆\s*4しょう ☆\s*5しょう ☆/);
-  await expect(page.locator('.title-chapter.is-faint')).toHaveCount(3);
+  // Stars: chapters 3, 4, 5 and 6 are there, faint (their first island is not open).
+  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ☆\s*3しょう ☆\s*4しょう ☆\s*5しょう ☆\s*6しょう ☆/);
+  await expect(page.locator('.title-chapter.is-faint')).toHaveCount(4);
   const map = await openMap(page);
   await expect(map).toHaveAttribute('data-page', '1');
   await expect(page.locator('.map-page')).toHaveCount(1);
