@@ -56,6 +56,8 @@ async function tapNotch(page: Page, notch: number): Promise<void> {
 }
 
 async function setNotch(page: Page, notch: number): Promise<void> {
+  // The lever does nothing while the rocket burns; at ~10 fps (CI) the burn can outlast the run to the next place.
+  await expect(page.locator('#app')).not.toHaveAttribute('data-burn', '1', { timeout: 30_000 });
   await tapNotch(page, notch);
   await expect(page.locator('#app')).toHaveAttribute('data-notch', String(notch));
 }
