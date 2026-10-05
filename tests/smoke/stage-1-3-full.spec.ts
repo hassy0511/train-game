@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { progress, recordLines, reverseIntoSiding, setDirection, standStill } from './drive';
 
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), 'output');
 mkdirSync(OUT, { recursive: true });
@@ -199,5 +200,76 @@ test('stage 1-3 full run: island hops, the whistle pad, upside down, the updraft
   await page.locator('.map-island[data-island="2-1"]').dispatchEvent('click');
   await page.waitForURL(/stage=2-1/, { timeout: 30_000 });
   console.log('smoke 1-3 full: cleared');
+  expect(errors).toEqual([]);
+});
+
+test('stage 1-3 M3 with うしろむき (6-1 learned): the back siding past さかさのえき and record ③ under the upside-down island', async ({ page }) => {
+  test.setTimeout(600_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  await page.addInitScript(() => {
+    const key = 'train-game.progress.v1';
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        schema: 1,
+        cleared: ['1-1', '1-2'],
+        abilities: ['whistle', 'jump', 'light', 'reverse'],
+        records: [],
+        mapLinks: ['1-1>1-2', '1-2>1-3'],
+        resume: { stage: '1-3', mission: 2 },
+      }),
+    );
+  });
+  const lines = await recordLines(page);
+  const app = page.locator('#app');
+  await page.goto('/?stage=1-3&go=1&resume=1');
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  await card(page, 'かぜに');
+  await waitDriving(page);
+  await expect(page.locator('#reverse-switch')).toBeVisible();
+  await setNotch(page, NORMAL);
+  // Out of さかさのえき (flip 262), round the island's end and up: the whole train past the mouth (flip 340; front end
+  // 378), stopped by 390. The swirl post, the switch glowing, the partner's word.
+  await waitFor(page, 'flip', 384 - FRONT);
+  await standStill(page);
+  await expect.poll(lines, { timeout: 30_000 }).toContain('うしろに わきみちが ある！');
+  // Reversing: the right arrow (as seen from the rear window) into the siding; the flower under the upside-down island.
+  await reverseIntoSiding(page, 'right', 'ura', 'upside-island');
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: resolve(OUT, '1-3-ura.png') });
+  await setDirection(page, 'front');
+  await setNotch(page, NORMAL);
+  await expect(app).toHaveAttribute('data-rail', 'flip', { timeout: 60_000 });
+  // On with M3 as ever: the updraft way at the fork, the fog with the light, かぜのえき.
+  // The right arrow of the fork on main2 the moment it shows (checked and tapped in one page callback).
+  await page.waitForFunction(
+    () => {
+      const box = document.getElementById('junction');
+      const b = box?.querySelector<HTMLElement>('.arrow[data-side="right"]');
+      const d = document.getElementById('app')?.dataset;
+      if (!box || box.hidden || box.dataset.back === '1' || !b || d?.rail !== 'main2') return false;
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      return true;
+    },
+    null,
+    { timeout: 180_000, polling: 'raf' },
+  );
+  await expect(app).toHaveAttribute('data-rail', 'wind', { timeout: 60_000 });
+  await expect(app).toHaveAttribute('data-updraft', '1', { timeout: 60_000 });
+  await page.waitForFunction(() => Number(document.getElementById('app')?.dataset.speed) > 25, null, { timeout: 30_000 });
+  await jumpGap(page);
+  await expect(app).toHaveAttribute('data-rail', 'main2', { timeout: 30_000 });
+  await page.locator('#light').dispatchEvent('pointerdown');
+  await setNotch(page, FAST);
+  await waitFor(page, 'main2', 360);
+  await jumpGap(page);
+  await stopAt(page, 'main2', 520, 50, 3);
+  await card(page, 'できた！');
+  expect((await progress(page)).records).toContain('upside-island');
   expect(errors).toEqual([]);
 });

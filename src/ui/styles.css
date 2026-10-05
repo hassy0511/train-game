@@ -1729,6 +1729,32 @@ body {
   }
 }
 
+/* v1.11 (PR9): the castle's windows light up when it wakes (four warm dots on its picture, one after another). */
+.map-window {
+  position: absolute;
+  width: 4%;
+  aspect-ratio: 1;
+  border-radius: 30%;
+  background: #ffd45c;
+  box-shadow: 0 0 8px 3px rgba(255, 212, 92, 0.8);
+  transform: translate(-50%, -50%) scale(0);
+  animation: map-window-on 0.4s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes map-window-on {
+  to {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-window {
+    animation: none;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 /* An island that opens with the chapter's end: grey until the light reaches it, then the colour comes back. */
 .map-island.is-asleep img {
   filter: grayscale(0.7) brightness(1.1) opacity(0.6);

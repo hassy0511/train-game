@@ -1,5 +1,5 @@
 {
-  "_doc": "The world map (docs/PHASE4_DESIGN.md), in pages of two chapters (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3; page 3, chapters 5 and 6: docs/PHASE9_CHAPTER5_6.md 第 1 部 §3): a chapter's `page` is where its islands are; `pages[].title` is the heading beside \"ちず\" once there is more than one page. Islands are placed in % of the map area (x from the left, y from the top) of their page. An island without a stage file yet is shown as a '?' silhouette (no name, no records, it only wiggles); the rails to it are laid as usual, so a page can come before its stages, and the island gets its name once its stage file is there (and its own picture once it has a `diorama`). `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees. `chapters[].finale` plays once when its link is first drawn, or without a link once the chapter is done (a light — gold round a `ring`, water along a `path`, an aurora, or fireflies gathering along a `path` into one big light that flies to `target`, the node it lands on (\"teaser:6\" until 6-1's island is there) — then a card); `chapters[].teaser` is a later chapter's single \"?\" island on the page of its `from` island (docs/PHASE7_FINISH.md §3). A link's optional `via` is the curve's control point in %; `afterChapter` holds it back until that chapter is done; `exit`/`enter` take it to another page through the cloud gate (the gate's place on each page, with the curve to it).",
+  "_doc": "The world map (docs/PHASE4_DESIGN.md), in pages of two chapters (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3; page 3, chapters 5 and 6: docs/PHASE9_CHAPTER5_6.md 第 1 部 §3): a chapter's `page` is where its islands are; `pages[].title` is the heading beside \"ちず\" once there is more than one page. Islands are placed in % of the map area (x from the left, y from the top) of their page. An island without a stage file yet is shown as a '?' silhouette (no name, no records, it only wiggles); the rails to it are laid as usual, so a page can come before its stages, and the island gets its name once its stage file is there (and its own picture once it has a `diorama`). `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees. `chapters[].finale` plays once when its link is first drawn, or without a link once the chapter is done (a light — gold round a `ring`, water along a `path`, an aurora, or fireflies gathering along a `path` into one big light that flies to `target`, the node it lands on (the castle 6-1, which wakes there: its windows light) — then a card); `chapters[].teaser` is a later chapter's single \"?\" island on the page of its `from` island (docs/PHASE7_FINISH.md §3). A link's optional `via` is the curve's control point in %; `afterChapter` holds it back until that chapter is done; `exit`/`enter` take it to another page through the cloud gate (the gate's place on each page, with the curve to it). An island's optional `size` scales its width (25 % × size; the castle 6-1 is 1.2). A chapter with a `finale` is done only once the world has as many of its islands as it has stage files (src/world/pages.ts chapterDone), so chapter 6 with only 6-1 never ends.",
   "pages": [
     {
       "id": 1,
@@ -92,7 +92,7 @@
           "5-3"
         ],
         "light": "firefly",
-        "target": "teaser:6",
+        "target": "6-1",
         "card": "5しょう クリア！\nふしぎな せかいが\nぜんぶ つながった！",
         "button": "つぎへ",
         "icon": "firefly"
@@ -102,14 +102,7 @@
       "id": 6,
       "page": 3,
       "title": "6しょう さいごの たび",
-      "teaser": {
-        "label": "6しょう",
-        "x": 50,
-        "y": 36,
-        "from": "5-3",
-        "after": "5-3",
-        "line": "つづきは また こんど！"
-      }
+      "count": 2
     }
   ],
   "islands": [
@@ -1713,6 +1706,70 @@
           }
         ]
       }
+    },
+    {
+      "id": "6-1",
+      "chapter": 6,
+      "x": 50,
+      "y": 36,
+      "size": 1.2,
+      "diorama": {
+        "base": "island-b",
+        "ground": "#bfe0a6",
+        "rail": {
+          "radius": 11
+        },
+        "camera": {
+          "yaw": 25,
+          "pitch": 28
+        },
+        "items": [
+          {
+            "model": "sakasa-castle",
+            "at": [
+              -2,
+              -4
+            ],
+            "rotY": 20,
+            "scale": 0.42
+          },
+          {
+            "model": "house-upside-a",
+            "at": [
+              -15,
+              6
+            ],
+            "rotY": 30,
+            "scale": 0.6
+          },
+          {
+            "model": "tree-upside",
+            "at": [
+              14,
+              -8
+            ],
+            "rotY": 0,
+            "scale": 0.9
+          },
+          {
+            "model": "tree-upside",
+            "at": [
+              -12,
+              -12
+            ],
+            "rotY": 50,
+            "scale": 0.8
+          },
+          {
+            "model": "train-proto",
+            "at": [
+              11,
+              2
+            ],
+            "rotY": 0
+          }
+        ]
+      }
     }
   ],
   "links": [
@@ -1828,12 +1885,13 @@
     ],
     [
       "5-3",
-      "teaser:6",
+      "6-1",
       {
         "via": [
           76,
           44
-        ]
+        ],
+        "afterChapter": 5
       }
     ]
   ]

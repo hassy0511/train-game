@@ -13,8 +13,9 @@
  *      mirror shows the cut), the turned-away mirror the magnet turns round (its fork shows no arrows); the ending at
  *      the big mirror (the mirror Sakasa: "ほんとうは のりたい"; Sakasa turns the mirror over, never breaks it; the notes
  *      held up to a mirror read "のせて").
- *   Record ③ waits behind a glass side way `ura` (its backwards fork comes with PR9, 第 3 部 A12.3): PR6b lays the side
- *   way (it merges into main at 3250) and the record; its buffer stop is the rail mesh's (PR8a, §0.9 の 22).
+ *   Record ③ waits behind a glass side way `ura` (第 3 部 A12.3): PR6b laid the side way (it merges into main at 3250)
+ *   and the record; its buffer stop is the rail mesh's (PR8a, §0.9 の 22); PR9 adds the back junction `ura-guchi`
+ *   (reversing past main 3250, the arrows lead into it).
  *
  *   node scripts/layout-5-3.mjs         write src/stages/5-3.json and print the checks
  *   node scripts/layout-5-3.mjs --dry   print the checks only
@@ -241,6 +242,9 @@ const JUNCTIONS = [
   { id: 'j-kagami1', railId: 'main', at: J1, left: 'kagami1', right: 'main', default: 'left', signReversed: true, phantom: true },
   { id: 'j-kagami2', railId: 'main', at: J2, left: 'main', right: 'kagami2', default: 'right', signReversed: true, phantom: true },
   { id: 'j-kagami3', railId: 'main', at: J3, left: 'kagami3', right: 'main', default: 'left', signReversed: true, phantom: true },
+  // PR9 (第 3 部 A8.1, 第 6 部 §5.3): the back junction into the glass side way (left as seen reversing). The loader
+  // stands the swirl post beside it.
+  { id: 'ura-guchi', railId: 'main', at: URA_AT, back: true, left: 'ura', right: 'main', default: 'right', line: 'かがみの うしろに みちが ある！' },
 ];
 
 const RECORDS = [

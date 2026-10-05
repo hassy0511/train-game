@@ -16,6 +16,7 @@ import { buildToyPlaceholder } from './toy-placeholders';
 import { buildMagnetPlaceholder } from './magnet-placeholders';
 import { buildMirrorPlaceholder } from './mirror-placeholders';
 import { buildReversePlaceholder } from './reverse-placeholders';
+import { buildCastlePlaceholder } from './castle-placeholders';
 import { buildVolcanoPlaceholder } from './volcano-placeholders';
 import { buildEndingPlaceholder } from './ending-placeholders';
 
@@ -103,6 +104,7 @@ export class ModelLibrary {
         buildMagnetPlaceholder(name) ??
         buildMirrorPlaceholder(name) ??
         buildReversePlaceholder(name) ??
+        buildCastlePlaceholder(name) ??
         buildEndingPlaceholder(name) ??
         buildRecordPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);

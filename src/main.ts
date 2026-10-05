@@ -174,10 +174,10 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
   }
   const done = (id: number): boolean => {
     const chapter = file.chapters.find((c) => c.id === id);
-    return !!chapter && chapterDone(file, chapter, progress.cleared);
+    return !!chapter && chapterDone(file, chapter, progress.cleared, listStageIds());
   };
   // A rail is laid once its `from` is cleared, and a rail out of a chapter (`afterChapter`) once that chapter is done.
-  const laid = laidLinks(file, progress.cleared);
+  const laid = laidLinks(file, progress.cleared, listStageIds());
   // A chapter's closing rail waits for the whole chapter (a stage opened on its own with ?stage= does not
   // finish it): until then it is drawn but neither new nor saved, so its finale still plays the first time
   // the chapter is really done.
@@ -200,6 +200,8 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
     const last = ending.path?.[ending.path.length - 1];
     const lastChapter = file.islands.find((i) => i.id === last)?.chapter;
     const opens = islands.find((i) => i.id === last && i.unlocked && !i.cleared);
+    // v1.11 (PR9): the island the fireflies' big light lands on (the castle, 6-1), when it opens with this end.
+    const target = islands.find((i) => i.id === ending.target && i.title && i.unlocked && !i.cleared);
     finale = {
       chapter: endingChapter.id,
       link: ending.link,
@@ -209,11 +211,12 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
       target: ending.target,
       // The water light ends on the next chapter's first island: it wakes up then, and snow falls on its chapter.
       // v1.11: the fireflies' path wakes its last island the same way (when it opens with the end).
-      wake: (light === 'water' || light === 'firefly') && opens ? [opens.id] : undefined,
+      wake: [...((light === 'water' || light === 'firefly') && opens ? [opens.id] : []), ...(light === 'firefly' && target ? [target.id] : [])],
       snow: light === 'water' ? file.islands.filter((i) => i.chapter === lastChapter).map((i) => i.id) : undefined,
       onHop: () => (light === 'water' ? audio.playBubblePop() : light === 'firefly' ? audio.playFirefly() : audio.playRecord()),
-      // v1.11: the fireflies' big light lands on the "?" island (the castle's windows come with 6-1, PR9).
+      // v1.11: the fireflies' big light lands on the castle (6-1), which wakes up: its windows light, "ちりりん".
       onLand: () => audio.playFirefly(),
+      onWindows: () => audio.playWindows(),
       onSnow: () => audio.playSnowShimmer(),
       onShown: async () => {
         if (ending.ring || ending.path) audio.playFanfare();
@@ -241,7 +244,13 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
     finale: endingChapter?.id,
   };
   const pages = knownPages(file, facts);
+  // v1.11 (PR9, 第 1 部 §3.4): a child who saw a chapter's end before the island its light flew to was there (the
+  // castle, 6-1): the new rail to it grows, and as it gets there the castle wakes and its windows light.
+  const seenEnd = file.chapters.find((c) => c.finale?.target && progress.mapLinks.includes(`finale:${c.id}`) && fresh.some((key) => key.endsWith(`>${c.finale?.target}`)));
+  const wakeTarget = seenEnd?.finale?.target;
+  const windows = wakeTarget ? { island: wakeTarget, link: fresh.find((key) => key.endsWith(`>${wakeTarget}`)) ?? '', onWindows: () => audio.playWindows() } : undefined;
   return showMap(root, file, {
+    windows,
     islands,
     laid,
     fresh,
@@ -274,7 +283,8 @@ async function chapterStars(): Promise<{ label: string; done: boolean; faint: bo
     if (ids.length === 0) continue;
     const first = await peekStage(ids[0]);
     const open = !!first && first.unlock.requires.every((r) => cleared.includes(r));
-    out.push({ label: `${chapter.id}しょう`, done: ids.every((id) => cleared.includes(id)), faint: !open });
+    // v1.11 (PR9): the same rule as the map's (6しょう stays ☆ while 6-2 is not on the map yet).
+    out.push({ label: `${chapter.id}しょう`, done: chapterDone(file, chapter, cleared, listStageIds()), faint: !open });
   }
   return out;
 }

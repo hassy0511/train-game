@@ -44,6 +44,11 @@ export interface MapFinale {
   onLand?: () => void;
   /** Islands that open with this end: they stay asleep (grey) until the light reaches them. */
   wake?: string[];
+  /**
+   * v1.11 (PR9): the big light landed on an island that opens with this end (the castle, 6-1): it wakes and its windows
+   * light up ("ちりりん").
+   */
+  onWindows?: () => void;
   /** Islands the powder snow falls on when the water light arrives (the next chapter's). */
   snow?: string[];
   /** Each hop, bob or twinkle (its sound). */
@@ -90,6 +95,11 @@ export interface MapOptions {
   page?: number;
   /** The pages the child knows about (default: just `page`). Only these are drawn, and ◀ ▶ go between them. */
   pages?: number[];
+  /**
+   * v1.11 (PR9, 第 1 部 §3.4): a child who saw chapter 5's end before 6-1's island came: the rail `link` (fresh) grows
+   * to the castle `island`, asleep (grey) until the rail reaches it; then it wakes and its windows light (`onWindows`).
+   */
+  windows?: { island: string; link: string; onWindows?: () => void };
 }
 
 /** `resume`: go on from the island's saved mission ("つづきから") instead of from its start. */
@@ -99,6 +109,14 @@ export const linkKey = (from: string, to: string): string => `${from}>${to}`;
 
 const SVG = 'http://www.w3.org/2000/svg';
 const RAIL_GROW_SECONDS = 1.4;
+/** v1.11 (PR9): the castle's windows lighting one by one (0.8 s in all), at these places on its picture (%). */
+const WINDOWS_SECONDS = 0.8;
+const MAP_WINDOWS: [number, number][] = [
+  [40, 30],
+  [58, 28],
+  [46, 44],
+  [62, 46],
+];
 /** The golden light: seconds per link of the ring (6 links: about 3 s round). The water light runs as fast. */
 const RING_STEP_SECONDS = 0.5;
 /** A breath between the light coming home and the card. */
@@ -442,6 +460,8 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
       btn.dataset.island = island.id;
       btn.style.left = `${island.x}%`;
       btn.style.top = `${island.y}%`;
+      // v1.11: a bigger island (the castle, 6-1): 25 % × size wide.
+      if (island.size !== undefined) btn.style.width = `${25 * island.size}%`;
       // Islands higher up the map sit on top: their name tag hangs below them, over the island underneath.
       btn.style.zIndex = String(100 - Math.round(island.y));
       const img = document.createElement('img');
@@ -470,7 +490,7 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
         if (state.cleared) btn.classList.add('is-cleared');
         if (!state.unlocked) btn.classList.add('is-locked');
         // Opening with this chapter's end: still asleep until the light gets here.
-        if (finale?.wake?.includes(island.id)) btn.classList.add('is-asleep');
+        if (finale?.wake?.includes(island.id) || options.windows?.island === island.id) btn.classList.add('is-asleep');
       }
       btn.addEventListener('click', (e) => {
         if (state?.title && state.unlocked) {
@@ -660,6 +680,29 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
       // Wait for the rail to reach it before it starts bouncing.
       if (delay && options.fresh.length > 0) btn.style.animationDelay = `${RAIL_GROW_SECONDS}s`;
     };
+    /** v1.11 (PR9): the castle wakes: its colour comes back and four windows light up, one after another. */
+    const lightWindows = (id: string): void => {
+      const btn = islandEls.get(id);
+      if (!btn || btn.querySelector('.map-window')) return;
+      btn.classList.remove('is-asleep');
+      for (let i = 0; i < MAP_WINDOWS.length; i++) {
+        const w = document.createElement('span');
+        w.className = 'map-window';
+        w.style.left = `${MAP_WINDOWS[i][0]}%`;
+        w.style.top = `${MAP_WINDOWS[i][1]}%`;
+        w.style.animationDelay = `${(i * WINDOWS_SECONDS) / MAP_WINDOWS.length}s`;
+        btn.appendChild(w);
+      }
+    };
+    const windows = options.windows;
+    if (windows && options.fresh.includes(windows.link)) {
+      // The rail grows to the sleeping castle; as it gets there, the castle wakes.
+      window.setTimeout(() => {
+        lightWindows(windows.island);
+        windows.onWindows?.();
+        el.dataset.windows = windows.island;
+      }, RAIL_GROW_SECONDS * 1000);
+    } else if (windows) lightWindows(windows.island);
     if (!finale && later.length === 0) {
       markNext(true);
       return;
@@ -781,6 +824,14 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
         targetEl?.classList.add('is-lit');
         if (target) reach(target);
         finale?.onLand?.();
+        // v1.11 (PR9): the castle the light lands on wakes up and its windows light ("ちりりん").
+        if (target && finale?.wake?.includes(target)) {
+          await sleep(0.3);
+          lightWindows(target);
+          finale.onWindows?.();
+          el.dataset.windows = target;
+          await sleep(WINDOWS_SECONDS);
+        }
         await sleep(RING_REST_SECONDS);
       }
       swarm.forEach((dot) => dot.remove());

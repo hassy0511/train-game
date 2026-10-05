@@ -8,8 +8,9 @@ import type { WorldFile } from '../../src/world/types';
 /**
  * Chapter 5's end on the map (docs/PHASE9_CHAPTER5_6.md 第 1 部 §4, read with §0.9 の 1; PR6c): with 5-1, 5-2 and 5-3
  * cleared the map opens on page 3 at night; fireflies rise from 5-1, 5-2 and 5-3 in turn and gather into one big light
- * that flies to 「6しょう ？」, which glows warm; the night lifts; the card 「5しょう クリア！」 (its firefly picture);
- * closed, "finale:5" is saved and 「6しょう ？」 hops. Once only. With calm motion no dots fly. And the badges of the
+ * that flies to the castle 6-1 (asleep, grey, until it lands: then it wakes and its windows light, PR9); the night
+ * lifts; the card 「5しょう クリア！」 (its firefly picture); closed, "finale:5" is saved, the new rail 5-3 → 6-1 grows and
+ * the castle hops. Once only. With calm motion no dots fly. And the badges of the
  * islands whose "?" the magnet light can fetch now glow softly (§0.4, `.map-badge.is-takeable`).
  */
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -85,7 +86,7 @@ function justCleared(): Save {
   return { cleared: TO_53, abilities: [...SIX, 'magnetLight'], records: [], mapLinks: links };
 }
 
-test("chapter 5's end: night, the fireflies from 5-1, 5-2 and 5-3 into one big light on 「6しょう ？」, the card, once", async ({ page }) => {
+test("chapter 5's end: night, the fireflies from 5-1, 5-2 and 5-3 into one big light on the castle, which wakes; the card, once", async ({ page }) => {
   test.setTimeout(240_000);
   const errors = watchErrors(page);
   await seed(page, justCleared());
@@ -95,16 +96,20 @@ test("chapter 5's end: night, the fireflies from 5-1, 5-2 and 5-3 into one big l
   await expect(map).toHaveAttribute('data-page', '3');
   await expect(map).toHaveAttribute('data-light', 'firefly');
   await expect(map).toHaveAttribute('data-finale', 'playing');
-  // The "?" island and its dotted line are there from the start (the big light lands on it).
-  const teaser = page.locator('.map-island[data-island="teaser:6"]');
-  await expect(teaser).toBeVisible();
-  await expect(teaser).toContainText('6しょう');
-  await expect(page.locator('[data-link="5-3>teaser:6"]')).toBeVisible();
+  // The castle (6-1) is there from the start, asleep (grey); no "?" island any more. Its rail waits for the card.
+  await expect(page.locator('.map-island[data-island="teaser:6"]')).toHaveCount(0);
+  const castle = page.locator('.map-island[data-island="6-1"]');
+  await expect(castle).toBeVisible();
+  await expect(castle).toHaveClass(/is-asleep/);
   await expect(map).toHaveClass(/is-night/, { timeout: 10_000 });
   await page.waitForTimeout(700);
   await page.screenshot({ path: resolve(OUT, 'map-ch5-finale-1-night.png') });
-  await expect(map).toHaveAttribute('data-trail', '5-1,5-2,5-3,teaser:6', { timeout: 20_000 });
-  await expect(teaser).toHaveClass(/is-lit/);
+  await expect(map).toHaveAttribute('data-trail', '5-1,5-2,5-3,6-1', { timeout: 20_000 });
+  await expect(castle).toHaveClass(/is-lit/);
+  // It wakes: its colour back and four windows lit ("ちりりん").
+  await expect(map).toHaveAttribute('data-windows', '6-1', { timeout: 10_000 });
+  await expect(castle).not.toHaveClass(/is-asleep/);
+  await expect(castle.locator('.map-window')).toHaveCount(4);
   const f = await flies(page);
   expect(f.dots).toBe(18);
   expect(f.big).toBe(1);
@@ -123,17 +128,21 @@ test("chapter 5's end: night, the fireflies from 5-1, 5-2 and 5-3 into one big l
   await page.locator('#card-button').click();
   await expect(map).toHaveAttribute('data-finale', 'done', { timeout: 10_000 });
   expect((await saved(page)).mapLinks).toContain('finale:5');
-  await expect(teaser).toHaveClass(/is-next/);
+  // Then the new rail 5-3 → 6-1 grows and the castle hops.
+  await expect.poll(async () => (await saved(page)).mapLinks, { timeout: 10_000 }).toContain('5-3>6-1');
+  await expect(castle).toHaveClass(/is-next/, { timeout: 10_000 });
   await page.waitForTimeout(800);
   await page.screenshot({ path: resolve(OUT, 'map-ch5-finale-3-after.png') });
-  // Back to the title and to the map again: no end this time; the "?" island and its dotted line stay.
+  // Back to the title and to the map again: no end this time; the castle awake on its rail.
   await page.locator('#map-close').click();
   await expect(page.locator('#title-screen')).toBeVisible();
   await page.locator('#title-map').click();
   await expect(map).toBeVisible();
   await expect(map).toHaveAttribute('data-page', '3');
   await expect(map).not.toHaveAttribute('data-finale', /.+/);
-  await expect(teaser).toBeVisible();
+  await expect(castle).toBeVisible();
+  await expect(castle).not.toHaveClass(/is-asleep/);
+  await expect(page.locator('[data-link="5-3>6-1"]')).toHaveClass(/is-laid/);
   expect(errors).toEqual([]);
 });
 
@@ -144,14 +153,14 @@ test("chapter 5's end with calm motion: no fireflies fly, the islands glow in tu
   await countFlies(page);
   await openTitleMap(page);
   const map = page.locator('#map');
-  await expect(map).toHaveAttribute('data-trail', '5-1,5-2,5-3,teaser:6', { timeout: 20_000 });
+  await expect(map).toHaveAttribute('data-trail', '5-1,5-2,5-3,6-1', { timeout: 20_000 });
   await expect(page.locator('#card')).toBeVisible({ timeout: 20_000 });
   const f = await flies(page);
   expect(f.big).toBe(0);
   expect(await page.locator('.map-firefly').count()).toBe(0);
 });
 
-test("5-3 cleared on its own (5-2 not yet): no chapter end, no 「6しょう ？」", async ({ page }) => {
+test("5-3 cleared on its own (5-2 not yet): no chapter end, no rail to the castle", async ({ page }) => {
   const errors = watchErrors(page);
   const cleared = TO_53.filter((id) => id !== '5-2');
   await seed(page, { cleared, abilities: [...SIX, 'magnetLight'], records: [], mapLinks: seenMapLinks(WORLD, cleared) });
@@ -159,6 +168,7 @@ test("5-3 cleared on its own (5-2 not yet): no chapter end, no 「6しょう ？
   await expect(page.locator('#map')).not.toHaveAttribute('data-finale', /.+/);
   await expect(page.locator('.map-island[data-island="teaser:6"]')).toHaveCount(0);
   expect((await saved(page)).mapLinks).not.toContain('finale:5');
+  expect((await saved(page)).mapLinks).not.toContain('5-3>6-1');
   expect(errors).toEqual([]);
 });
 
