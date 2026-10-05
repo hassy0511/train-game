@@ -18,6 +18,7 @@ import { buildMirrorPlaceholder } from './mirror-placeholders';
 import { buildReversePlaceholder } from './reverse-placeholders';
 import { buildCastlePlaceholder } from './castle-placeholders';
 import { buildVolcanoPlaceholder } from './volcano-placeholders';
+import { buildEndingPlaceholder } from './ending-placeholders';
 
 const PLACEHOLDER_COLORS: Record<string, number> = {
   tree: 0x4f9f5a,
@@ -104,6 +105,7 @@ export class ModelLibrary {
         buildMirrorPlaceholder(name) ??
         buildReversePlaceholder(name) ??
         buildCastlePlaceholder(name) ??
+        buildEndingPlaceholder(name) ??
         buildRecordPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(drawn ?? makePlaceholder(name));

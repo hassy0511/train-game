@@ -1,0 +1,1 @@
+{"_expect": "shot target \"nobody\" must be a figure brought on", "_base": "1-1", "_edit": [{"path": "cutscenes.opening.0", "value": {"shot": "close", "target": "nobody"}}]}

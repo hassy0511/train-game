@@ -110,7 +110,6 @@ export interface MissionPorts extends CutscenePorts {
   showDoorButton(onPress: () => void): void;
   hideDoorButton(): void;
   setCargo(passengers: number, parcel: boolean): void;
-  fade(toBlack: boolean, seconds: number): Promise<void>;
   cameraFx(dip: number, shake: number): void;
   /** Lever back to "stop" after a rewind. */
   resetLever(): void;
@@ -3537,6 +3536,10 @@ export class MissionRunner {
     );
     this.skip = null;
     door(false);
+    // v1.12: a shot, the letterbox and a drive end with their cutscene.
+    void this.ports.shot(null);
+    this.ports.letterbox(false);
+    if (this.train.autoDriving) this.ports.drive(null);
     this.ports.autoCamera(null);
     this.ports.fixedCamera(null);
     this.phase = previous === 'driving' ? 'idle' : previous;

@@ -3,6 +3,7 @@
  * Rendering budget probe (TECH_SPEC §6: at most 200 draw calls and 100,000 triangles per frame):
  *   npm run budget                 # every playable stage
  *   npm run budget -- 1-2 2-1      # just some
+ *   npm run budget -- --movie ending   # v1.12: a movie (src/movies/), every frame of it played through to its card
  * For each stage (src/stages/*.json without "hidden") and each camera, puts the train on every rail every 50 m
  * (every 20 m within 60 m of a station), draws one frame and reads renderer.info. Prints the heaviest frames per
  * stage and camera, the worst one of each with its draw calls and triangles per object, and exits 1 when any
@@ -54,7 +55,17 @@ const every = readdirSync(stageDir)
   .map((file) => JSON.parse(readFileSync(resolve(stageDir, file), 'utf8')))
   .sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true }));
 const playable = every.filter((stage) => !stage.hidden);
-const wanted = process.argv.slice(2);
+// v1.12 (えんしゅつ): `--movie <id>` (or `--movie` for every movie in src/movies/) plays the movie through to its card
+// and measures every frame of it (the camera "movie"), instead of the stages.
+const args = process.argv.slice(2);
+const movieAt = args.indexOf('--movie');
+const movieIds =
+  movieAt < 0
+    ? []
+    : args[movieAt + 1] && !args[movieAt + 1].startsWith('-')
+      ? [args[movieAt + 1]]
+      : readdirSync(resolve(root, 'src/movies')).filter((f) => f.endsWith('.json')).map((f) => f.replace('.json', ''));
+const wanted = movieAt < 0 ? args : [];
 for (const id of wanted) {
   if (!every.some((stage) => stage.id === id)) {
     console.error(`no stage ${id} (have: ${every.map((stage) => stage.id).join(', ')})`);
@@ -62,7 +73,7 @@ for (const id of wanted) {
   }
 }
 // Named stages may be hidden ones (the test stages 0-x); with none named, every playable stage.
-const stages = wanted.length > 0 ? every.filter((stage) => wanted.includes(stage.id)) : playable;
+const stages = movieIds.length > 0 ? [] : wanted.length > 0 ? every.filter((stage) => wanted.includes(stage.id)) : playable;
 
 /** v1.11: the looks the stage's cutscenes change to (its own environment with each step's fields over it), once each. */
 function cutsceneLooks(stage) {
@@ -267,6 +278,72 @@ function instrument() {
   }));
 }
 
+/**
+ * v1.12: in the page, before the movie starts: counts every frame's draw calls and triangles (per object, as
+ * instrument() does) until the card; keeps the heaviest frames and the ones over budget in window.__probeMovieDone.
+ */
+function instrumentMovie() {
+  const view = window.__debugView;
+  const renderer = view.renderer;
+  const scene = view.getScene();
+  const clean = (name) => name.split(':')[0].replace(/-\d+$/, '');
+  const label = (object) => {
+    const path = [];
+    for (let o = object; o && o !== scene; o = o.parent) path.unshift(o);
+    const top = path[0];
+    const named = path.slice(1).find((o) => o.name && !o.name.startsWith('baked') && o.name !== 'Scene' && o.name !== 'rig');
+    return `${clean(top?.name || top?.type || '?')}${named ? ` / ${clean(named.name)}` : ''}`;
+  };
+  let current = null;
+  let tally = new Map();
+  const draw = renderer.renderBufferDirect;
+  renderer.renderBufferDirect = function (...a) {
+    current = a[4];
+    try {
+      return draw.apply(this, a);
+    } finally {
+      current = null;
+    }
+  };
+  const info = renderer.info;
+  const update = info.update;
+  info.update = function (...a) {
+    const before = info.render.triangles;
+    update.apply(this, a);
+    if (!current) return;
+    const key = label(current);
+    const row = tally.get(key) ?? { calls: 0, tris: 0 };
+    row.calls += 1;
+    row.tris += info.render.triangles - before;
+    tally.set(key, row);
+  };
+  const app = document.getElementById('app');
+  const out = { frames: 0, byCalls: null, byTris: null, worst: null, over: [] };
+  const loadOf = (f) => Math.max(f.calls / 200, f.tris / 100000);
+  const loop = () => {
+    const state = app.dataset.movieState;
+    if (state === 'card' || state === 'done') {
+      window.__probeMovieDone = out;
+      return;
+    }
+    requestAnimationFrame(loop);
+    if (state !== 'playing' && state !== 'skipped') {
+      tally = new Map();
+      return;
+    }
+    const { calls, triangles } = info.render;
+    const f = { calls, tris: triangles, beat: app.dataset.beat ?? '', time: app.dataset.time ?? '', objects: [...tally] };
+    tally = new Map();
+    if (calls === 0) return;
+    out.frames += 1;
+    if (!out.byCalls || f.calls > out.byCalls.calls) out.byCalls = f;
+    if (!out.byTris || f.tris > out.byTris.tris) out.byTris = f;
+    if (!out.worst || loadOf(f) > loadOf(out.worst)) out.worst = f;
+    if ((f.calls > 200 || f.tris > 100000) && out.over.length < 50) out.over.push(f);
+  };
+  requestAnimationFrame(loop);
+}
+
 const k = (tris) => `${(tris / 1000).toFixed(1)}k`;
 const over = (f) => f.calls > MAX_CALLS || f.tris > MAX_TRIANGLES;
 /** A frame's load against the budget: 1 = exactly at the limit of calls or triangles, whichever is nearer. */
@@ -371,6 +448,30 @@ try {
       `stage ${stage.id}: ${rails.map((r) => `${r.id} ${Math.round(r.length)} m`).join(', ')}; ${points} points × ${CAMERAS.length} cameras, title camera × ${TITLE_ANGLES.length} angles`,
     );
     for (const row of byCamera.values()) if (row.frames > 0) results.push({ ...row, stage: stage.id });
+    await page.close();
+  }
+  for (const id of movieIds) {
+    const page = await browser.newPage({ viewport: { width: 1194, height: 834 }, deviceScaleFactor: 1, serviceWorkers: 'block' });
+    page.on('pageerror', (e) => {
+      pageErrors += 1;
+      console.error(`  [movie ${id}] ${e.message}`);
+    });
+    await page.goto(`${origin}/?movie=${id}`);
+    await page.waitForSelector('#movie-play', { timeout: 120_000 });
+    await page.evaluate(instrumentMovie);
+    await page.click('#movie-play');
+    const done = await page.waitForFunction(() => window.__probeMovieDone, undefined, { timeout: 600_000, polling: 1000 });
+    const r = await done.jsonValue();
+    const row = { stage: `movie:${id}`, camera: 'movie', frames: r.frames, calls: null, tris: null, worst: null };
+    for (const f of [r.byCalls, r.byTris, r.worst]) {
+      const frame = { ...f, stage: row.stage, rail: f.beat || 'start', s: `${f.time} s` };
+      if (!row.calls || f.calls > row.calls.calls) row.calls = frame;
+      if (!row.tris || f.tris > row.tris.tris) row.tris = frame;
+      if (!row.worst || load(f) > load(row.worst)) row.worst = frame;
+    }
+    for (const f of r.over) failures.push({ ...f, stage: row.stage, camera: 'movie', rail: f.beat || 'start', s: `${f.time} s` });
+    console.log(`movie ${id}: ${r.frames} frames to the card`);
+    results.push(row);
     await page.close();
   }
 } finally {

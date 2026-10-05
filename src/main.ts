@@ -4,10 +4,11 @@ import { AudioEngine } from './audio/audio';
 import { GAME_TITLE, GAME_TITLE_LINES, PARTNER_NAME } from './config';
 import { StageEventBus } from './core/stage-events';
 import { addToProgress, loadProgress, setResume, startSandbox, type Resume } from './core/progress';
-import { abilitiesTaughtBefore, kakuninMission, kakuninRunAllowed, stageBounces } from './core/kakunin';
+import { abilitiesTaughtBefore, kakuninMission, kakuninRunAllowed, movieBounces, stageBounces, stageLockActive } from './core/kakunin';
 import { ABILITY_CARD_TITLES, ABILITY_NAMES, abilityInUse, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
-import { listStageIds, loadAllRecords, loadStage, peekStage } from './stage/loader';
+import { listStageIds, loadAllRecords, loadStage, peekMovie, peekStage } from './stage/loader';
+import { playMovie } from './movie/player';
 import type { AbilityId, EnvironmentDef, GimmickDef, Vec3 } from './stage/types';
 import type { RunSurface } from './audio/run-sound';
 import {
@@ -55,6 +56,8 @@ import { createStopGauge } from './ui/stop-gauge';
 import { createDiveButton, createJumpButton, createLightButton, createPlowButton, createRocketButton } from './ui/ability-buttons';
 import { createCountdownPanel } from './ui/countdown-panel';
 import { createSkipButton, type SkipButton } from './ui/skip-button';
+import { createLetterbox, LETTERBOX_PART } from './ui/letterbox';
+import { TrainWatch } from './cutscene/train-watch';
 import { RocketSystem } from './gimmick/rocket';
 import { SlopeSystem } from './gimmick/slope';
 import { DiveSystem } from './gimmick/dive';
@@ -321,8 +324,47 @@ async function savedResume(): Promise<Resume | null> {
 const SKIP_CARD_WINDOW_MS = 1500;
 const SKIP_CARD_GUARD_SECONDS = 0.8;
 
+/**
+ * v1.12 (えんしゅつ): `?movie=<id>`: a movie (src/movie/player.ts) instead of a stage. Behind the かくにん lock (dev and
+ * browser automation are not locked), or opened by the save (the ending once 6-2 is cleared). From the check mode's
+ * list (`kakunin=1`) it goes back to the list after its card; otherwise to the title.
+ */
+async function bootMovie(params: URLSearchParams, id: string): Promise<void> {
+  if (await movieBounces(params, loadProgress(), peekMovie)) {
+    location.replace(location.pathname);
+    return;
+  }
+  const kakunin = params.get('kakunin') === '1' && kakuninRunAllowed();
+  // TODO(6-2): a child watching it again (「もういちど みる」) skips with "▶▶" once it has been seen (keep a mark of it
+  // in the save, like the map's "finale:" marks). Until then only the owner's check (and dev) can skip.
+  const owner = kakunin || !stageLockActive();
+  document.title = GAME_TITLE;
+  app.dataset.build = __BUILD_ID__;
+  await playMovie(id, app, viewEl, uiEl, {
+    skippable: owner,
+    startButton: true,
+    onDone: () => {
+      if (kakunin) showKakuninList(uiEl, { onClose: () => (location.href = location.pathname) });
+      else location.href = location.pathname;
+    },
+  });
+}
+
+/**
+ * v1.12: TODO(6-2): the hook for the ending movie. After 6-2's clear card (the end of boot() below), and from the
+ * title's 「もういちど みる」 once 6-2 is cleared, the game goes here; the movie then goes back to the title.
+ */
+export function goToMovie(id: string): void {
+  location.search = `?movie=${encodeURIComponent(id)}`;
+}
+
 async function boot(): Promise<void> {
   const params = new URLSearchParams(location.search);
+  const movie = params.get('movie');
+  if (movie !== null) {
+    await bootMovie(params, movie);
+    return;
+  }
   // The `?stage=` lock (src/core/kakunin.ts): a kid's address bar cannot open a test stage or one the save has not opened.
   if (await stageBounces(params, loadProgress(), peekStage)) {
     location.replace(location.pathname);
@@ -437,6 +479,9 @@ async function boot(): Promise<void> {
   /** Screen shake and dips are dropped with "がめんの ゆれ: へらす". */
   const shakeScale = (): number => (settings.calm ? 0 : 1);
   applySettings();
+  // v1.12: prefers-reduced-motion: a cutscene shot's moves become cuts, the figures' motions smaller.
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  view.setReducedMotion?.(reducedMotion);
   let paused = false;
   let runner: MissionRunner | null = null;
   // "▶▶" on cutscenes (PHASE7_FINISH §4 item 7): only on a stage cleared before this run.
@@ -672,6 +717,11 @@ async function boot(): Promise<void> {
   speedLines.innerHTML = '<span></span>'.repeat(8);
   uiEl.appendChild(speedLines);
 
+  // v1.12 (えんしゅつ): a cutscene's shot (the view frames a figure; it wins over every other camera), the letterbox and
+  // the waits for the train to pass a place.
+  let shotOn = false;
+  const letterbox = createLetterbox(uiEl, app);
+  const trainWatch = new TrainWatch();
   // Camera: the player picks a mode; the game may override it for a moment (doors, cutscenes).
   let userCamera: CameraMode = 'cab';
   let cameraOverride: CameraMode | null = null;
@@ -690,7 +740,7 @@ async function boot(): Promise<void> {
     const mode = train.reversing && !leadHoldsFront ? reversedCamera(picked) : picked;
     view.setCamera(mode, snap);
     view.setFixedCamera(fixedCamera);
-    app.dataset.camera = fixedCamera ? 'fixed' : orbiting ? 'orbit' : mode;
+    app.dataset.camera = shotOn ? 'shot' : fixedCamera ? 'fixed' : orbiting ? 'orbit' : mode;
     cameraButton.setMode(picked);
   };
   // In the top corner beside the pause button (PHASE7 §1), for every stage.
@@ -1351,6 +1401,8 @@ async function boot(): Promise<void> {
         w.resolve();
       }
     }
+    // v1.12: cutscene waits for the train to pass a place ("trainAt").
+    trainWatch.update(train, simTime);
 
     // Stage zones along the rail (front of the train): camera views and updrafts.
     const gimmicks = stage.file.gimmicks;
@@ -1995,6 +2047,24 @@ async function boot(): Promise<void> {
       audio.playPop();
       await waitSeconds(0.6);
     },
+    // v1.12 (えんしゅつ): shots, the letterbox, the train running by itself, a wait for it, a named point.
+    shot: (def) => {
+      if (!def && !shotOn) return Promise.resolve();
+      shotOn = def !== null;
+      view.setShot?.(def);
+      applyCamera(!def);
+      // With prefers-reduced-motion the move is a cut: nothing to wait for.
+      return def?.seconds && !reducedMotion ? waitSeconds(def.seconds) : Promise.resolve();
+    },
+    letterbox: (on) => {
+      letterbox.set(on);
+      view.setLetterbox?.(on ? LETTERBOX_PART : 0);
+    },
+    drive: (order) => train.setAutoDrive(order),
+    trainAt: (at, max) => trainWatch.wait(train, at, max, simTime),
+    beat: (name) => {
+      app.dataset.beat = name;
+    },
   };
   events.on('event', (e) => {
     if (e.type === 'door') audio.playDoor(e.open);
@@ -2190,6 +2260,8 @@ async function boot(): Promise<void> {
   }
   addToProgress('cleared', [stage.file.id]);
   if (loadProgress().resume?.stage === stage.file.id) setResume(null);
+  // TODO(6-2): after 6-2's clear the ending movie plays here, before the map: `goToMovie('ending')` (the movie goes
+  // back to the title; the map's chapter-6 card then waits for the next time the map opens).
   addToProgress('abilities', stage.file.unlocks);
   // Back to the map: the rail to the next island grows in, and the child taps it to go on.
   const after = await nextStage(loadProgress().cleared, stage.file.id);

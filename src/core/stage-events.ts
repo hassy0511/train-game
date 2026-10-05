@@ -1,5 +1,5 @@
 import type { Quaternion, Vector3 } from 'three';
-import type { AbilityId, Emote, EnvironmentDef } from '../stage/types';
+import type { AbilityId, ActKind, Emote, EnvironmentDef, ShotTarget } from '../stage/types';
 import { Emitter } from './events';
 
 /** Things that happened in the game that the view (and audio) may want to show. */
@@ -9,8 +9,12 @@ export type StageEvent =
   /** v1.11 (5-2) `delay`: the move to `position` starts after this many seconds (a toy's key turns first). */
   | { type: 'actor:state'; id: string; state: string; position?: Vector3; seconds?: number; delay?: number }
   /** v1.11 (5-3) `mirror`: "only" = seen only in a mirror's reflection, "hide" = never reflected. */
-  | { type: 'actor:spawn'; id: string; model: string; position: Vector3; quaternion: Quaternion; mirror?: 'only' | 'hide' }
-  | { type: 'actor:move'; id: string; position: Vector3; seconds: number }
+  /** v1.12 `car`: it rides in that car (0 = the lead), `position` and `quaternion` in the car's own space. */
+  | { type: 'actor:spawn'; id: string; model: string; position: Vector3; quaternion: Quaternion; mirror?: 'only' | 'hide'; car?: number; scale?: number }
+  /** v1.12 `bob`: little hops on the way; `face`: it turns to the way it goes first. */
+  | { type: 'actor:move'; id: string; position: Vector3; seconds: number; bob?: boolean; face?: boolean }
+  /** v1.12 (えんしゅつ): a figure's little motion (ActDef). `seconds` 0 with "turn": at once (a fast-forward). */
+  | { type: 'actor:act'; id: string; act: ActKind; times?: number; seconds?: number; toward?: ShotTarget }
   | { type: 'actor:remove'; id: string }
   /**
    * A rail was cut (a gap from `from` to `to`). v1.7: `style` "fall" drops the stretch and props tagged `props`.

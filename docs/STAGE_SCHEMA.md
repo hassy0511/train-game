@@ -1,6 +1,6 @@
 # ステージJSON スキーマ v1
 
-最終更新: 2026-09-30（v1.11 の 5-1 夜の 分）
+最終更新: 2026-10-05（v1.12 えんしゅつ の 分。§25）
 状態: v1 確定（2026-09-13）。型の実体は `src/stage/types.ts`、検証は `src/stage/validate.ts`
 
 1ステージ = 1ファイル。`src/stages/<chapter>-<n>.json`。
@@ -1563,3 +1563,76 @@ type LineKey = /* v1.11 (PR8a) */ 'backNear' | 'backArrows' | 'reverseNudge' | '
 - できごと: `lead:start`・`lead:call`（`{ n, auto }`）・`lead:learn`・`lead:follow`（`{ auto }`）・`lead:met`（`{ auto }`）・`lead:gone`・`lead:hop`、`station:open`、`welcome:beat`・`welcome:flinch`・`welcome:giggle`・`welcome:board`・`welcome:step`・`welcome:shy`、`crew`、`depart`
 - わざと まちがえた 形: `tests/stages-bad/lead-*.json`・`welcome-*.json`・`mission-junction-*.json`・`depart-*.json`
 - 本番に デバッグの 口は 足さない（テストは `addInitScript` の 記録係 `window.__leadLog`・`window.__welcomeLog`）
+
+## 25. v1.12 の追加（えんしゅつ: カメラの ショット・生き物の 動き・レターボックス・ムービー、2026-10-05）
+
+だいさん GO（2026-10-05）。寸劇を「カメラを 少し 動かして ふきだし」から、**寄り・引き・回りこみ の ある えんしゅつ** に する しくみ。どの ステージの 寸劇でも つかえる（いまの 寸劇は かわらない: 新しい ステップを 書かない かぎり 同じ 動き）。さいしょに つかうのは エンディング ムービー（`src/movies/ending.json`）。ふきだしは いまの ふきだしの まま。
+
+### カメラの ショット（`shot`）
+```json
+{ "shot": "close", "target": "squirrel", "angle": 20, "height": 6, "side": 0.25, "push": 0.12, "hold": 4 }
+{ "shot": "medium", "target": "train", "angle": 150, "height": 28, "distance": 32, "seconds": 3 }
+{ "shot": "wide", "target": [0, 2, 0], "distance": 280, "angle": 160, "height": 34, "world": true, "seconds": 8, "ease": "inOut" }
+```
+- `shot`: `close`（ねらいが 絵の 高さの 7 わり くらい）・`medium`（4 わり）・`wide`（1.5 わり）。きょりは ねらいの 大きさから 自動（レターボックスが ある ときは その 内がわで）。`distance`（1〜600 m）で きめても よい。レンズは close ほど 少し 望遠（34°／42°／50°）
+- `target`: 寸劇で 出した 役者の id・ステージの 役者の id・`"train"`（電車ぜんぶ）・`"car-0"`〜`"car-2"`（1 両。0 が 先頭）・`"partner"`（運転席の ピコ）・`[x, y, z]`（場所。`distance` が いる）
+- `angle`: ねらいの 正面（+Z）から 左（+X）へ まわった 角度（既定 30°）。`world: true` なら 世界の +Z から（ねらいが 向きを かえても カメラが まわらない）。電車なら 進む 向きの 左（§3 の 左右と 同じ。エンディングの 輪では 内がわ）
+- `height`: 見おろす 角度（−10〜80°、既定 close 8・medium 16・wide 30）。`side`: ねらいを 絵の どこに おくか（−0.8 左 〜 0.8 右）
+- `seconds`: 前の ショットから うごく 時間（0 か 書かない: パッと きりかえ）。同じ ねらいなら まわりこみ（オービット）、ちがう ねらいなら ドリー。`ease`: `linear`／`in`／`out`／`inOut`（既定）。うごき おわるまで 次の ステップを まつ（`nowait: true` で またない）
+- `push`（0〜0.6）: うごいた あと ゆっくり 寄る（きょりが その わりあい ちぢむ）。`orbit`（−180〜180°）: ゆっくり まわる。どちらも `hold` 秒（既定 8）かけて
+- `reach`（1〜4）: 固定カメラと 同じ（霧の 何ばい 先まで 見るか）。既定 wide 2.5・ほか 1
+- ねらいが うごけば ついていく（電車なら 電車と いっしょに まがる）。**カメラと ねらいの あいだに 何か あると、その 手前まで 寄る**（もの の 中に はいらない。電車の 中の 役者を ねらう ときは その 車両を とおして 見る。場所 `[x, y, z]` の ひろい 絵は しらべない）。地面より 下に いかない
+- ショットは 寸劇の おわり、または `camera` の ステップで おわる（いつもの カメラに もどる）。`#app[data-camera="shot"]`
+- `prefers-reduced-motion`: うごきは ぜんぶ きりかえ、`push`・`orbit` なし。「がめんの ゆれ: へらす」: ショットに ゆれは ない（うごきは そのまま）
+
+### 役者の 動き（`act`）
+```json
+{ "act": "hop", "id": "squirrel", "times": 3 }
+{ "act": "turn", "id": "dino-small", "toward": "train", "seconds": 0.8, "nowait": true }
+{ "act": "wave", "id": "sakasa" }
+```
+- 骨の ない モデルを まるごと やさしく うごかす: `hop`（ぴょこん。`times` 既定 2）・`jump`（大きく 1 回）・`nod`（おじぎ。既定 2）・`tilt`（くびを かしげる）・`cheer`（ばんざい）・`wiggle`（ふりふり。しっぽを ふる かわり。既定 3）・`wave`（サカサは `amanojaku-wave` に かわって 手を ふり ゆれる。ほかは 左右に ゆれる。次の `act` まで つづく）・`turn`（`toward` の ほうを むく: 役者の id・`"train"`・`"camera"`・`[x, y, z]`。`seconds` 既定 0.6、そのまま のこる）
+- `id`: 寸劇で 出した 役者・ステージの 役者・`"partner"`（運転席の ピコ。`jump`／`tilt`／`cheer` は いまの えもーと）
+- 動きが おわるまで まつ（`nowait: true` で またない。`wave` は またない）。`times` は 1〜8（`wave`・`turn` には 書かない）
+- `prefers-reduced-motion`: 動きは 半分の 大きさ
+- 早送り（▶▶・つづき）: `turn` だけ のこる（むいた ほうを むいて いる）
+
+### 出す・うごかす の 足し
+- `spawn` の 置き場所は `onRail`・`position`（世界の 場所 [x, y, z]、`rotationY` は 世界の +Z から）・`ride`（電車の 中: `{ "car": 1, "at": [-0.95, 1.5, 1.65] }`。車両の 中の m、+Z が 前、y 0 が レールの 上。中に いる こと）の どれか 1 つ。`scale`（0.1〜5）で 大きさ
+- `ride` の 役者は 車両と いっしょに うごく。その 車両の まどが すきとおり、中に 部屋（クリームの かべ・木の ゆか）が 見える（見た目だけ）。`ride` の 役者は `move` で うごかさない（出しなおす）
+- `move` も `position` で 世界の 場所へ。`bob: true`: ぴょこぴょこ はねながら。`face: true`: 先に すすむ ほうを むく
+
+### レターボックス・フェード
+- `{ "letterbox": true }`／`false`: 画面の 上と 下に 黒い 帯（DOM。高さの 11% ずつ）。ふきだしは 下の 帯の 上に 出る（かくれない）。▶▶ は 上の 帯の すみ。寸劇の おわりで 消える。`#app[data-letterbox]`
+- `{ "fade": "out", "seconds": 1 }`／`"in"`: 黒へ／黒から（0〜10 秒、既定 1）。おわるまで まつ
+
+### 電車が 自分で はしる（`drive`・`trainAt`）
+- `{ "drive": { "speed": 10 } }`: 電車が 自分で その はやさ（m/s、0〜22）で はしる。0 で やさしく 止まる。`{ "drive": { "speed": 10, "stopAt": 6.4 } }`: その 場所（いまの 線路の m、先頭）で やさしく 止まる。またない。寸劇の おわりで レバーに もどる。早送りでは とばす
+- `{ "trainAt": 120, "max": 20 }`: 電車の 先頭が その 場所を とおる（か そこに 止まって いる）まで まつ。`max` 秒（既定 40、120 まで）で あきらめる。少し 前に とおった ばかり（60 m 以内）なら すぐ すすむ。輪の 線路でも つかえる
+- 「生き物の 前を 電車が とおる」ショットは、`trainAt` で 電車が 来る 少し 前に きりかえる（はやさが ゆれても ずれない）
+
+### しるし（`beat`）
+- `{ "beat": "squirrel" }`: 何も しない。`#app[data-beat]`（いま）と ムービーの `#app[data-beats]`（ここまで ぜんぶ）に 書く。テストと スクショの 目じるし。名前は a-z・0-9・-
+
+### にじの 線路（`gimmicks[]` の `rainbow`、見た目だけ）
+- `{ "type": "rainbow", "railId": "wa", "from": 472.1, "to": 552.3 }`: その 区間の 線路の 下に、にじの 6 色の 帯が たれる（よこから 見ると にじの 上を 電車が わたる）。はしの 14 m で 帯が のびる。描く 回数 1
+
+### ムービー（`src/movies/<id>.json`）
+- ふつうの ステージ ファイルと 同じ 形で、ミッションが ない（`missions: []`、`chapter: 0`、`hidden: true`）。`movie: { "play": "<寸劇の id>", "card": { "title": "…", "button": "…" } }`
+- `src/movie/player.ts` が 見せる: ボタン・レバーは 出さない、レターボックス、電車は `drive` で 自分で はしる、さいごに `card`（ファンファーレ）。▶▶（ゆるされた とき）は のこりを 早送りして、さいごの ショットで 札へ
+- ひらきかた: `?movie=<id>`（かくにん モードの 鍵の うしろ。開発と ブラウザの 自動操作では 鍵なし）。`unlock.requires` の ステージを ぜんぶ クリアした セーブなら 子どもも ひらける（エンディングは 6-2）。かくにん モードの いちらんの「ムービー」から（`?movie=<id>&kakunin=1`、札の あと いちらんへ）。アドレスから ひらくと さいしょに「▶ みる」（iPad は タップまで 音が 出ない）
+- `#app` の `data-movie`・`data-movie-state`（`loading` → `start` → `playing` →〔`skipped`〕→ `card` → `done`）・`data-beat`・`data-beats`・`data-shot`（`close:squirrel` など）・`data-shots`・`data-acts`・`data-letterbox`・`data-reduced-motion`
+- 曲は `environment.bgm`（エンディングは `ending`「せかいの わ」）
+- 性能: `npm run budget -- --movie ending`（ムービーを さいごまで 流し、どの こまも 200 回・10 万 三角形 以内か）
+- 開発だけ: `?movie=<id>&fast=5&until=<beat>`（その しるしまで 5 ばいで すすむ）
+
+### エンディング「せかいの わ」（`scripts/layout-ending.mjs` → `src/movies/ending.json`）
+- 半径 92 m の 輪の 線路 `wa`（1 本の 輪）に 6 つの 島（1〜6 章）。6 章の しろの 島から 1 章の まちへ もどる ところが にじ（高さ 10 m）。島の あいだは 木の はしら（`base` の `pier`）
+- しろは 仮の `ring-castle`（チケット 0025。**TODO(PR9)**: `sakasa-castle` に かえる）
+- **TODO(6-2)**: 6-2 の クリア札の あとと、タイトルの「もういちど みる」から `goToMovie('ending')`（`src/main.ts`）。2 回目からは ▶▶（見た しるしを セーブに）
+
+### 読み込み時の 検査
+- 形: `shot`（大きさ・ねらい・はんい・場所には `distance`）、`act`（しゅるい・`times`・`seconds`・`toward`）、`spawn`（置き場所 1 つ・`ride` の 車両と 中・`scale`）、`move`（`onRail` か `position`）、`letterbox`・`fade`・`drive`・`trainAt`・`beat`
+- ならび: `shot` の ねらい・`act` の id・`turn` の `toward` は その 前に 出した 役者（とって いない）・ステージの 役者・`partner`・`train`・`car-<n>`。`ride` の 役者を `move` しない
+- ムービー: `movie.play` が 寸劇、`movie.card` に `title` と `button`、ミッション なし、`hidden`。`src/stages/` には `movie` を 書かない（`scripts/check-stages.mjs`）
+- わざと まちがえた 形: `tests/stages-bad/shot-*.json`・`act-*.json`・`spawn-*.json`・`move-riding.json`・`drive-*.json`・`train-at-max.json`・`fade-kind.json`・`letterbox-type.json`・`beat-name.json`・`movie-*.json`・`rainbow-no-to.json`

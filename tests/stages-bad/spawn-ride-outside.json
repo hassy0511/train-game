@@ -1,0 +1,1 @@
+{"_expect": "spawn \"ride\" at must be inside the car", "_base": "1-1", "_edit": [{"path": "cutscenes.opening.0", "value": {"spawn": "x", "model": "amanojaku", "ride": {"car": 1, "at": [2.5, 1.5, 0]}}}]}

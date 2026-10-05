@@ -2,7 +2,7 @@ import type { Scene } from 'three';
 import type { StageEvent } from '../core/stage-events';
 import type { CameraMode, OrbitCamera } from './camera-rig';
 import type { RailNetwork } from '../rail/types';
-import type { EnvironmentDef, StageData } from '../stage/types';
+import type { EnvironmentDef, ShotDef, StageData } from '../stage/types';
 import type { TrainPose } from '../train/types';
 import type { LeadPose } from '../mission/lead';
 
@@ -51,6 +51,15 @@ export interface SceneView {
    * as often as wanted: 5-1's day and night, 6-2's sections.
    */
   applyEnvironment(env: EnvironmentDef): void;
+  /**
+   * v1.12 (えんしゅつ): a cutscene camera shot framing a figure, a car or a point (null: none; the camera the mode, a
+   * fixed camera or the orbit wants comes back). Optional.
+   */
+  setShot?(def: ShotDef | null): void;
+  /** v1.12: the letterbox bars' part of the screen height (0: off): shots frame inside what is left. Optional. */
+  setLetterbox?(part: number): void;
+  /** v1.12: prefers-reduced-motion: camera moves become cuts, the figures' motions smaller. Optional. */
+  setReducedMotion?(on: boolean): void;
   resize(width: number, height: number, devicePixelRatio: number): void;
   getStats(): { drawCalls: number; triangles: number } | null;
   /** For dev-only helpers (spline visualizer). May return null. */

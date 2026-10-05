@@ -932,8 +932,21 @@ export type CutsceneStep =
   | {
       spawn: string;
       model: string;
-      onRail: { railId: string; at: number; lateral?: number; heightFromRail?: number };
-      /** v1.6: turn it about the vertical (degrees; 180 faces back along the rail, towards the train). */
+      /**
+       * Where it stands: on a rail (`onRail`), or v1.12 at a world place (`position`, [x, y, z] m), or v1.12 riding in a
+       * car of the train (`ride`: `car` 0 = the lead car, 1 = the second, 2 = the third; `at` in the car's own metres,
+       * +Z forward, y 0 at rail top). Exactly one of the three. A figure riding a car moves with it, and that car's
+       * windows turn see-through (looks only) so it can be seen inside.
+       */
+      onRail?: { railId: string; at: number; lateral?: number; heightFromRail?: number };
+      position?: Vec3;
+      ride?: { car: number; at: Vec3 };
+      /** v1.12: drawn this many times its size (0.1–5; default 1). */
+      scale?: number;
+      /**
+       * v1.6: turn it about the vertical (degrees; 180 faces back along the rail, towards the train). v1.12: with
+       * `position` from world +Z, with `ride` from the car's +Z.
+       */
       rotationY?: number;
       /**
        * v1.11 (5-3): "only" = drawn only in the reflection of a mirror that shows cutscene figures (not seen directly);
@@ -943,10 +956,16 @@ export type CutsceneStep =
     }
   | {
       move: string;
-      onRail: { railId: string; at: number; lateral?: number; heightFromRail?: number };
+      /** On a rail, or v1.12 a world place (`position`). Exactly one. */
+      onRail?: { railId: string; at: number; lateral?: number; heightFromRail?: number };
+      position?: Vec3;
       seconds: number;
       /** v1.6: go on to the next step at once (several things move together). */
       nowait?: boolean;
+      /** v1.12: little hops on the way ("ぴょこぴょこ"; Sakasa and the hoppers always hop). */
+      bob?: boolean;
+      /** v1.12: it turns to face the way it goes first. */
+      face?: boolean;
     }
   | { remove: string }
   | { wait: number }
@@ -1038,7 +1057,109 @@ export type CutsceneStep =
    * v1.11 (6-1): the train rolls by itself to `to` on its rail (slow start, at most DEPART.maxSpeed, a gentle stop) in
    * about `seconds` s. Only in the stage's ending; skipped by a fast-forward.
    */
-  | { depart: { to: number; seconds: number } };
+  | { depart: { to: number; seconds: number } }
+  /**
+   * v1.12 (えんしゅつ, docs/STAGE_SCHEMA.md §25): a camera shot framing a target, for the rest of the cutscene (a
+   * `camera` step, or the cutscene's end, gives the usual camera back). See ShotDef.
+   */
+  | ShotDef
+  /** v1.12: a figure's little motion (procedural; see ActKind). */
+  | ActDef
+  /** v1.12: black bars at the top and bottom of the screen (a movie's look), on or off. */
+  | { letterbox: boolean }
+  /** v1.12: the screen fades to black ("out") or back from it ("in") over `seconds` (default 1); waited for. */
+  | { fade: 'in' | 'out'; seconds?: number }
+  /**
+   * v1.12: the train runs by itself (a movie): at `speed` m/s (0 = a gentle stop where it is), or to a gentle stop with
+   * its front at `stopAt` on its rail. Not waited for (a `trainAt` waits). Skipped by a fast-forward.
+   */
+  | { drive: { speed?: number; stopAt?: number } }
+  /**
+   * v1.12: wait until the train front passes `trainAt` (m) on its rail (or stands within 1.5 m of it), at most `max`
+   * seconds (default 40). Ends at once in a fast-forward.
+   */
+  | { trainAt: number; max?: number }
+  /** v1.12: a named point in the cutscene (tests and screenshots read it as `#app[data-beat]`); does nothing else. */
+  | { beat: string };
+
+/** v1.12: how much of the frame a shot's target fills. */
+export type ShotSize = 'close' | 'medium' | 'wide';
+export const SHOT_SIZES: readonly ShotSize[] = ['close', 'medium', 'wide'];
+/** v1.12: how a camera move starts and ends ("inOut": slow, faster, slow). */
+export type Ease = 'linear' | 'in' | 'out' | 'inOut';
+export const EASES: readonly Ease[] = ['linear', 'in', 'out', 'inOut'];
+
+/**
+ * v1.12: what a shot frames: a figure brought on (its id) or a stage actor, "train" (the whole train), "car-0" … "car-2"
+ * (one car; 0 is the lead), "partner" (the partner in the cab), or a world point [x, y, z].
+ */
+export type ShotTarget = string | Vec3;
+
+/**
+ * v1.12 (えんしゅつ): a camera shot. The distance comes from the target's size (a close shot fills most of the frame
+ * with it, a medium one about half, a wide one a little), unless `distance` says. The camera never ends up inside
+ * anything between it and the target (it comes nearer instead), and keeps the fog's `reach` rule of a fixed camera.
+ */
+export interface ShotDef {
+  shot: ShotSize;
+  target: ShotTarget;
+  /** Degrees round the target from its front (+Z) towards its left (+X); default 30. With `world`, from world +Z. */
+  angle?: number;
+  /** Degrees above level the camera looks down from (-10 … 80); default by size (close 8, medium 16, wide 30). */
+  height?: number;
+  /** Where the target sits across the frame, -0.8 (left) … 0.8 (right); default 0 (the middle). */
+  side?: number;
+  /** Metres from the target, instead of working it out from its size (1 … 600). */
+  distance?: number;
+  /** `angle` is measured from world +Z (the target turning does not swing the camera round). */
+  world?: boolean;
+  /**
+   * Seconds the camera takes to move from the shot before (a dolly, or an orbit round the target), eased; 0 or left
+   * out: a hard cut. Waited for unless `nowait`.
+   */
+  seconds?: number;
+  ease?: Ease;
+  /** A slow push-in after the move: the distance shrinks by this part (0 … 0.6) over `hold` seconds. */
+  push?: number;
+  /** A slow drift round the target after the move, degrees over `hold` seconds (-180 … 180). */
+  orbit?: number;
+  /** Seconds the push-in and the drift take (default 8). */
+  hold?: number;
+  /** As a fixed camera's (1–4): how many times further than the stage fog it sees. Default: wide 2.5, else 1. */
+  reach?: number;
+  nowait?: boolean;
+}
+
+/**
+ * v1.12: a figure's motion, gentle and short (the models have no bones: the whole figure moves). "hop": little hops
+ * (`times`, default 2); "jump": one bigger hop; "nod": a little bow (`times`, default 2); "tilt": the head on one side
+ * ("?"); "cheer": bouncing and swaying ("ばんざい"); "wiggle": a quick side-to-side turn (`times`, default 3; a tail
+ * wagging); "wave": Sakasa raises her hand and sways ("amanojaku-wave", until another act; others sway side to side);
+ * "turn": turns to face `toward` over `seconds` (default 0.6; it stays so). `id` is a figure brought on, a stage actor,
+ * or "partner" (the partner in the cab: jump, tilt and cheer are its own emotes).
+ */
+export type ActKind = 'hop' | 'jump' | 'nod' | 'tilt' | 'cheer' | 'wiggle' | 'wave' | 'turn';
+export const ACT_KINDS: readonly ActKind[] = ['hop', 'jump', 'nod', 'tilt', 'cheer', 'wiggle', 'wave', 'turn'];
+export interface ActDef {
+  act: ActKind;
+  id: string;
+  times?: number;
+  seconds?: number;
+  /** "turn": what to face: a figure id, "train", "camera", or a world point. */
+  toward?: ShotTarget;
+  /** Go on at once (default for "wave"); otherwise the step waits until the motion is done. */
+  nowait?: boolean;
+}
+
+/**
+ * v1.12 (えんしゅつ): a movie (src/movies/<id>.json, a stage file with no missions): the cutscene `play` is played with
+ * the letterbox on, the controls hidden and the train running by itself; then the card. Opened with `?movie=<id>`
+ * (behind the かくにん lock) and from the game (src/movie/player.ts).
+ */
+export interface MovieDef {
+  play: string;
+  card: { title: string; button: string };
+}
 
 export interface GimmickDef {
   type: string;
@@ -1290,6 +1411,8 @@ export interface StageFile {
   cutscenes?: Record<string, CutsceneStep[]>;
   /** v1.10: things floating over surface rails, to dive under. */
   floaters?: FloaterDef[];
+  /** v1.12: this file is a movie (src/movies/), not a stage. */
+  movie?: MovieDef;
 }
 
 /**

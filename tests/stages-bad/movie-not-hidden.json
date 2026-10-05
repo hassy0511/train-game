@@ -1,0 +1,1 @@
+{"_expect": "a movie is hidden", "_base": "ending", "_edit": [{"path": "hidden", "value": false}]}

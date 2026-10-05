@@ -38,7 +38,7 @@ import {
   WINDUP,
 } from '../train/params';
 import { inArea, openWaterAt } from './water';
-import { AMBIENCE_KINDS, CAT_LOOKS, type JunctionDef, FLOATER_LOOKS, IRON_LOOKS, MAGNET_KINDS, MAGNET_LOOKS, WATER_LOOKS, type AmbienceKind, type CatLook, type FloaterLook, type IronLook, type MagnetKind, type MagnetLook, type MagnetTarget, type Placement, type StageFile, type WaterDef, type WaterLook } from './types';
+import { ACT_KINDS, EASES, SHOT_SIZES, AMBIENCE_KINDS, CAT_LOOKS, type JunctionDef, FLOATER_LOOKS, IRON_LOOKS, MAGNET_KINDS, MAGNET_LOOKS, WATER_LOOKS, type AmbienceKind, type CatLook, type FloaterLook, type IronLook, type MagnetKind, type MagnetLook, type MagnetTarget, type Placement, type StageFile, type WaterDef, type WaterLook } from './types';
 import { paradeSetup } from '../actors/parade';
 import { checkBubbleIcon, checkCrewDepartStep, checkLandmark, checkLeadShapes } from './validate-lead';
 
@@ -91,6 +91,39 @@ function checkPlacement(p: unknown, where: string, railIds: Set<string>): void {
   if (p.rotation !== undefined && !isVec3(p.rotation)) fail(`${where}: "rotation" must be [x, y, z] degrees`);
 }
 
+/** v1.12: the fastest a cutscene's `drive` may run (m/s; the lever's own top speed). */
+const DRIVE_MAX_SPEED = LEVER_NOTCHES[LEVER_NOTCHES.length - 1].speed;
+
+/** v1.12: where a figure riding in a car stands (the car's own metres: inside its body, vehicle_common.py). */
+function checkRide(r: unknown, where: string): void {
+  if (!isObject(r) || !isNumber(r.car) || !Number.isInteger(r.car) || !isVec3(r.at)) fail(`${where}: spawn "ride" needs "car" (0 = the lead car) and "at" [x, y, z]`);
+  if (r.car < 0 || r.car >= TRAIN.carCount) fail(`${where}: spawn "ride" car must be 0 to ${TRAIN.carCount - 1}`);
+  const [x, y, z] = r.at as number[];
+  if (Math.abs(x) > 1.35 || y < 0.9 || y > 2.2 || Math.abs(z) > TRAIN.length / 2 - 0.4) fail(`${where}: spawn "ride" at must be inside the car (|x| <= 1.35, y 0.9 to 2.2, |z| <= ${TRAIN.length / 2 - 0.4})`);
+}
+
+/** v1.12: a camera shot (ShotDef). */
+function checkShot(st: Record<string, unknown>, where: string): void {
+  if (!SHOT_SIZES.includes(st.shot as never)) fail(`${where}: shot must be one of ${SHOT_SIZES.join(', ')}`);
+  if (!(isString(st.target) || isVec3(st.target))) fail(`${where}: shot needs a "target" (a figure, "train", "car-0" to "car-2", "partner" or [x, y, z])`);
+  const range = (key: string, lo: number, hi: number): void => {
+    const v = st[key];
+    if (v !== undefined && !(isNumber(v) && v >= lo && v <= hi)) fail(`${where}: shot "${key}" must be ${lo} to ${hi}`);
+  };
+  range('angle', -360, 360);
+  range('height', -10, 80);
+  range('side', -0.8, 0.8);
+  range('distance', 1, 600);
+  range('seconds', 0, 20);
+  range('push', 0, 0.6);
+  range('orbit', -180, 180);
+  range('hold', 0.5, 30);
+  range('reach', 1, 4);
+  if (st.ease !== undefined && !EASES.includes(st.ease as never)) fail(`${where}: shot "ease" must be one of ${EASES.join(', ')}`);
+  for (const k of ['world', 'nowait']) if (st[k] !== undefined && typeof st[k] !== 'boolean') fail(`${where}: shot "${k}" must be true or false`);
+  if (Array.isArray(st.target) && st.distance === undefined) fail(`${where}: a shot of a point [x, y, z] needs "distance"`);
+}
+
 function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): void {
   if (!isObject(st)) fail(`${where}: must be an object`);
   const onRailOk = (r: unknown): boolean =>
@@ -115,14 +148,23 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
     // v1.11 (5-3) "ride"; (6-1) "hand-stop", "run-swirl".
     checkBubbleIcon(st.icon, where);
   } else if ('spawn' in st) {
-    if (!isString(st.spawn) || !isString(st.model) || !MODEL_NAME.test(st.model) || !onRailOk(st.onRail)) {
-      fail(`${where}: spawn needs id, model and onRail`);
-    }
+    if (!isString(st.spawn) || !isString(st.model) || !MODEL_NAME.test(st.model)) fail(`${where}: spawn needs id, model and onRail`);
+    // v1.12: or a world place ("position"), or riding in a car ("ride").
+    const places = ['onRail', 'position', 'ride'].filter((k) => st[k] !== undefined);
+    if (places.length !== 1) fail(`${where}: spawn needs id, model and onRail (or v1.12 "position" or "ride": exactly one)`);
+    if (st.onRail !== undefined && !onRailOk(st.onRail)) fail(`${where}: spawn needs id, model and onRail`);
+    if (st.position !== undefined && !isVec3(st.position)) fail(`${where}: spawn "position" must be [x, y, z]`);
+    if (st.ride !== undefined) checkRide(st.ride, where);
+    if (st.scale !== undefined && !(isNumber(st.scale) && st.scale >= 0.1 && st.scale <= 5)) fail(`${where}: spawn "scale" must be 0.1 to 5`);
     if (st.rotationY !== undefined && !isNumber(st.rotationY)) fail(`${where}: "rotationY" must be a number`);
     if (st.mirror !== undefined && st.mirror !== 'only' && st.mirror !== 'hide') fail(`${where}: spawn "mirror" must be "only" or "hide"`);
   } else if ('move' in st) {
-    if (!isString(st.move) || !onRailOk(st.onRail) || !isNumber(st.seconds)) fail(`${where}: move needs id, onRail, seconds`);
+    if (!isString(st.move) || !isNumber(st.seconds)) fail(`${where}: move needs id, onRail, seconds`);
+    if ((st.onRail === undefined) === (st.position === undefined)) fail(`${where}: move needs id, onRail, seconds (or v1.12 "position" instead of onRail: exactly one)`);
+    if (st.onRail !== undefined && !onRailOk(st.onRail)) fail(`${where}: move needs id, onRail, seconds`);
+    if (st.position !== undefined && !isVec3(st.position)) fail(`${where}: move "position" must be [x, y, z]`);
     if (st.nowait !== undefined && typeof st.nowait !== 'boolean') fail(`${where}: "nowait" must be true or false`);
+    for (const k of ['bob', 'face']) if (st[k] !== undefined && typeof st[k] !== 'boolean') fail(`${where}: move "${k}" must be true or false`);
   } else if ('remove' in st) {
     if (!isString(st.remove)) fail(`${where}: "remove" must be an actor id`);
   } else if ('wait' in st) {
@@ -175,6 +217,34 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
   } else if ('crew' in st || 'depart' in st) {
     // v1.11 (6-1): friends ride along; the train rolls off.
     checkCrewDepartStep(st, where);
+  } else if ('shot' in st) {
+    checkShot(st, where);
+  } else if ('act' in st) {
+    // v1.12: a figure's little motion.
+    if (!ACT_KINDS.includes(st.act as never)) fail(`${where}: act must be one of ${ACT_KINDS.join(', ')}`);
+    if (!isString(st.id)) fail(`${where}: act needs "id" (a figure, a stage actor or "partner")`);
+    if (st.times !== undefined && !(isNumber(st.times) && Number.isInteger(st.times) && st.times >= 1 && st.times <= 8)) fail(`${where}: act "times" must be 1 to 8`);
+    if (st.times !== undefined && (st.act === 'wave' || st.act === 'turn')) fail(`${where}: act "${st.act}" takes no "times"`);
+    if (st.seconds !== undefined && (st.act !== 'turn' || !(isNumber(st.seconds) && st.seconds > 0 && st.seconds <= 5))) fail(`${where}: only act "turn" takes "seconds" (0 to 5)`);
+    if (st.act === 'turn' && st.toward === undefined) fail(`${where}: act "turn" needs "toward" (a figure, "train", "camera" or [x, y, z])`);
+    if (st.toward !== undefined && (st.act !== 'turn' || !(isString(st.toward) || isVec3(st.toward)))) fail(`${where}: only act "turn" takes "toward" (a figure, "train", "camera" or [x, y, z])`);
+    if (st.nowait !== undefined && typeof st.nowait !== 'boolean') fail(`${where}: "nowait" must be true or false`);
+  } else if ('letterbox' in st) {
+    if (typeof st.letterbox !== 'boolean') fail(`${where}: "letterbox" must be true or false`);
+  } else if ('fade' in st) {
+    if (st.fade !== 'in' && st.fade !== 'out') fail(`${where}: fade must be "in" or "out"`);
+    if (st.seconds !== undefined && !(isNumber(st.seconds) && st.seconds >= 0 && st.seconds <= 10)) fail(`${where}: fade "seconds" must be 0 to 10`);
+  } else if ('drive' in st) {
+    // v1.12: the train runs by itself.
+    const d = st.drive;
+    if (!isObject(d) || (d.speed === undefined && d.stopAt === undefined)) fail(`${where}: drive needs "speed" (m/s) or "stopAt" (m)`);
+    if (d.speed !== undefined && !(isNumber(d.speed) && d.speed >= 0 && d.speed <= DRIVE_MAX_SPEED)) fail(`${where}: drive "speed" must be 0 to ${DRIVE_MAX_SPEED} m/s`);
+    if (d.stopAt !== undefined && !(isNumber(d.stopAt) && d.stopAt >= 0)) fail(`${where}: drive "stopAt" must be a place on the rail (m)`);
+  } else if ('trainAt' in st) {
+    if (!(isNumber(st.trainAt) && st.trainAt >= 0)) fail(`${where}: "trainAt" must be a place on the rail (m)`);
+    if (st.max !== undefined && !(isNumber(st.max) && st.max > 0 && st.max <= 120)) fail(`${where}: trainAt "max" must be 0 to 120 s`);
+  } else if ('beat' in st) {
+    if (!isString(st.beat) || !/^[a-z0-9-]+$/.test(st.beat)) fail(`${where}: "beat" must be a name (a-z, 0-9, -)`);
   } else {
     fail(`${where}: unknown step`);
   }
@@ -592,9 +662,33 @@ export function validateStageFile(raw: unknown): StageFile {
       // v1.11 (5-2): a press that winds (fx "windup") winds a figure this cutscene brought on before it (and has not
       // taken off yet), a reverse-wound one ("-back").
       const on = new Map<string, string>();
+      // v1.12: the figures riding in a car (they move with it, never by a "move").
+      const riding = new Set<string>();
+      const actorIds = new Set((raw.actors as Record<string, unknown>[]).map((a) => String(a.id)));
+      const known = (id: string): boolean => on.has(id) || actorIds.has(id) || id === 'partner';
+      const target = (t: unknown, what: string, i: number): void => {
+        if (!isString(t)) return;
+        if (t === 'train' || /^car-[0-9]$/.test(t)) {
+          if (t !== 'train' && Number(t.slice(4)) >= TRAIN.carCount) fail(`cutscene "${id}" step ${i}: ${what} "${t}": the train has cars 0 to ${TRAIN.carCount - 1}`);
+          return;
+        }
+        if (what === 'turn toward' && t === 'camera') return;
+        if (!known(t)) fail(`cutscene "${id}" step ${i}: ${what} "${t}" must be a figure brought on (spawn) before it, a stage actor, "partner", "train" or "car-<n>"`);
+      };
       steps.forEach((st: Record<string, unknown>, i) => {
         if (isString(st.spawn) && isString(st.model)) on.set(st.spawn, st.model);
+        if (isString(st.spawn)) {
+          if (st.ride !== undefined) riding.add(st.spawn);
+          else riding.delete(st.spawn);
+        }
         if (isString(st.remove)) on.delete(st.remove);
+        if ('shot' in st) target(st.target, 'shot target', i);
+        if ('act' in st && isString(st.id)) {
+          target(st.id, 'act id', i);
+          if (st.id === 'train' || /^car-/.test(st.id)) fail(`cutscene "${id}" step ${i}: act id "${st.id}" must be a figure, a stage actor or "partner"`);
+          if (st.act === 'turn') target(st.toward, 'turn toward', i);
+        }
+        if (isString(st.move) && riding.has(st.move)) fail(`cutscene "${id}" step ${i}: move "${st.move}": a figure riding in a car moves with it (bring it on again instead)`);
         // v1.11 (PR5): a press "magnet" pulls a figure this cutscene brought on (and has not taken off yet).
         if ('press' in st && st.press === 'magnet' && !on.has(String(st.target))) fail(`cutscene "${id}" step ${i}: press "magnet" target "${String(st.target)}" must be a figure brought on (spawn) before it`);
         if ('press' in st && st.fx === 'windup') {
@@ -637,6 +731,15 @@ export function validateStageFile(raw: unknown): StageFile {
   for (const key of ['opening', 'ending'] as const) {
     const id = raw[key];
     if (id !== undefined && (!isString(id) || !cutsceneIds.has(id))) fail(`"${key}" must name a cutscene`);
+  }
+  // v1.12 (えんしゅつ): a movie (src/movies/): the cutscene it plays and its last card; no missions, hidden.
+  if (raw.movie !== undefined) {
+    const m = raw.movie;
+    if (!isObject(m) || !isString(m.play) || !cutsceneIds.has(m.play)) fail('"movie.play" must name a cutscene');
+    const card = (m as Record<string, unknown>).card;
+    if (!isObject(card) || !isString(card.title) || !isString(card.button)) fail('"movie.card" needs "title" and "button"');
+    if (requireArray(raw, 'missions').length > 0) fail('a movie has no missions');
+    if (raw.hidden !== true || raw.chapter !== 0) fail('a movie is hidden: "chapter" 0 and "hidden" true');
   }
 
   for (const m of requireArray(raw, 'missions')) {
@@ -685,7 +788,7 @@ export function validateStageFile(raw: unknown): StageFile {
     if (!isObject(g) || !isString(g.type)) fail(`gimmicks[${i}]: "type" is required`);
     // v1.11 (PR8a, 第 3 部 A8.6): the first plan's reversing point is not made.
     if (g.type === 'reverse') fail(`gimmicks[${i}]: "reverse" is not used any more (reversing works anywhere; a back siding is junctions[].back)`);
-    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound', 'ice', 'thin-ice', 'tunnel', 'hush', 'whistle-reversed'];
+    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound', 'ice', 'thin-ice', 'tunnel', 'hush', 'whistle-reversed', 'rainbow'];
     if (zoned.includes(g.type)) {
       if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`gimmicks[${i}] ${g.type}: needs a known railId and "from"`);
       if (g.type !== 'jump-pad' && (!isNumber(g.to) || (g.to as number) <= (g.from as number))) fail(`gimmicks[${i}] ${g.type}: needs "to" after "from"`);

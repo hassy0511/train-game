@@ -20,7 +20,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SPECS = 'tests/smoke';
 const FULL_RUN = /^stage-(\d+-\d+)-full\.spec\.ts$/;
 /** Quick specs that run several drives (weights for the shards; a stage's full run weighs 10). */
-const SLOW_QUICK = { 'night.spec.ts': 4, 'toy.spec.ts': 3, 'magnet.spec.ts': 3, 'mirror-world.spec.ts': 4 };
+const SLOW_QUICK = { 'night.spec.ts': 4, 'toy.spec.ts': 3, 'magnet.spec.ts': 3, 'mirror-world.spec.ts': 4, 'movie.spec.ts': 5 };
 
 const allSpecs = () =>
   readdirSync(resolve(root, SPECS))
@@ -78,6 +78,8 @@ function stageOf(file) {
 function shared(file) {
   if (stageOf(file)) return false;
   if (file.startsWith('src/viewer/')) return false; // the model page only
+  // v1.12: a movie's own file (its layout script, its JSON) is no stage's: movie.spec.ts (always run) covers it.
+  if (file.startsWith('src/movies/') || file === 'scripts/layout-ending.mjs') return false;
   return (
     file.startsWith('src/') ||
     file.startsWith('public/models/') ||

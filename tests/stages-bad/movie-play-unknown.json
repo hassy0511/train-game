@@ -1,0 +1,1 @@
+{"_expect": "\"movie.play\" must name a cutscene", "_base": "ending", "_edit": [{"path": "movie.play", "value": "nothing"}]}

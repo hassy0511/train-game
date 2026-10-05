@@ -41,8 +41,9 @@ for (const [name, spec] of Object.entries(manifest)) {
   for (const problem of analyse(path)) errors.push(`${name}: ${problem}`);
 }
 
-for (const file of readdirSync('src/stages').filter((f) => f.endsWith('.json'))) {
-  const text = readFileSync(`src/stages/${file}`, 'utf8');
+// The stages and (v1.12) the movies.
+for (const file of ['src/stages', 'src/movies'].flatMap((dir) => readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => `${dir}/${f}`))) {
+  const text = readFileSync(file, 'utf8');
   for (const [, model] of text.matchAll(/"model":\s*"([^"]+)"/g)) {
     if (!glbs.includes(model) && !pending.has(model)) errors.push(`${file}: model "${model}" has no GLB`);
   }

@@ -1,0 +1,1 @@
+{"_expect": "spawn \"scale\" must be 0.1 to 5", "_base": "1-1", "_edit": [{"path": "cutscenes.opening.0", "value": {"spawn": "x", "model": "amanojaku", "position": [0, 0, 0], "scale": 9}}]}

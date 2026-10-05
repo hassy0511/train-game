@@ -1,0 +1,1 @@
+{"_expect": "fade must be \"in\" or \"out\"", "_base": "1-1", "_edit": [{"path": "cutscenes.opening.0", "value": {"fade": "up"}}]}
