@@ -762,3 +762,8 @@ export const DEPART = { maxSpeed: 8, accel: 1.5, brake: 2 } as const;
  * out over `fade` m nearer than that.
  */
 export const LANDMARK = { near: 600, fade: 100 } as const;
+/**
+ * v1.11 (6-1 さかさまのしろ, PR9): the clock tower's hands (src/view/three/castle.ts): their pivot on the dial in the
+ * tower's own frame (the dial faces −X) and the seconds a round takes, backwards.
+ */
+export const CASTLE = { dial: [-3.95, 12.5, 0] as [number, number, number], clockSeconds: 60 } as const;

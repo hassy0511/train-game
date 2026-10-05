@@ -48,6 +48,11 @@ export interface WorldChapter {
   page: number;
   title: string;
   /**
+   * v1.11 (PR9): how many stages the chapter will have. Until the world has that many of its islands the chapter is not
+   * done (no ★ on the title, no end): chapter 6 has 6-1 only until 6-2 comes.
+   */
+  count?: number;
+  /**
    * Shown once, the first time the map draws `link` (docs/PHASE7_FINISH.md §3). Without a link, the first time
    * the map opens with the chapter done; then "finale:<id>" in the save's mapLinks marks it seen.
    */
@@ -95,6 +100,8 @@ export interface WorldIsland {
   /** Centre in % of the map area, from the left and from the top. */
   x: number;
   y: number;
+  /** v1.11: the island's width, × 25 % of the map (default 1; the castle 6-1 is 1.2). 0.8–1.4. */
+  size?: number;
   /** What the island picture (public/map/<id>.png) shows; see scripts/render-map.mjs. */
   diorama?: WorldDiorama;
 }

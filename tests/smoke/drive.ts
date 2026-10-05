@@ -484,3 +484,25 @@ export async function pressWhen(page: Page, id: string, cond: string, timeoutMs 
   );
   expect(await pressed.jsonValue()).toBe(true);
 }
+
+/** v1.11 (PR9): the lever to "とまる" and waits until the train stands. */
+export async function standStill(page: Page, timeoutMs = 60_000): Promise<void> {
+  await setNotch(page, STOP);
+  await page.waitForFunction(() => Number(document.getElementById('app')?.dataset.speed) < 0.05, null, { timeout: timeoutMs });
+}
+
+/**
+ * v1.11 (PR9, PHASE9_CHAPTER5_6 第 3 部 A16): the record at the end of a back siding (1-3, 5-3, 6-1). The train stands
+ * with its whole length past the siding's mouth and the switch glowing: "うしろ", the lever to ふつう, the back arrow
+ * `side` into `siding`, back to its buffer ("こつん"), `record` found on the way. It is left standing at the buffer.
+ */
+export async function reverseIntoSiding(page: Page, side: 'left' | 'right', siding: string, record: string): Promise<void> {
+  const app = page.locator('#app');
+  await expect(page.locator('#reverse-switch')).toHaveAttribute('data-glow', '1', { timeout: 30_000 });
+  await setDirection(page, 'back');
+  await setNotch(page, NORMAL);
+  await backArrow(page, side);
+  await expect(app).toHaveAttribute('data-tail-rail', siding, { timeout: 120_000 });
+  await waitReverseStop(page, 'buffer');
+  await expect.poll(async () => (await progress(page)).records ?? [], { timeout: 30_000 }).toContain(record);
+}

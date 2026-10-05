@@ -11,6 +11,9 @@ import {
   lightOnGlow,
   lightTo,
   NORMAL,
+  reverseIntoSiding,
+  setDirection,
+  standStill,
   pressOnGlow,
   pressOnGlowBefore,
   progress,
@@ -473,11 +476,16 @@ test('stage 5-3 full run: the magnet light learned, the mirror world, phantoms, 
   await expect(map).toBeVisible({ timeout: 30_000 });
   await expect(map).toHaveAttribute('data-page', '3', { timeout: 20_000 });
   await expect(map).toHaveAttribute('data-light', 'firefly', { timeout: 20_000 });
-  await expect(map).toHaveAttribute('data-trail', '5-1,5-2,5-3,teaser:6', { timeout: 30_000 });
+  // v1.11 (PR9): the big light lands on the castle (6-1), which wakes: its windows light up.
+  await expect(map).toHaveAttribute('data-trail', '5-1,5-2,5-3,6-1', { timeout: 30_000 });
+  await expect(map).toHaveAttribute('data-windows', '6-1', { timeout: 20_000 });
+  await expect(page.locator('.map-island[data-island="6-1"] .map-window')).toHaveCount(4);
   await card(page, '5しょう クリア！');
   await expect(map).toHaveAttribute('data-finale', 'done', { timeout: 20_000 });
-  await expect(page.locator('.map-island[data-island="teaser:6"]')).toHaveClass(/is-next/);
-  expect((await progress(page)).mapLinks).toContain('finale:5');
+  // Then the new rail 5-3 → 6-1 grows and the castle hops: where the story goes next.
+  await expect(page.locator('.map-island[data-island="6-1"]')).toHaveClass(/is-next/, { timeout: 20_000 });
+  await expect(page.locator('.map-island[data-island="teaser:6"]')).toHaveCount(0);
+  expect((await progress(page)).mapLinks).toEqual(expect.arrayContaining(['finale:5', '5-3>6-1']));
   const island = page.locator('.map-island[data-island="5-3"]');
   await expect(island).toHaveClass(/is-cleared/, { timeout: 30_000 });
   await expect(island.locator('.map-badge')).toHaveText('きろく 2/3 ？');
@@ -518,5 +526,50 @@ test('stage 5-3 つづき: M2 with the rail joined and the light off; M3 with th
     // M3 starts at めいろえき, 150 m before the whistle gate: shut.
     else await expect(app).toHaveAttribute('data-flip-gate', 'shut', { timeout: 10_000 });
   }
+  expect(errors).toEqual([]);
+});
+
+test('stage 5-3 with うしろむき (6-1 learned): M3 from つづき, the back siding behind the mirror and record ③', async ({ page }) => {
+  test.setTimeout(900_000);
+  const errors = watchErrors(page);
+  const app = page.locator('#app');
+  const lines = await recordLines(page);
+  await seedSave(page, { abilities: [...SIX, 'magnetLight', 'reverse'], records: ['kagami-kanban', 'hand-mirror'], resume: { stage: '5-3', mission: 2 } });
+  await page.goto('/?stage=5-3&go=1&resume=1');
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  await card(page, 'ミッション 3');
+  await waitDriving(page);
+  await expect(page.locator('#reverse-switch')).toBeVisible();
+  await setNotch(page, NORMAL);
+  // The whistle gate on its glow, the star inside in the magnet step, the phantom bridge jumped at はやい, the
+  // turned-away mirror pulled round (still the magnet step): as in the full run.
+  await pressOnGlow(page, 'whistle');
+  await expect(app).toHaveAttribute('data-flip', '1', { timeout: 60_000 });
+  await lightOnGlow(page, 'magnet', 'main', 2500);
+  await waitFront(page, 'main', FLIP2.to + 10);
+  await setNotch(page, FAST);
+  await pressOnGlowBefore(page, 'jump', 'main', GAP.from);
+  await waitFront(page, 'main', GAP.to + 20);
+  await setNotch(page, NORMAL);
+  await expect(app).toHaveAttribute('data-magnet-kurutto', 'open', { timeout: 120_000 });
+  await waitFront(page, 'main', J3 + 20);
+  await expect(app).toHaveAttribute('data-rail', 'main');
+  // Past the back junction at main 3250 with the whole train (front end 3288): the switch glows, the partner says so.
+  await waitFront(page, 'main', 3292);
+  await standStill(page);
+  await expect.poll(lines, { timeout: 30_000 }).toContain('かがみの うしろに みちが ある！');
+  // Reversing: the arrows (left, as seen from the rear window) into the glass siding; record ③ on the way.
+  await reverseIntoSiding(page, 'left', 'ura', 'sakasa-doodle');
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: resolve(OUT, '5-3-ura.png') });
+  // Forward again, out of the siding, on to おおかがみえき.
+  await setDirection(page, 'front');
+  await setNotch(page, NORMAL);
+  await expect(app).toHaveAttribute('data-rail', 'main', { timeout: 60_000 });
+  await stopAt(page, 'main', OOGAGAMI);
+  await doors(page);
+  await card(page, 'できた');
+  expect((await progress(page)).records).toEqual(expect.arrayContaining(['kagami-kanban', 'hand-mirror', 'sakasa-doodle']));
+  expect(await app.getAttribute('data-fails')).toBeNull();
   expect(errors).toEqual([]);
 });

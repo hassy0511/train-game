@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * The picture book from the title (docs/PHASE7_FINISH.md §4 item 2), from a prepared save: one row per island,
- * 「みつけた n/45」, the pictures of found records, "?" cards with the grey picture of the ability they still need,
+ * 「みつけた n/48」, the pictures of found records, "?" cards with the grey picture of the ability they still need,
  * and 「とじる」 in sight at the bottom however far down the child has scrolled.
  */
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), 'output');
@@ -73,8 +73,8 @@ test('picture book: rows per island, count, pictures, grey ability pictures, clo
     mapLinks: CHAIN,
   });
   await openZukan(page);
-  await expect(page.locator('#zukan-count')).toHaveText('みつけた 6/45');
-  await expect(page.locator('.zukan-row')).toHaveCount(15);
+  await expect(page.locator('#zukan-count')).toHaveText('みつけた 6/48');
+  await expect(page.locator('.zukan-row')).toHaveCount(16);
   await expect(page.locator('.zukan-row[data-stage="1-1"] .zukan-row-count')).toHaveText('2/3');
   await expect(page.locator('.zukan-card.is-found')).toHaveCount(6);
   // Needs the rocket (not learned): grey rocket picture. The balloon needs the jump, which the child has: plain "?".
@@ -109,6 +109,10 @@ test('picture book: rows per island, count, pictures, grey ability pictures, clo
   await expect(page.locator('.zukan-card[data-record="hand-mirror"] .zukan-later[data-ability="magnetLight"] svg')).toHaveCount(1);
   await expect(page.locator('.zukan-card[data-record="sakasa-doodle"] .zukan-later[data-ability="reverse"] svg')).toHaveCount(1);
   await expect(page.locator('.zukan-card[data-record="kagami-kanban"] .zukan-later')).toHaveCount(0);
+  // v1.11 (PR9) 6-1: record ③ the book waits for "うしろむき"; ① the raindrop needs the jump (had), ② the top the magnet.
+  await expect(page.locator('.zukan-card[data-record="backward-book"] .zukan-later[data-ability="reverse"] svg')).toHaveCount(1);
+  await expect(page.locator('.zukan-card[data-record="up-raindrop"] .zukan-later')).toHaveCount(0);
+  await expect(page.locator('.zukan-card[data-record="upside-top"] .zukan-later[data-ability="magnetLight"]')).toHaveCount(1);
   // The book is taller than the screen; 「とじる」 is in sight before any scrolling.
   const tall = await page.locator('#zukan').evaluate((e) => e.scrollHeight > e.clientHeight);
   expect(tall).toBe(true);
@@ -138,7 +142,7 @@ test('picture book with the rocket: the rocket "?" loses its grey picture, a fou
     mapLinks: [...CHAIN, '2-1>2-2', '2-2>2-3'],
   });
   await openZukan(page);
-  await expect(page.locator('#zukan-count')).toHaveText('みつけた 2/45');
+  await expect(page.locator('#zukan-count')).toHaveText('みつけた 2/48');
   await expect(page.locator('.zukan-card[data-record="treetop"] .zukan-later')).toHaveCount(0);
   await expect(page.locator('.zukan-card[data-record="treetop"] .zukan-mark')).toHaveText('？');
   await expect(page.locator('.zukan-card[data-record="cliff-nest"] .zukan-name')).toHaveText('がけの うえの す');
@@ -161,7 +165,7 @@ test('picture book with the magnet light (5-3 on): the seven magnet "?" lose the
     mapLinks: [...CHAIN, '2-1>2-2', '2-2>2-3', '2-3>1-1', '1-1>3-1', '3-1>3-2', '3-2>3-3', '3-3>4-1', '4-1>4-2', '4-2>4-3', '4-3>5-1', '5-1>5-2', '5-2>5-3', 'finale:4'],
   });
   await openZukan(page);
-  await expect(page.locator('#zukan-count')).toHaveText('みつけた 1/45');
+  await expect(page.locator('#zukan-count')).toHaveText('みつけた 1/48');
   for (const id of ['iron-star', 'festival-bell', 'tin-shovel', 'sleigh-bell', 'lantern-bell', 'tin-key', 'hand-mirror']) {
     await expect(page.locator(`.zukan-card[data-record="${id}"] .zukan-mark`), id).toHaveText('？');
     await expect(page.locator(`.zukan-card[data-record="${id}"] .zukan-later`), id).toHaveCount(0);
@@ -173,6 +177,28 @@ test('picture book with the magnet light (5-3 on): the seven magnet "?" lose the
   await page.locator('.zukan-row[data-stage="5-3"]').scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
   await page.screenshot({ path: resolve(OUT, 'zukan-4-magnet.png') });
+  await closeInSight(page);
+  expect(errors).toEqual([]);
+});
+
+test('picture book with うしろむき (6-1 cleared): the three うしろむき "?" lose their grey picture; a found one shows its picture', async ({ page }) => {
+  const errors = watchErrors(page);
+  await seed(page, {
+    cleared: ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', '3-1', '3-2', '3-3', '4-1', '4-2', '4-3', '5-1', '5-2', '5-3', '6-1'],
+    abilities: ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'magnetLight', 'reverse'],
+    records: ['backward-book'],
+    mapLinks: [...CHAIN, '2-1>2-2', '2-2>2-3', '2-3>1-1', '1-1>3-1', '3-1>3-2', '3-2>3-3', '3-3>4-1', '4-1>4-2', '4-2>4-3', '4-3>5-1', '5-1>5-2', '5-2>5-3', '5-3>6-1', 'finale:4', 'finale:5'],
+  });
+  await openZukan(page);
+  await expect(page.locator('#zukan-count')).toHaveText('みつけた 1/48');
+  for (const id of ['upside-island', 'sakasa-doodle']) {
+    await expect(page.locator(`.zukan-card[data-record="${id}"] .zukan-mark`), id).toHaveText('？');
+    await expect(page.locator(`.zukan-card[data-record="${id}"] .zukan-later`), id).toHaveCount(0);
+  }
+  expect(await pictureWidth(page, 'backward-book')).toBe(256);
+  await page.locator('.zukan-row[data-stage="6-1"]').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: resolve(OUT, 'zukan-5-reverse.png') });
   await closeInSight(page);
   expect(errors).toEqual([]);
 });

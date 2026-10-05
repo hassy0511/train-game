@@ -585,4 +585,59 @@ export const SONGS: Record<string, Song> = {
       { voice: 'wood', gain: 0.3, notes: mirrored('G3:2 -:2 D4:2 -:2 | E3:2 -:2 B3:2 -:2 | C4:2 -:2 G3:2 -:2 | D4:2 -:2 A3:2 -:2 | G3:2 -:2 D4:2 -:2 | G3:2 -:2 B3:2 -:2 | D4:2 -:2 A3:2 -:2 | G3:2 -:2 D4:2 -:2') },
     ],
   },
+
+  // v1.11 (6-1 さかさまのしろ): playful 6/8 in D major (bassoon-ish hopping bass, clarinet-ish lead). Not a castle organ
+  // toccata, not a theme park's castle tune (PHASE9_CHAPTER5_6 第 1 部 §8.1).
+  shiro: {
+    id: 'shiro',
+    title: 'さかさまの おしろ',
+    bpm: 72,
+    stepsPerBeat: 3,
+    tracks: [
+      {
+        voice: 'lead',
+        notes:
+          'A4:2 F#4:1 D5:2 A4:1 | F#5:3 E5:1 D5:1 C#5:1 | B4:2 D5:1 G5:2 B4:1 | A4:2 C#5:1 E5:3 | ' +
+          'D5:2 F#5:1 A5:2 F#5:1 | B5:3 A5:1 F#5:1 D5:1 | E5:2 G5:1 B5:2 G5:1 | A5:3 -:1 C#5:1 E5:1 | ' +
+          'D5:1 B4:1 G4:1 B4:1 D5:1 G5:1 | E5:1 C#5:1 A4:1 C#5:1 E5:1 A5:1 | F#5:2 E5:1 C#5:2 A4:1 | B4:3 D5:1 F#5:1 B5:1 | ' +
+          'G5:2 F#5:1 E5:2 D5:1 | C#5:2 E5:1 A5:2 G5:1 | F#5:2 A5:1 D6:2 A5:1 | D5:3 -:3',
+      },
+      {
+        voice: 'bell',
+        gain: 0.4,
+        notes:
+          'D6:3 -:3 | -:6 | B5:3 -:3 | -:6 | F#6:3 -:3 | -:6 | G6:3 -:3 | -:6 | ' +
+          'D6:3 -:3 | -:6 | C#6:3 -:3 | -:6 | B5:3 -:3 | -:6 | A6:3 -:3 | D6:3 -:3',
+      },
+      {
+        voice: 'bass',
+        gain: 0.8,
+        notes:
+          'D2:1 -:1 A2:1 D3:1 -:1 A2:1 | D2:1 -:1 A2:1 D3:1 -:1 A2:1 | G2:1 -:1 D3:1 G3:1 -:1 D3:1 | A2:1 -:1 E3:1 A3:1 -:1 E3:1 | ' +
+          'D2:1 -:1 A2:1 D3:1 -:1 A2:1 | B2:1 -:1 F#3:1 B3:1 -:1 F#3:1 | E2:1 -:1 B2:1 E3:1 -:1 B2:1 | A2:1 -:1 E3:1 A3:1 -:1 E3:1 | ' +
+          'G2:1 -:1 D3:1 G3:1 -:1 D3:1 | A2:1 -:1 E3:1 A3:1 -:1 E3:1 | F#2:1 -:1 C#3:1 F#3:1 -:1 C#3:1 | B2:1 -:1 F#3:1 B3:1 -:1 F#3:1 | ' +
+          'G2:1 -:1 D3:1 G3:1 -:1 D3:1 | A2:1 -:1 E3:1 A3:1 -:1 E3:1 | D2:1 -:1 A2:1 D3:1 -:1 A2:1 | D2:3 -:3',
+      },
+      {
+        voice: 'pad',
+        gain: 0.35,
+        notes: 'F#4:6 | F#4:6 | G4:6 | E4:6 | F#4:6 | F#4:6 | G4:6 | E4:6 | G4:6 | E4:6 | F#4:6 | F#4:6 | G4:6 | E4:6 | F#4:6 | F#4:6',
+      },
+      { voice: 'drums', gain: 0.5, notes: `${repeat('k:1 -:1 h:1 k:1 h:1 -:1', 15)} | k:1 -:5` },
+    ],
+  },
+  // v1.11 (6-1 M2): おいかけっこ, a game of tag: bright 2/4 in F major. Not the can-can, not a famous chase sax tune, not
+  // "the flight of the bumblebee"; not 'hurry' either (play, not a race against time).
+  oikake: {
+    id: 'oikake',
+    title: 'まてまて〜',
+    bpm: 152,
+    stepsPerBeat: 2,
+    tracks: [
+      { voice: 'lead', notes: 'C5:1 F5:1 A5:1 F5:1 | G5:1 E5:1 C5:2 | D5:1 F5:1 Bb5:1 F5:1 | A5:1 G5:1 F5:1 E5:1 | F5:1 A5:1 C6:1 A5:1 | D6:1 C6:1 A5:2 | Bb5:1 G5:1 E5:1 G5:1 | F5:2 -:2' },
+      { voice: 'wood', gain: 0.45, notes: 'F4:1 A4:1 C5:1 A4:1 | E4:1 G4:1 C5:1 G4:1 | F4:1 Bb4:1 D5:1 Bb4:1 | E4:1 G4:1 C5:1 G4:1 | F4:1 A4:1 C5:1 A4:1 | F4:1 A4:1 D5:1 A4:1 | G4:1 Bb4:1 C5:1 Bb4:1 | F4:1 A4:1 C5:1 -:1' },
+      { voice: 'bass', gain: 0.8, notes: 'F2:1 -:1 C3:1 -:1 | C2:1 -:1 G2:1 -:1 | Bb1:1 -:1 F2:1 -:1 | C2:1 -:1 G2:1 -:1 | F2:1 -:1 C3:1 -:1 | D2:1 -:1 A2:1 -:1 | C2:1 -:1 G2:1 -:1 | F2:1 -:1 F2:1 -:1' },
+      { voice: 'drums', gain: 0.55, notes: repeat('k:1 h:1 s:1 h:1', 8) },
+    ],
+  },
 };

@@ -34,6 +34,7 @@ import { PlowGimmicks } from './plow';
 import { VillageGimmicks } from './village';
 import { NightGimmicks } from './night';
 import { ToyGimmicks } from './toy';
+import { CastleGimmicks } from './castle';
 import { MagnetGimmicks } from './magnet';
 import { IronPropsView } from './iron-props';
 import { MirrorWorldGimmicks, trainFrontOf } from './mirror-world';
@@ -131,6 +132,8 @@ export class ThreeSceneView implements SceneView {
   private night: NightGimmicks | null = null;
   /** v1.11 (5-2): the toy band, the spinning forks' flags, the wound decorations, the slide, the ball pit's balls. */
   private toy: ToyGimmicks | null = null;
+  /** v1.11 (6-1): the upside-down town's clock hands. */
+  private castle: CastleGimmicks | null = null;
   /** v1.11 (PR5): the magnet light's targets, rings and flights, and the iron odds and ends (null without them). */
   private magnet: MagnetGimmicks | null = null;
   private iron: IronPropsView | null = null;
@@ -294,6 +297,10 @@ export class ThreeSceneView implements SceneView {
       this.toy = new ToyGimmicks(stage, this.train);
       this.scene.add(this.toy.group);
     }
+    if (CastleGimmicks.wanted(stage)) {
+      this.castle = new CastleGimmicks(stage);
+      this.scene.add(this.castle.group);
+    }
     // v1.11 (PR5): the magnet light's targets (a gap's piece is built like the track round it) and the odds and ends.
     if (MagnetGimmicks.wanted(stage)) {
       this.magnet = new MagnetGimmicks(stage, this.train, this.actors, this.lightBeam, (railId, from, to) => {
@@ -345,6 +352,7 @@ export class ThreeSceneView implements SceneView {
       this.plow.init(this.models),
       this.night?.init(this.models),
       this.toy?.init(this.models),
+      this.castle?.init(this.models),
       this.mirrorWorld?.init(this.models),
     ]);
     this.setLandmark(stage.file.environment);
@@ -784,6 +792,7 @@ export class ThreeSceneView implements SceneView {
     this.village?.update(dt);
     this.night?.update(dt);
     this.toy?.update(dt);
+    this.castle?.update(dt);
     this.lead?.update(dt);
     this.landmark?.update(this.camera);
     if (this.magnet) {

@@ -201,9 +201,9 @@ test('before chapter 2 is done: page 1 alone, as it always was', async ({ page }
   const errors = watchErrors(page);
   await seed(page, { cleared: [...CH1, '2-1'], abilities: ABILITIES, mapLinks: RING.slice(0, 4) });
   await toTitle(page);
-  // Stars: chapters 3, 4 and 5 are there, faint (their first island is not open).
-  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ☆\s*3しょう ☆\s*4しょう ☆\s*5しょう ☆/);
-  await expect(page.locator('.title-chapter.is-faint')).toHaveCount(3);
+  // Stars: chapters 3, 4, 5 and 6 are there, faint (their first island is not open).
+  await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ☆\s*3しょう ☆\s*4しょう ☆\s*5しょう ☆\s*6しょう ☆/);
+  await expect(page.locator('.title-chapter.is-faint')).toHaveCount(4);
   const map = await openMap(page);
   await expect(map).toHaveAttribute('data-page', '1');
   await expect(page.locator('.map-page')).toHaveCount(1);
@@ -646,16 +646,17 @@ for (const [w, hgt, oneRow] of [
   [667, 375, false],
   [568, 320, false],
 ] as const) {
-  test(`title at ${w}×${hgt}: five stars, ${oneRow ? 'one row' : 'three and two'}`, async ({ page }) => {
+  test(`title at ${w}×${hgt}: six stars, ${oneRow ? 'one row' : 'three and three'}`, async ({ page }) => {
     await page.setViewportSize({ width: w, height: hgt });
     await seed(page, { ...CH4_DONE, mapLinks: [...CH4_DONE.mapLinks, 'finale:4', GATE5] });
     await toTitle(page);
-    await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ★\s*3しょう ★\s*4しょう ★\s*5しょう ☆/);
-    await expect(page.locator('.title-chapter')).toHaveCount(5);
-    // 5-1 is open once its stage is there (4-3 is cleared); until then chapter 5 is faint.
-    await expect(page.locator('.title-chapter.is-faint')).toHaveCount(HAS_5_1 ? 0 : 1);
+    await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ★\s*3しょう ★\s*4しょう ★\s*5しょう ☆\s*6しょう ☆/);
+    await expect(page.locator('.title-chapter')).toHaveCount(6);
+    // 5-1 is open once its stage is there (4-3 is cleared); until then chapter 5 is faint. Chapter 6 (6-1 waits for
+    // 5-3) is faint.
+    await expect(page.locator('.title-chapter.is-faint')).toHaveCount(HAS_5_1 ? 1 : 2);
     expect(await checkStars(page, w)).toBe(oneRow ? 1 : 2);
-    await page.screenshot({ path: resolve(OUT, `map-pages-title5-${w}.png`) });
+    await page.screenshot({ path: resolve(OUT, `map-pages-title6-${w}.png`) });
   });
 }
 
@@ -702,16 +703,16 @@ for (const [w, hgt] of [
   });
 }
 
-/** v1.11 (PR6b/PR6c): chapter 5 done, its end seen: page 3 with 5-1, 5-2, 5-3, the gate and 「6しょう ？」. */
+/** v1.11 (PR6b/PR6c, PR9): chapter 5 done, its end seen: page 3 with 5-1, 5-2, 5-3, the gate and the castle 6-1. */
 for (const [w, hgt] of [
   [1194, 834],
   [568, 320],
 ] as const) {
-  test(`page 3 with chapter 5 done at ${w}×${hgt}: 5-1, 5-2, 5-3, the gate and 「6しょう ？」 apart`, async ({ page }) => {
+  test(`page 3 with chapter 5 done at ${w}×${hgt}: 5-1, 5-2, 5-3, the gate and the castle 6-1 apart`, async ({ page }) => {
     await page.setViewportSize({ width: w, height: hgt });
     const cleared = ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', ...CH3, ...CH4, '5-1', '5-2', '5-3'];
     const links = seenMapLinks(WORLD, cleared);
-    expect(links).toEqual(expect.arrayContaining(['5-2>5-3', 'finale:5']));
+    expect(links).toEqual(expect.arrayContaining(['5-2>5-3', 'finale:5', '5-3>6-1']));
     await seed(page, { cleared, abilities: [...ABILITIES, 'dive', 'plow', 'magnetLight'], mapLinks: links });
     await toTitle(page);
     await openMap(page);
@@ -719,9 +720,13 @@ for (const [w, hgt] of [
     await page.waitForTimeout(300);
     await expect(page.locator('.map-island[data-island="5-3"]')).toHaveClass(/is-cleared/);
     await expect(page.locator('[data-link="5-2>5-3"]')).toHaveClass(/is-laid/);
-    await expect(page.locator('.map-island[data-island="teaser:6"]')).toBeVisible();
+    await expect(page.locator('.map-island[data-island="teaser:6"]')).toHaveCount(0);
+    await expect(page.locator('.map-island[data-island="6-1"]')).toBeVisible();
+    await expect(page.locator('[data-link="5-3>6-1"]')).toHaveClass(/is-laid/);
+    // The castle is awake (its windows lit): nothing grew today.
+    await expect(page.locator('.map-island[data-island="6-1"]')).not.toHaveClass(/is-asleep/);
     const { things, arrows } = await layout(page);
-    expect(things.map((t) => t.id).sort()).toEqual(expect.arrayContaining(['5-1', '5-2', '5-3', 'teaser:6']));
+    expect(things.map((t) => t.id).sort()).toEqual(expect.arrayContaining(['5-1', '5-2', '5-3', '6-1']));
     for (let i = 0; i < things.length; i++) {
       for (let j = i + 1; j < things.length; j++) {
         const a = things[i].box;
@@ -733,3 +738,43 @@ for (const [w, hgt] of [
     await page.screenshot({ path: resolve(OUT, `map-pages-3-ch5-${w}.png`) });
   });
 }
+
+/** v1.11 (PR9, 第 1 部 §3.4): a child who saw chapter 5's end before 6-1's island came. */
+test("chapter 5's end seen before the castle came: the new rail 5-3 → 6-1 grows, the castle wakes and its windows light", async ({ page }) => {
+  const errors = watchErrors(page);
+  const cleared = ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', ...CH3, ...CH4, '5-1', '5-2', '5-3'];
+  const links = seenMapLinks(WORLD, cleared).filter((k) => k !== '5-3>6-1');
+  expect(links).toContain('finale:5');
+  await seed(page, { cleared, abilities: [...ABILITIES, 'dive', 'plow', 'magnetLight'], mapLinks: links });
+  await toTitle(page);
+  const map = await openMap(page);
+  await turned(page, 3);
+  const castle = page.locator('.map-island[data-island="6-1"]');
+  // No chapter 5 end again: the rail grows as a new one, the castle asleep until it gets there.
+  await expect(map).not.toHaveAttribute('data-light', 'firefly');
+  await expect(map).toHaveAttribute('data-windows', '6-1', { timeout: 10_000 });
+  await expect(castle).not.toHaveClass(/is-asleep/);
+  await expect(castle.locator('.map-window')).toHaveCount(4);
+  await expect(castle).toHaveClass(/is-next/);
+  await expect.poll(async () => (await saved(page)).mapLinks ?? [], { timeout: 10_000 }).toContain('5-3>6-1');
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: resolve(OUT, 'map-pages-castle-wakes.png') });
+  expect(errors).toEqual([]);
+});
+
+test('6-1 cleared, no 6-2 island yet: chapter 6 is not over (no finale:6), the title keeps 6しょう ☆', async ({ page }) => {
+  const errors = watchErrors(page);
+  const cleared = ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', ...CH3, ...CH4, '5-1', '5-2', '5-3', '6-1'];
+  const links = seenMapLinks(WORLD, cleared);
+  expect(links).not.toContain('finale:6');
+  await seed(page, { cleared, abilities: [...ABILITIES, 'dive', 'plow', 'magnetLight', 'reverse'], mapLinks: links });
+  await toTitle(page);
+  await expect(page.locator('#title-chapters')).toHaveText(/5しょう ★\s*6しょう ☆/);
+  const map = await openMap(page);
+  await turned(page, 3);
+  await expect(page.locator('.map-island[data-island="6-1"]')).toHaveClass(/is-cleared/);
+  await page.waitForTimeout(1_000);
+  expect(await map.getAttribute('data-finale')).toBeNull();
+  expect((await saved(page)).mapLinks).not.toContain('finale:6');
+  expect(errors).toEqual([]);
+});
