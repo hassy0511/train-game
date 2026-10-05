@@ -248,7 +248,7 @@ const movie = [
   // 8. Chapter 6: past the upside-down castle; Sakasa waves to it from her window.
   { trainAt: before(270, 20) },
   { beat: 'castle' },
-  { shot: 'medium', target: 'train', angle: 75, height: 12, distance: 40 },
+  { shot: 'medium', target: 'train', angle: -70, height: 12, distance: 46 },
   { act: 'wave', id: 'sakasa' },
   { wait: 3 },
   { beat: 'sakasa' },
@@ -279,8 +279,8 @@ const movie = [
   { say: 'みんな、ありがとう なのだ！', who: 'amanojaku' },
   // The partner hops along to below her window: both in one picture.
   { beat: 'together' },
-  { move: 'piko', position: at(UNDER_WINDOW, 2.9, 0), seconds: 1.6, bob: true, face: true, nowait: true },
-  { shot: 'medium', target: at(UNDER_WINDOW, 1.6, 1.75), angle: yawAt(UNDER_WINDOW, OUT + 8), height: 5, distance: 6.2, seconds: 1.8 },
+  { move: 'piko', position: at(UNDER_WINDOW, 3.6, 0), seconds: 1.6, bob: true, face: true, nowait: true },
+  { shot: 'medium', target: at(UNDER_WINDOW, 2, 1.25), angle: yawAt(UNDER_WINDOW, OUT + 8), height: 10, distance: 9, seconds: 1.8 },
   { act: 'turn', id: 'piko', toward: 'sakasa', seconds: 0.5 },
   { say: 'サカサ、いっしょに いおう！' },
   { act: 'turn', id: 'piko', toward: 'camera', seconds: 0.4 },
@@ -294,8 +294,8 @@ const movie = [
   { drive: { speed: SPEED } },
   { wait: 1 },
   { shot: 'wide', target: CENTER, distance: 280, angle: 160, height: 34, world: true, seconds: 8, ease: 'inOut', orbit: 10, hold: 10 },
-  { wait: 1.5 },
   { beat: 'end' },
+  { wait: 2 },
 ];
 
 const file = {

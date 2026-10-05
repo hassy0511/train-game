@@ -183,7 +183,7 @@
       { "act": "hop", "id": "chick", "times": 3 },
       { "trainAt": 413.5 },
       { "beat": "castle" },
-      { "shot": "medium", "target": "train", "angle": 75, "height": 12, "distance": 40 },
+      { "shot": "medium", "target": "train", "angle": -70, "height": 12, "distance": 46 },
       { "act": "wave", "id": "sakasa" },
       { "wait": 3 },
       { "beat": "sakasa" },
@@ -209,8 +209,8 @@
       { "shot": "close", "target": "sakasa", "angle": 0, "height": 4, "distance": 3.2 },
       { "say": "みんな、ありがとう なのだ！", "who": "amanojaku" },
       { "beat": "together" },
-      { "move": "piko", "position": [-10.75, 0, 94.29], "seconds": 1.6, "bob": true, "face": true, "nowait": true },
-      { "shot": "medium", "target": [-10.6, 1.75, 93], "angle": 1.4, "height": 5, "distance": 6.2, "seconds": 1.8 },
+      { "move": "piko", "position": [-10.83, 0, 94.99], "seconds": 1.6, "bob": true, "face": true, "nowait": true },
+      { "shot": "medium", "target": [-10.64, 1.25, 93.4], "angle": 1.4, "height": 10, "distance": 9, "seconds": 1.8 },
       { "act": "turn", "id": "piko", "toward": "sakasa", "seconds": 0.5 },
       { "say": "サカサ、いっしょに いおう！" },
       { "act": "turn", "id": "piko", "toward": "camera", "seconds": 0.4 },
@@ -233,8 +233,8 @@
         "orbit": 10,
         "hold": 10
       },
-      { "wait": 1.5 },
-      { "beat": "end" }
+      { "beat": "end" },
+      { "wait": 2 }
     ]
   },
   "movie": { "play": "movie", "card": { "title": "おしまい\nワールドレールは\nぜんぶ つながった！", "button": "やったね！" } }

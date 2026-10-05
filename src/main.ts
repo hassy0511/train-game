@@ -470,7 +470,8 @@ async function boot(): Promise<void> {
   const shakeScale = (): number => (settings.calm ? 0 : 1);
   applySettings();
   // v1.12: prefers-reduced-motion: a cutscene shot's moves become cuts, the figures' motions smaller.
-  view.setReducedMotion?.(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  view.setReducedMotion?.(reducedMotion);
   let paused = false;
   let runner: MissionRunner | null = null;
   // "▶▶" on cutscenes (PHASE7_FINISH §4 item 7): only on a stage cleared before this run.
@@ -2042,7 +2043,8 @@ async function boot(): Promise<void> {
       shotOn = def !== null;
       view.setShot?.(def);
       applyCamera(!def);
-      return def?.seconds ? waitSeconds(def.seconds) : Promise.resolve();
+      // With prefers-reduced-motion the move is a cut: nothing to wait for.
+      return def?.seconds && !reducedMotion ? waitSeconds(def.seconds) : Promise.resolve();
     },
     letterbox: (on) => {
       letterbox.set(on);

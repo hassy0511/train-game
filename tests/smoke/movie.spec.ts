@@ -22,6 +22,21 @@ const MOVIE = JSON.parse(readFileSync(resolve(here, '../../src/movies/ending.jso
 const STEPS = MOVIE.cutscenes[MOVIE.movie.play];
 /** The beats in the order the shot list has them. */
 const BEATS = STEPS.flatMap((st) => (typeof st.beat === 'string' ? [st.beat] : []));
+/**
+ * How long after a beat its shot has settled (ms): the longest camera move or fade in the steps just after it (a
+ * dolly, the opening's fade-in), and a little more.
+ */
+const SETTLE = new Map(
+  STEPS.flatMap((st, i) => {
+    if (typeof st.beat !== 'string') return [];
+    let longest = 0;
+    for (const next of STEPS.slice(i + 1, i + 5)) {
+      if (typeof next.beat === 'string') break;
+      if (typeof next.shot === 'string' || typeof next.fade === 'string') longest = Math.max(longest, Number(next.seconds ?? 0));
+    }
+    return [[st.beat, 900 + longest * 1000 * 0.6]] as [string, number][];
+  }),
+);
 /** Every line the movie says. */
 const LINES = STEPS.flatMap((st) => (typeof st.say === 'string' ? [st.say] : []));
 
@@ -44,13 +59,17 @@ async function recordBubbles(page: Page): Promise<void> {
     const w = window as unknown as { __lines: { text: string; bottom: number }[]; __shots: string[] };
     w.__lines = [];
     w.__shots = [];
-    new MutationObserver(() => {
+    const observer = new MutationObserver(() => {
       const bubble = document.getElementById('bubble');
       const line = bubble?.dataset.line;
       if (bubble && line && w.__lines[w.__lines.length - 1]?.text !== line) w.__lines.push({ text: line, bottom: bubble.getBoundingClientRect().bottom });
       const shot = document.getElementById('app')?.dataset.shot;
       if (shot && w.__shots[w.__shots.length - 1] !== shot) w.__shots.push(shot);
-    }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['data-line', 'data-shot'] });
+    });
+    // The init script runs before the document has its root.
+    document.addEventListener('DOMContentLoaded', () =>
+      observer.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['data-line', 'data-shot'] }),
+    );
   });
 }
 
@@ -77,11 +96,11 @@ test('ending movie: plays to its card with the letterbox, every beat in order, a
 
   for (const [i, beat] of BEATS.entries()) {
     await page.waitForFunction((b) => (document.getElementById('app')?.dataset.beats ?? '').split(',').includes(b), beat, { timeout: 120_000, polling: 100 });
-    // A moment into the shot (its cut or the start of its move), unless the next one already came.
-    await page.waitForTimeout(900);
-    const shot = await page.evaluate(() => document.getElementById('app')?.dataset.shot ?? '');
+    // A moment into the shot (after its cut, or well into its move), unless the next one already came.
+    await page.waitForTimeout(SETTLE.get(beat) ?? 900);
+    const { shot, time } = await page.evaluate(() => ({ shot: document.getElementById('app')?.dataset.shot ?? '', time: document.getElementById('app')?.dataset.time ?? '' }));
     await page.screenshot({ path: resolve(OUT, `movie-ending-${i + 1}.png`) });
-    console.log(`movie-ending-${i + 1}.png: beat ${beat}, shot ${shot}`);
+    console.log(`movie-ending-${i + 1}.png: beat ${beat}, shot ${shot}, ${time} s`);
   }
   expect(await beats(page)).toEqual(BEATS);
 
@@ -138,7 +157,8 @@ test('ending movie: "▶▶" skips to the last shot and the card', async ({ page
   expect(skippedBeats).not.toContain('end');
   // The card's button waits a moment after a skip (a double tap does not close it unseen), then works.
   await page.locator('#card-button').click();
-  await expect(page.locator('#app')).toHaveAttribute('data-movie-state', 'done');
+  // Opened by its address: back to the title.
+  await expect(page.locator('#app')).toHaveAttribute('data-stage', '1-1', { timeout: 60_000 });
   expect(errors).toEqual([]);
 });
 

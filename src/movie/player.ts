@@ -248,7 +248,10 @@ export async function playMovie(id: string, app: HTMLElement, viewEl: HTMLElemen
     await fade(true, 0.35);
     bubbles.clear();
     const ending = lastShotOf(steps);
-    if (ending) view.setShot?.({ ...ending, seconds: 0, push: 0, orbit: 0 });
+    if (ending) {
+      view.setShot?.({ ...ending, seconds: 0, push: 0, orbit: 0 });
+      app.dataset.shot = `${ending.shot}:${Array.isArray(ending.target) ? 'point' : ending.target}`;
+    }
     letterbox.set(true);
     view.setLetterbox?.(LETTERBOX_PART);
     await waitSeconds(0.2);
