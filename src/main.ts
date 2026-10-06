@@ -9,7 +9,7 @@ import { ABILITY_CARD_TITLES, ABILITY_NAMES, abilityInUse, MissionRunner, type M
 import { PhysicsWorld } from './physics/world';
 import { listStageIds, loadAllRecords, loadStage, peekMovie, peekStage } from './stage/loader';
 import { playMovie } from './movie/player';
-import type { AbilityId, EnvironmentDef, GimmickDef, Vec3 } from './stage/types';
+import type { AbilityId, AmbienceKind, EnvironmentDef, GimmickDef, Vec3 } from './stage/types';
 import type { RunSurface } from './audio/run-sound';
 import {
   DOOR_REMIND_SECONDS,
@@ -20,6 +20,7 @@ import {
   MAGNET,
   MIRROR_WORLD,
   PLOW,
+  PORTAL,
   LEAD,
   RECORD,
   WINDUP,
@@ -43,6 +44,7 @@ import { createCargoStrip } from './ui/cargo-strip';
 import { showCard } from './ui/cards';
 import { createDoorButton } from './ui/door-button';
 import { createFade } from './ui/fade';
+import { ambienceAt, ambienceZones, sectionOf } from './stage/sections';
 import { param, zoneAt } from './gimmick/zones';
 import { BoughSystem } from './gimmick/bough';
 import { showTitle } from './ui/title';
@@ -505,6 +507,16 @@ async function boot(): Promise<void> {
   const view = createSceneView(params);
   await view.init(viewEl, stage, stage.network);
   events.on('event', (e) => view.onStageEvent(e));
+  // v1.11 (PR11a, PHASE9_CHAPTER5_6 第 3 部 B6.4・A10): friends riding along from the start (6-2): Sakasa sits behind
+  // the driver's seat, and hops to the rear window while reversing (#app[data-sakasa] "seat" / "rear").
+  let crewOn = (stage.file.crew ?? []).length > 0;
+  events.on('event', (e) => {
+    if (e.type === 'crew') crewOn = true;
+  });
+  if (crewOn) {
+    app.dataset.crew = (stage.file.crew ?? []).join(',');
+    events.post({ type: 'crew', ids: [...(stage.file.crew ?? [])] });
+  }
 
   // Test/dev hooks for waiting on game time.
   let simTime = 0;
@@ -734,11 +746,55 @@ async function boot(): Promise<void> {
   const lookFade = createFade(uiEl, '#1b2350', 'look-fade');
   app.dataset.lighting = stage.file.environment.lighting;
   const hasVolcanoProp = stage.file.props.some((p) => p.model === 'volcano');
+  /**
+   * v1.11 (PR11a, PHASE9_CHAPTER5_6 第 3 部 B6.1): a stage in sections looks as the section the view is in (checked
+   * every frame from train.viewAnchor: the rear window reversing, the lead car else; a rewind or a resume anywhere
+   * lands in its section's look at once). Its sound around, its rails' sound, its fall's colour go with it.
+   */
+  const sections = stage.sections;
+  let section = sectionOf(sections, stage.file.start.railId);
+  /** The look as last applied (a cutscene's change over the section's or the stage's own). */
+  let look: EnvironmentDef = section?.environment ?? stage.file.environment;
+  /** v1.11 (PR11a, B6.5): the `ambience` stretches; the sound around as last set. */
+  const ambiences = ambienceZones(stage.file.gimmicks);
+  let ambienceNow: AmbienceKind | null = look.ambience ?? null;
   const applyLook = (env: Partial<EnvironmentDef>): void => {
-    const look = { ...stage.file.environment, ...env };
-    view.applyEnvironment(look);
-    audio.setAmbience(look.ambience ?? null, hasVolcanoProp);
+    look = { ...(section?.environment ?? stage.file.environment), ...env };
+    view.applyEnvironment(look, section?.centre);
+    ambienceNow = look.ambience ?? null;
+    audio.setAmbience(ambienceNow, hasVolcanoProp);
     app.dataset.lighting = look.lighting;
+    if (sections.length > 0) {
+      app.dataset.sky = look.sky.top;
+      fadeEl.style.background = FALL_COLORS[look.fall ?? 'dark'];
+    }
+  };
+  const fadeEl = uiEl.querySelector<HTMLElement>('#fade') as HTMLElement;
+  if (section) {
+    app.dataset.section = section.id;
+    applyLook({});
+  }
+  /** Every frame: the section the view is in (its look when it changed), and an `ambience` stretch's sound. */
+  const updateSection = (): void => {
+    const at = train.viewAnchor;
+    if (sections.length > 0) {
+      const now = sectionOf(sections, at.railId);
+      if (now && now !== section) {
+        section = now;
+        app.dataset.section = now.id;
+        // Built a slice a frame since the stage came up: whatever is left of it now (B13).
+        view.buildSection?.(now.id);
+        applyLook({});
+      }
+    }
+    if (ambiences.length > 0) {
+      const kind = ambienceAt(ambiences, at.railId, at.s)?.kind ?? look.ambience ?? null;
+      if (kind !== ambienceNow) {
+        ambienceNow = kind;
+        audio.setAmbience(kind, hasVolcanoProp);
+      }
+      app.dataset.ambience = kind ?? '';
+    }
   };
   let lookChanges = 0;
   events.on('event', (e) => {
@@ -1289,6 +1345,8 @@ async function boot(): Promise<void> {
       swirl.classList.add('is-on');
     }
     app.dataset.reverseStop = '';
+    // v1.11 (PR11a): Sakasa riding along hops to the rear window and back ("ぴょん").
+    if (crewOn && !instant) audio.playSakasaHop();
     events.post({ type: 'reverse', on });
     // The camera swaps during the turn (the swirl covers it).
     applyCamera(true);
@@ -1319,6 +1377,49 @@ async function boot(): Promise<void> {
   train.events.on('backLocked', backArrowsOff);
   train.events.on('backPassed', backArrowsOff);
   train.events.on('backSiding', ({ junction }) => events.post({ type: 'reverse:siding', junction: junction.id }));
+  // v1.11 (PR11a, PHASE9_CHAPTER5_6 第 3 部 B6.2): a gate ("もん"): the white comes in just before it ("ふわぁ・きらら"),
+  // the other side's look and the camera are put at once while it is white, then it goes. The section ahead is
+  // built in full first if it is not yet (B13). Test hooks: #fade[data-kind="gate"], #app[data-portals] (only goes
+  // up), #app[data-portal] ("from>to" the last one).
+  let gate: { rail: string; on: Promise<void> } | null = null;
+  let portals = 0;
+  const GATE_WHITE = '#fbfdff';
+  const gateOut = (): void => {
+    const was = gate;
+    gate = null;
+    void (async () => {
+      await was?.on;
+      if (gate) return;
+      await fade(false, PORTAL.whiteSeconds);
+      if (gate) return;
+      delete fadeEl.dataset.kind;
+      fadeEl.style.background = FALL_COLORS[look.fall ?? 'dark'];
+    })();
+  };
+  train.events.on('portalAhead', ({ seconds }) => {
+    audio.playGate();
+    fadeEl.dataset.kind = 'gate';
+    fadeEl.style.background = GATE_WHITE;
+    gate = { rail: train.state.railId, on: fade(true, Math.max(0.05, Math.min(PORTAL.whiteSeconds, seconds))) };
+  });
+  train.events.on('portal', ({ from, to }) => {
+    portals += 1;
+    app.dataset.portals = String(portals);
+    app.dataset.portal = `${from}>${to}`;
+    updateSection();
+    applyCamera(true);
+    events.post({ type: 'portal', from, to });
+    gateOut();
+  });
+  /** Every frame: a gate's white goes again if the train stopped before it; the section past it is built in time. */
+  const updateGate = (): void => {
+    if (gate && (train.state.railId !== gate.rail || train.state.speed < 1e-3)) gateOut();
+    const rail = train.currentRail;
+    if (rail.end.type === 'portal' && rail.length - train.frontS <= PORTAL.buildBefore) {
+      const next = sectionOf(sections, rail.end.railId);
+      if (next) view.buildSection?.(next.id);
+    }
+  };
   // The lines (a mission's words through the runner; the test course's straight to the bubble).
   reverse.events.on('line', (line: ReverseLine) => {
     if (runner) {
@@ -1385,6 +1486,8 @@ async function boot(): Promise<void> {
   app.dataset.build = __BUILD_ID__;
   console.info(`build ${__BUILD_ID__}`);
   app.dataset.ready = '1';
+  // v1.11 (PR11a, B13): how long the page took to be ready to play (ms since it began loading).
+  app.dataset.loadMs = String(Math.round(performance.now()));
   // index.html's loading screen (CSS only, shown from the first paint): gone now that the game is drawn.
   document.getElementById('loading')?.remove();
   registerOffline();
@@ -1499,6 +1602,9 @@ async function boot(): Promise<void> {
     }
 
     train.update(dt);
+    // v1.11 (PR11a): the section the view is in (its look), and a gate's white going away if the train stopped short.
+    updateSection();
+    updateGate();
     dive.update();
     plowHint.update();
     plow.update();
@@ -1546,7 +1652,7 @@ async function boot(): Promise<void> {
       braking: train.targetSpeed < Math.abs(train.state.speed) - 0.3,
       airborne: train.airborne || train.isFalling,
       // v1.11 (PR8a, A10): where the view is (the rear window reversing).
-      surface: runSurface(gimmicks, train.viewAnchor.railId, train.viewAnchor.s, stage.file.environment.surface),
+      surface: runSurface(gimmicks, train.viewAnchor.railId, train.viewAnchor.s, look.surface),
       rocket: train.rocketBurning,
       underwater: train.submerged,
       quiet: false,
@@ -1688,6 +1794,8 @@ async function boot(): Promise<void> {
       fpsAccum = 0;
       fpsFrames = 0;
       app.dataset.fps = fps.toFixed(0);
+      // v1.11 (PR11a, B13): the sections built so far (the others are built a slice a frame).
+      if (sections.length > 0) app.dataset.sectionsReady = (view.sectionsReady?.() ?? sections.map((x) => x.id)).join(',');
       if (stats) {
         app.dataset.draws = String(stats.drawCalls);
         app.dataset.drawsMax = String(drawsMax);
@@ -1710,6 +1818,7 @@ async function boot(): Promise<void> {
     app.dataset.tailRail = tail.railId;
     app.dataset.tailS = tail.s.toFixed(1);
     app.dataset.trailM = train.trail.length.toFixed(1);
+    if (crewOn) app.dataset.sakasa = train.reversing ? 'rear' : 'seat';
     app.dataset.hop = train.hopLift.toFixed(2);
     app.dataset.air = train.airborne ? '1' : '0';
     app.dataset.speed = train.state.speed.toFixed(1);

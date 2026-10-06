@@ -75,12 +75,13 @@ const CLIFF_BAND = '#BDB09A';
 const CLIFF_GRASS = '#8CC46A';
 
 /** The ground plane for a stage with water: holes where waters with an area are, none at all over a sea. */
-export function buildWaterGround(environment: EnvironmentDef): Mesh | null {
+export function buildWaterGround(environment: EnvironmentDef, centre: { x: number; z: number } = { x: 0, z: 0 }): Mesh | null {
   const ground = environment.ground;
   if (!ground) return null;
   const waters = environment.water ?? [];
   if (waters.some((w) => !w.area)) return null;
-  const shape = square(ground.size);
+  // v1.11 (PR11a): round a section's middle (the holes stay where their waters are).
+  const shape = square(ground.size, centre);
   for (const w of waters) {
     if (!w.area) continue;
     shape.holes.push(new Path(areaOutline(w.area).map(([x, z]) => xz(x, z))));
@@ -573,9 +574,10 @@ function cliffWall(outline: [number, number][], top: number, surface: number, fl
 }
 
 /** A square shape `size` across round the origin. */
-function square(size: number): Shape {
+function square(size: number, centre: { x: number; z: number } = { x: 0, z: 0 }): Shape {
   const h = size / 2;
-  return new Shape([xz(-h, h), xz(h, h), xz(h, -h), xz(-h, -h)]);
+  const { x, z } = centre;
+  return new Shape([xz(x - h, z + h), xz(x + h, z + h), xz(x + h, z - h), xz(x - h, z - h)]);
 }
 
 /** Keeps only `names` among a geometry's attributes (so they merge). */

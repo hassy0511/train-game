@@ -41,6 +41,7 @@ import { inArea, openWaterAt } from './water';
 import { ACT_KINDS, EASES, SHOT_SIZES, AMBIENCE_KINDS, CAT_LOOKS, type JunctionDef, FLOATER_LOOKS, IRON_LOOKS, MAGNET_KINDS, MAGNET_LOOKS, WATER_LOOKS, type AmbienceKind, type CatLook, type FloaterLook, type IronLook, type MagnetKind, type MagnetLook, type MagnetTarget, type Placement, type StageFile, type WaterDef, type WaterLook } from './types';
 import { paradeSetup } from '../actors/parade';
 import { checkBubbleIcon, checkCrewDepartStep, checkLandmark, checkLeadShapes } from './validate-lead';
+import { checkSectionShapes } from './validate-sections';
 
 const MODEL_NAME = /^[a-z0-9-]+$/;
 const ABILITIES = ['whistle', 'light', 'jump', 'rocket', 'dive', 'plow', 'magnetLight', 'reverse'];
@@ -293,6 +294,20 @@ function checkEnvironmentParts(env: Record<string, unknown>, where: string, step
   checkLandmark(env.landmark, where, isObject(env.fog) && isNumber(env.fog.far) ? env.fog.far : null);
 }
 
+/** v1.11 (PR11a, 第 3 部 B6.1): a section's look (the fields it changes, checked as the stage's own are). */
+function checkSectionLook(env: Record<string, unknown>, where: string): void {
+  checkEnvironmentParts(env, where);
+  if (env.fall !== undefined && !['dark', 'cloud', 'leaf', 'water', 'snow', 'balls'].includes(String(env.fall))) fail(`${where}: "fall" must be dark, cloud, leaf, water, snow or balls`);
+  if (env.cloudSea !== undefined && (!isObject(env.cloudSea) || !isNumber(env.cloudSea.y))) fail(`${where}: "cloudSea" needs y`);
+  if (env.surface !== undefined && !RUN_SURFACES.includes(env.surface as RunSurface)) fail(`${where}: "surface" must be one of ${RUN_SURFACES.join(', ')}`);
+  if (env.snow !== undefined) {
+    const sn = env.snow;
+    if (!isObject(sn) || !Number.isInteger(sn.count) || (sn.count as number) < 0 || (sn.count as number) > 2000) fail(`${where}: "snow.count" must be a whole number 0–2000`);
+  }
+  if (env.fog !== undefined && env.fog !== null && !isString((env.fog as Record<string, unknown>).color)) fail(`${where}: "fog" needs a color`);
+  if (isObject(env.ground) && !isString(env.ground.color)) fail(`${where}: "ground" needs a color`);
+}
+
 /** Structural validation of a stage file. Range checks that need rail lengths happen in the loader. */
 export function validateStageFile(raw: unknown): StageFile {
   if (!isObject(raw)) fail('root must be an object');
@@ -351,11 +366,15 @@ export function validateStageFile(raw: unknown): StageFile {
     if (!Array.isArray(r.points) || r.points.length < 2 || !r.points.every(isVec3)) {
       fail(`rail "${r.id}": "points" needs at least 2 [x, y, z] entries`);
     }
-    if (!isObject(r.end) || !['buffer', 'merge', 'open'].includes(String(r.end.type))) {
-      fail(`rail "${r.id}": "end.type" must be buffer, merge or open`);
+    if (!isObject(r.end) || !['buffer', 'merge', 'open', 'portal'].includes(String(r.end.type))) {
+      fail(`rail "${r.id}": "end.type" must be buffer, merge, open or portal`);
     }
     if (r.end.type === 'merge' && (!isString(r.end.railId) || !isNumber(r.end.at))) {
       fail(`rail "${r.id}": merge end needs railId and at`);
+    }
+    // v1.11 (PR11a, PHASE9_CHAPTER5_6 第 3 部 B6.2): a gate to another rail (the lead car's centre arrives at `at`).
+    if (r.end.type === 'portal' && (!isString(r.end.railId) || !isNumber(r.end.at))) {
+      fail(`rail "${r.id}": portal end needs railId and at`);
     }
     if (r.gaps !== undefined) {
       if (!Array.isArray(r.gaps)) fail(`rail "${r.id}": "gaps" must be an array`);
@@ -417,6 +436,9 @@ export function validateStageFile(raw: unknown): StageFile {
     const end = r.end as Record<string, unknown>;
     if (end.type === 'merge' && !railIds.has(String(end.railId))) {
       fail(`rail "${String(r.id)}": merges into unknown rail "${String(end.railId)}"`);
+    }
+    if (end.type === 'portal' && !railIds.has(String(end.railId))) {
+      fail(`rail "${String(r.id)}": its portal leads to unknown rail "${String(end.railId)}"`);
     }
   }
 
@@ -776,6 +798,11 @@ export function validateStageFile(raw: unknown): StageFile {
           fail(`mission "${m.id}": hint needs railId, at, text`);
         }
         if (h.unless !== undefined && !ABILITIES.includes(String(h.unless))) fail(`mission "${m.id}": hint "unless" must be an ability`);
+        // v1.11 (PR11a, 第 3 部 B6.5): said only during one step of the mission; by whom.
+        if (h.whileStep !== undefined && !(Number.isInteger(h.whileStep) && (h.whileStep as number) >= 0 && (h.whileStep as number) < (m.steps as unknown[]).length)) {
+          fail(`mission "${m.id}": hint "whileStep" must be a step of the mission (0–${(m.steps as unknown[]).length - 1})`);
+        }
+        if (h.who !== undefined && h.who !== 'partner' && h.who !== 'amanojaku') fail(`mission "${m.id}": hint "who" must be partner or amanojaku`);
       }
     }
     if (m.onComplete !== undefined && (!isString(m.onComplete) || !cutsceneIds.has(m.onComplete))) {
@@ -788,12 +815,14 @@ export function validateStageFile(raw: unknown): StageFile {
     if (!isObject(g) || !isString(g.type)) fail(`gimmicks[${i}]: "type" is required`);
     // v1.11 (PR8a, 第 3 部 A8.6): the first plan's reversing point is not made.
     if (g.type === 'reverse') fail(`gimmicks[${i}]: "reverse" is not used any more (reversing works anywhere; a back siding is junctions[].back)`);
-    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound', 'ice', 'thin-ice', 'tunnel', 'hush', 'whistle-reversed', 'rainbow'];
+    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound', 'ice', 'thin-ice', 'tunnel', 'hush', 'whistle-reversed', 'rainbow', 'ambience'];
     if (zoned.includes(g.type)) {
       if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`gimmicks[${i}] ${g.type}: needs a known railId and "from"`);
       if (g.type !== 'jump-pad' && (!isNumber(g.to) || (g.to as number) <= (g.from as number))) fail(`gimmicks[${i}] ${g.type}: needs "to" after "from"`);
     }
     const p = (g.params ?? {}) as Record<string, unknown>;
+    // v1.11 (PR11a, 第 3 部 B6.5): the sound around the train along a stretch (where a section's look changes).
+    if (g.type === 'ambience' && !AMBIENCE_KINDS.includes(p.kind as AmbienceKind)) fail(`gimmicks[${i}] ambience: params.kind must be one of ${AMBIENCE_KINDS.join(', ')}`);
     if (g.type === 'flower-bridge') {
       const from = g.from as number;
       const to = g.to as number;
@@ -918,6 +947,8 @@ export function validateStageFile(raw: unknown): StageFile {
 
   // v1.11 (6-1): おいかけっこ, ドアを あけて まつ, the missions' own junction rules, junctions[].glow.
   checkLeadShapes(raw);
+  // v1.11 (PR11a): sections (each one's look as the stage's own is checked) and the friends riding along.
+  checkSectionShapes(raw, railIds, checkSectionLook);
   return raw as unknown as StageFile;
 }
 
@@ -2253,6 +2284,9 @@ export function validateBackJunctions(file: StageFile, network: RailNetwork, bac
       if (span && (g.to ?? g.from) >= lo && g.from <= hi) fail(`${where}: gimmicks[${i}] ${g.type} is near its mouth`);
     });
     for (const st of file.stations) if (st.railId === j.railId && Math.abs(st.at - j.at) < REVERSE.mouthStation) fail(`${where}: station "${st.id}"'s stop line must be ${REVERSE.mouthStation} m from its mouth`);
+    // v1.11 (PR11a): away from a gate's end and from where a gate arrives (the white is just gone).
+    if (main.end.type === 'portal' && main.length - j.at < REVERSE.mouthPortal) fail(`${where}: its mouth must be ${REVERSE.mouthPortal} m from the gate at the end of "${j.railId}"`);
+    for (const p of network.portalsInto(j.railId)) if (Math.abs(p.at - j.at) < REVERSE.mouthPortal) fail(`${where}: its mouth must be ${REVERSE.mouthPortal} m from where rail "${p.railId}"'s gate arrives (${p.at})`);
     for (const m of file.missions) {
       for (const step of m.steps) {
         const c = step.chase;

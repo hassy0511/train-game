@@ -103,8 +103,11 @@ export class Trail {
     return p.d0 + (s - p.from);
   }
 
-  /** Starts over with the lead car centre at `s` on `railId` (the start, a rewind): traced back TRAIL.back m. */
-  rebuild(railId: string, s: number): void {
+  /**
+   * Starts over with the lead car centre at `s` on `railId` (the start, a rewind): traced back TRAIL.back m. v1.11
+   * (PR11a): `why` the floor is there ("portal": the train came through a gate, B6.2; it never reverses back through).
+   */
+  rebuild(railId: string, s: number, why: ReverseStop = 'floor'): void {
     const back: { railId: string; from: number; to: number }[] = [];
     let need: number = TRAIL.back;
     let rail = railId;
@@ -129,7 +132,7 @@ export class Trail {
     this.ghost = [];
     // The rear end as it is put now (the rails behind it may run out sooner: then it is already there).
     this.floorX = this.head - REVERSE.tail;
-    this.floorWhy = 'floor';
+    this.floorWhy = why;
   }
 
   /** Where the train came from onto rail `id` at its start (s = 0), or null. */

@@ -114,6 +114,7 @@ export const SOUNDS: SoundEntry[] = [
   { group: 'うしろむき', id: 'reverse-bump', label: 'くるまどめ（こつん ぽよ）', play: (a) => a.playReverseBump() },
   { group: 'うしろむき', id: 'hop-back', label: 'うしろむきで ジャンプ（ぴょこっ）', play: (a) => a.playHopBack() },
   { group: 'うしろむき', id: 'sakasa-hop', label: 'サカサが ぴょん（6-2）', play: (a) => a.playSakasaHop() },
+  { group: 'うしろむき', id: 'gate', label: 'もんを くぐる（ふわぁ・きらら）', play: (a) => a.playGate() },
   { group: 'さかさまの しろ', id: 'lead-pop', label: 'サカサが とびだす（ぴょこん）', play: (a) => a.playLeadPop() },
   { group: 'さかさまの しろ', id: 'lead-dash', label: 'サカサが にげる（しゅたたた〜）', play: (a) => a.playLeadDash() },
   { group: 'さかさまの しろ', id: 'lead-turn', label: 'サカサが ふりむく（くるっ）', play: (a) => a.playLeadTurn() },

@@ -17,6 +17,7 @@ import {
   JUNCTION_ARROW_DISTANCE,
   PAD_JUMP,
   PLOW,
+  PORTAL,
   UPDRAFT_ACCELERATION,
   JUNCTION_LOCK_DISTANCE,
   LEVER_NOTCHES,
@@ -128,6 +129,13 @@ export interface TrainEvents extends Record<string, unknown> {
   backSiding: { junction: JunctionDef };
   /** v1.11 (PR8a): a jump pressed while reversing: a little hop where it is ("ぴょこっ"). */
   hopped: void;
+  /**
+   * v1.11 (PR11a, 第 3 部 B6.2): the gate at the end of this rail is `seconds` away (PORTAL.whiteLead s and
+   * PORTAL.whiteMargin m before it): the white comes in now. Once a gate.
+   */
+  portalAhead: { seconds: number };
+  /** v1.11 (PR11a): through a gate: the train is on rail `to` now (`from` the rail it left), speed and lever kept. */
+  portal: { from: string; to: string };
 }
 
 /** v1.11 (PR8a): what a press of the まえ／うしろ switch did. */
@@ -334,6 +342,10 @@ export class Train {
 
   /** v1.11 (PR7): the way the train has come (every car is placed along it). */
   readonly trail: Trail;
+  /** v1.11 (PR11a): where gates arrive, by rail (a rewind never puts the lead car centre before it there). */
+  private readonly portalArrivals = new Map<string, number>();
+  /** v1.11 (PR11a): the white of the gate ahead was announced (portalAhead), for the rail it is on. */
+  private portalAnnounced: string | null = null;
   /** v1.11 (PR8a): the back junctions (switchbacks: only reversing; the loader keeps them apart from the forward ones). */
   private backJunctions: JunctionDef[] = [];
   /** v1.11 (PR8a): the switch was pressed while moving: the direction to take once stopped. */
@@ -394,6 +406,10 @@ export class Train {
     };
     this.pose.tail = this.pose.cars[this.pose.cars.length - 1] ?? this.pose.tail;
     this.trail = new Trail(network);
+    for (const id of network.rails.keys()) {
+      const arrivals = network.portalsInto(id);
+      if (arrivals.length > 0) this.portalArrivals.set(id, Math.min(...arrivals.map((p) => p.at)));
+    }
     this.trail.rebuild(this.state.railId, this.state.s);
     // The train always starts facing forward (the start's `direction` is the rail's way, kept for the view).
     this.state.direction = 1;
@@ -624,7 +640,9 @@ export class Train {
       const next = this.trail.nextBackJunction(tail, this.backJunctions);
       if (!next || next.distance > REVERSE.arrowDistance || next.distance <= REVERSE.lockDistance) return;
       const j = next.junction;
-      const preferred = this.backPreferred.get(j.id);
+      // v1.11 (PR11a, 第 3 部 B5): a mission's own rule for it (missions[].junctions: its default chosen from the start).
+      const rule = this.junctionRules?.[j.id];
+      const preferred = this.backPreferred.get(j.id) ?? rule?.lock ?? rule?.default;
       this.backAhead = { junction: j, x: next.x, choice: preferred !== undefined && j[preferred] !== undefined ? preferred : null, locked: false };
       this.events.emit('backArrows', { junction: j, left: j.left !== undefined, right: j.right !== undefined, default: this.backAhead.choice ?? j.default });
       return;
@@ -859,10 +877,16 @@ export class Train {
     if (this.state.speed > 0) this.state.notch = HARD_BRAKE_NOTCH;
   }
 
-  /** Puts the train back with its front at `frontS` (on `railId`, default the current rail), stopped, lever at "stop". */
+  /**
+   * Puts the train back with its front at `frontS` (on `railId`, default the current rail), stopped, lever at "stop".
+   * v1.11 (PR11a, 第 3 部 B6.2): never back past a gate: on a rail a gate arrives on, not before its arrival point.
+   */
   rewindTo(frontS: number, railId?: string): void {
     const st = this.state;
     if (railId) st.railId = railId;
+    const arrival = this.portalArrivals.get(st.railId);
+    if (arrival !== undefined) frontS = Math.max(frontS, arrival + TRAIN.length / 2);
+    this.portalAnnounced = null;
     this.arcs = [];
     this.falling = null;
     this.slipping = null;
@@ -2031,9 +2055,12 @@ export class Train {
     return this.pose;
   }
 
-  /** Where the train must stop on this rail, or null when the rail continues (merge). */
+  /**
+   * Where the train must stop on this rail, or null when the rail continues (merge). v1.11 (PR11a): or goes on through
+   * a gate (no automatic stop before it).
+   */
   private stopDistance(rail: Rail): number | null {
-    if (rail.end.type === 'merge') return null;
+    if (rail.end.type === 'merge' || rail.end.type === 'portal') return null;
     return rail.length - BUFFER_MARGIN;
   }
 
@@ -2107,8 +2134,54 @@ export class Train {
     }
   }
 
+  /**
+   * v1.11 (PR11a, 第 3 部 B6.2): through a gate: the lead car centre to `at` on `railId`, the speed and the lever kept,
+   * the cars put along the new rail (the trail made again there: its floor is the arrival, A5.2). The rocket ends here
+   * ("ぷしゅっ": not on at 22–30 m/s on the other side); a jump or a dive going on is over (the gate is level ground).
+   */
+  teleport(railId: string, at: number): void {
+    const st = this.state;
+    const from = st.railId;
+    if (this.rocketLeft > 0) {
+      this.rocketLeft = 0;
+      this.events.emit('rocketEnded', { cut: true });
+    }
+    this.settling = false;
+    this.rocketRails = [];
+    this.arcs = [];
+    this.airClimb = 0;
+    this.slope = null;
+    this.blockFront = null;
+    this.plowFront = null;
+    this.held.clear();
+    st.railId = railId;
+    st.s = at;
+    this.ended = false;
+    this.portalAnnounced = null;
+    this.trail.rebuild(railId, at, 'portal');
+    this.liftTrack.length = 0;
+    this.markFrom = null;
+    this.backAhead = null;
+    this.refreshPending();
+    this.resetDive();
+    this.enteredRail(railId);
+    this.computePose();
+    this.events.emit('railChanged', { railId });
+    this.events.emit('portal', { from, to: railId });
+  }
+
   private handleEnd(rail: Rail): void {
     const st = this.state;
+    // v1.11 (PR11a, 第 3 部 B6.2): a gate: the white comes in just before; at the end the train goes through.
+    if (rail.end.type === 'portal') {
+      const left = rail.length - st.s;
+      if (this.portalAnnounced !== rail.id && st.speed > 0 && left <= st.speed * PORTAL.whiteLead + PORTAL.whiteMargin) {
+        this.portalAnnounced = rail.id;
+        this.events.emit('portalAhead', { seconds: left / Math.max(st.speed, 0.1) });
+      }
+      if (st.s >= rail.length) this.teleport(rail.end.railId, rail.end.at + (st.s - rail.length));
+      return;
+    }
     if (rail.end.type === 'merge') {
       if (st.s >= rail.length) {
         this.trail.switchRail(rail.length, rail.end.railId, rail.end.at);

@@ -82,14 +82,12 @@ export async function addProps(target: Group, props: ResolvedProp[], models: Mod
   await addModelPlacements(target, props, models);
 }
 
-/** Adds model placements. Repeated models are instanced independently for each glTF mesh. */
-export async function addModelPlacements(
-  target: Group,
-  placements: ModelPlacement[],
-  models: ModelLibrary,
-): Promise<void> {
-  // One instanced batch per model and ground cell: a batch is culled as a whole, so on a long stage the
-  // cells behind the camera and beyond the fog are skipped instead of drawing every copy every frame.
+/**
+ * The placements batched by model and ground cell: a batch is culled as a whole, so on a long stage the cells behind
+ * the camera and beyond the fog are skipped instead of drawing every copy every frame. v1.11 (PR11a): exported for the
+ * sections built later a batch at a time (buildQueue).
+ */
+export function placementBatches(placements: ModelPlacement[]): { model: string; placements: ModelPlacement[] }[] {
   const byModel = new Map<string, ModelPlacement[]>();
   for (const placement of placements) {
     const cell = `${Math.floor(placement.position.x / CELL)}:${Math.floor(placement.position.z / CELL)}`;
@@ -98,42 +96,48 @@ export async function addModelPlacements(
     if (matching) matching.push(placement);
     else byModel.set(key, [placement]);
   }
+  return [...byModel].map(([key, matching]) => ({ model: key.split('|')[0], placements: matching }));
+}
 
+/** One batch of `name` (its template loaded) into `target`: plain meshes for one copy, else one instanced mesh per part. */
+export function addBatch(target: Group, name: string, template: Group, matching: ModelPlacement[]): void {
+  if (matching.length === 1) {
+    const placed = placementMatrix(matching[0], new Matrix4());
+    for (const source of sourceMeshes(template)) {
+      const mesh = new Mesh(source.mesh.geometry, source.mesh.material);
+      mesh.name = `${name}:${source.mesh.name}`;
+      // Set the matrix directly: a part's own scale may be non-uniform, which a decompose would skew.
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.multiplyMatrices(placed, source.matrix);
+      target.add(mesh);
+    }
+    return;
+  }
+  const placement = new Matrix4();
+  const combined = new Matrix4();
+  for (const source of sourceMeshes(template)) {
+    const instances = new InstancedMesh(source.mesh.geometry, source.mesh.material as Material | Material[], matching.length);
+    instances.name = `${name}:${source.mesh.name}`;
+    for (let index = 0; index < matching.length; index += 1) {
+      placementMatrix(matching[index], placement);
+      combined.multiplyMatrices(placement, source.matrix);
+      instances.setMatrixAt(index, combined);
+    }
+    instances.instanceMatrix.needsUpdate = true;
+    instances.computeBoundingSphere();
+    target.add(instances);
+  }
+}
+
+/** Adds model placements. Repeated models are instanced independently for each glTF mesh. */
+export async function addModelPlacements(
+  target: Group,
+  placements: ModelPlacement[],
+  models: ModelLibrary,
+): Promise<void> {
   await Promise.all(
-    [...byModel].map(async ([key, matching]) => {
-      const name = key.split('|')[0];
-      const template = await models.load(name);
-      if (matching.length === 1) {
-        const placed = placementMatrix(matching[0], new Matrix4());
-        for (const source of sourceMeshes(template)) {
-          const mesh = new Mesh(source.mesh.geometry, source.mesh.material);
-          mesh.name = `${name}:${source.mesh.name}`;
-          // Set the matrix directly: a part's own scale may be non-uniform, which a decompose would skew.
-          mesh.matrixAutoUpdate = false;
-          mesh.matrix.multiplyMatrices(placed, source.matrix);
-          target.add(mesh);
-        }
-        return;
-      }
-
-      const placement = new Matrix4();
-      const combined = new Matrix4();
-      for (const source of sourceMeshes(template)) {
-        const instances = new InstancedMesh(
-          source.mesh.geometry,
-          source.mesh.material as Material | Material[],
-          matching.length,
-        );
-        instances.name = `${name}:${source.mesh.name}`;
-        for (let index = 0; index < matching.length; index += 1) {
-          placementMatrix(matching[index], placement);
-          combined.multiplyMatrices(placement, source.matrix);
-          instances.setMatrixAt(index, combined);
-        }
-        instances.instanceMatrix.needsUpdate = true;
-        instances.computeBoundingSphere();
-        target.add(instances);
-      }
+    placementBatches(placements).map(async ({ model, placements: matching }) => {
+      addBatch(target, model, await models.load(model), matching);
     }),
   );
 }

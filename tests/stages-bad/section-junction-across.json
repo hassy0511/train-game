@@ -1,0 +1,1 @@
+{"_expect": "junction \"yoru-ura-guchi\": joins rails of sections", "_base": "0-7", "_edit": [{"path": "sections.0.rails", "value": ["main", "kaeri", "yoru-ura"]}, {"path": "sections.1.rails", "value": ["yoru"]}]}

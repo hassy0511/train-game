@@ -21,6 +21,8 @@
  * night) is probed too: every rail point again under it, as the cameras "<camera>+<lighting>".
  * v1.11 (PR8a): a stage with back junctions (うしろむきの わき道) is also measured reversed on each siding every 10 m, as
  * the cameras "rear" (the rear window) and "chase-rev" (what cab and chase turn into reversing), うしろむき learned.
+ * v1.11 (PR11a): a stage in sections (区画) is probed 5 m before each gate's end and 5 m after where it arrives too
+ * (before the white and after it), and the heaviest frame of each section is listed (PHASE9_CHAPTER5_6 第 3 部 B13).
  * Runs the dev server, since the __debugView / __debugTrain handles only exist in dev builds.
  * Needs Playwright's Chromium (PW_CHROMIUM_PATH to reuse an installed one). BUDGET_ROWS=40 lists more objects.
  */
@@ -88,8 +90,11 @@ function cutsceneLooks(stage) {
   return [...seen.values()];
 }
 
-/** Front positions (m) to probe on one rail: the regular steps plus the finer ones around its stations. */
-function probePoints(rail, stations) {
+/**
+ * Front positions (m) to probe on one rail: the regular steps plus the finer ones around its stations. v1.11 (PR11a):
+ * `extra` adds more (5 m either side of a gate).
+ */
+function probePoints(rail, stations, extra = []) {
   const points = new Set();
   const add = (s) => {
     if (rail.loop) points.add(Math.round((((s % rail.length) + rail.length) % rail.length) * 10) / 10);
@@ -100,7 +105,28 @@ function probePoints(rail, stations) {
   for (const station of stations) {
     for (let d = -STATION_REACH; d <= STATION_REACH; d += STATION_STEP) add(station.at + d);
   }
+  for (const s of extra) add(s);
   return [...points].sort((a, b) => a - b);
+}
+
+/** v1.11 (PR11a): the gates' probe points by rail: 5 m before a gate's end, 5 m after its arrival (front positions). */
+function gatePoints(stage) {
+  const out = new Map();
+  const push = (id, s) => out.set(id, [...(out.get(id) ?? []), s]);
+  for (const r of stage.rails) {
+    if (r.end?.type !== 'portal') continue;
+    push(r.id, -5);
+    // The arrival `at` is the lead car's centre; the probe puts the front (6 m ahead of it).
+    push(r.end.railId, r.end.at + 6 + 5);
+  }
+  return out;
+}
+
+/** v1.11 (PR11a): the section each rail is in ("" for a stage in one piece). */
+function sectionByRail(stage) {
+  const out = new Map();
+  for (const sec of stage.sections ?? []) for (const id of sec.rails) out.set(id, sec.id);
+  return out;
 }
 
 const server = spawn(resolve(root, 'node_modules/.bin/vite'), ['--port', '5195', '--host', '127.0.0.1'], {
@@ -352,6 +378,8 @@ const load = (f) => Math.max(f.calls / MAX_CALLS, f.tris / MAX_TRIANGLES);
 const started = Date.now();
 /** Per stage and camera: frames measured, the heaviest by calls, by triangles and against the budget. */
 const results = [];
+/** v1.11 (PR11a): per stage in sections, the heaviest frame of each section. */
+const sectionTables = [];
 const failures = [];
 let pageErrors = 0;
 let browser = null;
@@ -382,11 +410,16 @@ try {
       if (over(f)) failures.push(frame);
     }
     let points = 0;
+    const gates = gatePoints(stage);
+    const sectionOf = sectionByRail(stage);
+    /** v1.11 (PR11a): the heaviest frame in each section (any camera), for the table at the end. */
+    const bySection = new Map();
     /** Every rail point under the look now; `suffix` names the look in the camera column ("" = the stage's own). */
     const probeRails = async (suffix) => {
       for (const rail of rails) {
         const stations = stage.stations.filter((station) => station.railId === rail.id);
-        for (const s of probePoints(rail, stations)) {
+        const extra = (gates.get(rail.id) ?? []).map((s) => (s < 0 ? rail.length + s : s));
+        for (const s of probePoints(rail, stations, extra)) {
           points += 1;
           const frames = await page.evaluate(([id, at, cameras]) => window.__probeAt(id, at, cameras), [rail.id, s, CAMERAS]);
           for (const f of frames) {
@@ -399,6 +432,8 @@ try {
             if (!row.tris || f.tris > row.tris.tris) row.tris = frame;
             if (!row.worst || load(f) > load(row.worst)) row.worst = frame;
             if (over(f)) failures.push(frame);
+            const sec = sectionOf.get(rail.id);
+            if (sec !== undefined && (!bySection.has(sec) || load(f) > load(bySection.get(sec)))) bySection.set(sec, frame);
           }
         }
       }
@@ -448,6 +483,7 @@ try {
       `stage ${stage.id}: ${rails.map((r) => `${r.id} ${Math.round(r.length)} m`).join(', ')}; ${points} points × ${CAMERAS.length} cameras, title camera × ${TITLE_ANGLES.length} angles`,
     );
     for (const row of byCamera.values()) if (row.frames > 0) results.push({ ...row, stage: stage.id });
+    if (bySection.size > 0) sectionTables.push({ stage: stage.id, rows: [...bySection] });
     await page.close();
   }
   for (const id of movieIds) {
@@ -486,6 +522,11 @@ for (const r of results) {
   const calls = `${String(r.calls.calls).padStart(4)} (${at(r.calls)})`;
   const tris = `${k(r.tris.tris).padStart(6)} (${at(r.tris)})`;
   console.log(`${r.stage.padEnd(6)} ${r.camera.padEnd(7)} ${String(r.frames).padStart(6)}   ${calls.padEnd(21)} ${tris}`);
+}
+
+for (const t of sectionTables) {
+  console.log(`\nstage ${t.stage}: heaviest frame per section`);
+  for (const [sec, f] of t.rows) console.log(`  ${sec.padEnd(8)} ${String(f.calls).padStart(4)} calls ${k(f.tris).padStart(7)} triangles  (${f.camera} at ${at(f)})`);
 }
 
 console.log('\nworst frame per stage and camera (nearest the budget), by object: calls, triangles');

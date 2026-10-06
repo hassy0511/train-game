@@ -294,6 +294,8 @@ export type StageEvent =
   | { type: 'glass'; on: boolean }
   /** v1.11 (6-1): friends riding along from now on (cutscene "crew"; Sakasa sits behind the driver's seat). */
   | { type: 'crew'; ids: string[] }
+  /** v1.11 (PR11a, PHASE9_CHAPTER5_6 第 3 部 B6.2): through a gate from rail `from` to rail `to`. */
+  | { type: 'portal'; from: string; to: string }
   /** v1.11 (6-1): a cutscene's roll ("depart") started or ended. */
   | { type: 'depart'; state: 'rolling' | 'done' }
   /**

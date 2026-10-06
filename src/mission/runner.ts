@@ -25,6 +25,7 @@ import { SnowWave, type SnowWaveView } from './chase';
 import { LeadRunner, NO_REVERSE, type LeadOutcome, type LeadPhase, type LeadPose } from './lead';
 import { Welcome, type WelcomeOutcome, type WelcomeState } from './welcome';
 import { resolvePlacement } from '../stage/loader';
+import { sectionOf } from '../stage/sections';
 import type { TunnelSystem } from '../gimmick/tunnel';
 import type { MagnetSystem } from '../gimmick/magnet';
 import type { IronProps } from '../gimmick/iron-props';
@@ -289,6 +290,8 @@ type DefaultLine =
   | MirrorWorldLine
   // v1.11 (PR8a うしろむき)
   | Exclude<keyof typeof REVERSE_LINES, 'needAbility'>
+  // v1.11 (PR11a 区画と もん)
+  | 'wrongGate'
   // v1.11 (6-1 おいかけっこ・ドアを あけて まつ)
   | LeadLine
   | WelcomeLine;
@@ -449,6 +452,8 @@ const DEFAULT_LINES: Record<DefaultLine, string> = {
   backUp: REVERSE_LINES.backUp,
   refuseRocketBack: REVERSE_LINES.refuseRocketBack,
   reverseOops: REVERSE_LINES.reverseOops,
+  // v1.11 (PR11a 区画と もん, PHASE9_CHAPTER5_6 第 3 部 B9): through a gate to a section with nothing for this step.
+  wrongGate: 'こっちの せかいも みて いこう！',
   // v1.11 (6-1 おいかけっこ, PHASE9_CHAPTER5_6 第 7 部 §4.8). Every one within 20 letters. leadStart is Sakasa's.
   leadStart: 'さようなら〜！',
   leadStartReply: 'でた！ まてまて〜！',
@@ -710,6 +715,8 @@ export class MissionRunner {
   private backUpSaidFor: string | null = null;
   /** v1.11 (PR8a, B6.3): the step drives to a reverse platform: arriving is stopping at its siding's buffer. */
   private reverseArrival: StationDef | null = null;
+  /** v1.11 (PR11a): the sections "こっちの せかいも みて いこう！" was said for (this stage run). */
+  private readonly wrongGateSaid = new Set<string>();
   /** v1.11 (6-1): "おいかけっこ" of the step being driven (kept after it for the test hooks). */
   private lead: LeadRunner | null = null;
   /** v1.11 (6-1): the mid-step cutscene playing now (a lead's `learn`), or "". */
@@ -739,6 +746,16 @@ export class MissionRunner {
     this.magnet = systems?.magnet ?? null;
     this.iron = systems?.iron ?? null;
     this.reverse = systems?.reverse ?? null;
+    // v1.11 (PR11a, 第 3 部 B5・B9): through a gate into a section where this step's station is not (not the one the
+    // stage starts in: every way back goes through it): "こっちの せかいも みて いこう！", once a section. Never a fail.
+    train.events.on('portal', ({ to }) => {
+      const sec = sectionOf(stage.sections, to);
+      const station = this.stepStation;
+      if (!sec || !station || this.phase !== 'driving' || this.wrongGateSaid.has(sec.id)) return;
+      if (sec.rails.has(station.railId) || sec === sectionOf(stage.sections, stage.file.start.railId)) return;
+      this.wrongGateSaid.add(sec.id);
+      this.ports.sayAsync(this.lines.wrongGate ?? DEFAULT_LINES.wrongGate);
+    });
     // v1.11 (PR8a, B6.3): arriving at a reverse platform = stopping at its siding's buffer, reversing.
     train.events.on('reverseStop', ({ why }) => {
       const st = this.reverseArrival;
@@ -1837,6 +1854,10 @@ export class MissionRunner {
       if (rail.end.type === 'merge') {
         queue.push({ railId: rail.end.railId, enter: rail.end.railId === railId ? 0 : rail.end.at, legs: [...legs, { railId, from: enter, to: rail.length }] });
       }
+      // v1.11 (PR11a): through a gate (the way goes on from its arrival point).
+      if (rail.end.type === 'portal') {
+        queue.push({ railId: rail.end.railId, enter: rail.end.at, legs: [...legs, { railId, from: enter, to: rail.length }] });
+      }
     }
     return [];
   }
@@ -1942,10 +1963,12 @@ export class MissionRunner {
       if (this.hintsFired.has(i)) return;
       // v1.11: a riddle about a record for a later ability is not said once the player has that ability.
       if (h.unless && this.abilities.has(h.unless)) return;
+      // v1.11 (PR11a, 第 3 部 B6.5): one said only while the mission is at that step (it may come up again later).
+      if (h.whileStep !== undefined && h.whileStep !== this.stepIndex) return;
       const d = this.train.distanceAhead(h.railId, h.at);
       if (d !== null && d <= 0 && d > -30) {
         this.hintsFired.add(i);
-        this.ports.sayAsync(h.text);
+        this.ports.sayAsync(h.text, h.who === 'amanojaku' ? 'amanojaku' : undefined);
       }
     });
     this.updateGapHints();

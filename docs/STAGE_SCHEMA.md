@@ -35,6 +35,8 @@ interface StageFile {
   records: RecordItem[];
   missions: Mission[];
   gimmicks: Gimmick[];
+  sections?: { id: string; rails: string[]; environment: Partial<Environment> }[];  // v1.11 区画（§24）
+  crew?: "sakasa"[];          // v1.11 はじめから のって いる なかま（§24）
 }
 
 interface Environment {
@@ -54,7 +56,8 @@ interface Rail {
   end:
     | { type: "buffer" }                              // 車止め。自動停止
     | { type: "merge"; railId: string; at: number }   // 他の線路に合流
-    | { type: "open" };                               // 何もない（落下）
+    | { type: "open" }                                // 何もない（落下）
+    | { type: "portal"; railId: string; at: number }; // v1.11 もん。railId の at へ うつる（§24）
 }
 
 interface Junction {
@@ -249,7 +252,7 @@ interface MissionDef {
   id: string; type: 'deliver' | 'pickup' | 'repair' | 'timed'; title: string;
   steps: MissionStep[];               // 順に回る。最後の駅がゴール
   lines?: Partial<Record<LineKey, string>>;   // 場面ごとの相棒の台詞。無い場面は黙る
-  hints?: { railId: string; at: number; text: string }[];   // 電車の先頭が at を過ぎたら 1 回だけ言う
+  hints?: { railId: string; at: number; text: string; unless?: AbilityId; whileStep?: number; who?: "partner" | "amanojaku" }[];   // 電車の先頭が at を過ぎたら 1 回だけ言う（v1.11 whileStep・who は §24）
   onComplete?: string;                // 達成後に流す寸劇 id
 }
 type LineKey = 'start' | 'moving' | 'stationNear' | 'tooFast' | 'overshoot' | 'short' | 'perfect' | 'ok'
@@ -1563,6 +1566,79 @@ type LineKey = /* v1.11 (PR8a) */ 'backNear' | 'backArrows' | 'reverseNudge' | '
 - できごと: `lead:start`・`lead:call`（`{ n, auto }`）・`lead:learn`・`lead:follow`（`{ auto }`）・`lead:met`（`{ auto }`）・`lead:gone`・`lead:hop`、`station:open`、`welcome:beat`・`welcome:flinch`・`welcome:giggle`・`welcome:board`・`welcome:step`・`welcome:shy`、`crew`、`depart`
 - わざと まちがえた 形: `tests/stages-bad/lead-*.json`・`welcome-*.json`・`mission-junction-*.json`・`depart-*.json`
 - 本番に デバッグの 口は 足さない（テストは `addInitScript` の 記録係 `window.__leadLog`・`window.__welcomeLog`）
+
+## 24. v1.11 の追加（区画と もん: `sections`・線路の おわり `portal`・のって いる なかま `crew`・ステップの 間だけの ひとこと、2026-10-06 PR11a）
+設計: `docs/PHASE9_CHAPTER5_6.md` 第 3 部 第 B 部 B6（§0 と `docs/PHASE9_0_FREE_ABILITIES.md` が 先に きく）。`schemaVersion` は 1 の まま、ぜんぶ 省略可。全ステージ共通の 数は `src/train/params.ts` の `PORTAL`。ためしの ステージ **0-7**「てすとの もん」（`src/stages/0-7.json`、`hidden: true`・`chapter: 0`: 昼の 区画 `hiru` ＋ 3 km 東の 夜の 区画 `yoru`、行きと 帰りの もん、夜の 区画の うしろむきの わき道の おくに うしろの ホーム）。6-2「つながったせかい」が これを つかう（PR11b）。`StageFile.clearButton` は PR11b で この 節に 足す。
+
+### 区画（`sections`）
+```json
+"sections": [
+  { "id": "hiru", "rails": ["main", "kaeri"], "environment": {} },
+  { "id": "yoru", "rails": ["yoru", "yoru-ura"],
+    "environment": { "sky": { "top": "#141c46", "bottom": "#3d3f7e" }, "fog": { "color": "#2a3566", "near": 90, "far": 360 },
+                     "lighting": "night", "ground": { "y": -0.6, "size": 1400, "color": "#2f4a3a" },
+                     "stars": { "count": 300 }, "moon": { "azimuth": 20, "elevation": 24 }, "ambience": "night", "fall": "leaf" } }
+]
+```
+- ステージを とおく（3 km）はなれた 区画に わける。**どの 線路も ちょうど 1 つの 区画に 入る**。2 つ 以上
+- 区画の `environment` は ステージの `environment` に **書いた 欄だけ 上書き**: `sky`・`fog`・`lighting`・`ground`・`cloudSea`・`ambience`（まわりの 音）・`surface`（走る 音）・`fall`（しっぱいの 色）・`moon`・`fireflies`・`stars`・`snow`・`landmark`。`water` は ステージ ぜんたいの 一覧の まま（海は `area` で その 区画の 場所に 置く）、曲（`bgm`）は ステージで 1 つ（書くと はじく）
+- どの 区画の 見た目に するかは **毎フレーム** 見る 位置（`train.viewAnchor`: 前向きは 先頭、うしろむきは いちばん うしろの 車両）の 線路で きめる。巻き戻し・つづき・`npm run budget` の 置きなおしで 区画を とびこえても、すぐ その 区画の 見た目に なる
+- 地面の 板は 1 枚の まま、区画ごとに 色と 位置（その 区画の 線路の まん中）を かえる。雪の 床（`surface: "snow"`）は その 区画の 線路 だけ
+- ほかの 区画は カメラの 遠い 面（霧の 先 ＋ 40 m）の 外なので 描かれない（線路も 小物も 75 m の ます ごと。じしゃくの 小物 `ironProps` も 区画ごとに わけて 描く）
+- はじまりの 区画で ない 区画の 小物（`props`）は、ステージが 出た あと 1 フレーム 8 ms ずつ 作る（`buildQueue`、「あとから 作る」）。もんの 90 m 手前・見る 位置が その 区画に 入った ときに まだ なら のこりを いっきに 作る（白い もんの あいだ）
+
+### もん（線路の おわり `portal`）
+```json
+{ "id": "main", "points": ["…"], "end": { "type": "portal", "railId": "yoru", "at": 45 } }
+```
+- 先頭の 車両の まん中が 線路の おわりに 着くと、電車を `railId` の `at`（先頭の 車両の まん中）に うつす。**速さ・レバーは そのまま**、うしろの 車両は 行き先の 線路に そって 置きなおす（通った 道は そこで 作りなおし、床 ＝ 着いた 所）
+- **自動ブレーキ しない**（車止めでは ない）。止まっても よい（何も おきない）
+- 白い もん: のこりが `速さ × 0.3 秒 ＋ 1 m` に なると 0.3 秒で 白く なり（`#fade[data-kind="gate"]`、雲の 白 `#fbfdff` に きらきら）、音「ふわぁ・きらら」（`playGate`）、うつした しゅんかんに 区画の 見た目と カメラを すぐ 合わせ、0.3 秒で もどる。白く なりはじめて から 止まったら 白は もどる
+- ロケットは もんで おわる（「ぷしゅっ」。着いた 先で 22〜30 m/s の まま 走らない）。ジャンプ・もぐるの 弧も もんで おわる
+- うしろむきは もんを こえない（着いた 所で「おっとっと」、`data-reverse-stop="portal"`）。巻き戻しの 戻り先も もんを こえない（もんが 着く 線路では `at` より 前に 置かない）
+- もんの 先は 先読みしない（駅の ゲージ・雪の かべ・水・じしゃくの 窓・おいかけっこの 道。もんで 道が おわる と みる）。ミッションの 道しらべ（つづきの とき 通った しかけ）は もんを とおる
+- もんの おわりにも 着く 線路の はじまりにも 車止めは 描かない
+- できごと `portal`（`{ from, to }`）・`railChanged`
+
+### うしろの ホーム（`stations[].reverse`）
+§22 の まま（PR8a で 作った）。着いた ＝ うしろむきで わき道の 車止めに 止まった（`ReverseArrival`。`StopMonitor` は 作らない ので、ゲージ・はやすぎ・とおりすぎ なし）。ホーム・札・乗客の 列は +s 向き。0-7 で `0-7-home.png` を 撮る。
+
+### のって いる なかま（`crew`）
+```json
+"crew": ["sakasa"]
+```
+- ステージの はじめから サカサが 電車に のって いる: 運転席の うしろに すわる（`amanojaku-sit`）。うしろむきに なると 「ぐるりん」の あいだに いちばん うしろの 車両の うしろの まどへ（`amanojaku`、外を 向いて 立つ、「ぴょん」`playSakasaHop`）、まえに もどると 席へ。`#app[data-sakasa]`（`seat`／`rear`）
+- `sakasa` だけ。6-2 だけに 書く（6-1 の おわりは 寸劇の `crew`。§23）
+
+### ステップの 間だけの ひとこと・話す 人（`hints[].whileStep`・`hints[].who`）
+```json
+{ "railId": "yoru", "at": 330, "who": "amanojaku", "text": "うしろの ホーム、わすれてる のだ！", "whileStep": 0 }
+```
+- `whileStep`（0 から）: その ミッションの その ステップ（その 駅へ 走って いる あいだ）だけ 言う。ほかの ステップの あいだに 通っても 言わない（言わなかった ヒントは あとで その ステップに なって 通れば 言う）。ステップの 数より 小さい こと
+- `who`: 話す 人（`partner` 既定、`amanojaku` ＝ のって いる サカサ）
+
+### まわりの 音の 区間（`gimmicks[]` の `ambience`）
+```json
+{ "type": "ambience", "railId": "yoru", "from": 450, "to": 700, "params": { "kind": "toy" } }
+```
+- 見る 位置が この 区間に ある あいだ、まわりの 音を `kind`（`AmbienceKind`）に かえる（区画の 中で 景色が かわる 所）。`#app[data-ambience]`
+
+### ちがう もん（せりふの キー `wrongGate`）
+- もんを くぐって 入った 区画に いまの ステップの 駅が なければ（ステージの はじまりの 区画は のぞく: どの 道も そこを とおる）、その 区画に はじめて 入った とき 1 回「こっちの せかいも みて いこう！」。しっぱいに しない
+
+### 読み込み時の 検査（`validate.ts` の 形の 検査 ＋ `validate-sections.ts` の `validateSectionLayout`）
+- `end.type` は `buffer`・`merge`・`open`・`portal`。`portal` は `railId`（ある 線路、自分 いがい）と `at`（45 以上、行き先の おわりの 40 m 手前 まで）
+- もんの おわりの 手前 40 m と、行き先の 0〜`at` に 分かれ道・合流・切れ目・水・雪の かべ・坂・駅 なし
+- 行き先の `at`〜`at + 150`（30 m/s × 5 秒）に 線路の 上の 役者・切れ目・水の はし・雪の かべ・じしゃくの 区間・`mirror-flip`・うきもの なし（白い もんの すぐ あとに あわてる ものを 置かない）
+- うしろむきの わき道の 口は もんの おわり・もんが 着く 点から 80 m 以上（§22 の 検査に 足した）
+- `sections`: 2 つ 以上、id が かさならない、どの 線路も ちょうど 1 つ、`environment` は 上の 欄 だけ（ステージの `environment` と 同じ 決まりで 検査）。ちがう 区画の 線路は 分かれ道・合流で つながらない（`portal` だけ）。**ちがう 区画の 線路の 点どうしの いちばん 近い きょり ≥ max(霧の far) × 4 ＋ 40 ＋ 100**（寸劇の `fixed` カメラは 遠い 面を 霧の 4 倍まで のばす。霧が なければ 600 ＋ 100）
+- `hints[].whileStep`: その ミッションの ステップの 数より 小さい 0 以上の 整数。`hints[].who`: `partner` か `amanojaku`
+- `crew`: `["sakasa"]` だけ。`gimmicks[]` の `ambience`: `params.kind` が `AmbienceKind`
+- わざと まちがえた 形: `tests/stages-bad/portal-*.json`・`section-*.json`・`hint-while-step.json`・`crew-other.json`・`ambience-kind.json`
+
+### テスト用の しるし
+- `#app` の `data-section`（いまの 区画）・`data-sky`（区画の 空の 上の 色。区画の ある ステージ だけ）・`data-portals`（くぐった 回数。ふえる だけ）・`data-portal`（さいごの `from>to`）・`data-sections-ready`（作り おわった 区画の id）・`data-load-ms`（ページが あそべる ように なるまでの ms）・`data-sakasa`・`data-ambience`。`#fade[data-kind="gate"]`（白い もんの あいだ）
+- 本番に デバッグの 口は 足さない（テストは `addInitScript` の 記録係 `window.__portalLog`。区画を とびこえる テストは 開発サーバーの `__debugTrain.rewindTo`）
 
 ## 25. v1.12 の追加（えんしゅつ: カメラの ショット・生き物の 動き・レターボックス・ムービー、2026-10-05）
 

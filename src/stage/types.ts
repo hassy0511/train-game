@@ -199,7 +199,13 @@ export const AMBIENCE_KINDS: readonly AmbienceKind[] = [
 export type RailEndDef =
   | { type: 'buffer' }
   | { type: 'merge'; railId: string; at: number }
-  | { type: 'open' };
+  | { type: 'open' }
+  /**
+   * v1.11 (PR11a, PHASE9_CHAPTER5_6 第 3 部 B6.2): a gate ("もん"): once the lead car's centre reaches the end the train
+   * is moved to rail `railId` with its lead car's centre at `at` (≥ 45: the three cars fit in), speed and lever kept,
+   * behind a short white fade. Rails of different sections (`sections`) meet only by gates.
+   */
+  | { type: 'portal'; railId: string; at: number };
 
 /** Lever notch the partner recommends for a jump (v1.2). */
 export type JumpHint = 'normal' | 'fast' | 'max';
@@ -667,6 +673,10 @@ export interface HintDef {
   text: string;
   /** v1.11: not said when the player has this ability (a riddle about a record for a later ability). */
   unless?: AbilityId;
+  /** v1.11 (PR11a, 第 3 部 B6.5): said only while the mission is at this step (0-based; less than its steps). */
+  whileStep?: number;
+  /** v1.11 (PR11a, B6.5): who says it (default the partner; "amanojaku" Sakasa riding along). */
+  who?: 'partner' | 'amanojaku';
 }
 
 /** v1.11 (6-1, 第 7 部 §4.8): the lines of "おいかけっこ" (every one has a default). */
@@ -888,6 +898,8 @@ export type MissionLines = Partial<
     | 'backUp'
     | 'refuseRocketBack'
     | 'reverseOops'
+    // v1.11 (PR11a 区画と もん, 第 3 部 B5・B9): through a gate into a section with no station of the step's.
+    | 'wrongGate'
     // v1.11 (6-1 おいかけっこ・ドアを あけて まつ)
     | LeadLine
     | WelcomeLine,
@@ -1413,6 +1425,55 @@ export interface StageFile {
   floaters?: FloaterDef[];
   /** v1.12: this file is a movie (src/movies/), not a stage. */
   movie?: MovieDef;
+  /**
+   * v1.11 (PR11a, 第 3 部 B6.1): the stage in sections far apart (3 km), joined only by gates (`end.type` "portal"):
+   * every rail in exactly one; each section's look over the stage's own `environment`. Omitted: one look everywhere.
+   */
+  sections?: SectionDef[];
+  /** v1.11 (PR11a, B6.4): friends riding along from the start (Sakasa sits behind the driver's seat; 6-2). */
+  crew?: 'sakasa'[];
+}
+
+/**
+ * v1.11 (PR11a, 第 3 部 B6.1): one section of a stage: its rails and its look (the fields written override the stage's
+ * own `environment`; `water` stays stage-wide, the song is the stage's: no `bgm`).
+ */
+export interface SectionDef {
+  id: string;
+  rails: string[];
+  environment: SectionEnvironment;
+}
+
+/** v1.11 (PR11a): what a section's look may override. */
+export type SectionEnvironment = Partial<
+  Pick<
+    EnvironmentDef,
+    'sky' | 'fog' | 'lighting' | 'ground' | 'cloudSea' | 'ambience' | 'surface' | 'fall' | 'moon' | 'fireflies' | 'stars' | 'snow' | 'landmark'
+  >
+>;
+export const SECTION_ENVIRONMENT_KEYS: readonly (keyof SectionEnvironment)[] = [
+  'sky',
+  'fog',
+  'lighting',
+  'ground',
+  'cloudSea',
+  'ambience',
+  'surface',
+  'fall',
+  'moon',
+  'fireflies',
+  'stars',
+  'snow',
+  'landmark',
+];
+
+/** v1.11 (PR11a, set by the loader): a section resolved: its look (the stage's with its own over it) and its middle. */
+export interface ResolvedSection {
+  id: string;
+  rails: ReadonlySet<string>;
+  environment: EnvironmentDef;
+  /** The middle of its rails (x, z; the ground board is put there). */
+  centre: { x: number; z: number };
 }
 
 /**
@@ -1497,6 +1558,8 @@ export interface StageData {
   ironProps: IronProp[];
   /** v1.11 (PR8a): the back junctions (taken out of `file.junctions`, which holds the forward ones only). */
   backJunctions: JunctionDef[];
+  /** v1.11 (PR11a): the sections (empty: the stage is one). */
+  sections: ResolvedSection[];
 }
 
 // ---- v1.11 (PR5): the magnet light (PHASE9_CHAPTER5_6 第 2 部 M9) ------------------------------------------------

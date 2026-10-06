@@ -1,0 +1,1 @@
+{"_expect": "hint \"whileStep\" must be a step of the mission (0–0)", "_base": "0-7", "_edit": [{"path": "missions.1.hints", "value": [{"railId": "kaeri", "at": 100, "text": "まだ", "whileStep": 1}]}]}

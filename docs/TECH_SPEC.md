@@ -65,6 +65,16 @@ Godotは**採用しない**（決定理由: エージェント主導でエディ
 - カメラ（`src/view/camera-rig.ts`）: `rear`（いちばん うしろの 車両の うしろの はしから 0.3 m 外・高さ 2.3 m・−s を 見る、画角 55°・near 0.4 m、なめらかに しない）と `chase-rev`（先頭の 前 16 m・上 9 m から 電車ごしに）。カメラの 板には 出さない（`main.ts` の `applyCamera` が うしろむきの あいだ おきかえる）。うしろの まどの わくは DOM（`.rear-window`）、ぐるりんも DOM（`.reverse-swirl`）。うしろむきの あいだ 光の すじは いちばん うしろの 車両に つけかえ、白い ランプ 2 つ（1 回で 描く）
 - テスト用の しるし: `#app[data-car-gap]`（1・2 両めの まん中の きょり、まっすぐなら 12.5）・`#app[data-car-lift-err]`（うしろの 車両の 高さと、同じ 積算きょりに いた ときの 先頭の 車両の 高さの ちがい）。`tests/smoke/consist.spec.ts`。`scripts/probe-consist.mjs`（開発サーバーで: ぜんぶの ステージの 置き方を まえの 置き方と くらべる・分かれ道や 合流を とびながら 走って 高さを くらべる）
 
+### 区画と もん（2026-10-06 PHASE9 PR11a）
+- ステージを とおく（3 km）はなれた **区画**（`sections`）に わけ、線路の おわり **もん**（`end.type: "portal"`）で つなぐ（STAGE_SCHEMA §24、PHASE9_CHAPTER5_6 第 3 部 B6）。区画どうしは 線路で つながらない ので、`RailNetwork` も つながない（`RailNetwork.portalsInto(id)` で 着く 所 だけ わかる）
+- もん（`Train`）: 先頭の 車両の まん中が おわりに 着くと `Train.teleport(railId, at)`。速さ・レバーは そのまま、通った 道は 行き先で 作りなおし（床 ＝ 着いた 所、止まる わけ `portal`）。`stopDistance()` は `null`（自動ブレーキ なし）、のこりが `速さ × 0.3 秒 ＋ 1 m` で できごと `portalAhead`（白く なりはじめる）、うつった ときに `portal { from, to }`・`railChanged`。ロケットは そこで おわる（`rocketEnded { cut: true }`）。`rewindTo` は もんが 着く 線路では 着く 所より 前に 置かない
+- 先読み（`routeDistance`・`nextPlowWall`・水の 先読み・じしゃくの 窓・おいかけっこの 道・ロケットの 車止め）は いままでどおり `merge` しか たどらない ＝ もんで 道が おわる と みる。ミッションの 道しらべ（`wayTo`、つづきの とき）は もんを とおる。`rail-mesh.ts`・`WireSceneView` は もんの おわりにも 着く 線路の はじまりにも 車止めを 描かない
+- 区画の 見た目（`main.ts`）: 毎フレーム `train.viewAnchor` の 線路から 区画を きめ、かわったら その 区画の 環境（ステージの `environment` に 区画の 欄を 上書き）を `SceneView.applyEnvironment(env, centre)` で かける（地面の 板を 区画の まん中へ）。まわりの 音・走る 音・しっぱいの 色も 区画の もの。`gimmicks[]` の `ambience` 区間は まわりの 音 だけ かえる。白い もんは しっぱいの フェードと 同じ `#fade`（`data-kind="gate"`、`#fbfdff`）、うつった しゅんかんに 区画の 見た目と カメラを すぐ 合わせる
+- ほかの 区画は カメラの 遠い 面の 外なので 描かれない（線路・小物は 75 m の ます ごと。1 つの InstancedMesh が 区画を またがない こと: `IronPropsView` は 区画ごとに わけた。`flocks` は むれ ごと。ステージで 1 つに まとめる もの〈氷の 鳥の 列・水の 光の すじ など〉は 1 つの 区画に しか 置かない こと ＝ 6-2 で 2 つの 区画に 置く なら わける）。読み込みの 検査が 区画の 線路の はなれ（霧の far × 4 ＋ 40 ＋ 100 m 以上）を たしかめる
+- あとから 作る（B13）: はじまりの 区画で ない 区画の 小物は `BuildQueue`（`src/core/build-queue.ts`）に つみ、`ThreeSceneView.update` が 1 フレーム 8 ms まで 作る（iPad の Safari に `requestIdleCallback` が ない ので 自前）。もんの 90 m 手前・見る 位置が 入った ときに まだ なら のこりを いっきに（`SceneView.buildSection`）。しるし `#app[data-sections-ready]`・`#app[data-load-ms]`（あそべる ように なるまでの ms。iPad 第 9 世代で 4 秒を こえたら、ほかの 層も あとから 作る ように する）
+- のって いる なかま（`crew`）: サカサは 先頭の 車両の 運転席の うしろ（`addCrewSeat`）、うしろむきの あいだ いちばん うしろの 車両の うしろの はし（`amanojaku`、その 車両は まどが すける）。`#app[data-sakasa]`
+- テスト: `tests/smoke/portal.spec.ts`（0-7。区画を とびこえる ところは 開発サーバーの `__debugTrain.rewindTo`）
+
 ### 判定と演出
 - 障害物・生き物・記録・仕掛け＝Rapierセンサー。電車が入った瞬間にイベント発火
 - 転がる岩・崩れる橋・脱線で転がる・乗客ずっこけ＝Rapier剛体（ラグドールは簡易でよい）
@@ -211,6 +221,7 @@ GitHub Actions
   - 開発サーバーで動かす（開発版だけにある `__debugView` / `__debugTrain` を使う）。約 2 分かかるので CI には入れず、ステージの PR の前に回す
   - 2026-09-25 の値: 一番重いのは 1-2 うしろから（9.2 万三角形）と 1-3 うしろから（82 回）。表は `docs/PHASE4_DESIGN.md` §6
   - タイトルの カメラ（止まった電車の まわりを ゆっくり ゆれる、PHASE7_FINISH §4 の 6）も「title」として 測る。スタート地点で 電車の 両側 ±28° を 14° ごと
+  - 区画の ある ステージ（PR11a）: もんの おわりの 5 m 手前と 着いた 所の 5 m 先も 測り、区画ごとの いちばん 重い コマを 表に 出す。めやすは 区画ごとに 120 回・8 万 三角形 以下（PHASE9_CHAPTER5_6 第 3 部 B13）
 - 重い端末では描画の細かさを自動で 2 → 1.5 → 1.25 → 1 と下げる（45 fps を 3 秒下回ったら 1 段）
 
 ---

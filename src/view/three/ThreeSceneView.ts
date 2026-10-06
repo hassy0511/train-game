@@ -23,9 +23,11 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { StageEvent } from '../../core/stage-events';
+import { BuildQueue } from '../../core/build-queue';
+import { sectionOf } from '../../stage/sections';
 import type { RailNetwork } from '../../rail/types';
 import type { StageData } from '../../stage/types';
-import { TRAIN } from '../../train/params';
+import { PORTAL, TRAIN } from '../../train/params';
 import type { TrainPose } from '../../train/types';
 import type { CameraFx, SceneView } from '../SceneView';
 import { cameraTarget, makeCameraTarget, orbitAngle, orbitTarget, REAR_CAMERA, smoothCamera, type CameraMode, type OrbitCamera } from '../camera-rig';
@@ -56,7 +58,7 @@ import type { LeadPose } from '../../mission/lead';
 import { bakeModel } from './bake';
 import { CAMERA_FAR, EnvironmentState, FOG_CULL_MARGIN, snowBeds } from './environment-state';
 import { ModelLibrary } from './models';
-import { addModelPlacements, addProps } from './props';
+import { addBatch, addModelPlacements, addProps, placementBatches } from './props';
 import { buildDetachedRailPiece, buildRailScene, buildTrack, type TrackLook, type TrackLooks } from './rail-mesh';
 import { WaterLayer } from './water';
 import { SeaGimmicks } from './sea';
@@ -167,6 +169,14 @@ export class ThreeSceneView implements SceneView {
   /** v1.11 (6-1): Sakasa in "おいかけっこ", and sitting behind the driver's seat (crew). */
   private lead: LeadFigure | null = null;
   private crewSeat: Object3D | null = null;
+  /** v1.11 (PR11a, 第 3 部 A10・B6.4): Sakasa standing at the last car's rear window while reversing (made the first time). */
+  private crewRear: Object3D | null = null;
+  private reversing = false;
+  /**
+   * v1.11 (PR11a, 第 3 部 B13): the props of the sections the train does not start in, built a slice a frame after
+   * the stage is up ("あとから 作る"); each section's in a group of its own.
+   */
+  private readonly buildQueue = new BuildQueue();
   /** v1.11 (PR10): Sakasa sitting in the first car on the title (and which call last asked, as the model loads). */
   private titleCrew: Object3D | null = null;
   private titleCrewAsk = 0;
@@ -233,8 +243,11 @@ export class ThreeSceneView implements SceneView {
     for (const r of stage.file.rails) if (r.base) bases.set(r.id, Array.isArray(r.base) ? r.base : [r.base]);
     const slopes = slopeZones(stage.file.gimmicks);
     // v1.10 (4-1): the bed is white on snow, pale blue on ice and a deeper blue on thin ice.
+    // v1.11 (PR11a): a stage in sections: snow beds under each snowy section's own rails.
     const beds = [
-      ...snowBeds(stage.file.rails, stage.file.environment),
+      ...(stage.sections.length > 0
+        ? stage.sections.flatMap((sec) => snowBeds(stage.file.rails.filter((r) => sec.rails.has(r.id)), sec.environment))
+        : snowBeds(stage.file.rails, stage.file.environment)),
       ...iceZones(stage.file.gimmicks).map((z) => ({ railId: z.railId, from: z.from, to: z.to, color: ICE_BED })),
       ...thinIceZones(stage.file.gimmicks).map((z) => ({ railId: z.railId, from: z.from, to: z.to, color: THIN_ICE_BED })),
     ];
@@ -368,7 +381,9 @@ export class ThreeSceneView implements SceneView {
       this.models.load('partner'),
       // v1.11 (5-1): sleepers each on their own (they hide by themselves: the night layer).
       // v1.11 (5-2): the reverse-wound decorations too (the toy layer turns them round).
-      addProps(props, stage.props.filter((p) => !p.tag && !(p.sleeper && this.night) && !(p.windup && this.toy)), this.models),
+      addProps(props, this.splitLaterProps(stage.props.filter((p) => !p.tag && !(p.sleeper && this.night) && !(p.windup && this.toy))), this.models),
+      // v1.11 (PR11a): (after the line above split them off) the other sections' props, queued.
+      this.queueLaterProps(),
       ...this.taggedProps.map(({ prop, group }) => addProps(group, [prop], this.models)),
       addModelPlacements(bufferStops, bufferStopsShown, this.models),
       this.actors.init(stage.actors, stage.records),
@@ -414,6 +429,69 @@ export class ThreeSceneView implements SceneView {
     this.addDoorVisuals();
 
     this.resize(container.clientWidth, container.clientHeight, window.devicePixelRatio);
+  }
+
+  /** v1.11 (PR11a, B13): the later sections' props being queued (section id → props), filled by splitLaterProps. */
+  private readonly laterProps = new Map<string, ResolvedProp[]>();
+
+  /**
+   * v1.11 (PR11a, 第 3 部 B13): the props of a stage in sections: those of the section the train starts in are
+   * returned (built now); the other sections' are queued, each section's batches into a group of its own, built a
+   * slice a frame (buildQueue) once their models are in.
+   */
+  private splitLaterProps(list: ResolvedProp[]): ResolvedProp[] {
+    const stage = this.stage;
+    if (!stage || stage.sections.length === 0) return list;
+    const start = sectionOf(stage.sections, stage.file.start.railId);
+    const now: ResolvedProp[] = [];
+    for (const p of list) {
+      let sec = p.onRail ? sectionOf(stage.sections, p.onRail.railId) : null;
+      if (!sec) {
+        let best = Infinity;
+        for (const c of stage.sections) {
+          const d = Math.hypot(p.position.x - c.centre.x, p.position.z - c.centre.z);
+          if (d < best) {
+            best = d;
+            sec = c;
+          }
+        }
+      }
+      if (!sec || sec === start) now.push(p);
+      else {
+        const later = this.laterProps.get(sec.id);
+        if (later) later.push(p);
+        else this.laterProps.set(sec.id, [p]);
+      }
+    }
+    for (const sec of stage.sections) if (sec !== start && !this.laterProps.has(sec.id)) this.laterProps.set(sec.id, []);
+    return now;
+  }
+
+  private async queueLaterProps(): Promise<void> {
+    for (const [id, list] of this.laterProps) {
+      const group = new Group();
+      group.name = `props:${id}`;
+      this.scene.add(group);
+      const batches = placementBatches(list);
+      const templates = new Map(await Promise.all([...new Set(batches.map((b) => b.model))].map(async (m) => [m, await this.models.load(m)] as const)));
+      for (const b of batches) this.buildQueue.add(id, () => addBatch(group, b.model, templates.get(b.model) as Group, b.placements));
+      this.queuedSections.add(id);
+    }
+  }
+
+  /** v1.11 (PR11a): the later sections whose props are queued (their models are in). */
+  private readonly queuedSections = new Set<string>();
+
+  /** v1.11 (PR11a, B13): builds what is left of section `id` now (before a gate into it, or the view got there). */
+  buildSection(id: string): void {
+    this.buildQueue.flush(id);
+  }
+
+  /** v1.11 (PR11a, B13): the sections built so far (all of them on a stage in one piece: none). */
+  sectionsReady(): string[] {
+    const stage = this.stage;
+    if (!stage) return [];
+    return stage.sections.filter((sec) => !this.laterProps.has(sec.id) || (this.buildQueue.ready(sec.id) && this.queuedSections.has(sec.id))).map((sec) => sec.id);
   }
 
   private addDoorVisuals(): void {
@@ -512,6 +590,7 @@ export class ThreeSceneView implements SceneView {
       this.crewSeat = new Object3D();
       void addCrewSeat(this.models, this.train).then((sit) => {
         this.crewSeat = sit;
+        this.placeCrew();
       });
     }
     if (event.type === 'rocket') this.fovTarget = event.state === 'burn' && !this.calm ? ROCKET_FOV : 0;
@@ -654,6 +733,34 @@ export class ThreeSceneView implements SceneView {
     const holder = on ? tail : this.train;
     if (this.lightBeam.parent !== holder) holder.add(this.lightBeam);
     this.lightBeam.rotation.y = on ? Math.PI : 0;
+    // v1.11 (PR11a, 第 3 部 A10・B6.4): Sakasa riding along hops from her seat to the last car's rear window (and back),
+    // during the turn's swirl.
+    this.reversing = on;
+    this.placeCrew();
+  }
+
+  /** v1.11 (PR11a): Sakasa on her seat going forward, standing at the rear window (looking out) reversing. */
+  private placeCrew(): void {
+    if (!this.crewSeat) return;
+    const rear = this.reversing;
+    this.crewSeat.visible = !rear;
+    if (rear && !this.crewRear) {
+      this.crewRear = new Object3D();
+      const index = this.cars.length;
+      void this.models.load('amanojaku').then((model) => {
+        const stand = (bakeModel(model) ?? model).clone(true);
+        stand.name = 'crew-sakasa-rear';
+        // Just inside the last car's rear end, on its floor, facing out the way the train goes now (−Z).
+        stand.position.set(0, 1.0, -(TRAIN.length / 2 - 0.9));
+        stand.rotation.y = Math.PI;
+        (this.cars[index - 1] ?? this.train).add(stand);
+        // The car she stands in is drawn with see-through windows (she can be seen from outside).
+        this.clearWindows(index);
+        this.crewRear = stand;
+        this.placeCrew();
+      });
+    }
+    if (this.crewRear) this.crewRear.visible = rear;
   }
 
   /** v1.12: car `index` (0 = the lead) drawn again with see-through windows and a plain inside (once). */
@@ -831,8 +938,9 @@ export class ThreeSceneView implements SceneView {
    * PHASE9 B6.1: changes the look (a 6-2 section's, 5-1's day and night), as often as wanted. Only what differs from
    * the look before is built again.
    */
-  applyEnvironment(env: EnvironmentDef): void {
-    this.environment.apply(env);
+  applyEnvironment(env: EnvironmentDef, centre?: { x: number; z: number }): void {
+    this.environment.apply(env, centre);
+    this.sky3?.snapFog();
     this.setLandmark(env);
     // Under water the view had kept the look above the surface to come back to: it takes the new one next frame.
     this.aboveWater = null;
@@ -940,6 +1048,8 @@ export class ThreeSceneView implements SceneView {
   update(dt: number, pose: TrainPose, fx: CameraFx): void {
     if (!this.renderer) return;
     this.renderer.info.reset();
+    // v1.11 (PR11a, B13): a slice of the later sections' building a frame (not while the game stands paused).
+    if (dt > 0) this.buildQueue.run(PORTAL.buildSliceMs);
     this.train.position.copy(pose.position);
     this.train.quaternion.copy(pose.quaternion);
     this.cars.forEach((car, i) => {

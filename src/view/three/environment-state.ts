@@ -89,7 +89,11 @@ export class EnvironmentState {
     return this.fog;
   }
 
-  apply(env: EnvironmentDef): void {
+  /**
+   * Sets the look `env`. v1.11 (PR11a, B6.1): `centre` puts the one ground board round a section's middle (x, z; the
+   * stage's origin by default).
+   */
+  apply(env: EnvironmentDef, centre: { x: number; z: number } = { x: 0, z: 0 }): void {
     const scene = this.scene;
     scene.background = this.background.set(env.sky.bottom);
     if (env.fog) {
@@ -122,8 +126,8 @@ export class EnvironmentState {
     this.lightingAsSet = env.lighting;
 
     // v1.10: the stage's water is the same everywhere (it cuts the ground's holes), so it is part of the key.
-    const groundKey = env.ground || env.water?.length ? JSON.stringify([env.ground?.size, env.ground?.y, env.ground?.look ?? null, env.water ?? null]) : null;
-    const ground = this.piece('ground', groundKey, () => buildGround(env), scene) as Mesh | null;
+    const groundKey = env.ground || env.water?.length ? JSON.stringify([env.ground?.size, env.ground?.y, env.ground?.look ?? null, env.water ?? null, centre.x, centre.z]) : null;
+    const ground = this.piece('ground', groundKey, () => buildGround(env, centre), scene) as Mesh | null;
     if (ground) paintGround(ground, env);
 
     const snow = env.snow && env.snow.count > 0 ? env.snow : null;

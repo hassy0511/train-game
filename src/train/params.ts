@@ -25,6 +25,33 @@ export const TRAIN = {
 export const TRAIL = { back: 33, max: 2000 } as const;
 
 /**
+ * v1.11 (PR11a, PHASE9_CHAPTER5_6 第 3 部 B6.1・B6.2・B6.7・B13): sections and gates ("もん"). A gate puts the train's lead
+ * car centre at least `minAt` m into the rail it arrives on (the three cars fit in its cloud tunnel). The last
+ * `clearBefore` m before a gate's end and the first `clearBefore`.. its arrival point hold no fork, merge, gap, water,
+ * snow wall, slope nor station; for `clearAfter` m after the arrival (30 m/s for 5 s) nothing asks the child for
+ * something at once. The white ("白い もん") comes in when `whiteLead` s of the way to the end are left (plus
+ * `whiteMargin` m), over `whiteSeconds` s, and goes again as long once across. Sections' rails keep the fog's farthest
+ * reach (fog far × `reachMax`, a fixed cutscene camera's most, + the far plane's margin) plus `sectionMargin` m apart;
+ * without a fog `noFogFar` m. The props of the sections the train does not start in are built once the stage is up,
+ * `buildSliceMs` ms a frame (`buildQueue`; iPad Safari has no requestIdleCallback), the rest at once `buildBefore` m
+ * before a gate into one not ready (in the white) or when the view gets into it.
+ */
+export const PORTAL = {
+  minAt: 45,
+  clearBefore: 40,
+  clearAfter: 150,
+  whiteLead: 0.3,
+  whiteMargin: 1,
+  whiteSeconds: 0.3,
+  reachMax: 4,
+  farMargin: 40,
+  sectionMargin: 100,
+  noFogFar: 600,
+  buildSliceMs: 8,
+  buildBefore: 90,
+} as const;
+
+/**
  * v1.11 (PR8a, PHASE9_CHAPTER5_6 第 3 部 A4, PHASE9_0 §5): "うしろむき". The switch beside the lever turns the train
  * round when it stands (`turnSeconds`); pressed while moving it first brakes to a stop at `switchBrake` (a second press
  * cancels). Reversing, any running notch asks for `maxSpeed` (accel `accel`, brake `brake`), and the train retraces its
