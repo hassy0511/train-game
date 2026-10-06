@@ -83,6 +83,12 @@ export function saveProgress(progress: Progress): void {
   }
 }
 
+/**
+ * v1.11 (PR11b): the save's mark of a movie watched to its card ("movie:<id>", in mapLinks like the map's "finale:"
+ * marks): from then on "▶▶" skips it, and the clear that opened it does not play it again.
+ */
+export const movieSeen = (id: string): string => `movie:${id}`;
+
 /** Adds items to a list field and saves. Returns true when something new was added. */
 export function addToProgress(field: 'cleared' | 'abilities' | 'records' | 'mapLinks', items: string[]): boolean {
   const progress = loadProgress();
@@ -253,9 +259,8 @@ const PASSCODE_V1: PasscodeVersion = {
 
 /**
  * Chapters 3 and 4 after version 1's items, in stage order (3 records a stage). 4-3's are the ones its design gives
- * (PHASE8_CHAPTER3_4 第 8 部); scripts/check-stages.mjs (npm run build) and pause-settings.spec.ts check that every
- * stage file's clear, ability and records have a place here, so a stage that ships with other ids fails before this
- * version is published.
+ * (PHASE8_CHAPTER3_4 第 8 部); scripts/check-stages.mjs (npm run build) checks that every id here is still in a stage
+ * file.
  * `magnetLight` (chapter 5) and `reverse` (chapter 6) came with version 3. Read only now (new codes are version 3).
  */
 const PASSCODE_V2: PasscodeVersion = {
@@ -290,10 +295,10 @@ const PASSCODE_V2: PasscodeVersion = {
 
 /**
  * Chapters 5 and 6 after version 2's items, in stage order (3 records a stage), with their two abilities
- * (PHASE9_CHAPTER5_6 §0.6, 第 1 部 §7.2). Published before those stages are all built: the ids are the design's, and
- * the bits of a stage not built yet stay 0. As for version 2, scripts/check-stages.mjs and pause-settings.spec.ts
- * fail if a stage ships with other ids, so fix the stage, never this list. 6-2 with more than 3 records would need
- * fewer check bits (at least 16) or 24 letters with `padBits` (§7.2).
+ * (PHASE9_CHAPTER5_6 §0.6, 第 1 部 §7.2). Published (PR3) before those stages were built, with the design's ids; since
+ * 6-2 (PR11b) every one of them is in a stage file, and scripts/check-stages.mjs (npm run build) checks both ways:
+ * every stage's clear, ability and record has a place here, and this list is exactly the stages' own in stage order
+ * (PR12). A stage that changes an id fails the build: fix the stage, never this list.
  */
 const PASSCODE_V3: PasscodeVersion = {
   version: 3,

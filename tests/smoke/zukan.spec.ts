@@ -1,12 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
  * The picture book from the title (docs/PHASE7_FINISH.md §4 item 2), from a prepared save: one row per island,
- * 「みつけた n/48」, the pictures of found records, "?" cards with the grey picture of the ability they still need,
- * and 「とじる」 in sight at the bottom however far down the child has scrolled.
+ * 「みつけた n/48」 (51 once 6-1 is cleared: 6-2's row), the pictures of found records, "?" cards with the grey picture
+ * of the ability they still need, and 「とじる」 in sight at the bottom however far down the child has scrolled. With
+ * every ability no grey picture is left, and with every record no "？" (PHASE9_CHAPTER5_6 §0.7 PR12).
  */
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), 'output');
 mkdirSync(OUT, { recursive: true });
@@ -193,6 +194,9 @@ test('picture book with うしろむき (6-1 cleared): the three うしろむき
   // PR11b: 6-1 cleared opens 6-2's row (its three records, all うしろむき: no grey picture either).
   await expect(page.locator('#zukan-count')).toHaveText('みつけた 1/51');
   await expect(page.locator('.zukan-row[data-stage="6-2"] .zukan-card')).toHaveCount(3);
+  // Every ability learned: no grey picture is left anywhere (PR12).
+  await expect(page.locator('.zukan-card .zukan-mark')).toHaveCount(50);
+  await expect(page.locator('.zukan-later')).toHaveCount(0);
   for (const id of ['upside-island', 'sakasa-doodle', 'swirl-acorn', 'left-shell', 'sakasa-tag']) {
     await expect(page.locator(`.zukan-card[data-record="${id}"] .zukan-mark`), id).toHaveText('？');
     await expect(page.locator(`.zukan-card[data-record="${id}"] .zukan-later`), id).toHaveCount(0);
@@ -217,5 +221,46 @@ test('picture book before 6-1 is cleared: no row for 6-2 (it is not on the map e
   await expect(page.locator('.zukan-row[data-stage="6-1"]')).toHaveCount(1);
   await expect(page.locator('.zukan-row[data-stage="6-2"]')).toHaveCount(0);
   await expect(page.locator('#zukan-count')).toHaveText('みつけた 0/48');
+  expect(errors).toEqual([]);
+});
+
+/** Every playable stage's records, in stage order, from the stage files. */
+function allRecords(): { stage: string; ids: string[] }[] {
+  const dir = resolve(dirname(fileURLToPath(import.meta.url)), '../../src/stages');
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.json'))
+    .sort()
+    .map((f) => JSON.parse(readFileSync(resolve(dir, f), 'utf8')) as { id: string; hidden?: boolean; records: { id: string }[] })
+    .filter((s) => !s.hidden)
+    .map((s) => ({ stage: s.id, ids: s.records.map((r) => r.id) }));
+}
+
+test('picture book with everything (6-2 cleared, every record): no "？" left, every picture there (PR12)', async ({ page }) => {
+  const errors = watchErrors(page);
+  const stages = allRecords();
+  const ids = stages.flatMap((s) => s.ids);
+  expect([stages.length, ids.length]).toEqual([17, 51]);
+  await seed(page, {
+    cleared: stages.map((s) => s.stage),
+    abilities: ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'magnetLight', 'reverse'],
+    records: ids,
+    mapLinks: [...CHAIN, '2-1>2-2', '2-2>2-3', '2-3>1-1', '1-1>3-1', '3-1>3-2', '3-2>3-3', '3-3>4-1', '4-1>4-2', '4-2>4-3', '4-3>5-1', '5-1>5-2', '5-2>5-3', '5-3>6-1', '6-1>6-2', 'finale:4', 'finale:5', 'finale:world', 'finale:6', 'movie:ending'],
+  });
+  await openZukan(page);
+  await expect(page.locator('#zukan-count')).toHaveText('みつけた 51/51');
+  await expect(page.locator('.zukan-row')).toHaveCount(17);
+  for (const { stage } of stages) await expect(page.locator(`.zukan-row[data-stage="${stage}"] .zukan-row-count`), stage).toHaveText('3/3');
+  await expect(page.locator('.zukan-mark')).toHaveCount(0);
+  await expect(page.locator('.zukan-later')).toHaveCount(0);
+  await expect(page.locator('.zukan-card.is-found')).toHaveCount(51);
+  // Every found card has its picture, and every picture is served (they load lazily, so fetch them).
+  await expect(page.locator('.zukan-card.is-found img')).toHaveCount(51);
+  const sources = await page.locator('.zukan-card.is-found img').evaluateAll((imgs) => imgs.map((i) => (i as HTMLImageElement).src));
+  for (const src of sources) expect((await page.request.get(src)).status(), src).toBe(200);
+  expect(await pictureWidth(page, 'sakasa-tag')).toBe(256);
+  await page.locator('.zukan-row[data-stage="6-2"]').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: resolve(OUT, 'zukan-6-all.png') });
+  await closeInSight(page);
   expect(errors).toEqual([]);
 });

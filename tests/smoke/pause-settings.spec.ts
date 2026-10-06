@@ -328,8 +328,9 @@ const V3_LATER = {
  * Everything there is to have in the stage files (`only`: the stages whose id matches; `extra`: more, e.g. of
  * stages not built yet), with the map seen as the game saves it once the map has shown it all: every rail laid by
  * the clears (a rail out of a chapter once the chapter is done; a chapter's closing rail once it is done), and
- * "finale:<id>" for a done chapter whose end has no rail. The fullest progress. `maxPage`: only rails and ends on
- * pages up to it (what a rail-less あいことば of that many pages brings back).
+ * "finale:<id>" for a done chapter whose end has no rail, the world's end, and "movie:<id>" for a movie the clears
+ * have opened. The fullest progress. `maxPage`: only rails and ends on pages up to it (what a rail-less あいことば of
+ * that many pages brings back).
  */
 function fullProgress(only = /./, extra?: { cleared: string[]; abilities: string[]; records: string[] }, maxPage = Infinity): Saved {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -338,6 +339,9 @@ function fullProgress(only = /./, extra?: { cleared: string[]; abilities: string
     .map((f) => JSON.parse(readFileSync(resolve(root, 'src/stages', f), 'utf8')) as { id: string; hidden?: boolean; unlocks: string[]; records: { id: string }[] })
     .filter((s) => !s.hidden && only.test(s.id));
   const world = JSON.parse(readFileSync(resolve(root, 'src/world/world.json'), 'utf8')) as WorldData;
+  const movies = readdirSync(resolve(root, 'src/movies'))
+    .filter((f) => f.endsWith('.json'))
+    .map((f) => JSON.parse(readFileSync(resolve(root, 'src/movies', f), 'utf8')) as { id: string; unlock: { requires: string[] } });
   const more = (have: string[], add: string[] | undefined): string[] => [...have, ...(add ?? []).filter((id) => !have.includes(id))];
   const cleared = more(
     stages.map((s) => s.id),
@@ -374,6 +378,8 @@ function fullProgress(only = /./, extra?: { cleared: string[]; abilities: string
         .filter((key) => !closing.has(key) || done(closing.get(key) ?? 0)),
       ...world.chapters.filter((c) => c.finale && !c.finale.link && done(c.id) && c.page <= maxPage).map((c) => `finale:${c.id}`),
       ...(endSeen ? ['finale:world'] : []),
+      // PR12: a movie the clears have opened (the ending after 6-2) counts as watched, as the game marks it.
+      ...movies.filter((m) => m.unlock.requires.length > 0 && m.unlock.requires.every((id) => cleared.includes(id))).map((m) => `movie:${m.id}`),
     ],
   };
 }
@@ -590,12 +596,15 @@ async function typePasscode(page: Page, code: string, clears: number): Promise<v
 
 const progressNow = (page: Page): Promise<Saved> => page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
 
-test('あいことば version 3: all of chapters 5 and 6 in 20 letters (the stages not built yet too), on a small phone', async ({ page }) => {
+test('あいことば version 3: all of chapters 1 to 6 in 20 letters, on a small phone', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  // Every clear, ability and record the version has a place for (17 clears, 8 abilities, 51 records).
-  const full = fullProgress(/./, V3_LATER);
+  // Every clear, ability and record the version has a place for (17 clears, 8 abilities, 51 records): since 6-2
+  // (PR11b) all of them are in the stage files (PR12: nothing of version 3 is missing from them any more).
+  const full = fullProgress();
   expect([full.cleared.length, full.abilities.length, full.records.length]).toEqual([17, 8, 51]);
+  expect(sorted(full)).toEqual(sorted(fullProgress(/./, V3_LATER)));
+  expect(full.mapLinks).toEqual(expect.arrayContaining(['finale:5', 'finale:world', 'finale:6', 'movie:ending']));
   await page.setViewportSize({ width: 568, height: 320 });
   await page.goto('/');
   await page.evaluate((p) => localStorage.setItem('train-game.progress.v1', JSON.stringify(p)), full);
@@ -626,7 +635,7 @@ test('あいことば version 3: all of chapters 5 and 6 in 20 letters (the stag
   await openParents(page);
   await typePasscode(page, code, 17);
   expect(sorted(await progressNow(page))).toEqual(sorted(full));
-  await expect(page.locator('#title-chapters')).toHaveText(/4しょう ★\s*5しょう ★/);
+  await expect(page.locator('#title-chapters')).toHaveText(/4しょう ★\s*5しょう ★\s*6しょう ★/);
   // The map shows nothing new: no rail grows, no chapter's end.
   await page.setViewportSize({ width: 1194, height: 834 });
   await page.locator('#title-map').click();

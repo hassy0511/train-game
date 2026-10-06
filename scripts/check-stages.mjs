@@ -12,7 +12,12 @@
 //     check >= 16 bits), no id is listed twice, a version keeps the lists of the one before it in the same order, a
 //     version without rails says up to which map page it rebuilds them (`pages`, from version 2 on), and every
 //     clear, ability (also the ones records require) and record of every playable (non-hidden) stage has a place in
-//     the latest version.
+//     the latest version. And the other way round (PR12): every id of every version is in a playable stage file, the
+//     latest version is exactly the playable stages' clears, given abilities and records in stage order (but for the
+//     ids listed in AHEAD, of stages not built yet), and every ability a record needs is given by some playable stage
+//     (with every ability, no "？" is out of reach).
+//     The pictures: a playable record with a `model` has public/zukan/<id>.png, an island with a `diorama` has
+//     public/map/<id>.png.
 //  4. src/world/world.json (src/world/pages.ts validateWorld): the world's end's trail runs along links (or its long rail
 //     home), its islands are there, the islands' sizes are 0.8–1.4 (PHASE9_CHAPTER5_6 第 1 部 §3.7).
 //
@@ -163,6 +168,73 @@ try {
     }
     for (const a of abilities) place('abilities', a, `${at} ability`);
     for (const r of s.records ?? []) place('records', r.id, `${at} record`);
+  }
+
+  // 3b. (PHASE9_CHAPTER5_6 §0.6, PR12) The other way round, now that every stage of version 3 is built: every id of
+  //     every version is in a playable stage file (an id renamed in a stage would quietly drop it from the codes
+  //     already written down), and the latest version lists exactly the playable stages' clears, given abilities and
+  //     records in stage order (its clear order; a stage's records in the file's order). And every record's
+  //     `requires` is an ability some playable stage gives: with every ability no "？" is out of reach (the picture
+  //     book can reach みつけた n/n).
+  //     AHEAD: ids of a version published before its stages are built (as version 3 was from PR3 to PR11b, so that
+  //     a child's clears are not lost meanwhile). List them here while their stage is not there yet; empty since 6-2.
+  const AHEAD = new Set([]);
+  const playable = stages.filter((s) => !s.hidden && !s._movie);
+  const byId = new Map(playable.map((s) => [s.id, s]));
+  /** The abilities a stage gives: its `unlocks`, then its cutscenes' `unlock`/`learn`. */
+  const given = (s) => {
+    const out = [...(s.unlocks ?? [])];
+    for (const steps of Object.values(s.cutscenes ?? {})) {
+      for (const step of steps) for (const key of ['unlock', 'learn']) if (typeof step[key] === 'string') out.push(step[key]);
+    }
+    return out;
+  };
+  const stageLists = {
+    cleared: playable.map((s) => s.id),
+    abilities: [...new Set(playable.flatMap(given))],
+    records: playable.flatMap((s) => (s.records ?? []).map((r) => r.id)),
+  };
+  for (const v of versions) {
+    for (const f of ['cleared', 'abilities', 'records']) {
+      for (const id of v[f]) {
+        if (!AHEAD.has(id) && !stageLists[f].includes(id)) fail(`passcode v${v.version}: ${f} "${id}" is in no playable stage file (the stages keep every published version's ids)`);
+      }
+    }
+  }
+  const inOrder = {
+    cleared: latest.cleared.filter((id) => byId.has(id)),
+    abilities: [...new Set(latest.cleared.flatMap((id) => (byId.has(id) ? given(byId.get(id)) : [])))],
+    records: latest.cleared.flatMap((id) => (byId.get(id)?.records ?? []).map((r) => r.id)),
+  };
+  for (const f of ['cleared', 'abilities', 'records']) {
+    const want = inOrder[f];
+    const listed = latest[f].filter((id) => !AHEAD.has(id));
+    if (want.length !== stageLists[f].length || listed.join() !== want.join()) {
+      fail(`passcode v${latest.version}: ${f} is not the playable stages' own in stage order.\n    stages:  ${want.join(' ')}\n    version: ${listed.join(' ')}`);
+    }
+  }
+  const learnable = new Set(stageLists.abilities);
+  for (const s of playable) {
+    for (const r of s.records ?? []) {
+      if (typeof r.requires === 'string' && !learnable.has(r.requires)) {
+        fail(`stage ${s.id} record "${r.id}": needs "${r.requires}", which no playable stage gives (its "？" could never be found)`);
+      }
+    }
+  }
+
+  // 3c. (PR12) The pictures: every record of a playable stage with a `model` has its picture-book picture
+  //     (public/zukan/<id>.png, scripts/render-zukan.mjs), every island with a `diorama` its map picture
+  //     (public/map/<id>.png, scripts/render-map.mjs).
+  const pngs = (dir) => new Set(readdirSync(resolve(root, dir)).filter((f) => f.endsWith('.png')).map((f) => basename(f, '.png')));
+  const zukanPictures = pngs('public/zukan');
+  for (const s of playable) {
+    for (const r of s.records ?? []) {
+      if (r.model && !zukanPictures.has(r.id)) fail(`stage ${s.id} record "${r.id}": no picture public/zukan/${r.id}.png (node scripts/render-zukan.mjs ${r.id})`);
+    }
+  }
+  const mapPictures = pngs('public/map');
+  for (const island of readJson(resolve(root, 'src/world/world.json')).islands) {
+    if (island.diorama && !mapPictures.has(island.id)) fail(`src/world/world.json island ${island.id}: no picture public/map/${island.id}.png (node scripts/render-map.mjs ${island.id})`);
   }
 
   // 4. The world map.

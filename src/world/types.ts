@@ -71,7 +71,7 @@ export interface WorldChapter {
   title: string;
   /**
    * v1.11 (PR9): how many stages the chapter will have. Until the world has that many of its islands the chapter is not
-   * done (no ★ on the title, no end): chapter 6 has 6-1 only until 6-2 comes.
+   * done (no ★ on the title, no end): chapter 6 waited so with 6-1 only until 6-2 came (PR11b).
    */
   count?: number;
   /**

@@ -11,8 +11,9 @@ export const FOG_CULL_MARGIN = 40;
 const SNOW_BED = '#E8EEF4';
 
 /**
- * The pieces that come and go with the look. v1.11 (PR2c): the night's moon and firefly motes. `landmark` is a slot for
- * a look still to come (a far landmark past the fog, 6-2): nothing builds it yet.
+ * The pieces that come and go with the look. v1.11 (PR2c): the night's moon and firefly motes. `landmark` stays empty:
+ * the faraway landmark past the fog (`environment.landmark`, 6-1's castle) is ThreeSceneView's LandmarkBoard
+ * (src/view/three/landmark.ts), which follows the camera.
  */
 type PieceName = 'cloudSea' | 'stars' | 'ground' | 'snowfall' | 'moon' | 'fireflies' | 'landmark';
 
@@ -143,7 +144,7 @@ export class EnvironmentState {
     const motesKey = motes ? JSON.stringify(motes) : null;
     if (this.pieces.get('fireflies')?.key !== motesKey) this.fireflies = motes ? new AmbientFireflies(motes) : null;
     this.piece('fireflies', motesKey, () => this.fireflies?.points ?? null, scene);
-    // A look still to come (6-2: the landmark).
+    // Empty: the landmark is ThreeSceneView's LandmarkBoard (see PieceName).
     this.piece('landmark', null, () => null, scene);
 
     // Past the fog nothing shows, so stop drawing there (the track and prop pieces beyond are culled); the sky dome
