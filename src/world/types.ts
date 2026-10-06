@@ -78,7 +78,7 @@ export interface WorldChapter {
     /** Card text (lines split by "\n", 20 characters at most per line) and its button. */
     card: string;
     button: string;
-    icon?: 'badge' | 'ring' | 'wave' | 'snow' | 'firefly';
+    icon?: 'badge' | 'ring' | 'wave' | 'snow' | 'firefly' | 'world';
   };
   /** A chapter without stages yet: one "?" island with a dotted line, once `after` is cleared. */
   teaser?: {
@@ -104,6 +104,11 @@ export interface WorldIsland {
   size?: number;
   /** What the island picture (public/map/<id>.png) shows; see scripts/render-map.mjs. */
   diorama?: WorldDiorama;
+  /**
+   * v1.11 (PR9b): where the castle's lit windows go on its picture, in % of the picture (x from the left, y from the
+   * top). Written by scripts/render-map.mjs from the diorama's `windows` anchors; not edited by hand.
+   */
+  windows?: [number, number][];
 }
 
 export interface WorldDiorama {
@@ -128,5 +133,10 @@ export interface WorldDiorama {
     lift?: number;
     /** Offset in the model's own (rotated, scaled) frame, e.g. a neck on its joint. */
     local?: [number, number, number];
+    /**
+     * v1.11 (PR9b): windows on this model that light up on the map (the castle's), in the model's own frame (m). The
+     * render projects them onto the picture and writes `islands[].windows`.
+     */
+    windows?: [number, number, number][];
   }[];
 }

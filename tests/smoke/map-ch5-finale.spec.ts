@@ -101,6 +101,8 @@ test("chapter 5's end: night, the fireflies from 5-1, 5-2 and 5-3 into one big l
   const castle = page.locator('.map-island[data-island="6-1"]');
   await expect(castle).toBeVisible();
   await expect(castle).toHaveClass(/is-asleep/);
+  // PR9b: asleep, its windows are dark.
+  await expect(castle.locator('.map-window')).toHaveCount(0);
   await expect(map).toHaveClass(/is-night/, { timeout: 10_000 });
   await page.waitForTimeout(700);
   await page.screenshot({ path: resolve(OUT, 'map-ch5-finale-1-night.png') });
@@ -143,6 +145,27 @@ test("chapter 5's end: night, the fireflies from 5-1, 5-2 and 5-3 into one big l
   await expect(castle).toBeVisible();
   await expect(castle).not.toHaveClass(/is-asleep/);
   await expect(page.locator('[data-link="5-3>6-1"]')).toHaveClass(/is-laid/);
+  // PR9b: "finale:5" seen, the castle stays awake: its four windows are simply lit (no pop, no "ちりりん"), on the
+  // castle's picture.
+  await expect(castle).toHaveClass(/is-awake/);
+  const lit = castle.locator('.map-picture .map-window.is-still');
+  await expect(lit).toHaveCount(4);
+  const picture = await castle.locator('.map-picture img').boundingBox();
+  expect(picture).not.toBeNull();
+  for (const w of await lit.all()) {
+    const b = await w.boundingBox();
+    expect(b).not.toBeNull();
+    if (!b || !picture) continue;
+    // Small round lights inside the castle's part of the picture (its upper half).
+    expect(b.width).toBeLessThan(picture.width * 0.08);
+    expect(b.x + b.width / 2).toBeGreaterThan(picture.x + picture.width * 0.3);
+    expect(b.x + b.width / 2).toBeLessThan(picture.x + picture.width * 0.7);
+    expect(b.y + b.height / 2).toBeGreaterThan(picture.y);
+    expect(b.y + b.height / 2).toBeLessThan(picture.y + picture.height * 0.5);
+  }
+  await expect(map).not.toHaveAttribute('data-windows', /.+/);
+  await page.screenshot({ path: resolve(OUT, 'map-ch5-castle-lit.png') });
+  if (picture) await page.screenshot({ path: resolve(OUT, 'map-ch5-castle-lit-close.png'), clip: picture });
   expect(errors).toEqual([]);
 });
 

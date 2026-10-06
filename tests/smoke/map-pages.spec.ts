@@ -613,10 +613,11 @@ async function layout(page: Page): Promise<{ things: { id: string; box: DOMRect 
   return page.evaluate(() => {
     const n = document.getElementById('map')?.dataset.page;
     const pageEl = document.querySelector(`.map-page[data-page="${n}"]`);
-    const things = [...(pageEl?.querySelectorAll('.map-island img, .map-gate svg') ?? [])].map((e) => ({
-      id: (e.parentElement as HTMLElement).dataset.island ?? `gate:${(e.parentElement as HTMLElement).dataset.gate}`,
-      box: e.getBoundingClientRect().toJSON() as DOMRect,
-    }));
+    // The castle's picture sits in a frame of its own (its windows, PR9b): the island is the nearest .map-island.
+    const things = [...(pageEl?.querySelectorAll('.map-island img, .map-gate svg') ?? [])].map((e) => {
+      const host = e.closest<HTMLElement>('.map-island, .map-gate');
+      return { id: host?.dataset.island ?? `gate:${host?.dataset.gate}`, box: e.getBoundingClientRect().toJSON() as DOMRect };
+    });
     const arrows = [...document.querySelectorAll<HTMLElement>('.map-turn')].filter((b) => !b.hidden).map((b) => b.getBoundingClientRect().toJSON() as DOMRect);
     return { things, arrows };
   });
@@ -725,6 +726,7 @@ for (const [w, hgt] of [
     await expect(page.locator('[data-link="5-3>6-1"]')).toHaveClass(/is-laid/);
     // The castle is awake (its windows lit): nothing grew today.
     await expect(page.locator('.map-island[data-island="6-1"]')).not.toHaveClass(/is-asleep/);
+    await expect(page.locator('.map-island[data-island="6-1"] .map-window.is-still')).toHaveCount(4);
     const { things, arrows } = await layout(page);
     expect(things.map((t) => t.id).sort()).toEqual(expect.arrayContaining(['5-1', '5-2', '5-3', '6-1']));
     for (let i = 0; i < things.length; i++) {

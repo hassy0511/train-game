@@ -1729,12 +1729,26 @@ body {
   }
 }
 
-/* v1.11 (PR9): the castle's windows light up when it wakes (four warm dots on its picture, one after another). */
+/*
+ * v1.11 (PR9b): the castle's picture in a frame of its own (src/ui/map.ts), so its windows are placed in % of the
+ * picture itself (world.json's island `windows`, from scripts/render-map.mjs), not of the island with its name tag.
+ */
+.map-picture {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+/*
+ * v1.11 (PR9): the castle's windows light up when it wakes (four small warm round lights on its picture, one after
+ * another). PR9b: once awake they stay lit on every visit (`.is-still`, no pop).
+ */
 .map-window {
   position: absolute;
-  width: 4%;
+  width: 3.2%;
+  min-width: 5px;
   aspect-ratio: 1;
-  border-radius: 30%;
+  border-radius: 50%;
   background: #ffd45c;
   box-shadow: 0 0 8px 3px rgba(255, 212, 92, 0.8);
   transform: translate(-50%, -50%) scale(0);
@@ -1746,6 +1760,11 @@ body {
   to {
     transform: translate(-50%, -50%) scale(1);
   }
+}
+
+.map-window.is-still {
+  animation: none;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -88,6 +88,22 @@ function tintTop(root: Group, color: string): void {
   });
 }
 
+/** v1.11 (PR9b): the diorama's window anchors (the castle's), placed in the island's frame (m). */
+function windowAnchors(diorama: WorldDiorama | null): Vector3[] {
+  const out: Vector3[] = [];
+  for (const item of diorama?.items ?? []) {
+    const scale = item.scale ?? 1;
+    const rot = MathUtils.degToRad(item.rotY ?? 0);
+    const local = new Vector3(...(item.local ?? [0, 0, 0]));
+    for (const w of item.windows ?? []) {
+      const p = new Vector3(w[0], w[1] * (item.scaleY ?? 1), w[2]).add(local);
+      p.multiplyScalar(scale).applyAxisAngle(new Vector3(0, 1, 0), rot);
+      out.push(p.add(new Vector3(item.at[0], item.lift ?? 0, item.at[1])));
+    }
+  }
+  return out;
+}
+
 async function build(diorama: WorldDiorama | null, models: ModelLibrary): Promise<Group> {
   const root = new Group();
   const base = (await models.load(diorama?.base ?? 'island-b')).clone(true);
@@ -114,8 +130,11 @@ async function build(diorama: WorldDiorama | null, models: ModelLibrary): Promis
   return root;
 }
 
-/** Trims the transparent margin (plus a little padding) into a new canvas that the script reads. */
-function crop(source: HTMLCanvasElement): void {
+/**
+ * Trims the transparent margin (plus a little padding) into a new canvas that the script reads; returns the kept box
+ * (its top left corner and size, in pixels of the full canvas).
+ */
+function crop(source: HTMLCanvasElement): { x: number; y: number; w: number; h: number } {
   const full = document.createElement('canvas');
   full.width = source.width;
   full.height = source.height;
@@ -146,6 +165,7 @@ function crop(source: HTMLCanvasElement): void {
   out.getContext('2d')!.drawImage(full, x0 - pad, y0 - pad, w, h, 0, 0, w, h);
   document.body.dataset.size = `${w}x${h}`;
   document.body.appendChild(out);
+  return { x: x0 - pad, y: y0 - pad, w, h };
 }
 
 async function main(): Promise<void> {
@@ -189,7 +209,19 @@ async function main(): Promise<void> {
   camera.position.copy(sphere.center).addScaledVector(dir, distance);
   camera.lookAt(sphere.center);
   renderer.render(scene, camera);
-  crop(renderer.domElement);
+  const box = crop(renderer.domElement);
+  // v1.11 (PR9b): where the windows that light up on the map fall on the picture, in % of it (render-map.mjs keeps them).
+  const anchors = windowAnchors(diorama);
+  if (anchors.length > 0) {
+    camera.updateMatrixWorld();
+    const at = anchors.map((p) => {
+      const v = p.clone().project(camera);
+      const px = ((v.x + 1) / 2) * WIDTH - box.x;
+      const py = ((1 - v.y) / 2) * HEIGHT - box.y;
+      return [Math.round((px / box.w) * 1000) / 10, Math.round((py / box.h) * 1000) / 10];
+    });
+    document.body.dataset.windows = JSON.stringify(at);
+  }
   document.body.dataset.done = '1';
 }
 

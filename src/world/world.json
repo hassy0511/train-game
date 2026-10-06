@@ -1,5 +1,5 @@
 {
-  "_doc": "The world map (docs/PHASE4_DESIGN.md), in pages of two chapters (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3; page 3, chapters 5 and 6: docs/PHASE9_CHAPTER5_6.md 第 1 部 §3): a chapter's `page` is where its islands are; `pages[].title` is the heading beside \"ちず\" once there is more than one page. Islands are placed in % of the map area (x from the left, y from the top) of their page. An island without a stage file yet is shown as a '?' silhouette (no name, no records, it only wiggles); the rails to it are laid as usual, so a page can come before its stages, and the island gets its name once its stage file is there (and its own picture once it has a `diorama`). `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees. `chapters[].finale` plays once when its link is first drawn, or without a link once the chapter is done (a light — gold round a `ring`, water along a `path`, an aurora, or fireflies gathering along a `path` into one big light that flies to `target`, the node it lands on (the castle 6-1, which wakes there: its windows light) — then a card); `chapters[].teaser` is a later chapter's single \"?\" island on the page of its `from` island (docs/PHASE7_FINISH.md §3). A link's optional `via` is the curve's control point in %; `afterChapter` holds it back until that chapter is done; `exit`/`enter` take it to another page through the cloud gate (the gate's place on each page, with the curve to it). An island's optional `size` scales its width (25 % × size; the castle 6-1 is 1.2). A chapter with a `finale` is done only once the world has as many of its islands as it has stage files (src/world/pages.ts chapterDone), so chapter 6 with only 6-1 never ends.",
+  "_doc": "The world map (docs/PHASE4_DESIGN.md), in pages of two chapters (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3; page 3, chapters 5 and 6: docs/PHASE9_CHAPTER5_6.md 第 1 部 §3): a chapter's `page` is where its islands are; `pages[].title` is the heading beside \"ちず\" once there is more than one page. Islands are placed in % of the map area (x from the left, y from the top) of their page. An island without a stage file yet is shown as a '?' silhouette (no name, no records, it only wiggles); the rails to it are laid as usual, so a page can come before its stages, and the island gets its name once its stage file is there (and its own picture once it has a `diorama`). `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees. `chapters[].finale` plays once when its link is first drawn, or without a link once the chapter is done (a light — gold round a `ring`, water along a `path`, an aurora, or fireflies gathering along a `path` into one big light that flies to `target`, the node it lands on (the castle 6-1, which wakes there: its windows light) — then a card); `chapters[].teaser` is a later chapter's single \"?\" island on the page of its `from` island (docs/PHASE7_FINISH.md §3). A link's optional `via` is the curve's control point in %; `afterChapter` holds it back until that chapter is done; `exit`/`enter` take it to another page through the cloud gate (the gate's place on each page, with the curve to it). An island's optional `size` scales its width (25 % × size; the castle 6-1 is 1.2). The castle sleeps (grey) until its chapter's end is seen, then wakes with its windows lit on every visit: a diorama item's `windows` are anchors on its model (m, its own frame) and scripts/render-map.mjs writes where they fall on the picture into the island's `windows` (% of the picture; not edited by hand). A chapter with a `finale` is done only once the world has as many of its islands as it has stage files (src/world/pages.ts chapterDone), so chapter 6 with only 6-1 never ends.",
   "pages": [
     {
       "id": 1,
@@ -1721,44 +1721,86 @@
         },
         "camera": {
           "yaw": 25,
-          "pitch": 28
+          "pitch": 20
         },
         "items": [
           {
-            "model": "sakasa-castle",
+            "model": "castle-island",
             "at": [
-              -2,
-              -4
+              0,
+              -1.5
             ],
-            "rotY": 20,
-            "scale": 0.42
+            "scale": 0.28,
+            "lift": 0.6
           },
           {
-            "model": "house-upside-a",
+            "model": "sakasa-castle",
             "at": [
-              -15,
-              6
+              0,
+              -1.5
+            ],
+            "rotY": 25,
+            "scale": 0.44,
+            "lift": 0.6,
+            "windows": [
+              [
+                0,
+                22,
+                7.1
+              ],
+              [
+                8.3,
+                17,
+                8.3
+              ],
+              [
+                -8.3,
+                17,
+                8.3
+              ],
+              [
+                -8.3,
+                24,
+                8.3
+              ]
+            ]
+          },
+          {
+            "model": "rainbow-stub",
+            "at": [
+              5,
+              -6
+            ],
+            "rotY": 165,
+            "scale": 0.32,
+            "lift": 0.6
+          },
+          {
+            "model": "tree-upside",
+            "at": [
+              -14,
+              -9
             ],
             "rotY": 30,
+            "scale": 0.65
+          },
+          {
+            "model": "tree-upside",
+            "at": [
+              -15,
+              3
+            ],
+            "rotY": 50,
             "scale": 0.6
           },
           {
             "model": "tree-upside",
             "at": [
-              14,
+              16,
               -8
             ],
             "rotY": 0,
-            "scale": 0.9
-          },
-          {
-            "model": "tree-upside",
-            "at": [
-              -12,
-              -12
-            ],
-            "rotY": 50,
-            "scale": 0.8
+            "scale": 0.55
           },
           {
             "model": "train-proto",
@@ -1769,7 +1811,25 @@
             "rotY": 0
           }
         ]
-      }
+      },
+      "windows": [
+        [
+          49.7,
+          26.9
+        ],
+        [
+          59.5,
+          33.4
+        ],
+        [
+          39.9,
+          33.4
+        ],
+        [
+          39.8,
+          24.9
+        ]
+      ]
     }
   ],
   "links": [
