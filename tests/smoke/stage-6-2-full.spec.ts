@@ -260,8 +260,8 @@ test('stage 6-2 full run: the back platform, three gates, three back sidings, ho
   await expect(page.locator('#junction')).toHaveAttribute('data-preset', 'right', { timeout: 120_000 });
   await expect(app).toHaveAttribute('data-section', 'p1', { timeout: 120_000 });
   await expect(app).toHaveAttribute('data-portal', 'g1>p1');
-  // Out of the cloud tunnel into the valley (the chase camera was inside the tunnel's cloud just after the white).
-  await waitFront(page, 'p1', 80);
+  // Out of the cloud tunnel into the valley (the camera behind the train is in the tunnel's cloud for a while).
+  await waitFront(page, 'p1', 112);
   await page.screenshot({ path: resolve(OUT, '6-2-gate.png') });
   await expect.poll(lines, { timeout: 20_000 }).toContain('わあっ、もんを くぐった！');
   // The cloud islands' gap: the jump; the rocket slope; the squirrel's nut.
