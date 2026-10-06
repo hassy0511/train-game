@@ -618,3 +618,31 @@ test('resume 4-2 mission 3: every wall on the way to スキーじょうえき is
   await expect(app).toHaveAttribute('data-plow', '');
   expect(errors).toEqual([]);
 });
+
+/** v1.11 (PR11b, PHASE9_CHAPTER5_6 第 3 部 B15): 6-2 resumed in a section: the train at its station, that section's look. */
+for (const [mission, rail, at, section, sky, title] of [
+  [1, 'p1', 760, 'p1', '#5aa8f0', 'うみと ゆきへ'],
+  [2, 'p2', 790, 'p2', '#5fb4f4', 'みんなで ほんぶへ'],
+] as const) {
+  test(`resume 6-2 mission ${mission + 1}: at its station in section ${section}, the section's look, the passengers aboard`, async ({ page }) => {
+    const errors = watchErrors(page);
+    await seed(page, {
+      cleared: ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', '3-1', '3-2', '3-3', '4-1', '4-2', '4-3', '5-1', '5-2', '5-3', '6-1'],
+      abilities: ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'magnetLight', 'reverse'],
+      mapLinks: [...ALL_LINKS, '1-1>3-1'],
+      resume: { stage: '6-2', mission },
+    });
+    await page.goto('/?stage=6-2&go=1&resume=1');
+    await ready(page, '6-2');
+    const app = page.locator('#app');
+    await tapUntil(page, '#card');
+    await expect(page.locator('#card')).toContainText(title);
+    await standsAt(page, rail, at);
+    await expect(app).toHaveAttribute('data-section', section);
+    await expect(app).toHaveAttribute('data-sky', sky);
+    await expect(page.locator('#cargo')).toHaveAttribute('data-passengers', mission === 1 ? '3' : '6');
+    await expect(app).toHaveAttribute('data-sakasa', 'seat');
+    await page.screenshot({ path: resolve(OUT, `94-resume-6-2-m${mission + 1}.png`) });
+    expect(errors).toEqual([]);
+  });
+}

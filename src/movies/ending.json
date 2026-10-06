@@ -119,7 +119,7 @@
     { "model": "crystal-tree-a", "position": [-84.56, 0, -57.04], "rotationY": -34 },
     { "model": "crystal-tree-b", "position": [-55.11, 0, -63.39], "rotationY": -49, "scale": 0.7 },
     { "model": "firefly-swarm", "position": [-56.63, 1, -87.23], "rotationY": 0 },
-    { "model": "ring-castle", "position": [-76.71, 0, 6.72], "rotationY": -85 },
+    { "model": "sakasa-castle", "position": [-76.71, 0, 6.72], "rotationY": -85, "scale": 0.42 },
     { "model": "birdhouse-upside", "position": [-99.94, 0, -3.5], "rotationY": -92.1 },
     { "model": "sakasa-doodle", "position": [-99.15, 0, 19.26], "rotationY": -79 },
     { "model": "tree-b", "position": [-107.74, 0, -7.55], "rotationY": -4 },

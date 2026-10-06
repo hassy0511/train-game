@@ -135,6 +135,11 @@ export interface MapOptions {
   lit?: string[];
   /** v1.11 (PR10): the world's end plays (`pages` must hold every page: they are all laid out side by side). */
   ending?: MapEnding;
+  /**
+   * v1.11 (PR11b, 第 1 部 §5.2 の 8): islands hidden until the rail to them (among `later`) has grown; then they pop up
+   * (6-2, held back by its `after` until 6-1, after the world's end).
+   */
+  appear?: string[];
 }
 
 /** `resume`: go on from the island's saved mission ("つづきから") instead of from its start. */
@@ -144,6 +149,8 @@ export const linkKey = (from: string, to: string): string => `${from}>${to}`;
 
 const SVG = 'http://www.w3.org/2000/svg';
 const RAIL_GROW_SECONDS = 1.4;
+/** v1.11 (PR11b): an island held back pops up at the end of its new rail ("ぽんっ"). */
+const ISLAND_APPEAR_SECONDS = 0.6;
 /**
  * v1.11 (PR9): the castle's windows lighting one by one (0.8 s in all), at the places world.json's island `windows`
  * gives on its picture (PR9b; scripts/render-map.mjs works them out).
@@ -385,7 +392,7 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
       // A bob or a twinkle is a moment: gone after, so a bounce (the next island) is not held back by it.
       if (e.animationName === 'island-bob') target.classList.remove('is-bob');
       if (e.animationName === 'island-twinkle') target.classList.remove('is-twinkle');
-      if (e.animationName === 'teaser-appear' || e.animationName === 'gate-appear') target.classList.remove('is-appear');
+      if (e.animationName === 'teaser-appear' || e.animationName === 'gate-appear' || e.animationName === 'island-appear' || e.animationName === 'fade-in-from-0') target.classList.remove('is-appear');
     });
 
     // Rail between islands, under them: one SVG per page. The area is always 16:10, so one user unit is the same
@@ -545,6 +552,8 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
           btn.classList.add('is-asleep');
         }
       }
+      // v1.11 (PR11b): not there yet: it pops up once its rail has grown.
+      if (options.appear?.includes(island.id)) btn.classList.add('is-pending');
       btn.addEventListener('click', (e) => {
         if (state?.title && state.unlocked) {
           if (state.resumeMission !== undefined) {
@@ -1059,6 +1068,13 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
           await sleep(RAIL_GROW_SECONDS);
         }
         pending.delete(key);
+        // v1.11 (PR11b): the island at its end pops up now (6-2).
+        const arrived = islandEls.get(key.split('>')[1]);
+        if (arrived?.classList.contains('is-pending')) {
+          arrived.classList.remove('is-pending');
+          arrived.classList.add('is-appear');
+          await sleep(ISLAND_APPEAR_SECONDS);
+        }
         options.onLinkShown?.(key);
       }
     };

@@ -82,7 +82,7 @@ import {
 } from '../train/params';
 import type { JunctionSide, Train } from '../train/train';
 import { StopMonitor, type GaugeState, type StopGrade } from './station-stop';
-import { REVERSE_LINES, type ReverseLine, type ReverseSystem } from '../gimmick/reverse';
+import { REVERSE_LINES, SAKASA_REVERSE_LINES, type ReverseLine, type ReverseSystem } from '../gimmick/reverse';
 
 /**
  * What the clear card shows (PHASE7_FINISH §4 item 10): the graded stops of this run (`perfect` of them "ぴったり")
@@ -1670,7 +1670,14 @@ export class MissionRunner {
       for (const l of line.own) this.ports.sayAsync(typeof l === 'string' ? l : l.text, typeof l === 'string' ? undefined : l.who === 'amanojaku' ? 'amanojaku' : undefined);
       return;
     }
-    const text = line.key === 'needAbility' ? this.needLine('reverse') : (this.lines[line.key] ?? DEFAULT_LINES[line.key]);
+    const own = this.lines[line.key];
+    // v1.11 (PR11b, A14): with Sakasa riding along (6-2) she says them in her words.
+    const sakasa = own === undefined && (this.stage.file.crew ?? []).includes('sakasa') ? SAKASA_REVERSE_LINES[line.key] : undefined;
+    if (sakasa) {
+      this.ports.sayAsync(sakasa, 'amanojaku');
+      return;
+    }
+    const text = line.key === 'needAbility' ? this.needLine('reverse') : (own ?? DEFAULT_LINES[line.key]);
     if (line.key === 'backUp') this.ports.sayNow(text);
     else this.ports.sayAsync(text);
   }
@@ -1900,6 +1907,10 @@ export class MissionRunner {
 
       for (let j = 0; j < mission.steps.length; j++) {
         this.stepIndex = j;
+        // v1.11 (PR11b, 6-2): a step's own junction rules over the mission's (a gate's fork on the way out, not home).
+        const own = mission.steps[j].junctions;
+        if (own) this.train.setJunctionRules({ ...mission.junctions, ...own });
+        else if (j > 0 && mission.steps[j - 1].junctions) this.train.setJunctionRules(mission.junctions ?? null);
         await this.runStep(mission.steps[j]);
       }
 
@@ -1925,7 +1936,8 @@ export class MissionRunner {
     if (file.ending) await this.cutscene(file.ending);
     this.phase = 'clear';
     this.ports.fanfare();
-    await this.ports.clearCard(`${file.title}\nクリア！`, 'つづく', {
+    // v1.11 (PR11b, 第 1 部 §5.5): the last stage's card says "やったね！" (`clearButton`).
+    await this.ports.clearCard(`${file.title}\nクリア！`, file.clearButton ?? 'つづく', {
       stops: this.stopsMade,
       perfect: this.perfectStops,
       records: this.stage.records.map(({ def }) => ({

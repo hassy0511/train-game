@@ -2,13 +2,17 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { seenMapLinks } from '../../src/world/pages';
+import type { WorldFile } from '../../src/world/types';
 
 /**
  * v1.12 (えんしゅつ, docs/STAGE_SCHEMA.md §25) on the production build: the ending movie "せかいの わ" plays from
  * 「▶ みる」 to its card with the letterbox on, every beat of its shot list happens in order (a screenshot at each:
  * output/movie-ending-<n>.png), the lines are the usual bubbles above the bottom bar, nothing throws; "▶▶" skips to the
  * card; prefers-reduced-motion plays it with cuts; the check mode's list opens it; the `?movie=` lock bounces it on a
- * kid's iPad until 6-2 is cleared.
+ * kid's iPad until 6-2 is cleared. v1.11 (PR11b): after 6-2's clear the game sends the child here (`then=map`): the
+ * first time there is no "▶▶", its card marks it seen ("movie:ending") and the map follows with chapter 6's end; from
+ * the title's 「もういちど みる」 it plays again with "▶▶" and goes back to the title.
  */
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(here, 'output');
@@ -211,4 +215,83 @@ test('ending movie: the check mode lists it; the `?movie=` lock on a kid\'s iPad
   await p2.goto('/?movie=ending');
   await expect(p2.locator('#movie-play')).toBeVisible({ timeout: 90_000 });
   await kid.close();
+});
+
+// ---- v1.11 (PR11b): after 6-2's clear, and again from the title ----
+
+const WORLD = JSON.parse(readFileSync(resolve(here, '../../src/world/world.json'), 'utf8')) as WorldFile;
+const ALL = WORLD.islands.map((i) => i.id);
+const EIGHT = ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'magnetLight', 'reverse'];
+/** A child who has just cleared 6-2 (chapter 6's end not seen yet); `seen`: the movie watched before. */
+const after62 = (seen: boolean): string =>
+  JSON.stringify({ schema: 1, cleared: ALL, abilities: EIGHT, records: [], mapLinks: [...seenMapLinks(WORLD, ALL).filter((k) => k !== 'finale:6'), ...(seen ? ['movie:ending'] : [])] });
+/** A context like a kid's iPad: no automation flag, so the `?movie=` lock and the "▶▶" rule apply. */
+async function kidPage(browser: import('@playwright/test').Browser, save: string): Promise<{ page: Page; close: () => Promise<void> }> {
+  const kid = await browser.newContext({ viewport: { width: 1194, height: 834 }, serviceWorkers: 'block', hasTouch: true });
+  const page = await kid.newPage();
+  await page.addInitScript(() => Object.defineProperty(navigator, 'webdriver', { get: () => false }));
+  await page.addInitScript(([k, v]) => {
+    if (!localStorage.getItem(k)) localStorage.setItem(k, v);
+  }, [SAVE_KEY, save] as const);
+  return { page, close: () => kid.close() };
+}
+
+test('after 6-2 (a kid\'s iPad): the first time the movie has no "▶▶"', async ({ browser }) => {
+  test.setTimeout(180_000);
+  const { page, close } = await kidPage(browser, after62(false));
+  const errors = watchErrors(page);
+  await page.goto('/?movie=ending&then=map');
+  await expect(page.locator('#movie-play')).toBeVisible({ timeout: 90_000 });
+  await page.locator('#movie-play').click();
+  await expect(page.locator('#app')).toHaveAttribute('data-movie-state', 'playing');
+  await page.waitForFunction(() => (document.getElementById('app')?.dataset.beats ?? '').split(',').includes('dino'), undefined, { timeout: 120_000 });
+  await expect(page.locator('#skip')).toHaveCount(0);
+  expect(errors).toEqual([]);
+  await close();
+});
+
+test('after 6-2: the card marks the movie seen, then the map with chapter 6\'s end (a card, the fanfare), then the title', async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors = watchErrors(page);
+  await page.addInitScript(([k, v]) => {
+    if (!localStorage.getItem(k)) localStorage.setItem(k, v);
+  }, [SAVE_KEY, after62(false)] as const);
+  await start(page, '&then=map');
+  // (The automation is the owner's check: "▶▶" is there.)
+  await page.locator('#skip').dispatchEvent('pointerdown');
+  await expect(page.locator('#card')).toBeVisible({ timeout: 30_000 });
+  await page.locator('#card-button').click();
+  await expect.poll(() => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? '{}').mapLinks ?? [], SAVE_KEY), { timeout: 10_000 }).toContain('movie:ending');
+  const map = page.locator('#map');
+  await expect(map).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('#card')).toContainText('6しょう クリア！', { timeout: 30_000 });
+  await page.screenshot({ path: resolve(OUT, 'movie-then-map.png') });
+  await page.locator('#card-button').click();
+  await expect.poll(() => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? '{}').mapLinks ?? [], SAVE_KEY), { timeout: 10_000 }).toContain('finale:6');
+  await expect(page.locator('#map-close')).toHaveText('タイトルへ', { timeout: 10_000 });
+  await page.locator('#map-close').click();
+  await expect(page.locator('#title-screen')).toBeVisible({ timeout: 90_000 });
+  await expect(page.locator('#title-movie')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('「もういちど みる」 on the title (a kid\'s iPad, seen before): the movie again with "▶▶", back to the title', async ({ browser }) => {
+  test.setTimeout(240_000);
+  const { page, close } = await kidPage(browser, after62(true));
+  const errors = watchErrors(page);
+  await page.goto('/');
+  await expect(page.locator('#title-screen')).toBeVisible({ timeout: 90_000 });
+  await page.screenshot({ path: resolve(OUT, 'movie-title-again.png') });
+  await page.locator('#title-movie').click();
+  await expect(page).toHaveURL(/\?movie=ending$/, { timeout: 30_000 });
+  await expect(page.locator('#movie-play')).toBeVisible({ timeout: 90_000 });
+  await page.locator('#movie-play').click();
+  await expect(page.locator('#skip')).toBeVisible({ timeout: 30_000 });
+  await page.locator('#skip').dispatchEvent('pointerdown');
+  await expect(page.locator('#card')).toBeVisible({ timeout: 30_000 });
+  await page.locator('#card-button').click();
+  await expect(page.locator('#app')).toHaveAttribute('data-stage', '1-1', { timeout: 60_000 });
+  await expect(page.locator('#title-screen')).toBeVisible({ timeout: 30_000 });
+  expect(errors).toEqual([]);
+  await close();
 });

@@ -101,6 +101,11 @@ export interface WorldChapter {
     card: string;
     button: string;
     icon?: 'badge' | 'ring' | 'wave' | 'snow' | 'firefly' | 'world';
+    /**
+     * v1.11 (PR11b, PHASE9_CHAPTER5_6 第 1 部 §3.7): the card's sound. Left out: the fanfare with a `ring` or a `path`,
+     * else the card's own sound. Chapter 6's end (a card only, no light) has the fanfare.
+     */
+    sound?: 'fanfare' | 'card';
   };
   /** A chapter without stages yet: one "?" island with a dotted line, once `after` is cleared. */
   teaser?: {
@@ -124,6 +129,11 @@ export interface WorldIsland {
   y: number;
   /** v1.11: the island's width, × 25 % of the map (default 1; the castle 6-1 is 1.2). 0.8–1.4. */
   size?: number;
+  /**
+   * v1.11 (PR11b, 第 1 部 §5.4): not on the map (no island, no "?", no row in the picture book) until this stage is
+   * cleared; it appears as the rail to it grows (6-2: after 6-1, at the end of the world's end).
+   */
+  after?: string;
   /** What the island picture (public/map/<id>.png) shows; see scripts/render-map.mjs. */
   diorama?: WorldDiorama;
   /**

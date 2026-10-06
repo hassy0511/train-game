@@ -1,4 +1,6 @@
 import type { AbilityId, RecordDef } from '../stage/types';
+import type { WorldFile } from '../world/types';
+import world from '../world/world.json';
 import { abilityIcon } from './ability-buttons';
 
 export interface ZukanEntry {
@@ -12,11 +14,22 @@ export interface ZukanEntry {
 const pictures = new Set<string>(__ZUKAN_PICTURES__);
 
 /**
+ * v1.11 (PR11b, PHASE9_CHAPTER5_6 第 1 部 §5.4): the islands whose rows the picture book holds back: an island with an
+ * `after` stage not cleared yet (6-2 before 6-1), the same as the map.
+ */
+export function zukanHidden(cleared: readonly string[]): Set<string> {
+  return new Set((world as unknown as WorldFile).islands.filter((i) => i.after !== undefined && !cleared.includes(i.after)).map((i) => i.id));
+}
+
+/**
  * The picture book: one row per island, every record of it — found ones with their picture, name and line, the
  * others as "？" (with the grey picture of the ability they need, while the player does not have it yet). The
- * heading counts them all: 「みつけた 11/21」.
+ * heading counts them all: 「みつけた 11/21」. v1.11 (PR11b): an island the map still holds back (`after`, see
+ * zukanHidden: `cleared` is the save's) has no row and is not counted.
  */
-export function showZukan(root: HTMLElement, entries: ZukanEntry[], abilities: ReadonlySet<AbilityId>): void {
+export function showZukan(root: HTMLElement, all: ZukanEntry[], abilities: ReadonlySet<AbilityId>, cleared: readonly string[] = []): void {
+  const hidden = zukanHidden(cleared);
+  const entries = all.filter((e) => !hidden.has(e.stageId));
   const el = document.createElement('div');
   el.id = 'zukan';
   el.className = 'overlay zukan';

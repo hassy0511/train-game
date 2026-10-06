@@ -7,7 +7,7 @@ import { addToProgress, loadProgress, setResume, startSandbox, type Resume } fro
 import { abilitiesTaughtBefore, kakuninMission, kakuninRunAllowed, movieBounces, stageBounces, stageLockActive } from './core/kakunin';
 import { ABILITY_CARD_TITLES, ABILITY_NAMES, abilityInUse, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
-import { listStageIds, loadAllRecords, loadStage, peekMovie, peekStage } from './stage/loader';
+import { listMovieIds, listStageIds, loadAllRecords, loadStage, peekMovie, peekStage } from './stage/loader';
 import { playMovie } from './movie/player';
 import type { AbilityId, AmbienceKind, EnvironmentDef, GimmickDef, Vec3 } from './stage/types';
 import type { RunSurface } from './audio/run-sound';
@@ -96,6 +96,7 @@ import {
   linkOptions,
   openingPage,
   type PageFacts,
+  visibleWorld,
 } from './world/pages';
 
 const app = document.getElementById('app') as HTMLElement;
@@ -158,8 +159,9 @@ function registerOffline(): void {
  * mark "finale:world" is saved once its card is closed.
  */
 async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: string; closeLabel?: string }): Promise<MapChoice> {
-  const file = world as unknown as WorldFile;
   const progress = loadProgress();
+  // v1.11 (PR11b): an island an `after` holds back (6-2 until 6-1 is cleared) is not on the map at all.
+  const file = visibleWorld(world as unknown as WorldFile, progress.cleared);
   const resume = await savedResume();
   const islands: MapIsland[] = [];
   // v1.11 (PHASE9_CHAPTER5_6 §0.4): the abilities stages before this one give (in world order), for "takeable".
@@ -208,11 +210,17 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
   const worldEnd = file.ending && endingDue(file, progress.cleared, progress.mapLinks, listStageIds()) ? file.ending : undefined;
   // The rails out of its last island (6-2's, PR11b) grow after it.
   const endingLater = worldEnd ? fresh.filter((key) => key.startsWith(`${worldEnd.after}>`)) : [];
+  // v1.11 (PR11b, 第 1 部 §5.2 の 8): an island an `after` held back appears as the new rail to it grows (it waits
+  // hidden till then): its rail grows with the map's hands off, like the rails through the gate.
+  const appearing = fresh.filter((key) => file.islands.some((i) => i.after !== undefined && key.endsWith(`>${i.id}`)));
   // Through the gate to another page, or waiting for this end's card: they grow after it, saved once they are in.
   const later = fresh.filter(
     (key) =>
       key !== ending?.link &&
-      (crossPages(file, key) !== null || (!!endingChapter && linkOptions(file, key)?.afterChapter === endingChapter.id) || endingLater.includes(key)),
+      (crossPages(file, key) !== null ||
+        (!!endingChapter && linkOptions(file, key)?.afterChapter === endingChapter.id) ||
+        endingLater.includes(key) ||
+        appearing.includes(key)),
   );
   addToProgress('mapLinks', fresh.filter((key) => key !== ending?.link && !later.includes(key)));
   let finale: MapFinale | undefined;
@@ -240,7 +248,8 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
       onWindows: () => audio.playWindows(),
       onSnow: () => audio.playSnowShimmer(),
       onShown: async () => {
-        if (ending.ring || ending.path) audio.playFanfare();
+        // v1.11 (PR11b): chapter 6's end is a card only, with the fanfare (`sound`).
+        if (ending.sound === 'fanfare' || (ending.sound === undefined && (ending.ring || ending.path))) audio.playFanfare();
         else audio.playCard();
         await showCard(root, ending.card, ending.button, ending.icon, FINALE_CARD_GUARD_SECONDS);
         addToProgress('mapLinks', [ending.link ?? `finale:${endingChapter.id}`]);
@@ -293,6 +302,7 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
   const seenTarget = (c: (typeof lightTargets)[number]): boolean => progress.mapLinks.includes(`finale:${c.id}`);
   const choice = await showMap(root, file, {
     ending: worldEnding,
+    appear: appearing.map((key) => key.split('>')[1]),
     windows,
     asleep: lightTargets.filter((c) => !seenTarget(c)).map((c) => c.finale?.target ?? ''),
     lit: lightTargets.filter(seenTarget).map((c) => c.finale?.target ?? ''),
@@ -375,7 +385,10 @@ const SKIP_CARD_GUARD_SECONDS = 0.8;
 /**
  * v1.12 (えんしゅつ): `?movie=<id>`: a movie (src/movie/player.ts) instead of a stage. Behind the かくにん lock (dev and
  * browser automation are not locked), or opened by the save (the ending once 6-2 is cleared). From the check mode's
- * list (`kakunin=1`) it goes back to the list after its card; otherwise to the title.
+ * list (`kakunin=1`) it goes back to the list after its card; otherwise to the title, or v1.11 (PR11b) with `then=map`
+ * (the game sent the child here after the clear that opened it) on to the map in the same page (its ends, chapter
+ * 6's; the movie's 「▶ みる」 tap has unlocked the sound) and from there to the title. The first time the card is closed
+ * the save keeps "movie:<id>" (movieSeen): from then on "▶▶" skips it.
  */
 async function bootMovie(params: URLSearchParams, id: string): Promise<void> {
   if (await movieBounces(params, loadProgress(), peekMovie)) {
@@ -383,27 +396,67 @@ async function bootMovie(params: URLSearchParams, id: string): Promise<void> {
     return;
   }
   const kakunin = params.get('kakunin') === '1' && kakuninRunAllowed();
-  // TODO(6-2): a child watching it again (「もういちど みる」) skips with "▶▶" once it has been seen (keep a mark of it
-  // in the save, like the map's "finale:" marks). Until then only the owner's check (and dev) can skip.
   const owner = kakunin || !stageLockActive();
+  const seen = loadProgress().mapLinks.includes(movieSeen(id));
   document.title = GAME_TITLE;
   app.dataset.build = __BUILD_ID__;
   await playMovie(id, app, viewEl, uiEl, {
-    skippable: owner,
+    skippable: owner || seen,
     startButton: true,
-    onDone: () => {
-      if (kakunin) showKakuninList(uiEl, { onClose: () => (location.href = location.pathname) });
-      else location.href = location.pathname;
+    onDone: (audio) => {
+      if (kakunin) {
+        showKakuninList(uiEl, { onClose: () => (location.href = location.pathname) });
+        return;
+      }
+      addToProgress('mapLinks', [movieSeen(id)]);
+      if (params.get('then') !== 'map') {
+        location.href = location.pathname;
+        return;
+      }
+      void (async () => {
+        const next = await nextStage(loadProgress().cleared);
+        audio.playMusic('title');
+        const choice = await openMap(uiEl, audio, { next: next?.id, closeLabel: 'タイトルへ' });
+        if (choice.kind === 'stage') goToStage(choice.id, choice.resume);
+        else location.href = location.pathname;
+      })();
     },
   });
 }
 
+/** v1.11 (PR11b): the save's mark of a movie watched to its card (in mapLinks, like the map's "finale:" marks). */
+const movieSeen = (id: string): string => `movie:${id}`;
+
 /**
- * v1.12: TODO(6-2): the hook for the ending movie. After 6-2's clear card (the end of boot() below), and from the
- * title's 「もういちど みる」 once 6-2 is cleared, the game goes here; the movie then goes back to the title.
+ * v1.11 (PR11b): the movie the clear of `stageId` opens now and the child has not watched yet (the ending after 6-2,
+ * its `unlock.requires`), else null.
  */
-export function goToMovie(id: string): void {
-  location.search = `?movie=${encodeURIComponent(id)}`;
+async function dueMovie(stageId: string): Promise<string | null> {
+  const progress = loadProgress();
+  for (const id of listMovieIds()) {
+    const movie = await peekMovie(id);
+    const needs = movie?.unlock.requires ?? [];
+    if (needs.includes(stageId) && needs.every((r) => progress.cleared.includes(r)) && !progress.mapLinks.includes(movieSeen(id))) return id;
+  }
+  return null;
+}
+
+/** v1.11 (PR11b): a movie the save has opened (every stage of its `unlock.requires` cleared), for the title's button. */
+async function openedMovie(): Promise<string | null> {
+  const cleared = loadProgress().cleared;
+  for (const id of listMovieIds()) {
+    const needs = (await peekMovie(id))?.unlock.requires ?? [];
+    if (needs.length > 0 && needs.every((r) => cleared.includes(r))) return id;
+  }
+  return null;
+}
+
+/**
+ * v1.12, v1.11 (PR11b): to a movie (a page of its own: the stage's scene is let go). `thenMap`: after its card the map
+ * opens (after the clear that opened it); otherwise back to the title (the title's 「もういちど みる」).
+ */
+export function goToMovie(id: string, thenMap = false): void {
+  location.search = `?movie=${encodeURIComponent(id)}${thenMap ? '&then=map' : ''}`;
 }
 
 async function boot(): Promise<void> {
@@ -1942,6 +1995,8 @@ async function boot(): Promise<void> {
   if (titleShown) {
     // The title's music box (it starts with the first tap: iPad keeps sound locked until then).
     audio.playMusic('title');
+    // v1.11 (PR11b): the ending movie once 6-2 has opened it: 「もういちど みる」 (from the second time on "▶▶" skips it).
+    const movieAgain = await openedMovie();
     const choice = await showTitle(uiEl, GAME_TITLE, {
       lines: GAME_TITLE_LINES,
       chapters: await chapterStars(),
@@ -1971,6 +2026,7 @@ async function boot(): Promise<void> {
           () => showParents(uiEl, { buildId: __BUILD_ID__, onProgressChanged: () => (location.href = location.pathname) }),
         );
       },
+      onMovie: movieAgain ? () => goToMovie(movieAgain) : undefined,
       onZukan: () => {
         void loadAllRecords().then((all) => {
           const progress = loadProgress();
@@ -1978,6 +2034,7 @@ async function boot(): Promise<void> {
             uiEl,
             all.map(({ stageId, stageTitle, record }) => ({ stageId, stageTitle, record, found: progress.records.includes(record.id) })),
             new Set(progress.abilities),
+            progress.cleared,
           );
         });
       },
@@ -2427,9 +2484,14 @@ async function boot(): Promise<void> {
   }
   addToProgress('cleared', [stage.file.id]);
   if (loadProgress().resume?.stage === stage.file.id) setResume(null);
-  // TODO(6-2): after 6-2's clear the ending movie plays here, before the map: `goToMovie('ending')` (the movie goes
-  // back to the title; the map's chapter-6 card then waits for the next time the map opens).
   addToProgress('abilities', stage.file.unlocks);
+  // v1.11 (PR11b): a clear that opens a movie not watched yet (6-2: the ending 「せかいの わ」) goes to it first; the map
+  // (chapter 6's end) opens after its card.
+  const opened = await dueMovie(stage.file.id);
+  if (opened) {
+    goToMovie(opened, true);
+    return;
+  }
   // Back to the map: the rail to the next island grows in, and the child taps it to go on.
   const after = await nextStage(loadProgress().cleared, stage.file.id);
   audio.playMusic('title');
