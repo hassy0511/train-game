@@ -590,6 +590,11 @@ export interface MissionStep {
   lead?: LeadDef;
   /** v1.11 (6-1): at this station the doors stay open and a guest comes aboard by herself (see WelcomeDef). */
   welcome?: WelcomeDef;
+  /**
+   * v1.11 (PR11b, 6-2): junction rules while this step runs, over the mission's own (`missions[].junctions`) for the same
+   * junction: a fork can take one side on the way to one station and the other on the way to the next (6-2's gates).
+   */
+  junctions?: Record<string, MissionJunctionRule>;
 }
 
 /**
@@ -1432,6 +1437,11 @@ export interface StageFile {
   sections?: SectionDef[];
   /** v1.11 (PR11a, B6.4): friends riding along from the start (Sakasa sits behind the driver's seat; 6-2). */
   crew?: 'sakasa'[];
+  /**
+   * v1.11 (PR11b, PHASE9_CHAPTER5_6 第 1 部 §5.5): the clear card's button instead of "つづく" (6-2, the last stage:
+   * "やったね！"). 20 letters at most.
+   */
+  clearButton?: string;
 }
 
 /**

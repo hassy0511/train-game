@@ -37,7 +37,7 @@ import {
  * train stops and うしろむき is learned there; backing up she turns round and follows (the view stays ahead on her),
  * the station opens; M3 the drawbridge put down by the magnet, the doors left open and Sakasa boards after a flinch
  * (a whistle while she walks); the ending ("…こんにちは", she joins, "ワンダーごう、しゅっぱつ！"), the clear card and
- * the map with the world's end 「せかいの わ」 (PR10). A second test plays it again with うしろむき: record ③ at the end of the back siding behind the town.
+ * the map with the world's end 「せかいの わ」 (PR10) and 6-2's island appearing at its end (PR11b). A second test plays it again with うしろむき: record ③ at the end of the back siding behind the town.
  *
  * Built for about 10 fps software GL: presses that must land in a window are checked and made in the same page
  * callback (drive.ts); the short states (the dash, the turn, the beats, the flinch) are kept by the page's own
@@ -319,6 +319,13 @@ test('stage 6-1 full run: every ability on the upside-down town, the chase where
   await page.locator('#card-button').click();
   await expect(map).toHaveAttribute('data-ending', 'done', { timeout: 30_000 });
   expect((await progress(page)).mapLinks).toContain('finale:world');
+  // PR11b: then the rail from the castle up into the sky, and 6-2 つながったせかい pops up (it was not on the map).
+  await expect(page.locator('[data-link="6-1>6-2"]')).toHaveClass(/is-growing/, { timeout: 30_000 });
+  await expect(page.locator('.map-island[data-island="6-2"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.map-island[data-island="6-2"]')).toHaveClass(/is-next/, { timeout: 30_000 });
+  await expect.poll(async () => (await progress(page)).mapLinks ?? [], { timeout: 20_000 }).toContain('6-1>6-2');
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: resolve(OUT, '6-1-19-6-2.png') });
   const said = await lines();
   for (const line of [
     'まずは とけいだいえきまで！',

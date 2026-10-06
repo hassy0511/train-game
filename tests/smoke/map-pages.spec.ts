@@ -722,6 +722,8 @@ for (const [w, hgt] of [
     await expect(page.locator('.map-island[data-island="5-3"]')).toHaveClass(/is-cleared/);
     await expect(page.locator('[data-link="5-2>5-3"]')).toHaveClass(/is-laid/);
     await expect(page.locator('.map-island[data-island="teaser:6"]')).toHaveCount(0);
+    // PR11b: 6-2 is not on the map at all before 6-1 is cleared (not even a "?").
+    await expect(page.locator('.map-island[data-island="6-2"]')).toHaveCount(0);
     await expect(page.locator('.map-island[data-island="6-1"]')).toBeVisible();
     await expect(page.locator('[data-link="5-3>6-1"]')).toHaveClass(/is-laid/);
     // The castle is awake (its windows lit): nothing grew today.
@@ -738,6 +740,41 @@ for (const [w, hgt] of [
       for (const arrow of arrows) expect(overlap(things[i].box, arrow), `arrow on ${things[i].id}`).toBe(0);
     }
     await page.screenshot({ path: resolve(OUT, `map-pages-3-ch5-${w}.png`) });
+  });
+}
+
+/** v1.11 (PR11b, 第 1 部 §3.2): 6-1 cleared, its rail to 6-2 seen: page 3 complete, nothing overlapping. */
+for (const [w, hgt] of [
+  [1194, 834],
+  [568, 320],
+] as const) {
+  test(`page 3 with 6-1 cleared at ${w}×${hgt}: 6-2 in the sky by the castle, everything apart`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: hgt });
+    const cleared = ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', ...CH3, ...CH4, '5-1', '5-2', '5-3', '6-1'];
+    const links = seenMapLinks(WORLD, cleared);
+    expect(links).toContain('6-1>6-2');
+    await seed(page, { cleared, abilities: [...ABILITIES, 'dive', 'plow', 'magnetLight', 'reverse'], mapLinks: links });
+    await toTitle(page);
+    await openMap(page);
+    await turned(page, 3);
+    await page.waitForTimeout(300);
+    await expect(page.locator('.map-island[data-island="6-2"]')).toBeVisible();
+    await expect(page.locator('[data-link="6-1>6-2"]')).toHaveClass(/is-laid/);
+    const { things, arrows } = await layout(page);
+    expect(things.map((t) => t.id)).toEqual(expect.arrayContaining(['5-1', '5-2', '5-3', '6-1', '6-2']));
+    for (let i = 0; i < things.length; i++) {
+      for (let j = i + 1; j < things.length; j++) {
+        const a = things[i].box;
+        const b = things[j].box;
+        expect(overlap(a, b) / Math.min(a.width * a.height, b.width * b.height), `${things[i].id} / ${things[j].id}`).toBeLessThanOrEqual(0.1);
+      }
+      for (const arrow of arrows) expect(overlap(things[i].box, arrow), `arrow on ${things[i].id}`).toBe(0);
+    }
+    // The heading fits beside the back button.
+    const heading = (await page.locator('.map-header').boundingBox())!;
+    const back = (await page.locator('#map-close').boundingBox())!;
+    expect(heading.x >= back.x + back.width || heading.y >= back.y + back.height).toBe(true);
+    await page.screenshot({ path: resolve(OUT, `map-pages-3-ch6-${w}.png`) });
   });
 }
 
@@ -764,7 +801,7 @@ test("chapter 5's end seen before the castle came: the new rail 5-3 → 6-1 grow
   expect(errors).toEqual([]);
 });
 
-test('6-1 cleared, no 6-2 island yet: chapter 6 is not over (no finale:6), the title keeps 6しょう ☆', async ({ page }) => {
+test('6-1 cleared, 6-2 not yet: chapter 6 is not over (no finale:6), the title keeps 6しょう ☆', async ({ page }) => {
   const errors = watchErrors(page);
   const cleared = ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', ...CH3, ...CH4, '5-1', '5-2', '5-3', '6-1'];
   const links = seenMapLinks(WORLD, cleared);
@@ -775,6 +812,10 @@ test('6-1 cleared, no 6-2 island yet: chapter 6 is not over (no finale:6), the t
   const map = await openMap(page);
   await turned(page, 3);
   await expect(page.locator('.map-island[data-island="6-1"]')).toHaveClass(/is-cleared/);
+  // PR11b: 6-2 is there (6-1 opened it), not cleared; its records' badge does not glow (its abilities are its own).
+  await expect(page.locator('.map-island[data-island="6-2"]')).toBeVisible();
+  await expect(page.locator('.map-island[data-island="6-2"]')).not.toHaveClass(/is-cleared/);
+  await expect(page.locator('.map-island[data-island="6-2"] .map-badge')).not.toHaveClass(/is-takeable/);
   await page.waitForTimeout(1_000);
   expect(await map.getAttribute('data-finale')).toBeNull();
   expect((await saved(page)).mapLinks).not.toContain('finale:6');

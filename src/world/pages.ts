@@ -51,6 +51,20 @@ export function chapterDone(world: WorldFile, chapter: WorldChapter, cleared: st
 }
 
 /**
+ * v1.11 (PR11b, PHASE9_CHAPTER5_6 第 1 部 §3.6・§5.4): the world as the map shows it for these clears: without the islands
+ * an `after` still holds back (6-2 until 6-1 is cleared: no island, no "?") and the rails to and from them.
+ */
+export function visibleWorld(world: WorldFile, cleared: string[]): WorldFile {
+  const hidden = new Set(world.islands.filter((i) => i.after !== undefined && !cleared.includes(i.after)).map((i) => i.id));
+  if (hidden.size === 0) return world;
+  return {
+    ...world,
+    islands: world.islands.filter((i) => !hidden.has(i.id)),
+    links: world.links.filter(([from, to]) => !hidden.has(from) && !hidden.has(to)),
+  };
+}
+
+/**
  * The rails laid for these clears ("from>to"): a rail once its `from` is cleared, and a rail out of a chapter
  * (`afterChapter`) once that chapter is done. Never the dotted line to a "?" island.
  */
@@ -184,6 +198,15 @@ export function validateWorld(world: WorldFile): string[] {
   const islands = new Set(world.islands.map((i) => i.id));
   for (const i of world.islands) {
     if (i.size !== undefined && !(i.size >= 0.8 && i.size <= 1.4)) errors.push(`island "${i.id}": size ${i.size} is not 0.8–1.4`);
+    // v1.11 (PR11b): an island held back until a stage is cleared: that stage is an island, and a rail leads to it.
+    if (i.after !== undefined) {
+      if (!islands.has(i.after)) errors.push(`island "${i.id}": "after" "${i.after}" is not an island`);
+      if (!world.links.some(([, to]) => to === i.id)) errors.push(`island "${i.id}": with "after", a link must lead to it (it appears as that rail grows)`);
+    }
+  }
+  for (const c of world.chapters) {
+    const sound = c.finale?.sound;
+    if (sound !== undefined && sound !== 'fanfare' && sound !== 'card') errors.push(`chapter ${c.id}: finale "sound" must be "fanfare" or "card"`);
   }
   const ending = world.ending;
   if (ending) {

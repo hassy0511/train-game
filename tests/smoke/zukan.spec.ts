@@ -190,8 +190,10 @@ test('picture book with うしろむき (6-1 cleared): the three うしろむき
     mapLinks: [...CHAIN, '2-1>2-2', '2-2>2-3', '2-3>1-1', '1-1>3-1', '3-1>3-2', '3-2>3-3', '3-3>4-1', '4-1>4-2', '4-2>4-3', '4-3>5-1', '5-1>5-2', '5-2>5-3', '5-3>6-1', 'finale:4', 'finale:5'],
   });
   await openZukan(page);
-  await expect(page.locator('#zukan-count')).toHaveText('みつけた 1/48');
-  for (const id of ['upside-island', 'sakasa-doodle']) {
+  // PR11b: 6-1 cleared opens 6-2's row (its three records, all うしろむき: no grey picture either).
+  await expect(page.locator('#zukan-count')).toHaveText('みつけた 1/51');
+  await expect(page.locator('.zukan-row[data-stage="6-2"] .zukan-card')).toHaveCount(3);
+  for (const id of ['upside-island', 'sakasa-doodle', 'swirl-acorn', 'left-shell', 'sakasa-tag']) {
     await expect(page.locator(`.zukan-card[data-record="${id}"] .zukan-mark`), id).toHaveText('？');
     await expect(page.locator(`.zukan-card[data-record="${id}"] .zukan-later`), id).toHaveCount(0);
   }
@@ -200,5 +202,20 @@ test('picture book with うしろむき (6-1 cleared): the three うしろむき
   await page.waitForTimeout(300);
   await page.screenshot({ path: resolve(OUT, 'zukan-5-reverse.png') });
   await closeInSight(page);
+  expect(errors).toEqual([]);
+});
+
+test('picture book before 6-1 is cleared: no row for 6-2 (it is not on the map either: `islands[].after`)', async ({ page }) => {
+  const errors = watchErrors(page);
+  await seed(page, {
+    cleared: ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3', '3-1', '3-2', '3-3', '4-1', '4-2', '4-3', '5-1', '5-2', '5-3'],
+    abilities: ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'magnetLight'],
+    records: [],
+    mapLinks: [...CHAIN, '2-1>2-2', '2-2>2-3', '2-3>1-1', '1-1>3-1', '3-1>3-2', '3-2>3-3', '3-3>4-1', '4-1>4-2', '4-2>4-3', '4-3>5-1', '5-1>5-2', '5-2>5-3', '5-3>6-1', 'finale:4', 'finale:5'],
+  });
+  await openZukan(page);
+  await expect(page.locator('.zukan-row[data-stage="6-1"]')).toHaveCount(1);
+  await expect(page.locator('.zukan-row[data-stage="6-2"]')).toHaveCount(0);
+  await expect(page.locator('#zukan-count')).toHaveText('みつけた 0/48');
   expect(errors).toEqual([]);
 });

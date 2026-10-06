@@ -23,8 +23,8 @@ import { createSceneView, type CameraFx } from '../view';
  * train runs by itself (`drive`), the camera frames shots (`shot`), the figures move (`act`), the lines are the usual
  * speech bubbles. "▶▶" (when allowed) skips to the last shot and the card.
  *
- * Opened as `?movie=<id>` (src/main.ts; behind the かくにん lock, or once the save has opened it). The game will send
- * the child here after 6-2's clear and from the title's 「もういちど みる」 (TODO(6-2): see main.ts).
+ * Opened as `?movie=<id>` (src/main.ts; behind the かくにん lock, or once the save has opened it). v1.11 (PR11b): the game
+ * sends the child here after 6-2's clear (the first time; the map follows) and from the title's 「もういちど みる」.
  */
 
 export interface MovieOptions {
@@ -32,8 +32,11 @@ export interface MovieOptions {
   skippable: boolean;
   /** Wait for a tap on 「みる」 first (a page opened by its address: iPad keeps the sound locked until a tap). */
   startButton: boolean;
-  /** After the card's button. */
-  onDone(): void;
+  /**
+   * After the card's button (the drawing stops: what comes next is DOM). `audio`: the movie's sound, unlocked by the
+   * start tap, for a map opened on top (v1.11, PR11b).
+   */
+  onDone(audio: AudioEngine): void;
 }
 
 const MAX_DT = 0.1;
@@ -154,7 +157,9 @@ export async function playMovie(id: string, app: HTMLElement, viewEl: HTMLElemen
     app.dataset.s = train.state.s.toFixed(1);
     skipButton?.setVisible(skip !== null && !skip.requested && uiEl.querySelector('#card') === null);
   };
+  let drawing = true;
   const frame = (now: number): void => {
+    if (!drawing) return;
     requestAnimationFrame(frame);
     try {
       tick(now);
@@ -263,7 +268,8 @@ export async function playMovie(id: string, app: HTMLElement, viewEl: HTMLElemen
   audio.playFanfare();
   await showCard(uiEl, movie.card.title, movie.card.button, undefined, skipped ? 0.8 : 0);
   app.dataset.movieState = 'done';
-  options.onDone();
+  drawing = false;
+  options.onDone(audio);
 }
 
 /** The start screen of a movie opened by its address: its title and 「みる」 (the tap unlocks the sound). */

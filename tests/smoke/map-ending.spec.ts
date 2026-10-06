@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { endingBridges, endingDue, ENDING_SEEN, knownPages, openingPage, seenMapLinks, validateWorld, type PageFacts } from '../../src/world/pages';
+import { endingBridges, endingDue, ENDING_SEEN, knownPages, openingPage, seenMapLinks, validateWorld, visibleWorld, type PageFacts } from '../../src/world/pages';
 import type { WorldFile } from '../../src/world/types';
 
 /**
@@ -11,7 +11,10 @@ import type { WorldFile } from '../../src/world/types';
  * side by side onto one sheet, rainbow rails join them (1-1>3-1 over page 1, 4-3>5-1 next door, and the long rail home
  * 6-1 → 1-1 under the pages), a golden light runs from 1-1 through every island back to 1-1, all glow, the card
  * 「ワールドレールが／ぜんぶ つながった！／サカサも いっしょだよ！」; closed, "finale:world" is saved and the pages come
- * back to page 3. 6-2 is not there yet (PR11b), so the map then simply offers 「タイトルへ」/「もどる」.
+ * back to page 3. Then (PR11b, §5.2 の 8) the rail 6-1 → 6-2 grows from the castle up into the sky and 6-2's island pops
+ * up and bounces (it is not on the map, not even as a "?", until 6-1 is cleared: `islands[].after`); a child who saw
+ * the world's end before 6-2 came sees that rail grow once as a new one. 6-2 cleared: chapter 6's end, a card only with
+ * the fanfare, every star on the title and its 「もういちど みる」.
  * And the title: once 6-1 is cleared Sakasa rides in the first car behind the title (§5.7).
  */
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -20,8 +23,10 @@ mkdirSync(OUT, { recursive: true });
 const WORLD = JSON.parse(readFileSync(resolve(HERE, '../../src/world/world.json'), 'utf8')) as WorldFile;
 const KEY = 'train-game.progress.v1';
 const SEVEN = ['whistle', 'jump', 'light', 'rocket', 'dive', 'plow', 'magnetLight'];
-const TO_61 = WORLD.islands.filter((i) => i.chapter <= 6).map((i) => i.id);
+const ALL = WORLD.islands.map((i) => i.id);
+const TO_61 = ALL.filter((id) => id !== '6-2');
 const TO_53 = TO_61.filter((id) => id !== '6-1');
+const RAIL_62 = '6-1>6-2';
 const TRAIL = '1-1,1-2,1-3,2-1,2-2,2-3,1-1,3-1,3-2,3-3,4-1,4-2,4-3,5-1,5-2,5-3,6-1,1-1';
 
 type Save = { cleared: string[]; abilities: string[]; records: string[]; mapLinks: string[] };
@@ -83,9 +88,9 @@ async function watchEnding(page: Page): Promise<void> {
 const ended = (page: Page): Promise<{ confetti: number; hops: number; music: string[]; duration: string[] }> =>
   page.evaluate(() => (window as unknown as { __end: { confetti: number; hops: number; music: string[]; duration: string[] } }).__end);
 
-/** A child who has just cleared 6-1: everything before seen (chapter 5's end too), the world's end not yet. */
+/** A child who has just cleared 6-1: everything before seen (chapter 5's end too), the world's end not yet (nor 6-2's rail). */
 function justCleared61(): Save {
-  const links = seenMapLinks(WORLD, TO_61).filter((k) => k !== ENDING_SEEN);
+  const links = seenMapLinks(WORLD, TO_61).filter((k) => k !== ENDING_SEEN && k !== RAIL_62);
   expect(links).toContain('finale:5');
   return { cleared: TO_61, abilities: [...SEVEN, 'reverse'], records: [], mapLinks: links };
 }
@@ -128,14 +133,22 @@ test('the world end is due once, on page 3, after 6-1 with chapters 1–5 done (
   expect(home.home).toBe(true);
   // Its middle runs under the pages (they end at 66 %).
   expect(0.25 * home.from.y + 0.5 * home.via[1] + 0.25 * home.to.y).toBeGreaterThan(70);
+  // PR11b: 6-2 is not on the map until 6-1 is cleared (`after`), then its rail is laid; chapter 6 ends with 6-2.
+  expect(visibleWorld(WORLD, TO_53).islands.map((i) => i.id)).not.toContain('6-2');
+  expect(visibleWorld(WORLD, TO_53).links.some(([a, b]) => a === '6-2' || b === '6-2')).toBe(false);
+  expect(visibleWorld(WORLD, TO_61).islands.map((i) => i.id)).toContain('6-2');
+  expect(links).toContain(RAIL_62);
+  expect(seenMapLinks(WORLD, ALL)).toEqual(expect.arrayContaining(['finale:6', ENDING_SEEN, RAIL_62]));
   // world.json passes its checks; a trail with a jump, or a castle twice as wide, does not.
   expect(validateWorld(WORLD)).toEqual([]);
   const broken = structuredClone(WORLD);
   broken.ending!.trail = ['1-1', '1-3', '1-1'];
   broken.islands.find((i) => i.id === '6-1')!.size = 2;
+  broken.islands.find((i) => i.id === '6-2')!.after = '9-9';
   const why = validateWorld(broken).join('\n');
   expect(why).toContain('trail 1-1 → 1-3');
   expect(why).toContain('size 2');
+  expect(why).toContain('"after" "9-9" is not an island');
 });
 
 test('the world end after 6-1: page 3, the pages side by side, rainbow rails, the golden light round the world, the card, once', async ({ page }) => {
@@ -199,13 +212,17 @@ test('the world end after 6-1: page 3, the pages side by side, rainbow rails, th
   await page.locator('#card-button').click();
   await expect(map).toHaveAttribute('data-ending', 'done', { timeout: 10_000 });
   expect((await saved(page)).mapLinks).toContain(ENDING_SEEN);
-  // Back to page 3, everything where it was; no 6-2 yet, so the way out comes back.
+  // Back to page 3, everything where it was; then (PR11b) the rail from the castle into the sky, and 6-2 pops up.
   await expect(map).not.toHaveClass(/is-world/);
   await expect(map).toHaveAttribute('data-page', '3');
+  const island62 = page.locator('.map-island[data-island="6-2"]');
+  await expect(page.locator(`[data-link="${RAIL_62}"]`)).toHaveClass(/is-growing/, { timeout: 15_000 });
+  await expect(island62).toBeVisible({ timeout: 15_000 });
+  await expect.poll(async () => (await saved(page)).mapLinks, { timeout: 15_000 }).toContain(RAIL_62);
+  await expect(island62).toHaveClass(/is-next/, { timeout: 10_000 });
   await expect(page.locator('#map-close')).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator('.map-island[data-island="6-2"]')).toHaveCount(0);
   await page.waitForTimeout(600);
-  await page.screenshot({ path: resolve(OUT, 'map-world-after.png') });
+  await page.screenshot({ path: resolve(OUT, 'map-6-2.png') });
   const e = await ended(page);
   expect(e.music).toContain('sekai');
   expect(e.confetti).toBeGreaterThan(0);
@@ -324,5 +341,60 @@ test('6-1 cleared: Sakasa rides in the first car behind the title, and gets off 
   await page.locator('#title-start').click();
   await expect(page.locator('#title-screen')).toHaveCount(0, { timeout: 10_000 });
   expect(await app.getAttribute('data-title-crew')).toBeNull();
+  expect(errors).toEqual([]);
+});
+
+test('the world end seen before 6-2 came (PR10): the rail from the castle grows once as a new one, and 6-2 pops up', async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = watchErrors(page);
+  await seed(page, { cleared: TO_61, abilities: [...SEVEN, 'reverse'], records: [], mapLinks: seenMapLinks(WORLD, TO_61).filter((k) => k !== RAIL_62) });
+  await openTitleMap(page);
+  const map = page.locator('#map');
+  await expect(map).toHaveAttribute('data-page', '3');
+  expect(await map.getAttribute('data-ending')).toBeNull();
+  const island62 = page.locator('.map-island[data-island="6-2"]');
+  await expect(page.locator(`[data-link="${RAIL_62}"]`)).toHaveClass(/is-growing/, { timeout: 15_000 });
+  await expect(island62).toBeVisible({ timeout: 15_000 });
+  await expect(island62).toHaveClass(/is-next/, { timeout: 10_000 });
+  await expect.poll(async () => (await saved(page)).mapLinks, { timeout: 10_000 }).toContain(RAIL_62);
+  // Once only.
+  await page.locator('#map-close').click();
+  await page.locator('#title-map').click();
+  await expect(map).toBeVisible();
+  await page.waitForTimeout(800);
+  await expect(page.locator(`[data-link="${RAIL_62}"]`)).not.toHaveClass(/is-growing/);
+  await expect(island62).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("6-2 cleared: chapter 6's end, a card only (the fanfare), once; every star on the title and 「もういちど みる」", async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = watchErrors(page);
+  await seed(page, { cleared: ALL, abilities: [...SEVEN, 'reverse'], records: [], mapLinks: seenMapLinks(WORLD, ALL).filter((k) => k !== 'finale:6') });
+  await toTitle(page);
+  await expect(page.locator('#title-chapters')).toHaveText(/5しょう ★\s*6しょう ★/);
+  await expect(page.locator('.title-chapter.is-done')).toHaveCount(6);
+  await expect(page.locator('#title-movie')).toHaveText('もういちど みる');
+  await page.locator('#title-map').click();
+  const map = page.locator('#map');
+  await expect(map).toHaveAttribute('data-page', '3');
+  await expect(map).toHaveAttribute('data-finale', 'playing');
+  // No light runs: straight to the card.
+  const card = page.locator('#card');
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await expect(card).toContainText('6しょう クリア！');
+  await expect(card).toContainText('ぜんぶの せかいを');
+  await expect(card).toContainText('まわったね！');
+  await expect(card.locator('svg.card-icon')).toHaveCount(1);
+  expect(await map.getAttribute('data-trail')).toBeFalsy();
+  await page.screenshot({ path: resolve(OUT, 'map-ch6-card.png') });
+  await expect(page.locator('#card-button')).toHaveText('やったね！');
+  await page.locator('#card-button').click();
+  await expect(map).toHaveAttribute('data-finale', 'done', { timeout: 10_000 });
+  expect((await saved(page)).mapLinks).toContain('finale:6');
+  await page.locator('#map-close').click();
+  await page.locator('#title-map').click();
+  await page.waitForTimeout(800);
+  expect(await map.getAttribute('data-finale')).toBeNull();
   expect(errors).toEqual([]);
 });

@@ -76,28 +76,33 @@ export function checkLeadShapes(raw: Record<string, unknown>): void {
   }
   for (const m of raw.missions as Record<string, unknown>[]) {
     const mid = String(m.id);
-    if (m.junctions !== undefined) {
-      if (!isObject(m.junctions)) fail(`mission "${mid}": "junctions" must be an object (by junction id)`);
-      for (const [id, rule] of Object.entries(m.junctions)) {
-        const j = junctions.find((x) => x.id === id);
-        const where = `mission "${mid}" junctions "${id}"`;
-        if (!j) fail(`${where}: no such junction`);
-        if (!isObject(rule) || (rule.lock === undefined) === (rule.default === undefined)) fail(`${where}: write exactly one of "lock" or "default"`);
-        const side = rule.lock ?? rule.default;
-        if (side !== 'left' && side !== 'right') fail(`${where}: the side must be "left" or "right"`);
-        if (j[side] === undefined) fail(`${where}: the ${side} side has no rail`);
-        if (rule.lock !== undefined && (j.signReversed === true || j.fireflies !== undefined || j.spin !== undefined || j.dive === true || j.needs !== undefined)) {
-          fail(`${where}: "lock" is not for a reversed sign, a firefly, spinning or dive fork, or one that needs an ability`);
-        }
-      }
-    }
-    for (const st of m.steps as Record<string, unknown>[]) {
+    if (m.junctions !== undefined) checkJunctionRules(m.junctions, `mission "${mid}"`, junctions);
+    for (const [i, st] of (m.steps as Record<string, unknown>[]).entries()) {
+      // v1.11 (PR11b): a step's own rules over the mission's.
+      if (st.junctions !== undefined) checkJunctionRules(st.junctions, `mission "${mid}" step ${i}`, junctions);
       if (st.lead !== undefined) checkLead(st.lead, `mission "${mid}" lead`, railIds, raw);
       if (st.welcome !== undefined) checkWelcome(st.welcome, `mission "${mid}" welcome`, railIds);
       if (st.lead !== undefined && (st.chase !== undefined || st.countdown !== undefined)) fail(`mission "${mid}": a step has a lead or a chase or a countdown, not two`);
       if (st.welcome !== undefined && (st.board !== undefined || st.alight !== undefined || st.parcel !== undefined)) {
         fail(`mission "${mid}": a step with "welcome" takes no board, alight or parcel (the guest boards by herself)`);
       }
+    }
+  }
+}
+
+/** `missions[].junctions` (v1.11, 6-1) and `steps[].junctions` (v1.11, PR11b): one rule per junction id. */
+function checkJunctionRules(rules: unknown, owner: string, junctions: Record<string, unknown>[]): void {
+  if (!isObject(rules)) fail(`${owner}: "junctions" must be an object (by junction id)`);
+  for (const [id, rule] of Object.entries(rules)) {
+    const j = junctions.find((x) => x.id === id);
+    const where = `${owner} junctions "${id}"`;
+    if (!j) fail(`${where}: no such junction`);
+    if (!isObject(rule) || (rule.lock === undefined) === (rule.default === undefined)) fail(`${where}: write exactly one of "lock" or "default"`);
+    const side = rule.lock ?? rule.default;
+    if (side !== 'left' && side !== 'right') fail(`${where}: the side must be "left" or "right"`);
+    if (j[side] === undefined) fail(`${where}: the ${side} side has no rail`);
+    if (rule.lock !== undefined && (j.signReversed === true || j.fireflies !== undefined || j.spin !== undefined || j.dive === true || j.needs !== undefined)) {
+      fail(`${where}: "lock" is not for a reversed sign, a firefly, spinning or dive fork, or one that needs an ability`);
     }
   }
 }

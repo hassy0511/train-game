@@ -1,5 +1,5 @@
 {
-  "_doc": "The world map (docs/PHASE4_DESIGN.md), in pages of two chapters (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3; page 3, chapters 5 and 6: docs/PHASE9_CHAPTER5_6.md 第 1 部 §3): a chapter's `page` is where its islands are; `pages[].title` is the heading beside \"ちず\" once there is more than one page. Islands are placed in % of the map area (x from the left, y from the top) of their page. An island without a stage file yet is shown as a '?' silhouette (no name, no records, it only wiggles); the rails to it are laid as usual, so a page can come before its stages, and the island gets its name once its stage file is there (and its own picture once it has a `diorama`). `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees. `chapters[].finale` plays once when its link is first drawn, or without a link once the chapter is done (a light — gold round a `ring`, water along a `path`, an aurora, or fireflies gathering along a `path` into one big light that flies to `target`, the node it lands on (the castle 6-1, which wakes there: its windows light) — then a card); `chapters[].teaser` is a later chapter's single \"?\" island on the page of its `from` island (docs/PHASE7_FINISH.md §3). A link's optional `via` is the curve's control point in %; `afterChapter` holds it back until that chapter is done; `exit`/`enter` take it to another page through the cloud gate (the gate's place on each page, with the curve to it). An island's optional `size` scales its width (25 % × size; the castle 6-1 is 1.2). The castle sleeps (grey) until its chapter's end is seen, then wakes with its windows lit on every visit: a diorama item's `windows` are anchors on its model (m, its own frame) and scripts/render-map.mjs writes where they fall on the picture into the island's `windows` (% of the picture; not edited by hand). A chapter with a `finale` is done only once the world has as many of its islands as it has stage files (src/world/pages.ts chapterDone), so chapter 6 with only 6-1 never ends. `ending` is the world's end 「せかいの わ」 (docs/PHASE9_CHAPTER5_6.md 第 1 部 §5.2), once (\"finale:world\" in the save), the first time the map opens with `after` cleared and every chapter before it done: it starts on the page of `after`, lays all the pages side by side on one sheet joined by rainbow rails (the rails through the gate, and a long rail from `after` back to `home` under the pages), and a golden light runs through the islands of `trail` in order (each two in a row joined by a link, or `after` then `home`); then its card, and back to the page of `after`.",
+  "_doc": "The world map (docs/PHASE4_DESIGN.md), in pages of two chapters (docs/PHASE8_CHAPTER3_4.md 第 1 部 §3; page 3, chapters 5 and 6: docs/PHASE9_CHAPTER5_6.md 第 1 部 §3): a chapter's `page` is where its islands are; `pages[].title` is the heading beside \"ちず\" once there is more than one page. Islands are placed in % of the map area (x from the left, y from the top) of their page. An island without a stage file yet is shown as a '?' silhouette (no name, no records, it only wiggles); the rails to it are laid as usual, so a page can come before its stages, and the island gets its name once its stage file is there (and its own picture once it has a `diorama`). `diorama` is what scripts/render-map.mjs puts on the island to draw public/map/<id>.png: models (bottom centre on the island top, y = 0), at [x, z] m, rotY in degrees. `chapters[].finale` plays once when its link is first drawn, or without a link once the chapter is done (a light — gold round a `ring`, water along a `path`, an aurora, or fireflies gathering along a `path` into one big light that flies to `target`, the node it lands on (the castle 6-1, which wakes there: its windows light) — then a card); `chapters[].teaser` is a later chapter's single \"?\" island on the page of its `from` island (docs/PHASE7_FINISH.md §3). A link's optional `via` is the curve's control point in %; `afterChapter` holds it back until that chapter is done; `exit`/`enter` take it to another page through the cloud gate (the gate's place on each page, with the curve to it). An island's optional `size` scales its width (25 % × size; the castle 6-1 is 1.2). The castle sleeps (grey) until its chapter's end is seen, then wakes with its windows lit on every visit: a diorama item's `windows` are anchors on its model (m, its own frame) and scripts/render-map.mjs writes where they fall on the picture into the island's `windows` (% of the picture; not edited by hand). A chapter with a `finale` is done only once the world has as many of its islands as it has stage files (src/world/pages.ts chapterDone), so chapter 6 with only 6-1 never ends. An island with `after` is not on the map (nor its rows in the picture book) until that stage is cleared; it appears as the rail to it grows (6-2, after 6-1 and the world's end). A finale's `sound` is \"fanfare\" or \"card\" (left out: the fanfare with a `ring` or `path`, else the card's sound); chapter 6's end is a card only, with the fanfare. `ending` is the world's end 「せかいの わ」 (docs/PHASE9_CHAPTER5_6.md 第 1 部 §5.2), once (\"finale:world\" in the save), the first time the map opens with `after` cleared and every chapter before it done: it starts on the page of `after`, lays all the pages side by side on one sheet joined by rainbow rails (the rails through the gate, and a long rail from `after` back to `home` under the pages), and a golden light runs through the islands of `trail` in order (each two in a row joined by a link, or `after` then `home`); then its card, and back to the page of `after`.",
   "pages": [
     {
       "id": 1,
@@ -102,7 +102,13 @@
       "id": 6,
       "page": 3,
       "title": "6しょう さいごの たび",
-      "count": 2
+      "count": 2,
+      "finale": {
+        "card": "6しょう クリア！\nぜんぶの せかいを\nまわったね！",
+        "button": "やったね！",
+        "icon": "world",
+        "sound": "fanfare"
+      }
     }
   ],
   "ending": {
@@ -1857,6 +1863,108 @@
           24.9
         ]
       ]
+    },
+    {
+      "id": "6-2",
+      "chapter": 6,
+      "x": 84,
+      "y": 22,
+      "after": "6-1",
+      "diorama": {
+        "base": "island-b",
+        "ground": "#bfe3a6",
+        "rail": {
+          "radius": 11
+        },
+        "camera": {
+          "yaw": 25,
+          "pitch": 28
+        },
+        "items": [
+          {
+            "model": "world-gate-1",
+            "at": [
+              -13,
+              -5
+            ],
+            "rotY": 40,
+            "scale": 0.45
+          },
+          {
+            "model": "world-gate-2",
+            "at": [
+              -3,
+              -13
+            ],
+            "rotY": 0,
+            "scale": 0.45
+          },
+          {
+            "model": "world-gate-3",
+            "at": [
+              9,
+              -11
+            ],
+            "rotY": -35,
+            "scale": 0.45
+          },
+          {
+            "model": "fern-a",
+            "at": [
+              -15,
+              5
+            ],
+            "rotY": 0,
+            "scale": 1.3
+          },
+          {
+            "model": "swirl-acorn",
+            "at": [
+              -7,
+              4
+            ],
+            "rotY": 20,
+            "scale": 6,
+            "lift": 1.2
+          },
+          {
+            "model": "snowman",
+            "at": [
+              2,
+              7
+            ],
+            "rotY": 20,
+            "scale": 1.4
+          },
+          {
+            "model": "block-house-a",
+            "at": [
+              -8,
+              11
+            ],
+            "rotY": 20,
+            "scale": 0.3
+          },
+          {
+            "model": "left-shell",
+            "at": [
+              15,
+              -4
+            ],
+            "rotY": 0,
+            "scale": 5,
+            "lift": 1.3
+          },
+          {
+            "model": "train-proto",
+            "at": [
+              11,
+              2
+            ],
+            "rotY": 0
+          }
+        ]
+      }
     }
   ],
   "links": [
@@ -1980,6 +2088,10 @@
         ],
         "afterChapter": 5
       }
+    ],
+    [
+      "6-1",
+      "6-2"
     ]
   ]
 }

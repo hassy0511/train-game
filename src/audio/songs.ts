@@ -77,6 +77,18 @@ const END_VOICING: Record<string, { root: string; fifth: string; third: string; 
   Am: { root: 'A1', fifth: 'E2', third: 'C4', top: 'E4', bell: ['C7', 'A6'] },
   Bm: { root: 'B1', fifth: 'F#2', third: 'D4', top: 'F#4', bell: ['D7', 'B6'] },
 };
+// ---- v1.11 (PR11b) 6-2 "tsunagari" -----------------------------------------------------------------------------
+
+// One bar (eighth steps) per chord: the bass's root and fifth bouncing, the marimba's broken chord, the pad's two notes.
+const TS_CHORDS = 'C G F C C G G C C Dm C G F Dm G C'.split(' ');
+const TS_VOICING: Record<string, { root: string; fifth: string; arp: [string, string, string]; pad: [string, string] }> = {
+  C: { root: 'C2', fifth: 'G2', arp: ['C4', 'E4', 'G4'], pad: ['E4', 'G4'] },
+  G: { root: 'G1', fifth: 'D2', arp: ['B3', 'D4', 'G4'], pad: ['D4', 'B4'] },
+  F: { root: 'F1', fifth: 'C2', arp: ['A3', 'C4', 'F4'], pad: ['C4', 'A4'] },
+  Dm: { root: 'D2', fifth: 'A2', arp: ['A3', 'D4', 'F4'], pad: ['D4', 'F4'] },
+};
+const tsBars = (bar: (v: (typeof TS_VOICING)[string], i: number) => string): string => TS_CHORDS.map((c, i) => bar(TS_VOICING[c], i)).join(' | ');
+
 const endBars = (bar: (v: (typeof END_VOICING)[string], i: number) => string): string => END_CHORDS.map((c, i) => bar(END_VOICING[c], i)).join(' | ');
 
 export const SONGS: Record<string, Song> = {
@@ -712,6 +724,31 @@ export const SONGS: Record<string, Song> = {
       { voice: 'wood', gain: 0.45, notes: 'F4:1 A4:1 C5:1 A4:1 | E4:1 G4:1 C5:1 G4:1 | F4:1 Bb4:1 D5:1 Bb4:1 | E4:1 G4:1 C5:1 G4:1 | F4:1 A4:1 C5:1 A4:1 | F4:1 A4:1 D5:1 A4:1 | G4:1 Bb4:1 C5:1 Bb4:1 | F4:1 A4:1 C5:1 -:1' },
       { voice: 'bass', gain: 0.8, notes: 'F2:1 -:1 C3:1 -:1 | C2:1 -:1 G2:1 -:1 | Bb1:1 -:1 F2:1 -:1 | C2:1 -:1 G2:1 -:1 | F2:1 -:1 C3:1 -:1 | D2:1 -:1 A2:1 -:1 | C2:1 -:1 G2:1 -:1 | F2:1 -:1 F2:1 -:1' },
       { voice: 'drums', gain: 0.55, notes: repeat('k:1 h:1 s:1 h:1', 8) },
+    ],
+  },
+  // v1.11 (PR11b) 6-2 つながったせかい (PHASE9_CHAPTER5_6 第 1 部 §8.1): the title's music box tune "そらの ちず" (this
+  // game's own) set to a travelling beat, 4/4 in C at 112, sixteen bars: A = the tune in eighths, B = a new answer that
+  // runs on and comes home. Lead, bell, marimba, bass, pad and light drums. One song for every section (第 3 部 B12).
+  tsunagari: {
+    id: 'tsunagari',
+    title: 'つながった せかい',
+    bpm: 112,
+    stepsPerBeat: 2,
+    tracks: [
+      {
+        voice: 'lead',
+        notes:
+          'E5:1 E5:1 G5:2 C6:3 -:1 | B5:2 A5:1 G5:1 -:1 G5:1 E5:2 | A5:1 A5:1 F5:2 A5:2 C6:2 | G5:6 -:2 | ' +
+          'E5:1 E5:1 G5:2 C6:3 -:1 | D6:2 C6:1 B5:1 -:1 B5:1 G5:2 | A5:2 B5:2 D6:2 B5:2 | C6:6 -:2 | ' +
+          'G5:1 A5:1 G5:1 E5:1 C5:2 E5:2 | F5:1 G5:1 A5:1 G5:1 F5:2 D5:2 | E5:1 F5:1 G5:1 C6:1 B5:2 A5:2 | G5:6 -:2 | ' +
+          'A5:1 B5:1 C6:1 A5:1 G5:2 E5:2 | F5:1 G5:1 A5:1 F5:1 E5:2 D5:2 | E5:2 G5:2 D5:2 B4:2 | C5:6 -:2',
+      },
+      { voice: 'bell', gain: 0.4, notes: tsBars((v, i) => (i % 2 === 0 ? `-:4 ${v.pad[1].replace('4', '6')}:2 -:2` : `-:8`)) },
+      { voice: 'wood', gain: 0.4, notes: tsBars((v) => `${v.arp[0]}:1 ${v.arp[1]}:1 ${v.arp[2]}:1 ${v.arp[1]}:1 ${v.arp[0]}:1 ${v.arp[1]}:1 ${v.arp[2]}:1 ${v.arp[1]}:1`) },
+      { voice: 'bass', gain: 0.8, notes: tsBars((v) => `${v.root}:1 -:1 ${v.fifth}:1 -:1 ${v.root}:1 -:1 ${v.fifth}:1 -:1`) },
+      { voice: 'pad', gain: 0.35, notes: tsBars((v) => `${v.pad[0]}:8`) },
+      { voice: 'pad', gain: 0.3, notes: tsBars((v) => `${v.pad[1]}:8`) },
+      { voice: 'drums', gain: 0.5, notes: `${repeat('k:1 h:1 s:1 h:1 k:1 h:1 s:1 h:1', 15)} | k:1 h:1 s:1 h:1 k:1 s:1 k:2` },
     ],
   },
 };

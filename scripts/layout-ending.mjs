@@ -146,9 +146,9 @@ prop('crystal-tree-a', 236, 10, 0);
 prop('crystal-tree-b', 221, -8, 0, { scale: 0.7 });
 props.push({ model: 'firefly-swarm', position: [...at(213, 12, 1)], rotationY: 0 });
 
-// 6 さかさまの しろ (chapter 6): the upside-down castle (a stand-in; TODO(PR9): "sakasa-castle"), pink-roofed with its
+// 6 さかさまの しろ (chapter 6): 6-1's upside-down castle ("sakasa-castle" at 0.42 of its size: as tall as the stand-in was), pink-roofed with its
 // swirl, an upside-down birdhouse and Sakasa's doodle by the line.
-prop('ring-castle', 275, -15, OUT);
+prop('sakasa-castle', 275, -15, OUT, { scale: 0.42 });
 prop('birdhouse-upside', 268, 8, OUT, { y: 0 });
 prop('sakasa-doodle', 281, 9, OUT);
 prop('tree-b', 266, 16, 0);

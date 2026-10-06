@@ -24,6 +24,20 @@ export const REVERSE_LINES = {
 
 export type ReverseLineKey = keyof typeof REVERSE_LINES;
 
+/**
+ * v1.11 (PR11b, 第 3 部 A14): the same lines in Sakasa's words, said by her when she rides along (`crew`, 6-2) and the
+ * mission has no line of that key. The keys left out stay the partner's.
+ */
+export const SAKASA_REVERSE_LINES: Partial<Record<ReverseLineKey, string>> = {
+  backNear: 'うしろむきの みち なのだ！',
+  backArrows: 'やじるしで はいる のだ！',
+  reverseNudge: 'レバーを あげる のだ〜',
+  reverseStop: 'ここまで なのだ',
+  reverseStopGap: 'きれめ なのだ！',
+  reverseEnd: 'ついた のだ！',
+  backUp: 'うしろで もどる のだ！',
+};
+
 /** A line to say: its key (the mission's own line of that key wins), or a stage's own text. */
 export interface ReverseLine {
   key: ReverseLineKey;

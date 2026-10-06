@@ -41,6 +41,11 @@ export interface TitleOptions {
   onMap?: () => void;
   /** Opens the picture book; omitted = no button. */
   onZukan?: () => void;
+  /**
+   * v1.11 (PR11b): watch the ending movie again (「もういちど みる」), once the save has opened it (6-2 cleared); omitted =
+   * no button.
+   */
+  onMovie?: () => void;
   /** Opens the settings (the gear in the corner); omitted = no gear. */
   onSettings?: () => void;
 }
@@ -88,7 +93,7 @@ export function showTitle(root: HTMLElement, title: string, options: TitleOption
     main.className = 'title-main';
     const buttons = document.createElement('div');
     buttons.className = 'title-buttons';
-    const add = (id: string, key: typeof primary | 'zukan', label: string, onClick: () => void): void => {
+    const add = (id: string, key: typeof primary | 'zukan' | 'movie', label: string, onClick: () => void): void => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.id = id;
@@ -101,6 +106,7 @@ export function showTitle(root: HTMLElement, title: string, options: TitleOption
     add('title-start', 'start', options.startLabel ?? 'はじめる', pick('start'));
     if (options.onMap) add('title-map', 'map', 'ちず', options.onMap);
     if (options.onZukan) add('title-zukan', 'zukan', 'ずかん', options.onZukan);
+    if (options.onMovie) add('title-movie', 'movie', 'もういちど みる', options.onMovie);
 
     const chapters = options.chapters ?? [];
     let row: HTMLElement | null = null;

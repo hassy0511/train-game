@@ -24,12 +24,16 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const isString = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 
 /**
- * `sections` and `crew` as written. `checkLook` checks a section's look like the stage's own (sky, fog, lighting, …).
+ * `sections`, `crew` and (PR11b) `clearButton` as written. `checkLook` checks a section's look like the stage's own (sky, fog, lighting, …).
  */
 export function checkSectionShapes(raw: Record<string, unknown>, railIds: Set<string>, checkLook: (env: Record<string, unknown>, where: string) => void): void {
   if (raw.crew !== undefined) {
     const c = raw.crew;
     if (!Array.isArray(c) || c.length !== 1 || c[0] !== 'sakasa') fail('"crew" must be ["sakasa"]');
+  }
+  // v1.11 (PR11b, 第 1 部 §5.5): the clear card's own button (6-2's "やったね！").
+  if (raw.clearButton !== undefined && (!isString(raw.clearButton) || [...raw.clearButton].length > 20 || raw.clearButton.includes('\n'))) {
+    fail('"clearButton" must be one line of 20 letters at most');
   }
   if (raw.sections === undefined) return;
   const list = raw.sections;

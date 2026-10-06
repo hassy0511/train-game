@@ -1623,6 +1623,25 @@ type LineKey = /* v1.11 (PR8a) */ 'backNear' | 'backArrows' | 'reverseNudge' | '
 ```
 - 見る 位置が この 区間に ある あいだ、まわりの 音を `kind`（`AmbienceKind`）に かえる（区画の 中で 景色が かわる 所）。`#app[data-ambience]`
 
+### クリア札の ボタン（`clearButton`、PR11b）
+```json
+"clearButton": "やったね！"
+```
+- クリア札の ボタンを「つづく」の かわりに この 字に する（さいごの ステージ 6-2 だけ。第 1 部 §5.5）。1 行・20 字 まで
+
+### ステップの 間だけの 分かれ道の きまり（`steps[].junctions`、PR11b）
+```json
+"steps": [
+  { "stationId": "ura-home", "board": 2, "junctions": { "mon-1": { "default": "left" } } },
+  { "stationId": "mori-eki", "board": 1, "junctions": { "mon-1": { "default": "right" } } }
+]
+```
+- その ステップ（その 駅へ 走って いる あいだ）だけ、ミッションの `junctions`（§23）の 上に かさねる。同じ 分かれ道なら ステップの ほうが 勝つ。書きかたと 検査は §23 と 同じ（`lock` か `default` の どちらか 1 つ）
+- 6-2: もん 1 の 分かれ道は うらの ホームへ 行く あいだ わの まま（わすれても わを まわって また 口の 前）、そのあと もんへ。もん 3 は おもちゃの えきへ 行く とき もんへ、ほんぶえきへ かえる ときは わの まま
+
+### のって いる サカサの ことば（PR11b）
+- `crew` に サカサが いる ステージ（6-2）では、うしろむきの ことば（§22 の `backNear`・`backArrows`・`reverseNudge`・`reverseStop`・`reverseStopGap`・`reverseEnd`・`backUp`）を ミッションが 書いて いなければ サカサが じぶんの ことばで 言う（「やじるしで はいる のだ！」など。第 3 部 A14 の 表）
+
 ### ちがう もん（せりふの キー `wrongGate`）
 - もんを くぐって 入った 区画に いまの ステップの 駅が なければ（ステージの はじまりの 区画は のぞく: どの 道も そこを とおる）、その 区画に はじめて 入った とき 1 回「こっちの せかいも みて いこう！」。しっぱいに しない
 
@@ -1704,8 +1723,8 @@ type LineKey = /* v1.11 (PR8a) */ 'backNear' | 'backArrows' | 'reverseNudge' | '
 
 ### エンディング「せかいの わ」（`scripts/layout-ending.mjs` → `src/movies/ending.json`）
 - 半径 92 m の 輪の 線路 `wa`（1 本の 輪）に 6 つの 島（1〜6 章）。6 章の しろの 島から 1 章の まちへ もどる ところが にじ（高さ 10 m）。島の あいだは 木の はしら（`base` の `pier`）
-- しろは 仮の `ring-castle`（チケット 0025。**TODO(PR9)**: `sakasa-castle` に かえる）
-- **TODO(6-2)**: 6-2 の クリア札の あとと、タイトルの「もういちど みる」から `goToMovie('ending')`（`src/main.ts`）。2 回目からは ▶▶（見た しるしを セーブに）
+- しろは 6-1 の `sakasa-castle`（0.42 倍。PR11b で 仮の `ring-castle` から かえ、`ring-castle` は けした）
+- **6-2 の あと**（PR11b、だいさん 2026-10-06）: 6-2 を はじめて クリアした とき、クリア札「やったね！」の あと この ムービーへ（`?movie=ending&then=map`。ページを かえるので 「▶ みる」の タップで 音が でる）。札の あと 同じ ページで 地図を ひらき、6章の おわり（札）→「タイトルへ」。札を とじると セーブの `mapLinks` に `movie:ending`（見た しるし）。**見た あとは ▶▶ が 出る**（はじめては 出ない）。タイトルの「もういちど みる」（6-2 クリアの あと。小さな ボタン）から いつでも もう 一度（札の あとは タイトルへ）
 
 ### 読み込み時の 検査
 - 形: `shot`（大きさ・ねらい・はんい・場所には `distance`）、`act`（しゅるい・`times`・`seconds`・`toward`）、`spawn`（置き場所 1 つ・`ride` の 車両と 中・`scale`）、`move`（`onRail` か `position`）、`letterbox`・`fade`・`drive`・`trainAt`・`beat`

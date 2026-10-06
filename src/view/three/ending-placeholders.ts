@@ -1,12 +1,11 @@
-import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, Float32BufferAttribute, type Group, SphereGeometry, TorusGeometry, Vector3 } from 'three';
-import { hash, mix, part, solid } from './placeholder-kit';
+import { BufferGeometry, Color, Float32BufferAttribute, type Group, Vector3 } from 'three';
+import { hash, mix, solid } from './placeholder-kit';
 
 /**
  * v1.12 (えんしゅつ, ticket 0025): the ending movie's diorama "せかいの わ" (src/movies/ending.json), drawn in code
  * until the models are built: a small round island for each chapter (its ground's colour and a sandy rim at the
- * water), and a stand-in for Sakasa's upside-down castle.
- * TODO(PR9): when 6-1's castle stand-in ("sakasa-castle", src/view/three/castle-placeholders.ts on the PR9 branch) is
- * on main, the movie uses it on the castle island instead of "ring-castle", and "ring-castle" goes.
+ * water). The castle island carries 6-1's own castle ("sakasa-castle", src/view/three/castle-placeholders.ts) at 0.42
+ * of its size (PR11b: the stand-in "ring-castle" is gone).
  *
  * Pastel colours, no faces, no letters, no crests. Each island stands in a calm sea (it does not float: no rock
  * hanging under it).
@@ -91,51 +90,8 @@ function isle(name: string): Group {
   return solid(name, [g], undefined, false);
 }
 
-/**
- * "ring-castle", about 16 × 20 × 16 m: the stand-in for Sakasa's upside-down castle (TODO(PR9): "sakasa-castle"). It
- * stands on its pink spire, the keep upside down above it (its battlements at the top), two little upside-down towers
- * beside it on their own spires, rows of small round windows (no faces), swirl-pink and lavender.
- */
-function castle(): Group {
-  const parts: BufferGeometry[] = [];
-  const pink = '#FF8DC0';
-  const wall = '#FFEAF3';
-  const lilac = '#D7C4FF';
-  const tower = (x: number, z: number, r: number, h: number, spire: number): void => {
-    // The spire (a roof, upside down) on the ground, the tower body above it, the battlements on top.
-    parts.push(part(new ConeGeometry(r * 1.25, spire, 18), pink, { at: [x, spire / 2, z], rot: [Math.PI, 0, 0] }));
-    parts.push(part(new CylinderGeometry(r, r, h, 18), wall, { at: [x, spire + h / 2, z] }));
-    parts.push(part(new CylinderGeometry(r * 1.12, r * 1.12, 0.7, 18), lilac, { at: [x, spire + h + 0.35, z] }));
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      parts.push(part(new CylinderGeometry(r * 0.22, r * 0.22, 0.9, 6), lilac, { at: [x + Math.sin(a) * r, spire + h + 1.1, z + Math.cos(a) * r] }));
-    }
-    // Small round windows in two rows (dots all round: never two eyes and a mouth).
-    for (let row = 0; row < 2; row++) {
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * Math.PI * 2 + row * 0.5;
-        const y = spire + h * (0.35 + row * 0.35);
-        parts.push(part(new SphereGeometry(r * 0.13, 6, 4), '#7FB6E8', { at: [x + Math.sin(a) * r * 0.98, y, z + Math.cos(a) * r * 0.98], scale: [1, 1.3, 0.5] }));
-      }
-    }
-  };
-  tower(0, 0, 3.4, 9, 7);
-  tower(-6.5, 1.5, 1.8, 6, 5);
-  tower(6.5, -1, 1.8, 6, 5);
-  // A pink swirl ring round the keep (Sakasa's mark), and a little flag pole standing up from the top, its flag a swirl.
-  parts.push(part(new TorusGeometry(3.6, 0.25, 6, 24), pink, { at: [0, 7 + 4.5, 0], rot: [Math.PI / 2, 0, 0] }));
-  parts.push(part(new CylinderGeometry(0.12, 0.12, 3, 6), '#B58A5A', { at: [0, 7 + 9 + 2.2, 0] }));
-  parts.push(part(new TorusGeometry(0.55, 0.14, 6, 14), pink, { at: [0.6, 7 + 9 + 3.2, 0] }));
-  return solid('ring-castle', parts);
-}
-
-const BUILDERS: Record<string, () => Group> = {
-  'ring-castle': castle,
-};
-
 /** The drawn stand-in for `name`, or null when it is not one of these. */
 export function buildEndingPlaceholder(name: string): Group | null {
   if (name in ISLES) return isle(name);
-  const build = BUILDERS[name];
-  return build ? build() : null;
+  return null;
 }
