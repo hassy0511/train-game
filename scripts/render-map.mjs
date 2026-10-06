@@ -6,6 +6,8 @@
  *   node scripts/render-map.mjs 1-3        # just some
  * Needs Playwright's Chromium (PW_CHROMIUM_PATH to reuse an installed one). MAP_PORT picks the dev server's port
  * (default 5199), e.g. when another render or test is running.
+ * v1.11 (PR9b): a diorama item with `windows` (anchors on its model: the castle's) also gets where they fall on the
+ * picture written into world.json's island `windows` (% of the picture), where the map lights them.
  */
 import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -47,6 +49,15 @@ try {
     const out = resolve(root, `public/map/${id}.png`);
     writeFileSync(out, Buffer.from(png.split(',')[1], 'base64'));
     console.log(`public/map/${id}.png ${await page.evaluate(() => document.body.dataset.size)}`);
+    // v1.11 (PR9b): the castle's windows (the diorama's `windows` anchors) as they fall on this picture: kept in
+    // world.json's island `windows`, where the map lights them.
+    const windows = await page.evaluate(() => document.body.dataset.windows);
+    if (windows) {
+      const island = world.islands.find((i) => i.id === id);
+      island.windows = JSON.parse(windows);
+      writeFileSync(resolve(root, 'src/world/world.json'), `${JSON.stringify(world, null, 2)}\n`);
+      console.log(`  src/world/world.json islands[${id}].windows ${windows}`);
+    }
     await page.close();
   }
 } finally {

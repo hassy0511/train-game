@@ -148,6 +148,7 @@ main に 入れると ぜんぶの テスト（いまは 約 2 時間。§0.11 �
 | **PR12 仕上げ** | 版 3 の 並びと ステージ ファイルの つきあわせ、おうちの かたへ の 文、図鑑と 島の 絵の 総点検、STAGE_SCHEMA・TECH_SPEC の 総点検、「？」が 0 こ に なる たしかめ、`zukan.spec.ts` の 灰色の 絵の 期待 | ぜんぶ |
 - 土台の PR（PR2a・PR2b・PR2c・PR5・PR6a・PR7・PR8a・PR8b・PR11a）は まだ だれも 使わない ので、出しても ふだんの 遊びは かわらない。ことばと「能力 なし」の 流れも ミッションの ある ためしの ステージ（0-1〜0-7）で その PR の うちに ためせる。
 - **うしろむきは 6-1 の PR**（PHASE9_0 §7 の 3）: PR8a・PR8b・PR9 は つづけて 出す。1-3 の うしろむきの わき道も PR9。
+- 残課題（2026-10-06 だいさん）: オープニング ムービーと、ほかの 章の 寸劇を えんしゅつの しくみ（STAGE_SCHEMA §25）で 作りなおす ことは あとまわし。エンディング ムービー（`src/movies/ending.json`）は 6-2 クリアの あとに つなぐ（PR11b）。
 - ほとんどの PR は `src/` を かえる ので CI は ぜんぶの テスト。ふえる 通し 5 本・みじかい テスト 約 12 本で main の 1 回は **わけないと 3.5〜4 時間**。各 PR の 本文に「main の テスト 約 X 時間」を 書きなおす。各 PR の 前に `npm run budget`（その ステージ。寸劇の 動かない カメラも こみ）。見た目は どれも コードで 作る 仮の 形（ステージごとに チケット 1 つ）。
 - 確かめる URL: 本番 `https://hassy0511.github.io/train-game/`、テストコース `https://hassy0511.github.io/train-game/?stage=0-0`（ためし `https://hassy0511.github.io/train-game/?stage=0-1`・`?stage=0-2`・`?stage=0-3`・`?stage=0-4`・`?stage=0-5`・`?stage=0-6`・`?stage=0-7`）、ステージ `https://hassy0511.github.io/train-game/?stage=5-1` など、モデル `https://hassy0511.github.io/train-game/models.html?model=<名前>`、ならべて くらべる `https://hassy0511.github.io/train-game/models.html?compare=<名前>,<名前>`、音 `https://hassy0511.github.io/train-game/sounds.html`。タイトル画面 右下の `build <ID>` で 新旧を 見わける。
 
@@ -6321,7 +6322,7 @@ wa 30（[298.5, 0, 1924.1]）から 左へ R30 で 90°（47.1 m）→ 東向き
 
 コードで 作る もの（モデル一覧に 入れない）: ほりばたの みち（帯）、ほりの 石の ふち、サカサの はしる・とまる・すわる・のる 動き（`src/view/three/lead.ts`）、ダッシュの けむり（`Points`）、とけいの はり、うえに ながれる たきの すじ、しろの まどの 灯、はねばしの 動き、サカサの ふりむく・ついて くる 動き。
 使い回す もの: `amanojaku`・`amanojaku-lantern`（5-1、0018）・`lantern`（4-2、ベンチの ちょうちん）・`windup-chick-back`／`windup-chick`（5-2、0019）・`crossing-bar-iron`（第 2 部、0020）・`thicket`（5-1）・駅の 一式・`partner`。
-地図の 島の 絵（`node scripts/render-map.mjs 6-1`）: `diorama` ＝ `sakasa-castle`（0.1 倍）、`castle-island`、`train-proto`（第 1 部 §1.3 の「しまに さかさに 立つ」）。
+地図の 島の 絵（`node scripts/render-map.mjs 6-1`）: `diorama` ＝ `sakasa-castle`（0.1 倍）、`castle-island`、`train-proto`（第 1 部 §1.3 の「しまに さかさに 立つ」）。**PR9b で 作った 形**: `castle-island`（0.28 倍）の 上に `sakasa-castle`（0.44 倍。0.1 倍 だと 電車より ずっと 小さく 見える ため）、そらへ のびる `rainbow-stub`、ねっこが 上の 木 3 本、`train-proto`。しろの まどの 灯 4 こ の 場所は、`sakasa-castle` の `windows`（モデルの 上の 点）から `render-map` が 絵に あわせて `world.json` の 島の `windows`（絵の %）に 書く。`finale:5` を まだ 見て いない あいだ しろは ねむって いて（灰色・まどは くらい）、見た あとは 地図を ひらく たびに まどに 灯が ついて いる。
 モデル確認: `https://hassy0511.github.io/train-game/models.html?model=sakasa-castle`（ほかも 同じ）。並べて くらべる `…/models.html?compare=house-upside-a,house-upside-b`・`?compare=up-raindrop,upside-top,backward-book`・`?compare=amanojaku,amanojaku-sit`。
 
 **描画の 見積もり**

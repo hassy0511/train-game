@@ -249,8 +249,14 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
   const seenEnd = file.chapters.find((c) => c.finale?.target && progress.mapLinks.includes(`finale:${c.id}`) && fresh.some((key) => key.endsWith(`>${c.finale?.target}`)));
   const wakeTarget = seenEnd?.finale?.target;
   const windows = wakeTarget ? { island: wakeTarget, link: fresh.find((key) => key.endsWith(`>${wakeTarget}`)) ?? '', onWindows: () => audio.playWindows() } : undefined;
+  // v1.11 (PR9b): the island a chapter's end flies its big light to (the castle, 6-1) sleeps until the child has seen
+  // that end ("finale:5"); from then on it is awake with its windows lit.
+  const lightTargets = file.chapters.filter((c) => c.finale?.target && !c.finale.target.startsWith('teaser:'));
+  const seenTarget = (c: (typeof lightTargets)[number]): boolean => progress.mapLinks.includes(`finale:${c.id}`);
   return showMap(root, file, {
     windows,
+    asleep: lightTargets.filter((c) => !seenTarget(c)).map((c) => c.finale?.target ?? ''),
+    lit: lightTargets.filter(seenTarget).map((c) => c.finale?.target ?? ''),
     islands,
     laid,
     fresh,
