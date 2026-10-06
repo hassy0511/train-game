@@ -307,6 +307,8 @@ interface WorldData {
   chapters: { id: number; page: number; finale?: { link?: string; ring?: string[] } }[];
   islands: { id: string; chapter: number }[];
   links: [string, string, { afterChapter?: number }?][];
+  /** v1.11 (PR10): the world's end after `after` (its mark "finale:world"). */
+  ending?: { after: string };
 }
 
 /** Everything of chapters 5 and 6 the あいことば version 3 has a place for (docs/PHASE9_CHAPTER5_6.md 第 1 部 §7.2). */
@@ -351,6 +353,11 @@ function fullProgress(only = /./, extra?: { cleared: string[]; abilities: string
     return ids.length > 0 && ids.every((i) => cleared.includes(i));
   };
   const closing = new Map(world.chapters.filter((c) => c.finale?.link).map((c) => [c.finale?.link, c.id]));
+  // PR10: the world's end is seen once its stage is cleared and every chapter before its chapter is done.
+  const endAfter = world.ending?.after;
+  const endChapter = world.islands.find((i) => i.id === endAfter)?.chapter ?? 0;
+  const endSeen =
+    !!endAfter && cleared.includes(endAfter) && page(endAfter) <= maxPage && world.chapters.filter((c) => c.id < endChapter).every((c) => done(c.id));
   return {
     schema: 1,
     cleared,
@@ -366,6 +373,7 @@ function fullProgress(only = /./, extra?: { cleared: string[]; abilities: string
         .map(([from, to]) => `${from}>${to}`)
         .filter((key) => !closing.has(key) || done(closing.get(key) ?? 0)),
       ...world.chapters.filter((c) => c.finale && !c.finale.link && done(c.id) && c.page <= maxPage).map((c) => `finale:${c.id}`),
+      ...(endSeen ? ['finale:world'] : []),
     ],
   };
 }

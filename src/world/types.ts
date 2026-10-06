@@ -12,6 +12,28 @@ export interface WorldFile {
    * "teaser:<chapter>" is the dotted line to that chapter's "?" island (never laid; drawn with the teaser).
    */
   links: WorldLink[];
+  /**
+   * v1.11 (PR10, docs/PHASE9_CHAPTER5_6.md 第 1 部 §5.2): the world's end on the map 「せかいの わ」, once, after `after` is
+   * cleared (and every chapter before its chapter is done): the pages laid side by side, joined by rainbow rails, a
+   * golden light along `trail`. Seen: "finale:world" in the save's mapLinks.
+   */
+  ending?: WorldEnding;
+}
+
+export interface WorldEnding {
+  /** The stage whose clear brings it (6-1); it starts on that island's page. */
+  after: string;
+  /** Where the long rail from `after` closes the world's ring (1-1). */
+  home: string;
+  /**
+   * The islands the golden light runs through, in order (from `home` back to `home`). Each two in a row are joined by a
+   * link (either way, through the gate between pages), or are `after` then `home` (the long rail home).
+   */
+  trail: string[];
+  /** Card text (lines split by "\n", 20 characters at most per line) and its button. */
+  card: string;
+  button: string;
+  icon?: 'badge' | 'ring' | 'wave' | 'snow' | 'firefly' | 'world';
 }
 
 export interface WorldPage {
