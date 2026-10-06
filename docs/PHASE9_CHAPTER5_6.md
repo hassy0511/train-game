@@ -763,6 +763,7 @@ M3 で サカサが のった あと。カメラは `chase` と `fixed`（ドア
 - `src/ui/cards.ts`: 絵 `world`。
 - `src/ui/styles.css`: `.map.is-world`・`.map-world-links`・`.map-bridge`・`.map-confetti`・`.map-island.is-gold`。
 - `src/audio/songs.ts`: `Song.loop?: boolean`（`sekai` は `false`）。`audio.ts`・`catalog.ts`: `playBridge`「きらーん」（sine 880→1760 Hz の 上がる スライド ＋ 小さな ベル、0.6 秒）、`playWorldStep(i)`（bell、ハ長調 5 音音階の i 番め。ページを こえたら はじめの 高さへ。0.25 秒）。
+- **PR10 で 作った 形**（2026-10-06）: `world.json` の `ending`（§3.3 の まま）と `_doc`、`pages.ts` の `endingDue`・`endingBridges`・`validateWorld`（`check-stages.mjs` の 4 番め）・`seenMapLinks` の `finale:world`・`openingPage` の 0。にじの レールは 1 まいの 上の SVG（`.map-world-links`）で、`viewBox` は ほかの 線路と 同じ `0 0 160 100`（x を 1.6 倍。16:10 の 箱に ゆがまず のる。§5.3 の `0 0 100 100`・`non-scaling-stroke` は つかって いない。位置の 数字は §5.3 の 表の まま）。にじの 帯は 6 色の うすい 線を かさねた もの。`via` は「ページの 上を こえる」が x ＝ 両はしの まんなか・y 6、「すぐ となり」が 高い ほうの もん より 4.4 上、ながい レールは y 112。光が 島を とおる たびに ぴょこっと はねて 金に なり、ベルは ページごとに はじめの 高さから（`playWorldStep`）。もんを またぐ ところは 出口の 線路 → にじ → 入り口の 線路 の 順に 光り、もんが きらり。札の あとは 3 ページめに もどり、6-2 が まだ ない ので 8 は とばす（「タイトルへ」／「もどる」）。5章の おわりも まだ なら 5章の おわり → `5-3>6-1` が のびる → エンディング の 順。曲 `sekai` は 1 回 だけ（約 19 秒）で、地図を とじて タイトルに もどると タイトルの 曲に もどる。タイトルの サカサは チケット 0021 の 注の とおり（`amanojaku-sit`、1 りょうめの まどを すける ガラスに）。テストは `map-ending.spec.ts`（6-2 の 部分は PR11b で 足す）と `stage-6-1-full` の さいご。
 
 ---
 

@@ -1,4 +1,4 @@
-import { chapterPage, crossPages, nodePage, pageTitle } from '../world/pages';
+import { chapterPage, crossPages, nodePage, pageTitle, type WorldBridge } from '../world/pages';
 import type { WorldFile, WorldGatePoint, WorldLinkOptions } from '../world/types';
 
 /** What the map shows about one island (worked out by the caller from the stages and the save). */
@@ -59,6 +59,32 @@ export interface MapFinale {
   onShown: () => Promise<void>;
 }
 
+/**
+ * v1.11 (PR10, docs/PHASE9_CHAPTER5_6.md 第 1 部 §5.2): the world's end 「せかいの わ」 (about 11 s and a card). It opens on
+ * the page of `after`; the pages shrink side by side onto one sheet; rainbow rails join them (and the long rail home);
+ * a golden light runs along `trail`, each island hopping and turning gold; everything glows; the card; back to the page.
+ * It plays after a chapter's end on the same map (and the rails that wait for that end), before `later`'s own rails.
+ */
+export interface MapEnding {
+  /** The islands the light runs through, in order (world.json's `ending.trail`). */
+  trail: string[];
+  /** The island the world's ring closes on (1-1); `after`: the one the long rail home starts from (6-1). */
+  home: string;
+  after: string;
+  /** The rainbow rails, on the sheet of all the pages (src/world/pages.ts endingBridges). */
+  bridges: WorldBridge[];
+  /** Fresh rails out of `after` that grow once it is over (6-2's rail, PR11b); among MapOptions.later. */
+  later?: string[];
+  /** It starts (the song "sekai"). */
+  onStart?: () => void;
+  /** The light reaches an island: `i` counts from 0 again on each page (the bell's note). */
+  onStep?: (i: number) => void;
+  /** A rainbow rail grows ("きらーん"). */
+  onBridge?: () => void;
+  /** Everything glows: show the card; the map waits for it. */
+  onShown: () => Promise<void>;
+}
+
 /** A later chapter's single "?" island, joined to `from` by a dotted line. */
 export interface MapTeaser {
   /** Its node id in world.json links ("teaser:<chapter>"). */
@@ -107,6 +133,8 @@ export interface MapOptions {
   asleep?: string[];
   /** v1.11 (PR9b): islands awake with their windows already lit (the castle, once "finale:5" is seen): no animation. */
   lit?: string[];
+  /** v1.11 (PR10): the world's end plays (`pages` must hold every page: they are all laid out side by side). */
+  ending?: MapEnding;
 }
 
 /** `resume`: go on from the island's saved mission ("つづきから") instead of from its start. */
@@ -140,6 +168,18 @@ const FIREFLY_STEP_SECONDS = 0.45;
 const FIREFLIES_PER_ISLAND = 6;
 const BIG_LIGHT_SECONDS = 0.8;
 const MAP_STARS = 12;
+/**
+ * v1.11 (PR10) the world's end (第 1 部 §5.2): the pages shrink side by side, the light runs (an island to the next on a
+ * page, a crossing through the gate or the long rail home), all glow, and the pages come back.
+ */
+const WORLD_IN_SECONDS = 1.2;
+const WORLD_STEP_SECONDS = 0.2;
+const WORLD_CROSS_SECONDS = 0.5;
+const WORLD_GLOW_SECONDS = 1;
+const WORLD_BACK_SECONDS = 1;
+const WORLD_CONFETTI = 28;
+/** The rainbow rail's bands, outside in (pastel: a thin ribbon of the rainbow's colours). */
+const RAINBOW = ['#ff9aa8', '#ffc98a', '#fff08a', '#a8eaa0', '#9ccfff', '#c8b0ff'];
 /** A rail through the gate: a breath at the gate before the page turns. */
 const GATE_REST_SECONDS = 0.3;
 const TURN_SECONDS = 0.5;
@@ -322,10 +362,11 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
     };
     area.addEventListener('click', closeChoose);
 
-    const { finale, teaser } = options;
+    const { finale, teaser, ending } = options;
     const later = options.later ?? [];
     const fresh = new Set(options.fresh);
-    const lightPath = finale?.ring ?? finale?.path;
+    // v1.11 (PR10): the world's end's golden light runs along the rails too (they carry it).
+    const lightPath = finale?.ring ?? finale?.path ?? ending?.trail;
     // Where each node sits (% of its page): the islands, and the teaser's "?" island.
     const at = new Map<string, { x: number; y: number }>(world.islands.map((i) => [i.id, { x: i.x, y: i.y }]));
     if (teaser) at.set(teaser.id, { x: teaser.x, y: teaser.y });
@@ -565,6 +606,37 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
       teaserPage.appendChild(btn);
     }
 
+    // v1.11 (PR10): the world's end's rainbow rails, over the sheet of all the pages side by side (hidden till they grow).
+    const bridgeEls = new Map<string, SVGGElement>();
+    if (ending) {
+      const svg = document.createElementNS(SVG, 'svg');
+      svg.setAttribute('class', 'map-world-links');
+      svg.setAttribute('viewBox', `0 0 ${WIDE} 100`);
+      svg.setAttribute('aria-hidden', 'true');
+      for (const b of ending.bridges) {
+        const g = document.createElementNS(SVG, 'g');
+        g.setAttribute('class', b.home ? 'map-bridge is-home is-pending' : 'map-bridge is-pending');
+        g.dataset.bridge = b.key;
+        g.style.setProperty('--grow-seconds', `${b.seconds}s`);
+        const d = `M ${b.from.x * K} ${b.from.y} Q ${b.via[0] * K} ${b.via[1]} ${b.to.x * K} ${b.to.y}`;
+        const layers = [...RAINBOW.map((_, i) => `band band-${i}`), 'glow', 'glow-core'];
+        layers.forEach((cls, i) => {
+          const path = document.createElementNS(SVG, 'path');
+          path.setAttribute('d', d);
+          path.setAttribute('class', cls);
+          path.setAttribute('pathLength', '100');
+          if (i < RAINBOW.length) {
+            path.setAttribute('stroke', RAINBOW[i]);
+            path.setAttribute('stroke-width', String(Math.round((1.5 - i * 0.22) * 100) / 100));
+          }
+          g.appendChild(path);
+        });
+        svg.appendChild(g);
+        bridgeEls.set(b.key, g);
+      }
+      area.appendChild(svg);
+    }
+
     el.append(sky, header, area);
     let close: HTMLButtonElement | null = null;
     if (options.closeLabel) {
@@ -724,7 +796,7 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
     } else if (windows) lightWindows(windows.island);
     // v1.11 (PR9b): a castle that woke on an earlier visit keeps its windows lit.
     for (const id of options.lit ?? []) if (id !== windows?.island) lightWindows(id, true);
-    if (!finale && later.length === 0) {
+    if (!finale && later.length === 0 && !ending) {
       markNext(true);
       return;
     }
@@ -748,10 +820,10 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
       trail.push(id);
       el.dataset.trail = trail.join(',');
     };
-    const restart = (node: HTMLElement | undefined, cls: string): void => {
+    const restart = (node: Element | null | undefined, cls: string): void => {
       if (!node) return;
       node.classList.remove(cls);
-      void node.offsetWidth;
+      void node.getBoundingClientRect();
       node.classList.add(cls);
     };
     const lightLink = (from: string, to: string, water: boolean): void => {
@@ -861,6 +933,136 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
       stars.remove();
     };
 
+    /** Lights one half of a rail through the gate (the part on one page), and its gate twinkles. */
+    const lightHalf = (part: LinkPart): void => {
+      part.g.classList.remove('is-lit', 'is-reverse', 'is-water', 'is-firefly');
+      void part.g.getBoundingClientRect();
+      part.g.classList.add('is-lit');
+      restart(part.gate, 'is-twinkle');
+    };
+    const lightBridge = (key: string): void => restart(bridgeEls.get(key), 'is-lit');
+
+    /**
+     * v1.11 (PR10) the world's end (第 1 部 §5.2): the song; the pages shrink side by side (names and badges go); the
+     * rainbow rails grow; the golden light runs along the trail (a hop and gold on each island, a bell rising on each
+     * page); all glow under a faint rainbow and star confetti; the card; the pages come back. With calm motion nothing
+     * slides or hops and no confetti falls: the islands turn gold in turn.
+     */
+    const playEnding = async (end: MapEnding): Promise<void> => {
+      const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+      closeChoose();
+      el.dataset.ending = 'playing';
+      end.onStart?.();
+      trail.length = 0;
+      delete el.dataset.trail;
+      // Every page on one sheet: the strip stays put, each page slides to its place and shrinks.
+      el.style.setProperty('--world-seconds', `${WORLD_IN_SECONDS}s`);
+      el.classList.add('is-world-moving');
+      void el.offsetWidth;
+      strip.style.transform = '';
+      el.classList.add('is-world');
+      await sleep(calm ? 0.1 : WORLD_IN_SECONDS);
+      // The rainbow rails: through the gates in order, then the long rail home.
+      for (const b of [...end.bridges].sort((a, c) => Number(!!a.home) - Number(!!c.home))) {
+        const g = bridgeEls.get(b.key);
+        if (!g) continue;
+        g.classList.remove('is-pending');
+        g.classList.add('is-growing');
+        end.onBridge?.();
+        await sleep(b.seconds);
+      }
+      // The golden light along the trail.
+      let lastPage: number | undefined;
+      let step = 0;
+      for (let i = 0; i < end.trail.length; i++) {
+        const id = end.trail[i];
+        if (i > 0) {
+          const from = end.trail[i - 1];
+          const key = linkKey(from, id);
+          const halves = parts.filter((p) => p.key === key || p.key === linkKey(id, from));
+          if (from === end.after && id === end.home) {
+            lightBridge(key);
+            await sleep(WORLD_CROSS_SECONDS);
+          } else if (halves.length > 0 && crossPages(world, halves[0].key) !== null) {
+            // Through the gate: its half on this page, the rainbow, its half on the next page.
+            const ordered = halves[0].key === key ? halves : [...halves].reverse();
+            lightHalf(ordered[0]);
+            await sleep(WORLD_CROSS_SECONDS / 3);
+            lightBridge(halves[0].key);
+            await sleep(WORLD_CROSS_SECONDS / 3);
+            if (ordered[1]) lightHalf(ordered[1]);
+            await sleep(WORLD_CROSS_SECONDS / 3);
+          } else {
+            lightLink(from, id, false);
+            await sleep(WORLD_STEP_SECONDS);
+          }
+        }
+        const page = nodePage(world, id);
+        if (page !== lastPage) step = 0;
+        lastPage = page;
+        const island = islandEls.get(id);
+        if (!calm) restart(island, 'is-hop');
+        island?.classList.add('is-gold');
+        reach(id);
+        end.onStep?.(step++);
+      }
+      // All of it glows: a faint rainbow over the sky and star confetti (no sound, no fireworks).
+      el.classList.add('is-world-glow');
+      const rainbow = document.createElement('div');
+      rainbow.className = 'map-world-rainbow';
+      el.insertBefore(rainbow, header);
+      const confetti = document.createElement('div');
+      confetti.className = 'map-confetti';
+      if (!calm) {
+        for (let i = 0; i < WORLD_CONFETTI; i++) {
+          const bit = document.createElement('span');
+          bit.className = `map-confetto is-${i % 4}`;
+          bit.style.left = `${3 + ((i * 37) % 94)}%`;
+          bit.style.animationDelay = `${((i * 0.11) % 0.9).toFixed(2)}s`;
+          confetti.appendChild(bit);
+        }
+      }
+      el.insertBefore(confetti, header);
+      await sleep(WORLD_GLOW_SECONDS);
+      await end.onShown();
+      el.dataset.ending = 'done';
+      // Back to the page it started on.
+      confetti.remove();
+      rainbow.remove();
+      el.classList.remove('is-world-glow');
+      el.style.setProperty('--world-seconds', `${WORLD_BACK_SECONDS}s`);
+      el.classList.remove('is-world');
+      show();
+      await sleep(calm ? 0.1 : WORLD_BACK_SECONDS);
+      el.classList.remove('is-world-moving');
+      for (const island of islandEls.values()) island.classList.remove('is-gold');
+    };
+
+    /** The rails that waited: one after another, through the gate to the page beyond. */
+    const growLater = async (keys: string[]): Promise<void> => {
+      for (const key of keys) {
+        const halves = parts.filter((p) => p.key === key);
+        const first = halves[0];
+        if (!first) continue;
+        await turnTo(first.page);
+        for (const [i, half] of halves.entries()) {
+          if (i > 0) {
+            await sleep(GATE_REST_SECONDS);
+            await turnTo(half.page);
+          }
+          half.g.classList.remove('is-pending');
+          half.g.classList.add('is-growing');
+          if (half.gate) {
+            half.gate.classList.remove('is-pending');
+            half.gate.classList.add('is-appear');
+          }
+          await sleep(RAIL_GROW_SECONDS);
+        }
+        pending.delete(key);
+        options.onLinkShown?.(key);
+      }
+    };
+
     void (async () => {
       if (finale) {
         if (finale.link && options.fresh.includes(finale.link)) await sleep(RAIL_GROW_SECONDS);
@@ -949,27 +1151,12 @@ export function showMap(root: HTMLElement, world: WorldFile, options: MapOptions
         el.classList.remove('is-finale-playing');
       }
 
-      // The rails that waited: one after another, through the gate to the page beyond.
-      for (const key of later) {
-        const halves = parts.filter((p) => p.key === key);
-        const first = halves[0];
-        if (!first) continue;
-        await turnTo(first.page);
-        for (const [i, half] of halves.entries()) {
-          if (i > 0) {
-            await sleep(GATE_REST_SECONDS);
-            await turnTo(half.page);
-          }
-          half.g.classList.remove('is-pending');
-          half.g.classList.add('is-growing');
-          if (half.gate) {
-            half.gate.classList.remove('is-pending');
-            half.gate.classList.add('is-appear');
-          }
-          await sleep(RAIL_GROW_SECONDS);
-        }
-        pending.delete(key);
-        options.onLinkShown?.(key);
+      // The rails that waited (a chapter's end's, through the gate); v1.11 (PR10) then the world's end, then its own.
+      const afterEnding = new Set(ending?.later ?? []);
+      await growLater(later.filter((key) => !afterEnding.has(key)));
+      if (ending) {
+        await playEnding(ending);
+        await growLater(later.filter((key) => afterEnding.has(key)));
       }
 
       el.classList.remove('is-busy');

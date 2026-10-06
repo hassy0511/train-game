@@ -37,7 +37,7 @@ import {
  * train stops and うしろむき is learned there; backing up she turns round and follows (the view stays ahead on her),
  * the station opens; M3 the drawbridge put down by the magnet, the doors left open and Sakasa boards after a flinch
  * (a whistle while she walks); the ending ("…こんにちは", she joins, "ワンダーごう、しゅっぱつ！"), the clear card and
- * the map. A second test plays it again with うしろむき: record ③ at the end of the back siding behind the town.
+ * the map with the world's end 「せかいの わ」 (PR10). A second test plays it again with うしろむき: record ③ at the end of the back siding behind the town.
  *
  * Built for about 10 fps software GL: presses that must land in a window are checked and made in the same page
  * callback (drive.ts); the short states (the dash, the turn, the beats, the flinch) are kept by the page's own
@@ -311,6 +311,14 @@ test('stage 6-1 full run: every ability on the upside-down town, the chase where
   expect(saved.records).not.toContain('backward-book');
   // Chapter 6 is not over with 6-1 alone (6-2 comes later): no end saved.
   expect(saved.mapLinks).not.toContain('finale:6');
+  // PR10: the world's end plays on this map (the pages side by side, the golden light round the world), then its card.
+  await expect(map).toHaveAttribute('data-ending', /.+/, { timeout: 20_000 });
+  await expect(page.locator('#card')).toContainText('ワールドレールが', { timeout: 90_000 });
+  await page.screenshot({ path: resolve(OUT, '6-1-18-world.png') });
+  await page.waitForTimeout(1_200);
+  await page.locator('#card-button').click();
+  await expect(map).toHaveAttribute('data-ending', 'done', { timeout: 30_000 });
+  expect((await progress(page)).mapLinks).toContain('finale:world');
   const said = await lines();
   for (const line of [
     'まずは とけいだいえきまで！',

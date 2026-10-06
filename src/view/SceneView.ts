@@ -31,6 +31,11 @@ export interface SceneView {
    * camera still wins over it.
    */
   setOrbit(orbit: OrbitCamera | null): void;
+  /**
+   * v1.11 (PR10, docs/PHASE9_CHAPTER5_6.md 第 1 部 §5.7): on the title, once Sakasa has joined (6-1 cleared), she sits in
+   * the first car behind the driver's seat, seen through its window; gone again when the title closes. Optional.
+   */
+  setTitleCrew?(on: boolean): void;
   /** "がめんの ゆれ: へらす": no view changes that move the picture (e.g. the rocket's wider view). */
   setCalm(calm: boolean): void;
   /** v1.10: the train runs under water on a long stretch (a camera outside the cab stays under the surface too). */

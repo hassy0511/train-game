@@ -152,6 +152,7 @@ const SONG_PLACES: Record<string, string> = {
   mura: '4-2',
   yuki: '4-3',
   ending: 'エンディング',
+  sekai: 'ちずの エンディング',
 };
 const songButtons: HTMLButtonElement[] = [];
 const playSong = (id: string | null, pressed: HTMLButtonElement): void => {

@@ -70,6 +70,9 @@ import { HarbourGimmicks } from './harbour';
  */
 const FIXED_CAMERA_REACH = 2.5;
 
+/** v1.11 (PR10): how much higher Sakasa sits on the title than on the crew seat (m): up in the window, not under its sill. */
+const TITLE_CREW_LIFT = 0.45;
+
 interface DoorVisual {
   group: Group;
   panel: Mesh;
@@ -164,6 +167,9 @@ export class ThreeSceneView implements SceneView {
   /** v1.11 (6-1): Sakasa in "おいかけっこ", and sitting behind the driver's seat (crew). */
   private lead: LeadFigure | null = null;
   private crewSeat: Object3D | null = null;
+  /** v1.11 (PR10): Sakasa sitting in the first car on the title (and which call last asked, as the model loads). */
+  private titleCrew: Object3D | null = null;
+  private titleCrewAsk = 0;
   /** v1.11 (6-1): environment.landmark, the faraway shadow beyond the fog. */
   private landmark: LandmarkBoard | null = null;
   private clock = 0;
@@ -192,6 +198,8 @@ export class ThreeSceneView implements SceneView {
   /** v1.12: each car's body as drawn (0 = the lead car), and the cars whose windows are see-through now. */
   private readonly carBodies: Object3D[] = [];
   private readonly clearCars = new Set<number>();
+  /** v1.11 (PR10): a car's own body (dark glass) while it is drawn with see-through windows, to put back (the title's). */
+  private readonly opaqueBodies = new Map<number, Object3D>();
   /** v1.12: a rainbow under a stretch of track (gimmick "rainbow"; null without one). */
   private rainbow: RainbowGimmicks | null = null;
 
@@ -653,6 +661,7 @@ export class ThreeSceneView implements SceneView {
     const body = this.carBodies[index];
     if (!body || !this.carTemplates || this.clearCars.has(index)) return;
     this.clearCars.add(index);
+    this.opaqueBodies.set(index, body);
     const clear = clearWindowCar(index === 0 ? this.carTemplates.lead : this.carTemplates.car, index === 0);
     clear.name = body.name;
     body.parent?.add(clear);
@@ -857,6 +866,44 @@ export class ThreeSceneView implements SceneView {
   /** v1.11: the look's lighting now ("day", "evening", "night", "cave"; a test hook). */
   get lighting(): string {
     return this.environment.lighting;
+  }
+
+  setTitleCrew(on: boolean): void {
+    const ask = ++this.titleCrewAsk;
+    this.titleCrew?.removeFromParent();
+    this.titleCrew = null;
+    if (!on) {
+      // The lead car's dark glass again (the cab view never looks into the car).
+      this.opaqueWindows(0);
+      return;
+    }
+    // She is seen through the lead car's windows (faint glass and a plain inside while the title is up).
+    this.clearWindows(0);
+    void addCrewSeat(this.models, this.train).then((sit) => {
+      // Asked again meanwhile (the title closed): not wanted any more.
+      if (ask !== this.titleCrewAsk) {
+        sit.removeFromParent();
+        return;
+      }
+      // A window seat on the side the title's camera swings on, up on the seat (the camera looks from above: lower
+      // down the window sill would hide her), so she is seen through the near windows.
+      const cameraOnLeft = Math.cos(((this.orbit?.centerDeg ?? 0) * Math.PI) / 180) >= 0;
+      sit.position.x = Math.abs(sit.position.x) * (cameraOnLeft ? 1 : -1);
+      sit.position.y += TITLE_CREW_LIFT;
+      this.titleCrew = sit;
+    });
+  }
+
+  /** v1.11 (PR10): car `index` drawn with its own dark glass again after clearWindows. */
+  private opaqueWindows(index: number): void {
+    const opaque = this.opaqueBodies.get(index);
+    const clear = this.carBodies[index];
+    if (!opaque || !clear) return;
+    clear.parent?.add(opaque);
+    clear.removeFromParent();
+    this.carBodies[index] = opaque;
+    this.clearCars.delete(index);
+    this.opaqueBodies.delete(index);
   }
 
   setOrbit(orbit: OrbitCamera | null): void {

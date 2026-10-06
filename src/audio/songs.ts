@@ -680,6 +680,26 @@ export const SONGS: Record<string, Song> = {
       { voice: 'drums', gain: 0.5, notes: `${repeat('k:1 -:1 h:1 k:1 h:1 -:1', 15)} | k:1 -:5` },
     ],
   },
+  // v1.11 (PR10) the map's world end「せかいの わ」(PHASE9_CHAPTER5_6 第 1 部 §8.1): once (no loop), 4/4 in C at 100, eight
+  // bars (about 19 s). The title's music box tune "そらの ちず" slowed from its waltz into four, as the map's own song: the
+  // bell and a pad alone at first, the soft lead, bass and marimba come in at bar 4, the drums for the last two bars,
+  // and the last chord is held. Not "a small world", not the firefly farewell song, not "pomp and circumstance".
+  sekai: {
+    id: 'sekai',
+    title: 'せかいの わ',
+    bpm: 100,
+    stepsPerBeat: 2,
+    loop: false,
+    tracks: [
+      { voice: 'bell', notes: 'E5:2 G5:2 C6:4 | B5:3 A5:1 G5:4 | A5:2 F5:2 A5:4 | G5:8 | E5:2 G5:2 C6:4 | D6:3 C6:1 B5:4 | A5:2 B5:2 D6:4 | C6:8' },
+      { voice: 'pad', gain: 0.45, notes: 'E4:8 | D4:8 | C4:8 | E4:8 | E4:8 | D4:8 | F#4:4 D4:4 | E4:8' },
+      { voice: 'pad', gain: 0.35, notes: 'G4:8 | G4:8 | A4:8 | G4:8 | G4:8 | B4:8 | A4:4 B4:4 | G4:8' },
+      { voice: 'lead', gain: 0.35, notes: '-:8 | -:8 | -:8 | -:4 G4:2 B4:2 | C5:2 E5:2 G5:4 | B4:3 A4:1 G4:4 | F#4:2 G4:2 B4:4 | C5:8' },
+      { voice: 'bass', gain: 0.8, notes: '-:8 | -:8 | -:8 | C3:2 G2:2 C3:2 G2:2 | C3:2 G2:2 C3:2 G2:2 | G2:2 D3:2 G2:2 D3:2 | D3:2 A2:2 G2:2 D3:2 | C3:6 -:2' },
+      { voice: 'wood', gain: 0.35, notes: '-:8 | -:8 | -:8 | C4:1 E4:1 G4:1 E4:1 C4:1 E4:1 G4:1 E4:1 | C4:1 E4:1 G4:1 E4:1 C4:1 E4:1 G4:1 E4:1 | G3:1 B3:1 D4:1 B3:1 G3:1 B3:1 D4:1 B3:1 | D4:1 F#4:1 A4:1 F#4:1 G3:1 B3:1 D4:1 B3:1 | C4:4 -:4' },
+      { voice: 'drums', gain: 0.45, notes: '-:8 | -:8 | -:8 | -:8 | -:8 | -:8 | k:2 h:2 s:2 h:2 | k:2 s:1 s:1 k:4' },
+    ],
+  },
   // v1.11 (6-1 M2): おいかけっこ, a game of tag: bright 2/4 in F major. Not the can-can, not a famous chase sax tune, not
   // "the flight of the bumblebee"; not 'hurry' either (play, not a race against time).
   oikake: {

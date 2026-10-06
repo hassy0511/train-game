@@ -48,11 +48,12 @@
 | `amanojaku-sit` | すわった サカサ（ベンチ・運転席の うしろ） | `amanojaku` と 同じ はば、高さ 約 1.0〜1.1、足が 前へ 0.4 | ≤ 1,500 | `amanojaku` と 同じ（ピンク `#E75BA0` の ぐるぐる ぼうし、マント）。ひざを まげて すわる（仮の 形は 足を まえに のばして いる） | **座面の 中心**（おしりの 下）、+Z が 前 | なし |
 | `sakasa-castle-far` | とおくの しろの かげ（`environment.landmark`） | 板 1 まい（高さ 1 で 作り、ゲームが 大きさを きめる） | ≤ 50 | うすい ラベンダー `#b9a9d8` の しろの かたち。`fog: false` | 下の はしの 中心 | なし |
 - 1 モデル 1 マテリアル（頂点カラー）。`amanojaku-sit` の **顔の 絵は いまの `amanojaku` の まま**
+- `amanojaku-sit` は タイトルでも 使う（PR10。第 1 部 §5.7）: 6-1 を クリアした あと、タイトルの 3D の 1 りょうめの まどに すわった サカサ。タイトルの カメラが まわる がわの まどぎわ、座面より 0.45 m 上に 置き、1 りょうめの まどを すける ガラスに する（タイトルを とじたら もとの くらい ガラスに もどし、サカサも おりる）。Blender で 作る ときも 原点・向きは 表の まま
 - アニメ: どれも ボーン なし（とけいの はり・こまの 回転・あめつぶの ふわふわ・はねばしは コード）
 
 ## 受け入れ条件
 - モデル確認ページで 見られる: `https://hassy0511.github.io/train-game/models.html?model=sakasa-castle`、並べて くらべる `https://hassy0511.github.io/train-game/models.html?compare=house-upside-a,house-upside-b`・`https://hassy0511.github.io/train-game/models.html?compare=up-raindrop,upside-top,backward-book`・`https://hassy0511.github.io/train-game/models.html?compare=amanojaku,amanojaku-sit`
-- または Playwright スモークの スクショ（`tests/smoke/stage-6-1-full.spec.ts` の `6-1-*.png`・`6-1-ura.png`、`stage-1-3-full.spec.ts` の `1-3-ura.png`、`welcome.spec.ts` の `welcome-peek.png`）で 見える こと
+- または Playwright スモークの スクショ（`tests/smoke/stage-6-1-full.spec.ts` の `6-1-*.png`・`6-1-ura.png`、`map-ending.spec.ts` の `title-sakasa.png`、`stage-1-3-full.spec.ts` の `1-3-ura.png`、`welcome.spec.ts` の `welcome-peek.png`）で 見える こと
 - `npm run build`（`check-models`）が とおる。三角形・原点が 表の とおり
 
 ## 進め方

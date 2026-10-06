@@ -13,6 +13,8 @@
 //     version without rails says up to which map page it rebuilds them (`pages`, from version 2 on), and every
 //     clear, ability (also the ones records require) and record of every playable (non-hidden) stage has a place in
 //     the latest version.
+//  4. src/world/world.json (src/world/pages.ts validateWorld): the world's end's trail runs along links (or its long rail
+//     home), its islands are there, the islands' sizes are 0.8–1.4 (PHASE9_CHAPTER5_6 第 1 部 §3.7).
 //
 // The TypeScript is loaded with Vite's SSR loader (Vite is a dependency; Node cannot import .ts). A `throw` while a
 // module loads does not fail `vite build`, which is why the checks are made here, on the loaded values.
@@ -38,6 +40,7 @@ const server = await createServer({
 try {
   const loader = await server.ssrLoadModule('/src/stage/loader.ts');
   const progress = await server.ssrLoadModule('/src/core/progress.ts');
+  const pages = await server.ssrLoadModule('/src/world/pages.ts');
   const prepareStage = loader.prepareStage;
 
   /** The message of what prepareStage throws for `raw`, or null when it passes. */
@@ -161,6 +164,9 @@ try {
     for (const a of abilities) place('abilities', a, `${at} ability`);
     for (const r of s.records ?? []) place('records', r.id, `${at} record`);
   }
+
+  // 4. The world map.
+  for (const why of pages.validateWorld(readJson(resolve(root, 'src/world/world.json')))) fail(`src/world/world.json: ${why}`);
 
   console.log(`check-stages: ${stages.length} stages, ${bad} broken fixtures, ${versions.length} passcode versions (${((Date.now() - started) / 1000).toFixed(1)} s)`);
 } finally {

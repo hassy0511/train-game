@@ -80,10 +80,21 @@ import { showSettings } from './ui/settings';
 import { showParents } from './ui/parents';
 import { createKakuninBadge, showKakuninList } from './ui/kakunin';
 import { createPause } from './ui/pause';
-import { showMap, type MapChoice, type MapFinale, type MapIsland, type MapTeaser } from './ui/map';
+import { showMap, type MapChoice, type MapEnding, type MapFinale, type MapIsland, type MapTeaser } from './ui/map';
 import world from './world/world.json';
 import type { WorldFile } from './world/types';
-import { chapterDone, crossPages, knownPages, laidLinks, linkOptions, openingPage, type PageFacts } from './world/pages';
+import {
+  chapterDone,
+  crossPages,
+  ENDING_SEEN,
+  endingBridges,
+  endingDue,
+  knownPages,
+  laidLinks,
+  linkOptions,
+  openingPage,
+  type PageFacts,
+} from './world/pages';
 
 const app = document.getElementById('app') as HTMLElement;
 const viewEl = document.getElementById('view') as HTMLElement;
@@ -140,7 +151,9 @@ function registerOffline(): void {
  * (docs/PHASE7_FINISH.md §3, docs/PHASE8_CHAPTER3_4.md 第 1 部 §4): its light and card play, and only once the card
  * is closed is its link (or "finale:<id>" for an end without one) saved, so leaving in the middle shows it again
  * next time. It waits for the whole chapter to be cleared. Rails through the cloud gate to another page, and rails
- * that wait for the end's card, grow after it and are saved once they are all in (§3.6).
+ * that wait for the end's card, grow after it and are saved once they are all in (§3.6). v1.11 (PR10): the world's end
+ * 「せかいの わ」 plays once after 6-1 (docs/PHASE9_CHAPTER5_6.md 第 1 部 §5.2), after a chapter's end if both are due; its
+ * mark "finale:world" is saved once its card is closed.
  */
 async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: string; closeLabel?: string }): Promise<MapChoice> {
   const file = world as unknown as WorldFile;
@@ -189,9 +202,15 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
     return c.finale.link ? fresh.includes(c.finale.link) : done(c.id) && !progress.mapLinks.includes(`finale:${c.id}`);
   });
   const ending = endingChapter?.finale;
+  // v1.11 (PR10): the world's end, when its clears are there and it was not seen yet.
+  const worldEnd = file.ending && endingDue(file, progress.cleared, progress.mapLinks, listStageIds()) ? file.ending : undefined;
+  // The rails out of its last island (6-2's, PR11b) grow after it.
+  const endingLater = worldEnd ? fresh.filter((key) => key.startsWith(`${worldEnd.after}>`)) : [];
   // Through the gate to another page, or waiting for this end's card: they grow after it, saved once they are in.
   const later = fresh.filter(
-    (key) => key !== ending?.link && (crossPages(file, key) !== null || (!!endingChapter && linkOptions(file, key)?.afterChapter === endingChapter.id)),
+    (key) =>
+      key !== ending?.link &&
+      (crossPages(file, key) !== null || (!!endingChapter && linkOptions(file, key)?.afterChapter === endingChapter.id) || endingLater.includes(key)),
   );
   addToProgress('mapLinks', fresh.filter((key) => key !== ending?.link && !later.includes(key)));
   let finale: MapFinale | undefined;
@@ -242,8 +261,25 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
     teaser: teaser?.id,
     next: options.next,
     finale: endingChapter?.id,
+    ending: !!worldEnd,
   };
-  const pages = knownPages(file, facts);
+  // The world's end lays every page side by side.
+  const pages = worldEnd ? [...new Set([...knownPages(file, facts), ...(file.pages ?? []).map((p) => p.id)])].sort((a, b) => a - b) : knownPages(file, facts);
+  const worldEnding: MapEnding | undefined = worldEnd && {
+    trail: worldEnd.trail,
+    home: worldEnd.home,
+    after: worldEnd.after,
+    bridges: endingBridges(file, pages),
+    later: endingLater,
+    // The song "sekai" once (it does not loop), a bell on each island, "きらーん" for each rainbow rail.
+    onStart: () => audio.playMusic('sekai'),
+    onStep: (i) => audio.playWorldStep(i),
+    onBridge: () => audio.playBridge(),
+    onShown: async () => {
+      await showCard(root, worldEnd.card, worldEnd.button, worldEnd.icon, FINALE_CARD_GUARD_SECONDS);
+      addToProgress('mapLinks', [ENDING_SEEN]);
+    },
+  };
   // v1.11 (PR9, 第 1 部 §3.4): a child who saw a chapter's end before the island its light flew to was there (the
   // castle, 6-1): the new rail to it grows, and as it gets there the castle wakes and its windows light.
   const seenEnd = file.chapters.find((c) => c.finale?.target && progress.mapLinks.includes(`finale:${c.id}`) && fresh.some((key) => key.endsWith(`>${c.finale?.target}`)));
@@ -253,7 +289,8 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
   // that end ("finale:5"); from then on it is awake with its windows lit.
   const lightTargets = file.chapters.filter((c) => c.finale?.target && !c.finale.target.startsWith('teaser:'));
   const seenTarget = (c: (typeof lightTargets)[number]): boolean => progress.mapLinks.includes(`finale:${c.id}`);
-  return showMap(root, file, {
+  const choice = await showMap(root, file, {
+    ending: worldEnding,
     windows,
     asleep: lightTargets.filter((c) => !seenTarget(c)).map((c) => c.finale?.target ?? ''),
     lit: lightTargets.filter(seenTarget).map((c) => c.finale?.target ?? ''),
@@ -268,6 +305,9 @@ async function openMap(root: HTMLElement, audio: AudioEngine, options: { next?: 
     page: openingPage(file, facts, pages),
     ...options,
   });
+  // The world's end's song played once: back on the title its music box plays again.
+  if (worldEnd && audio.musicId === 'sekai') audio.playMusic('title');
+  return choice;
 }
 
 /** A chapter's end card: its button comes after this long (the map ignored taps until then; the child may still be tapping). */
@@ -1331,6 +1371,13 @@ async function boot(): Promise<void> {
     const platformOnTrainLeft = (platform?.platformSide === 'left') === start.direction >= 0;
     view.setOrbit({ ...TITLE_ORBIT, centerDeg: platform && !platformOnTrainLeft ? 0 : 180 });
     applyCamera(true);
+    // v1.11 (PR10, 第 1 部 §5.7): once Sakasa has joined the team (the stage the world's end comes after, 6-1, cleared)
+    // she rides in the first car on the title, seen through its window.
+    const joinedAfter = (world as unknown as WorldFile).ending?.after;
+    if (joinedAfter && loadProgress().cleared.includes(joinedAfter)) {
+      view.setTitleCrew?.(true);
+      app.dataset.titleCrew = 'sakasa';
+    }
   }
 
   document.title = GAME_TITLE;
@@ -1842,6 +1889,11 @@ async function boot(): Promise<void> {
     orbiting = false;
     delete app.dataset.title;
     view.setOrbit(null);
+    // The title's Sakasa gets off (the stage's own story decides where she is).
+    if (app.dataset.titleCrew) {
+      view.setTitleCrew?.(false);
+      delete app.dataset.titleCrew;
+    }
     applyCamera(true);
   }
   audio.unlock();

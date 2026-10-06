@@ -2068,6 +2068,205 @@ body {
   }
 }
 
+/* ---- v1.11 the world's end 「せかいの わ」 (PHASE9_CHAPTER5_6 第 1 部 §5.2–§5.3, PR10) ---- */
+/* While it plays: no ◀ ▶, no heading, no page dots, no "もどる" (only the pictures). */
+.map[data-ending='playing'] .map-page-title,
+.map[data-ending='playing'] .map-dots,
+.map[data-ending='playing'] .map-close {
+  visibility: hidden;
+}
+
+/* The pages slide to their places on one sheet and back (1.2 s in, 1.0 s back). */
+.map.is-world-moving .map-pages {
+  transition: transform var(--world-seconds, 1.2s) ease-in-out;
+}
+
+.map.is-world-moving .map-page {
+  transition:
+    left var(--world-seconds, 1.2s) ease-in-out,
+    transform var(--world-seconds, 1.2s) ease-in-out;
+}
+
+/* All the pages side by side, a third of their size: page n at n × 34 % from the left, 34 % from the top. */
+.map.is-world .map-page {
+  left: calc(var(--slot) * 34%);
+  transform: translateY(34%) scale(0.32);
+  transform-origin: 0 0;
+}
+
+/* Too small to read on the sheet: the names and the record badges go. */
+.map-label,
+.map-badge {
+  transition: opacity 0.4s ease-out;
+}
+
+.map.is-world .map-label,
+.map.is-world .map-badge,
+.map.is-world .map-say,
+.map.is-world .map-choose {
+  opacity: 0;
+}
+
+/* The rainbow rails over the whole sheet (they grow in, then carry the golden light). */
+.map-world-links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.map:not(.is-world) .map-world-links {
+  visibility: hidden;
+}
+
+.map-bridge path {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.map-bridge.is-pending {
+  visibility: hidden;
+}
+
+.map-bridge .band {
+  opacity: 0.92;
+}
+
+.map-bridge.is-growing .band {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: rail-grow var(--grow-seconds, 0.8s) ease-in-out forwards;
+}
+
+.map-bridge .glow,
+.map-bridge .glow-core {
+  stroke-dasharray: 12 120;
+  stroke-dashoffset: 12;
+  opacity: 0;
+}
+
+.map-bridge .glow {
+  stroke: rgba(255, 190, 30, 0.85);
+  stroke-width: 2.6;
+}
+
+.map-bridge .glow-core {
+  stroke: #fffbe6;
+  stroke-width: 0.9;
+}
+
+.map-bridge.is-lit .glow,
+.map-bridge.is-lit .glow-core {
+  animation: ring-light 0.5s linear forwards;
+}
+
+/* On the sheet the light runs quicker from island to island (0.2 s each). */
+.map.is-world .map-link.is-lit .glow,
+.map.is-world .map-link.is-lit .glow-core {
+  animation-duration: 0.25s;
+}
+
+/* Each island the light passes turns gold and stays so until the pages come back. */
+.map-island.is-gold img {
+  filter: brightness(1.12) drop-shadow(0 0 12px rgba(255, 210, 80, 1)) drop-shadow(0 0 4px rgba(255, 240, 170, 1));
+}
+
+.map.is-world .map-island img {
+  transition: filter 0.3s ease-out;
+}
+
+.map.is-world-glow .map-island.is-gold img {
+  animation: island-gold 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes island-gold {
+  to {
+    filter: brightness(1.25) drop-shadow(0 0 18px rgba(255, 214, 90, 1)) drop-shadow(0 0 6px rgba(255, 250, 210, 1));
+  }
+}
+
+/* All aglow: a faint rainbow arched over the sky (behind the pages). */
+.map-world-rainbow {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  width: 120vw;
+  aspect-ratio: 2 / 1;
+  transform: translateX(-50%);
+  border-radius: 50% 50% 0 0;
+  background: radial-gradient(
+    circle at 50% 100%,
+    transparent 0 60%,
+    rgba(200, 176, 255, 0.35) 61%,
+    rgba(156, 207, 255, 0.35) 63.5%,
+    rgba(168, 234, 160, 0.35) 66%,
+    rgba(255, 240, 138, 0.35) 68.5%,
+    rgba(255, 201, 138, 0.35) 71%,
+    rgba(255, 154, 168, 0.35) 73.5%,
+    transparent 75%
+  );
+  opacity: 0;
+  animation: fade-in 0.6s ease-out forwards;
+  pointer-events: none;
+}
+
+/* Little stars drifting down over the sheet (no sound: never fireworks). */
+.map-confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.map-confetto {
+  position: absolute;
+  top: -4%;
+  width: 14px;
+  height: 14px;
+  background: #ffd45c;
+  clip-path: polygon(50% 0, 61% 38%, 100% 38%, 69% 61%, 80% 100%, 50% 76%, 20% 100%, 31% 61%, 0 38%, 39% 38%);
+  animation: map-confetto-fall 1.8s linear forwards;
+}
+
+.map-confetto.is-1 {
+  background: #ff9aa8;
+}
+
+.map-confetto.is-2 {
+  background: #9ccfff;
+}
+
+.map-confetto.is-3 {
+  background: #a8eaa0;
+}
+
+@keyframes map-confetto-fall {
+  from {
+    transform: translateY(0) rotate(0deg);
+  }
+  to {
+    transform: translateY(110vh) rotate(300deg);
+  }
+}
+
+/* Calm motion: the pages are simply there (no sliding), no confetti; the islands turn gold in turn. */
+@media (prefers-reduced-motion: reduce) {
+  .map.is-world-moving .map-pages,
+  .map.is-world-moving .map-page {
+    transition-duration: 0s;
+  }
+  .map-confetto {
+    display: none;
+  }
+  .map.is-world-glow .map-island.is-gold img {
+    animation: none;
+  }
+}
+
 /* The next chapter's single "?" island: white, floating, joined to the first town by a dotted line. */
 .map-island.is-teaser {
   animation: island-float 2.4s ease-in-out infinite alternate;
