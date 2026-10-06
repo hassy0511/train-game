@@ -1,6 +1,6 @@
 # ステージJSON スキーマ v1
 
-最終更新: 2026-10-05（v1.12 えんしゅつ の 分。§25）
+最終更新: 2026-10-06（PHASE9 PR12 仕上げ: 5・6章の 分を コードと つきあわせた。その前は v1.12 えんしゅつ の 分。§25）
 状態: v1 確定（2026-09-13）。型の実体は `src/stage/types.ts`、検証は `src/stage/validate.ts`
 
 1ステージ = 1ファイル。`src/stages/<chapter>-<n>.json`。
@@ -256,8 +256,10 @@ interface MissionDef {
   onComplete?: string;                // 達成後に流す寸劇 id
 }
 type LineKey = 'start' | 'moving' | 'stationNear' | 'tooFast' | 'overshoot' | 'short' | 'perfect' | 'ok'
-  | 'doorOpen' | 'doorClosed' | 'doorsOpenLever' | 'catNear' | 'catWoke' | 'catDanger' | 'catDangerAfter' | 'complete';
+  | 'doorOpen' | 'doorClosed' | 'doorsOpenLever' | 'catNear' | 'catWoke' | 'catDanger' | 'catDangerAfter' | 'complete'
+  | 'gauge' | 'signReversed' | 'hardBrake';
 // 'start' は改行で区切ると順番に複数の吹き出しになる
+// 'gauge' は 停止ゲージが 出た とき（1-1）。'signReversed'・'hardBrake' は 型に ある だけで、いまは 読まない（きゅうブレーキの 一言は いつも「わわっ！」）
 
 interface StageFile {
   // ...v1...
@@ -634,7 +636,7 @@ type LineKey = /* v1.7 */ | 'spurBack' | 'needAbility';
 - 読み込み時の 検査: `spur.back` は 線路の 中で 坂の 上でない。`spur` は buffer で 終わる。`needs` は 能力の 名前、わき道が ある、`signReversed` と いっしょに しない。`hint` は 文字
 
 ### 図鑑の 絵
-記録ごとの 絵は `public/zukan/<記録の id>.png`（256 px、背景 なし、1 枚 40 KB 以内）。`node scripts/render-zukan.mjs [id…]` が、記録の `model` を ゲームと 同じ モデル（まだ 作って いない モデルは コードで 描く 仮の 形）で 描いて 書き出す。記録を 足したり モデルを かえたら 作りなおす。`model` の ない 記録（1-3 さかさじまの うら）は 絵なし。
+記録ごとの 絵は `public/zukan/<記録の id>.png`（256 px、背景 なし、1 枚 40 KB 以内）。`node scripts/render-zukan.mjs [id…]` が、記録の `model` を ゲームと 同じ モデル（まだ 作って いない モデルは コードで 描く 仮の 形）で 描いて 書き出す。記録を 足したり モデルを かえたら 作りなおす。`model` の ない 記録は 絵なし（いまは ない。1-3 さかさじまの うらも v1.11 PR9 から `upside-flower`）。`model` の ある あそべる 記録に 絵が ないと `npm run build`（`check-stages.mjs`）が 落ちる（PR12）。
 絵は サービスワーカーが はじめに ぜんぶ ためる（オフラインでも 図鑑が 見える）。
 
 ### ステージに 足した もの
@@ -914,7 +916,7 @@ type LineKey = /* v1.10 (4-1) */
 ### テスト用の しるし
 `#app` の `data-ice`（先頭が こおりの 上 1）、`data-ice-hint`（`slow`／`stop`／空）、`data-thin`（`on`／`crack`／空）、`data-cracks`（ぽちゃんの 回数）、`data-mirror`（いま うつして いる かがみの gimmicks 番号）、`data-mirror-flash`（きらーんの 回数）。`#lever-knob` の `data-mark` に `ice`
 
-### まだ ない もの
+### まだ ない もの（2026-09-27 当時。いまは 全 17 ステージが ある）
 - 要る ステージが まだ ない とき（4-1 の `unlock.requires: ["3-3"]`）: 島は かぎの まま。`?stage=4-1` で 直接 ひらくと、ない ステージの かわりに それより 前の ステージが 教える 能力を 持って はじまる（いまは 2-3 まで。前の ステージの `unlocks` に `dive` が 入れば それも）
 
 ## 15. v1.10 の追加（3-2「たきのかわ」・3-3「ほしのうみ」、2026-09-27）
@@ -1568,7 +1570,7 @@ type LineKey = /* v1.11 (PR8a) */ 'backNear' | 'backArrows' | 'reverseNudge' | '
 - 本番に デバッグの 口は 足さない（テストは `addInitScript` の 記録係 `window.__leadLog`・`window.__welcomeLog`）
 
 ## 24. v1.11 の追加（区画と もん: `sections`・線路の おわり `portal`・のって いる なかま `crew`・ステップの 間だけの ひとこと、2026-10-06 PR11a）
-設計: `docs/PHASE9_CHAPTER5_6.md` 第 3 部 第 B 部 B6（§0 と `docs/PHASE9_0_FREE_ABILITIES.md` が 先に きく）。`schemaVersion` は 1 の まま、ぜんぶ 省略可。全ステージ共通の 数は `src/train/params.ts` の `PORTAL`。ためしの ステージ **0-7**「てすとの もん」（`src/stages/0-7.json`、`hidden: true`・`chapter: 0`: 昼の 区画 `hiru` ＋ 3 km 東の 夜の 区画 `yoru`、行きと 帰りの もん、夜の 区画の うしろむきの わき道の おくに うしろの ホーム）。6-2「つながったせかい」が これを つかう（PR11b）。`StageFile.clearButton` は PR11b で この 節に 足す。
+設計: `docs/PHASE9_CHAPTER5_6.md` 第 3 部 第 B 部 B6（§0 と `docs/PHASE9_0_FREE_ABILITIES.md` が 先に きく）。`schemaVersion` は 1 の まま、ぜんぶ 省略可。全ステージ共通の 数は `src/train/params.ts` の `PORTAL`。ためしの ステージ **0-7**「てすとの もん」（`src/stages/0-7.json`、`hidden: true`・`chapter: 0`: 昼の 区画 `hiru` ＋ 3 km 東の 夜の 区画 `yoru`、行きと 帰りの もん、夜の 区画の うしろむきの わき道の おくに うしろの ホーム）。6-2「つながったせかい」が これを つかう（PR11b）。`StageFile.clearButton`・`steps[].junctions`・のって いる サカサの ことば は PR11b で この 節に 足した。
 
 ### 区画（`sections`）
 ```json
@@ -1601,7 +1603,7 @@ type LineKey = /* v1.11 (PR8a) */ 'backNear' | 'backArrows' | 'reverseNudge' | '
 - できごと `portal`（`{ from, to }`）・`railChanged`
 
 ### うしろの ホーム（`stations[].reverse`）
-§22 の まま（PR8a で 作った）。着いた ＝ うしろむきで わき道の 車止めに 止まった（`ReverseArrival`。`StopMonitor` は 作らない ので、ゲージ・はやすぎ・とおりすぎ なし）。ホーム・札・乗客の 列は +s 向き。0-7 で `0-7-home.png` を 撮る。
+§22 の まま（PR8a で 作った）。着いた ＝ うしろむきで わき道の 車止めに 止まった（`MissionRunner` の `reverseArrival`。`StopMonitor` は 作らない ので、ゲージ・はやすぎ・とおりすぎ なし）。ホーム・札・乗客の 列は +s 向き。0-7 で `0-7-home.png` を 撮る。
 
 ### のって いる なかま（`crew`）
 ```json
@@ -1725,6 +1727,7 @@ type LineKey = /* v1.11 (PR8a) */ 'backNear' | 'backArrows' | 'reverseNudge' | '
 - 半径 92 m の 輪の 線路 `wa`（1 本の 輪）に 6 つの 島（1〜6 章）。6 章の しろの 島から 1 章の まちへ もどる ところが にじ（高さ 10 m）。島の あいだは 木の はしら（`base` の `pier`）
 - しろは 6-1 の `sakasa-castle`（0.42 倍。PR11b で 仮の `ring-castle` から かえ、`ring-castle` は けした）
 - **6-2 の あと**（PR11b、だいさん 2026-10-06）: 6-2 を はじめて クリアした とき、クリア札「やったね！」の あと この ムービーへ（`?movie=ending&then=map`。ページを かえるので 「▶ みる」の タップで 音が でる）。札の あと 同じ ページで 地図を ひらき、6章の おわり（札）→「タイトルへ」。札を とじると セーブの `mapLinks` に `movie:ending`（見た しるし）。**見た あとは ▶▶ が 出る**（はじめては 出ない）。タイトルの「もういちど みる」（6-2 クリアの あと。小さな ボタン）から いつでも もう 一度（札の あとは タイトルへ）
+- あいことばで 6-2 クリアを 入れた ときも `movie:ending` を つける（章の おわりと 同じく 入れなおした 子に 見せ なおさない。`src/ui/parents.ts`。PR12）
 
 ### 読み込み時の 検査
 - 形: `shot`（大きさ・ねらい・はんい・場所には `distance`）、`act`（しゅるい・`times`・`seconds`・`toward`）、`spawn`（置き場所 1 つ・`ride` の 車両と 中・`scale`）、`move`（`onRail` か `position`）、`letterbox`・`fade`・`drive`・`trainAt`・`beat`

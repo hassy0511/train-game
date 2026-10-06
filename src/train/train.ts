@@ -1174,7 +1174,9 @@ export class Train {
 
   /**
    * v1.11 (PR5): sets (or with null removes) the speed cap `id`: "light" (the light's and the magnet's 0.7), "magnet"
-   * (0.5 while pulling), later "reverse", "parade", "mirror-gate", "depart", "lead-learn".
+   * (0.5 while pulling), "depart" (a cutscene's roll to a stop, 6-1), "lead-learn" (held while 6-1's chase teaches
+   * うしろむき), "auto-drive" (v1.12: a cutscene drives the train). The band (5-2, setLeader), the mirror gates (5-3,
+   * setBlocks) and うしろむき's 5 m/s (updateReverse) hold the train their own way.
    */
   setSpeedCap(id: string, cap: SpeedCap | null): void {
     if (cap) this.speedCaps.set(id, cap);

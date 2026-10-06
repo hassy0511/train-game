@@ -3,7 +3,7 @@ import { Whistle } from './actions/whistle';
 import { AudioEngine } from './audio/audio';
 import { GAME_TITLE, GAME_TITLE_LINES, PARTNER_NAME } from './config';
 import { StageEventBus } from './core/stage-events';
-import { addToProgress, loadProgress, setResume, startSandbox, type Resume } from './core/progress';
+import { addToProgress, loadProgress, movieSeen, setResume, startSandbox, type Resume } from './core/progress';
 import { abilitiesTaughtBefore, kakuninMission, kakuninRunAllowed, movieBounces, stageBounces, stageLockActive } from './core/kakunin';
 import { ABILITY_CARD_TITLES, ABILITY_NAMES, abilityInUse, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
@@ -423,9 +423,6 @@ async function bootMovie(params: URLSearchParams, id: string): Promise<void> {
     },
   });
 }
-
-/** v1.11 (PR11b): the save's mark of a movie watched to its card (in mapLinks, like the map's "finale:" marks). */
-const movieSeen = (id: string): string => `movie:${id}`;
 
 /**
  * v1.11 (PR11b): the movie the clear of `stageId` opens now and the child has not watched yet (the ending after 6-2,

@@ -257,7 +257,9 @@ test('after 6-2: the card marks the movie seen, then the map with chapter 6\'s e
     if (!localStorage.getItem(k)) localStorage.setItem(k, v);
   }, [SAVE_KEY, after62(false)] as const);
   await start(page, '&then=map');
-  // (The automation is the owner's check: "▶▶" is there.)
+  // (The automation is the owner's check: "▶▶" is there. It shows on the next frame after "playing", and a hidden
+  // button takes no tap, so wait for it.)
+  await expect(page.locator('#skip')).toBeVisible({ timeout: 30_000 });
   await page.locator('#skip').dispatchEvent('pointerdown');
   await expect(page.locator('#card')).toBeVisible({ timeout: 30_000 });
   await page.locator('#card-button').click();

@@ -1,6 +1,7 @@
 import {
   clearProgress,
   loadProgress,
+  movieSeen,
   PASSCODE_LETTERS,
   passcodeToProgress,
   progressToPasscode,
@@ -9,6 +10,7 @@ import {
   type PasscodeError,
 } from '../core/progress';
 import { forgetKakunin, kakuninUnlocked } from '../core/kakunin';
+import { listMovieIds, peekMovie } from '../stage/loader';
 import { showKakuninList, showKakuninPad } from './kakunin';
 
 export interface ParentsOptions {
@@ -32,6 +34,16 @@ function passcodeError(error: PasscodeError, letters = PASSCODE_LETTERS): string
     case 'check':
       return 'あいことばが ちがうようです。もういちど たしかめてください。';
   }
+}
+
+/** The marks of the movies these clears have opened (every stage of a movie's `unlock.requires` cleared). */
+async function moviesSeenBy(cleared: readonly string[]): Promise<string[]> {
+  const marks: string[] = [];
+  for (const id of listMovieIds()) {
+    const needs = (await peekMovie(id))?.unlock.requires ?? [];
+    if (needs.length > 0 && needs.every((stage) => cleared.includes(stage))) marks.push(movieSeen(id));
+  }
+  return marks;
 }
 
 /** Opened as a home-screen app (Safari's "ホーム画面に追加"): its storage is not dropped after a while. */
@@ -143,15 +155,20 @@ export function showParents(root: HTMLElement, options: ParentsOptions): void {
     message.textContent = '';
     message.classList.remove('is-error');
     const found = read.progress;
-    confirm(
-      el,
-      `いまの記録を、この あいことばの記録（クリア ${found.cleared.length}・ずかん ${found.records.length}）に 入れかえます。`,
-      '入れかえる',
-      () => {
-        saveProgress(found);
-        options.onProgressChanged();
-      },
-    );
+    void moviesSeenBy(found.cleared).then((marks) => {
+      // Like the chapter ends (seenMapLinks): a child who types the code in is not shown the movies its clears have
+      // opened (the ending after 6-2) again as new; "▶▶" skips them (PHASE9_CHAPTER5_6 §0.6, PR12).
+      found.mapLinks.push(...marks.filter((mark) => !found.mapLinks.includes(mark)));
+      confirm(
+        el,
+        `いまの記録を、この あいことばの記録（クリア ${found.cleared.length}・ずかん ${found.records.length}）に 入れかえます。`,
+        '入れかえる',
+        () => {
+          saveProgress(found);
+          options.onProgressChanged();
+        },
+      );
+    });
   });
   form.append(input, load);
   pass.append(show, code, form, message);
