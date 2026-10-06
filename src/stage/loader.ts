@@ -6,6 +6,8 @@ import { fireflyForks } from '../gimmick/fireflies';
 import { hushZones } from '../gimmick/hush';
 import { assignPlowSpans, plowSpans } from '../gimmick/plow';
 import { reversedZones } from '../gimmick/reversed-whistle';
+import { resolveSections } from './sections';
+import { validateSectionLayout } from './validate-sections';
 import { FIREFLY_FORK } from '../train/params';
 import { rocketZones } from '../gimmick/rocket';
 import { slopeZones } from '../gimmick/slope';
@@ -194,8 +196,11 @@ export function prepareStage(raw: unknown): StageData {
   });
 
   validateBackJunctions(file, network, backJunctions, records.map((r) => ({ id: r.def.id, requires: r.def.requires, position: r.position })));
+  // v1.11 (PR11a): the gates and the sections (far apart, joined by gates only).
+  validateSectionLayout(file, network, backJunctions, magnets);
+  const sections = resolveSections(file, network);
 
-  return { file, network, props, actors, stations, records, magnets, ironProps, backJunctions };
+  return { file, network, props, actors, stations, records, magnets, ironProps, backJunctions, sections };
 }
 
 /**
@@ -290,6 +295,7 @@ function checkRanges(file: StageFile, network: RailNetwork): void {
   for (const s of file.stations) check(s.railId, s.at, `station "${s.id}"`);
   for (const r of file.rails) {
     if (r.end.type === 'merge') check(r.end.railId, r.end.at, `rail "${r.id}" merge`);
+    if (r.end.type === 'portal') check(r.end.railId, r.end.at, `rail "${r.id}" portal`);
     for (const g of r.gaps ?? []) {
       check(r.id, g.from, `rail "${r.id}" gap`);
       check(r.id, g.to, `rail "${r.id}" gap`);

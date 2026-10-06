@@ -800,7 +800,10 @@ export function buildRailScene(
   return { group, bufferStops };
 }
 
-/** v1.11 (PR8a): rail `id`'s start joins nothing: no junction feeds it, no rail merges into it there. */
+/**
+ * v1.11 (PR8a): rail `id`'s start joins nothing: no junction feeds it, no rail merges into it there. v1.11 (PR11a): nor
+ * does a gate arrive on it (its start is in the cloud tunnel, no buffer).
+ */
 export function startsNowhere(network: RailNetwork, id: string): boolean {
-  return network.feeder(id) === null && !network.mergesInto(id).some((m) => Math.abs(m.at) < 0.5);
+  return network.feeder(id) === null && !network.mergesInto(id).some((m) => Math.abs(m.at) < 0.5) && network.portalsInto(id).length === 0;
 }

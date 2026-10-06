@@ -1,0 +1,443 @@
+{
+  "schemaVersion": 1,
+  "id": "0-7",
+  "title": "てすとの もん",
+  "chapter": 0,
+  "hidden": true,
+  "unlock": {
+    "requires": [
+      "6-1"
+    ],
+    "purchase": null
+  },
+  "unlocks": [],
+  "crew": [
+    "sakasa"
+  ],
+  "environment": {
+    "sky": {
+      "top": "#4f9dff",
+      "bottom": "#d9f1ff"
+    },
+    "fog": {
+      "color": "#d9f1ff",
+      "near": 150,
+      "far": 450
+    },
+    "lighting": "day",
+    "ground": {
+      "y": -0.6,
+      "size": 1400,
+      "color": "#7fc96f"
+    },
+    "bgm": null,
+    "ambience": "town",
+    "surface": "rail",
+    "fall": "cloud"
+  },
+  "start": {
+    "railId": "main",
+    "at": 45,
+    "direction": 1
+  },
+  "sections": [
+    {
+      "id": "hiru",
+      "rails": [
+        "main",
+        "kaeri"
+      ],
+      "environment": {}
+    },
+    {
+      "id": "yoru",
+      "rails": [
+        "yoru",
+        "yoru-ura"
+      ],
+      "environment": {
+        "sky": {
+          "top": "#141c46",
+          "bottom": "#3d3f7e"
+        },
+        "fog": {
+          "color": "#2a3566",
+          "near": 90,
+          "far": 360
+        },
+        "lighting": "night",
+        "ground": {
+          "y": -0.6,
+          "size": 1400,
+          "color": "#2f4a3a"
+        },
+        "stars": {
+          "count": 300
+        },
+        "moon": {
+          "azimuth": 20,
+          "elevation": 24,
+          "size": 1
+        },
+        "fireflies": {
+          "count": 80,
+          "radius": 60
+        },
+        "ambience": "night",
+        "fall": "leaf"
+      }
+    }
+  ],
+  "rails": [
+    {
+      "id": "main",
+      "points": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          210
+        ],
+        [
+          0,
+          0,
+          420
+        ]
+      ],
+      "end": {
+        "type": "portal",
+        "railId": "yoru",
+        "at": 45
+      }
+    },
+    {
+      "id": "kaeri",
+      "points": [
+        [
+          -40,
+          0,
+          420
+        ],
+        [
+          -40,
+          0,
+          210
+        ],
+        [
+          -40,
+          0,
+          0
+        ]
+      ],
+      "end": {
+        "type": "buffer"
+      }
+    },
+    {
+      "id": "yoru",
+      "points": [
+        [
+          3000,
+          0,
+          0
+        ],
+        [
+          3000,
+          0,
+          350
+        ],
+        [
+          3000,
+          0,
+          700
+        ]
+      ],
+      "end": {
+        "type": "portal",
+        "railId": "kaeri",
+        "at": 45
+      }
+    },
+    {
+      "id": "yoru-ura",
+      "points": [
+        [
+          3008,
+          0,
+          192
+        ],
+        [
+          3008,
+          0,
+          204
+        ],
+        [
+          3007.6,
+          0,
+          216
+        ],
+        [
+          3005.4,
+          0,
+          228
+        ],
+        [
+          3002.4,
+          0,
+          240
+        ],
+        [
+          3000,
+          0,
+          250
+        ]
+      ],
+      "end": {
+        "type": "merge",
+        "railId": "yoru",
+        "at": 250
+      }
+    }
+  ],
+  "junctions": [
+    {
+      "id": "yoru-ura-guchi",
+      "railId": "yoru",
+      "at": 250,
+      "back": true,
+      "left": "yoru",
+      "right": "yoru-ura",
+      "default": "left",
+      "line": {
+        "who": "amanojaku",
+        "text": "うしろむきで はいる のだ！"
+      }
+    }
+  ],
+  "stations": [
+    {
+      "id": "hajime",
+      "name": "はじまりのえき",
+      "railId": "main",
+      "at": 45,
+      "platformSide": "left"
+    },
+    {
+      "id": "ura-home",
+      "name": "うらの ホーム",
+      "railId": "yoru-ura",
+      "at": 0.5,
+      "platformSide": "left",
+      "reverse": true
+    },
+    {
+      "id": "mori",
+      "name": "もりのえき",
+      "railId": "yoru",
+      "at": 560,
+      "platformSide": "left"
+    },
+    {
+      "id": "modori",
+      "name": "もどりのえき",
+      "railId": "kaeri",
+      "at": 330,
+      "platformSide": "left"
+    }
+  ],
+  "props": [
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "main",
+        "at": 110,
+        "lateral": -14
+      },
+      "rotationY": 20
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "main",
+        "at": 170,
+        "lateral": 12
+      },
+      "rotationY": 110
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "main",
+        "at": 260,
+        "lateral": -16
+      },
+      "rotationY": 200
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "main",
+        "at": 330,
+        "lateral": 14
+      },
+      "rotationY": 40
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "kaeri",
+        "at": 150,
+        "lateral": -12
+      },
+      "rotationY": 300
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "kaeri",
+        "at": 260,
+        "lateral": -15
+      },
+      "rotationY": 70
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "yoru",
+        "at": 130,
+        "lateral": -14
+      },
+      "rotationY": 20
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "yoru",
+        "at": 300,
+        "lateral": -12
+      },
+      "rotationY": 110
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "yoru",
+        "at": 400,
+        "lateral": 16
+      },
+      "rotationY": 200
+    },
+    {
+      "model": "tree-b",
+      "onRail": {
+        "railId": "yoru",
+        "at": 480,
+        "lateral": -14
+      },
+      "rotationY": 40
+    },
+    {
+      "model": "tree-a",
+      "onRail": {
+        "railId": "yoru",
+        "at": 620,
+        "lateral": 14
+      },
+      "rotationY": 300
+    }
+  ],
+  "actors": [],
+  "records": [],
+  "missions": [
+    {
+      "id": "m1",
+      "type": "pickup",
+      "title": "もんの むこうへ",
+      "steps": [
+        {
+          "stationId": "ura-home",
+          "board": 1,
+          "say": "うしろから きてくれた！"
+        },
+        {
+          "stationId": "mori",
+          "board": 1
+        }
+      ],
+      "junctions": {
+        "yoru-ura-guchi": {
+          "default": "right"
+        }
+      },
+      "hints": [
+        {
+          "railId": "main",
+          "at": 200,
+          "text": "もりのえきへ いこう！",
+          "whileStep": 1
+        },
+        {
+          "railId": "yoru",
+          "at": 330,
+          "who": "amanojaku",
+          "text": "うしろの ホーム、わすれてる のだ！",
+          "whileStep": 0
+        },
+        {
+          "railId": "yoru",
+          "at": 420,
+          "text": "ホームは うしろだよ！",
+          "whileStep": 0
+        }
+      ],
+      "lines": {
+        "start": "もんを くぐって よるの せかいへ！",
+        "stationNear": "{station}だ。ゆっくり！"
+      }
+    },
+    {
+      "id": "m2",
+      "type": "deliver",
+      "title": "もどりの えきへ",
+      "steps": [
+        {
+          "stationId": "modori",
+          "alight": 2
+        }
+      ],
+      "lines": {
+        "start": "もんを くぐって かえろう！",
+        "stationNear": "{station}だ。ゆっくり！",
+        "complete": "もんの ためし、できたね！"
+      }
+    }
+  ],
+  "gimmicks": [
+    {
+      "type": "ambience",
+      "railId": "yoru",
+      "from": 450,
+      "to": 700,
+      "params": {
+        "kind": "toy"
+      }
+    }
+  ],
+  "cutscenes": {
+    "opening": [
+      {
+        "caption": "てすとの もん",
+        "seconds": 2
+      },
+      {
+        "say": "もんの むこうは よるの せかい！",
+        "emote": "tilt"
+      }
+    ]
+  },
+  "opening": "opening"
+}

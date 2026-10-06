@@ -44,4 +44,9 @@ export interface RailNetwork {
   feeder(id: string): RailPoint | null;
   /** v1.11: the rails whose end merges into rail `id` (`railId` the merging rail, `at` where on `id`), in rails[] order. */
   mergesInto(id: string): readonly RailPoint[];
+  /**
+   * v1.11 (PR11a, 第 3 部 B6.2): the gates arriving on rail `id` (`railId` the rail whose end is the gate, `at` where
+   * the lead car's centre arrives on `id`), in rails[] order.
+   */
+  portalsInto(id: string): readonly RailPoint[];
 }

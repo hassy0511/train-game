@@ -825,6 +825,16 @@ export class AudioEngine {
     this.hiss({ seconds: 0.2, gain: 0.02, attack: 0.02, freq: 750, endFreq: 2700, q: 0.8, dest: o });
   }
 
+  /**
+   * v1.11 (PR11a, PHASE9_CHAPTER5_6 第 3 部 B12): through a gate ("もん"): "ふわぁ・きらら", a soft pink-noise breath
+   * 0.4 s falling 2 kHz → 800 Hz and four little bells going up.
+   */
+  playGate(): void {
+    const o = this.out(0.35, 1.2);
+    this.hiss({ color: 'pink', seconds: 0.4, gain: 0.03, attack: 0.08, filter: 'lowpass', freq: 2000, endFreq: 800, q: 0.7, dest: o });
+    [1568, 1760, 2093, 2637].forEach((f, i) => this.bell(f, 0.12 + i * 0.07, 0.03, 0.5, o));
+  }
+
   /** Sakasa hops to the rear window (6-2, later): "ぴょん", like the hop a little lower. */
   playSakasaHop(): void {
     const o = this.out(0.1, 0.5);

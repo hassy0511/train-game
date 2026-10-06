@@ -55,7 +55,14 @@ export interface SceneView {
    * v1.11 (PHASE9 B6.1): changes the look (the sky, the fog, the light, the ground, the stars, the moon, the fireflies)
    * as often as wanted: 5-1's day and night, 6-2's sections.
    */
-  applyEnvironment(env: EnvironmentDef): void;
+  applyEnvironment(env: EnvironmentDef, centre?: { x: number; z: number }): void;
+  /**
+   * v1.11 (PR11a, B13): builds what is left of section `id` now (its props are built a slice a frame once the stage is
+   * up; a gate into it or the view getting there cannot wait). Optional.
+   */
+  buildSection?(id: string): void;
+  /** v1.11 (PR11a): the sections built so far. Optional. */
+  sectionsReady?(): string[];
   /**
    * v1.12 (えんしゅつ): a cutscene camera shot framing a figure, a car or a point (null: none; the camera the mode, a
    * fixed camera or the orbit wants comes back). Optional.

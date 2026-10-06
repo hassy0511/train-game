@@ -1,6 +1,7 @@
 import { BufferGeometry, DynamicDrawUsage, Group, InstancedMesh, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import type { StageEvent } from '../../core/stage-events';
 import type { IronLook, IronProp, StageData } from '../../stage/types';
+import { sectionOf } from '../../stage/sections';
 import { IRON_PROPS, TRAIN } from '../../train/params';
 import { ironBucketGeometry, ironCanGeometry, SIGN_BELL_AT, signBellGeometry, signPostGeometry } from './magnet-placeholders';
 import { kitMaterial } from './placeholder-kit';
@@ -24,7 +25,8 @@ interface Placed {
   slot: number;
   position: Vector3;
   quaternion: Quaternion;
-  /** The bell's instance (a sign's), and where it hangs. */
+  /** The bell's instance (a sign's: in `bells`), and where it hangs. */
+  bells?: InstancedMesh;
   bellSlot?: number;
   bellAt?: Vector3;
 }
@@ -57,21 +59,27 @@ export class IronPropsView {
   private build(): void {
     const props = this.stage.ironProps;
     const groundY = this.stage.file.environment.ground?.y ?? null;
-    const counts: Record<string, number> = { can: 0, bucket: 0, post: 0, bell: 0 };
+    // v1.11 (PR11a, 第 3 部 B13): a stage in sections draws each section's in batches of their own (one batch over
+    // sections 3 km apart would never be culled).
+    const sec = (p: IronProp): string => sectionOf(this.stage.sections, p.railId)?.id ?? '';
+    const key = (kind: string, p: IronProp): string => `${kind}|${sec(p)}`;
+    const counts = new Map<string, number>();
+    const count = (k: string): void => {
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    };
     const drawsPost = (p: IronProp): boolean => p.look === 'bell' && (p.prop === undefined || this.stage.file.props[p.prop]?.model === 'sign-bell');
     for (const p of props) {
-      if (p.look === 'bell') counts.bell++;
-      else counts[p.look]++;
-      if (drawsPost(p)) counts.post++;
+      count(key(p.look, p));
+      if (drawsPost(p)) count(key('post', p));
     }
     const geos: Record<string, () => BufferGeometry> = { can: ironCanGeometry, bucket: ironBucketGeometry, post: signPostGeometry, bell: signBellGeometry };
-    for (const [kind, n] of Object.entries(counts)) {
-      if (n === 0) continue;
+    for (const [k, n] of counts) {
+      const kind = k.split('|')[0];
       const mesh = new InstancedMesh(geos[kind](), kitMaterial(), n);
       mesh.name = `iron-${kind}`;
       mesh.instanceMatrix.setUsage(DynamicDrawUsage);
       mesh.count = 0;
-      this.meshes.set(kind, mesh);
+      this.meshes.set(k, mesh);
       this.group.add(mesh);
     }
     for (const p of props) {
@@ -85,7 +93,7 @@ export class IronPropsView {
       toward.normalize();
       const quaternion = new Quaternion().setFromUnitVectors(new Vector3(0, 0, 1), toward);
       if (p.look !== 'bell') {
-        const mesh = this.meshes.get(p.look) as InstancedMesh;
+        const mesh = this.meshes.get(key(p.look, p)) as InstancedMesh;
         const slot = mesh.count++;
         // A little turn of its own, so the cans do not all stand alike.
         const own = quaternion.clone().multiply(this.spin.setFromAxisAngle(new Vector3(0, 1, 0), (p.index * 1.7) % (Math.PI * 2)));
@@ -94,7 +102,7 @@ export class IronPropsView {
         this.placed.push({ prop: p, mesh, slot, position, quaternion: own });
         continue;
       }
-      const bells = this.meshes.get('bell') as InstancedMesh;
+      const bells = this.meshes.get(key('bell', p)) as InstancedMesh;
       const bellSlot = bells.count++;
       const bellAt = SIGN_BELL_AT.clone().applyQuaternion(quaternion).add(position);
       this.matrix.compose(bellAt, quaternion, this.one);
@@ -102,12 +110,12 @@ export class IronPropsView {
       let mesh = bells;
       let slot = bellSlot;
       if (drawsPost(p)) {
-        mesh = this.meshes.get('post') as InstancedMesh;
+        mesh = this.meshes.get(key('post', p)) as InstancedMesh;
         slot = mesh.count++;
         this.matrix.compose(position, quaternion, this.one);
         mesh.setMatrixAt(slot, this.matrix);
       }
-      this.placed.push({ prop: p, mesh, slot, position, quaternion, bellSlot, bellAt });
+      this.placed.push({ prop: p, mesh, slot, position, quaternion, bells, bellSlot, bellAt });
     }
     for (const mesh of this.meshes.values()) {
       mesh.instanceMatrix.needsUpdate = true;
@@ -196,7 +204,7 @@ export class IronPropsView {
     this.flying = null;
     const p = f.placed;
     if (p.bellSlot !== undefined && p.bellAt) {
-      this.setInstance(this.meshes.get('bell') as InstancedMesh, p.bellSlot, p.bellAt, p.quaternion, this.one);
+      this.setInstance(p.bells as InstancedMesh, p.bellSlot, p.bellAt, p.quaternion, this.one);
       return;
     }
     if (f.phase === 'fall') this.setInstance(p.mesh, p.slot, f.to, p.quaternion, this.one);
@@ -212,7 +220,7 @@ export class IronPropsView {
       this.flyer.visible = false;
     }
     for (const p of this.placed) {
-      if (p.bellSlot !== undefined && p.bellAt) this.setInstance(this.meshes.get('bell') as InstancedMesh, p.bellSlot, p.bellAt, p.quaternion, this.one);
+      if (p.bellSlot !== undefined && p.bellAt) this.setInstance(p.bells as InstancedMesh, p.bellSlot, p.bellAt, p.quaternion, this.one);
       if (p.mesh.name !== 'iron-bell') this.setInstance(p.mesh, p.slot, p.position, p.quaternion, this.one);
     }
   }
@@ -234,7 +242,7 @@ export class IronPropsView {
       const at = (p.bellAt as Vector3).clone().add(dir);
       at.y += Math.sin(f.t * 25) * 0.05;
       f.to.copy(at);
-      this.setInstance(this.meshes.get('bell') as InstancedMesh, p.bellSlot as number, at, p.quaternion, this.one);
+      this.setInstance(p.bells as InstancedMesh, p.bellSlot as number, at, p.quaternion, this.one);
       return;
     }
     if (f.phase === 'spring') {
@@ -242,7 +250,7 @@ export class IronPropsView {
       const u = Math.min(1, f.t / 0.3);
       const at = f.to.clone().lerp(p.bellAt as Vector3, u);
       at.y += Math.sin(f.t * 30) * 0.08 * (1 - u);
-      this.setInstance(this.meshes.get('bell') as InstancedMesh, p.bellSlot as number, at, p.quaternion, this.one);
+      this.setInstance(p.bells as InstancedMesh, p.bellSlot as number, at, p.quaternion, this.one);
       if (u >= 1) this.flying = null;
       return;
     }

@@ -176,8 +176,9 @@ export function lightUp(hemisphere: HemisphereLight, sun: DirectionalLight, envi
  * The ground: a plane, or v1.10 with water one with holes where the ponds are (none at all over a sea: the water
  * layer draws the sea's surface and floor). Null when there is none.
  */
-export function buildGround(environment: EnvironmentDef): Mesh | null {
-  if (environment.water && environment.water.length > 0) return buildWaterGround(environment);
+/** The ground board (v1.11, PR11a: round `centre`, a section's middle; the stage's origin by default). */
+export function buildGround(environment: EnvironmentDef, centre: { x: number; z: number } = { x: 0, z: 0 }): Mesh | null {
+  if (environment.water && environment.water.length > 0) return buildWaterGround(environment, centre);
   if (!environment.ground) return null;
   const ground = new Mesh(
     new PlaneGeometry(environment.ground.size, environment.ground.size),
@@ -185,7 +186,7 @@ export function buildGround(environment: EnvironmentDef): Mesh | null {
   );
   ground.name = 'ground';
   ground.rotation.x = -Math.PI / 2;
-  ground.position.y = environment.ground.y;
+  ground.position.set(centre.x, environment.ground.y, centre.z);
   if (environment.ground.look === 'playmat') playmat(ground.material as MeshLambertMaterial);
   return ground;
 }

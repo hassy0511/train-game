@@ -79,6 +79,8 @@ export function buildRailNetwork(file: StageFile): RailNetwork {
   // v1.11: where each rail comes from (the consist's trail traces back through these, 第 3 部 A5.2).
   const feeders = new Map<string, RailPoint>();
   const mergers = new Map<string, RailPoint[]>();
+  // v1.11 (PR11a, 第 3 部 B6.2): the gates arriving on each rail (a gate is no join: the rails stay apart).
+  const portals = new Map<string, RailPoint[]>();
   for (const def of file.rails) {
     const feeder = file.junctions.find((j) => j.railId !== def.id && (j.left === def.id || j.right === def.id));
     if (feeder) feeders.set(def.id, { railId: feeder.railId, at: feeder.at });
@@ -87,12 +89,18 @@ export function buildRailNetwork(file: StageFile): RailNetwork {
       list.push({ railId: def.id, at: def.end.at });
       mergers.set(def.end.railId, list);
     }
+    if (def.end.type === 'portal') {
+      const list = portals.get(def.end.railId) ?? [];
+      list.push({ railId: def.id, at: def.end.at });
+      portals.set(def.end.railId, list);
+    }
   }
 
   return {
     rails,
     feeder: (id) => feeders.get(id) ?? null,
     mergesInto: (id) => mergers.get(id) ?? [],
+    portalsInto: (id) => portals.get(id) ?? [],
     getRail(id: string): Rail {
       const rail = rails.get(id);
       if (!rail) throw new Error(`Unknown rail "${id}"`);

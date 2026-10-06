@@ -1,0 +1,1 @@
+{"_expect": "actor \"neko\" within 150 m after its arrival", "_base": "0-7", "_edit": [{"path": "actors.0", "value": {"id": "neko", "type": "cat", "reactsTo": "whistle", "onRail": {"railId": "yoru", "at": 120}}}]}

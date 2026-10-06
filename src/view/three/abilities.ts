@@ -505,6 +505,15 @@ export class SkyGimmicks {
     return this.fogFar;
   }
 
+  /**
+   * v1.11 (PR11a): a new look (a section's behind a gate's white, a cutscene's behind its fade): the fog takes its
+   * reach at once next frame instead of easing over from the old one.
+   */
+  snapFog(): void {
+    this.fogNear = 0;
+    this.fogFar = 0;
+  }
+
   /** Per frame: pad state, and the fog for where the train is (fog stretches thicken it; the light thins it). */
   update(dt: number, railId: string, frontS: number, fog: Fog | null, baseFog: { near: number; far: number } | null): void {
     this.time += dt;

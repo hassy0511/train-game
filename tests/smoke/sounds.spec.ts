@@ -28,7 +28,7 @@ const MAGNET_SOUNDS = ['magnet-on', 'magnet-pull', 'magnet-catch', 'rail-snap', 
 /** v1.11 (5-3): the mirror world's effects, the group「かがみ」(PHASE9_CHAPTER5_6 第 6 部 §10; the turn with and without the flash). */
 const MIRROR_SOUNDS = ['mirror-gate', 'mirror-ripple', 'mirror-bump', 'phantom-pop', 'glass-on', 'mirror-turn', 'mirror-turn-back', 'letter-reflect'];
 /** v1.11 (PR8a): うしろむき's effects, the group「うしろむき」(PHASE9_CHAPTER5_6 第 3 部 A15). */
-const REVERSE_SOUNDS = ['reverse-on', 'reverse-off', 'switch-pending', 'reverse-stop', 'reverse-bump', 'hop-back', 'sakasa-hop'];
+const REVERSE_SOUNDS = ['reverse-on', 'reverse-off', 'switch-pending', 'reverse-stop', 'reverse-bump', 'hop-back', 'sakasa-hop', 'gate'];
 /** v1.11 (6-1): the group「さかさまの しろ」(PHASE9_CHAPTER5_6 第 7 部 §10). */
 const CASTLE_SOUNDS = ['lead-pop', 'lead-dash', 'lead-turn', 'welcome-step', 'flinch', 'board-harp', 'clock-back', 'drawbridge-down'];
 
