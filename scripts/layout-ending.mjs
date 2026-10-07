@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Writes src/movies/ending.json: the ending movie "せかいの わ" (v1.12 えんしゅつ, docs/STAGE_SCHEMA.md §25).
+ * Writes src/movies/ending.json: the ending movie "つながった ワールドレール" (renamed 2026-10-07 by だいさん; the map's world end keeps 「せかいの わ」) (v1.12 えんしゅつ, docs/STAGE_SCHEMA.md §25).
  *   node scripts/layout-ending.mjs
  *
  * A small diorama: six round islands in a calm sea, one for each chapter, on a ring of rail (radius RING m, one loop
@@ -301,7 +301,7 @@ const movie = [
 const file = {
   schemaVersion: 1,
   id: 'ending',
-  title: 'エンディング',
+  title: 'つながった ワールドレール',
   chapter: 0,
   hidden: true,
   // Opened by the game once 6-2 is cleared (the かくにん list opens it any time).

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "ending",
-  "title": "エンディング",
+  "title": "つながった ワールドレール",
   "chapter": 0,
   "hidden": true,
   "unlock": { "requires": ["6-2"], "purchase": null },

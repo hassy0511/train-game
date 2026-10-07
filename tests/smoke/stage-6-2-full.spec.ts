@@ -35,7 +35,7 @@ import {
  * buffer), the blue gate, the driftwood dived under, みなとえき, record ② in the cove, the snow wall, the snowman,
  * ゆきの むらえき (the lantern); M3 the purple gate, the firefly wood with the light, おもちゃの えき, the toy-block bridge
  * with the magnet, Sakasa's den (record ③), home to ほんぶえき, the ending, the clear card's 「やったね！」; then (だいさん,
- * 2026-10-06) the ending movie 「せかいの わ」 the first time, and after its card the map with chapter 6's end (a card
+ * 2026-10-06) the ending movie 「つながった ワールドレール」 the first time, and after its card the map with chapter 6's end (a card
  * only, the fanfare) and the title with every star and 「もういちど みる」.
  * A second test: M1 forgetting the back platform (Sakasa's step-0 line at hub 290), backing up into it from there, then
  * the wrong gate on purpose ("こっちの せかいも みて いこう！" once) and round the blue section back to the ring and the

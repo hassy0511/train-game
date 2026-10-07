@@ -259,7 +259,7 @@ type LineKey = 'start' | 'moving' | 'stationNear' | 'tooFast' | 'overshoot' | 's
   | 'doorOpen' | 'doorClosed' | 'doorsOpenLever' | 'catNear' | 'catWoke' | 'catDanger' | 'catDangerAfter' | 'complete'
   | 'gauge' | 'signReversed' | 'hardBrake';
 // 'start' は改行で区切ると順番に複数の吹き出しになる
-// 'gauge' は 停止ゲージが 出た とき（1-1）。'signReversed'・'hardBrake' は 型に ある だけで、いまは 読まない（きゅうブレーキの 一言は いつも「わわっ！」）
+// 'gauge' は 停止ゲージが 出た とき（1-1）。'signReversed'・'hardBrake' は 型に ある だけで、いまは 読まない（きゅうブレーキの 一言は どの ステージでも「わわっ！ きゅうブレーキ！」。2026-10-07 だいさん）
 
 interface StageFile {
   // ...v1...
