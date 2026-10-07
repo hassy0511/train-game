@@ -6,7 +6,7 @@ import { seenMapLinks } from '../../src/world/pages';
 import type { WorldFile } from '../../src/world/types';
 
 /**
- * v1.12 (えんしゅつ, docs/STAGE_SCHEMA.md §25) on the production build: the ending movie "せかいの わ" plays from
+ * v1.12 (えんしゅつ, docs/STAGE_SCHEMA.md §25) on the production build: the ending movie "つながった ワールドレール" plays from
  * 「▶ みる」 to its card with the letterbox on, every beat of its shot list happens in order (a screenshot at each:
  * output/movie-ending-<n>.png), the lines are the usual bubbles above the bottom bar, nothing throws; "▶▶" skips to the
  * card; prefers-reduced-motion plays it with cuts; the check mode's list opens it; the `?movie=` lock bounces it on a
@@ -189,14 +189,14 @@ test('ending movie: prefers-reduced-motion cuts instead of moving; the calm sett
 
 test('ending movie: the check mode lists it; the `?movie=` lock on a kid\'s iPad', async ({ page, context }) => {
   test.setTimeout(180_000);
-  // The check mode's list: 「ムービー」 → 「エンディング」 (the device was unlocked before).
+  // The check mode's list: 「ムービー」 → 「つながった ワールドレール」 (the device was unlocked before).
   await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [FLAG_KEY, FLAG_VALUE] as const);
   await page.goto('/?stage=0-0&go=1&kakunin=1');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
   await page.locator('#kakunin-badge').click();
   const movie = page.locator('#kakunin-list .kakunin-chapter[data-chapter="movie"]');
   await expect(movie).toContainText('ムービー');
-  await expect(movie.locator('[data-movie="ending"]')).toContainText('エンディング');
+  await expect(movie.locator('[data-movie="ending"]')).toContainText('つながった ワールドレール');
   await movie.locator('[data-movie="ending"]').click();
   await expect(page).toHaveURL(/\?movie=ending&kakunin=1/);
   await expect(page.locator('#movie-play')).toBeVisible({ timeout: 90_000 });

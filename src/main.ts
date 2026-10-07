@@ -1323,7 +1323,7 @@ async function boot(): Promise<void> {
   train.events.on('hardBrake', () => {
     fx.dip = Math.max(fx.dip, 0.5 * shakeScale());
     audio.playSqueal();
-    if (hasMissions) void bubbles.say('わわっ！');
+    if (hasMissions) void bubbles.say('わわっ！ きゅうブレーキ！');
   });
 
   // Springy boughs (2-1): they bend under the train and throw it at the tip.
@@ -2482,7 +2482,7 @@ async function boot(): Promise<void> {
   addToProgress('cleared', [stage.file.id]);
   if (loadProgress().resume?.stage === stage.file.id) setResume(null);
   addToProgress('abilities', stage.file.unlocks);
-  // v1.11 (PR11b): a clear that opens a movie not watched yet (6-2: the ending 「せかいの わ」) goes to it first; the map
+  // v1.11 (PR11b): a clear that opens a movie not watched yet (6-2: the ending 「つながった ワールドレール」) goes to it first; the map
   // (chapter 6's end) opens after its card.
   const opened = await dueMovie(stage.file.id);
   if (opened) {

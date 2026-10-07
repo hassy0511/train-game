@@ -2,7 +2,7 @@ import { BufferGeometry, Color, Float32BufferAttribute, type Group, Vector3 } fr
 import { hash, mix, solid } from './placeholder-kit';
 
 /**
- * v1.12 (えんしゅつ, ticket 0025): the ending movie's diorama "せかいの わ" (src/movies/ending.json), drawn in code
+ * v1.12 (えんしゅつ, ticket 0025): the ending movie's diorama "つながった ワールドレール" (src/movies/ending.json), drawn in code
  * until the models are built: a small round island for each chapter (its ground's colour and a sandy rim at the
  * water). The castle island carries 6-1's own castle ("sakasa-castle", src/view/three/castle-placeholders.ts) at 0.42
  * of its size (PR11b: the stand-in "ring-castle" is gone).

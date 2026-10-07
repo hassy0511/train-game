@@ -596,14 +596,14 @@ export const SONGS: Record<string, Song> = {
     ],
   },
 
-  // v1.12 the ending movie「せかいの わ」: a warm, glad 4/4 in G at 100 (about 77 s, then again). The bell sings the tune
+  // v1.12 the ending movie「つながった ワールドレール」: a warm, glad 4/4 in G at 100 (about 77 s, then again). The bell sings the tune
   // (stepping up to the high G at the ends of its phrases: "やったね"), a soft trumpet doubles it from the third part
   // on, a gentle bass walks root and fifth, two pads hold the chords, a high bell twinkles, soft drums keep time and
   // fill at every eighth bar. Written for this game: its opening climbs the G chord and falls by step (no well-known
   // tune, school song, birthday song, anthem or station melody starts so).
   ending: {
     id: 'ending',
-    title: 'せかいの わ',
+    title: 'つながった ワールドレール',
     bpm: 100,
     stepsPerBeat: 2,
     tracks: [
