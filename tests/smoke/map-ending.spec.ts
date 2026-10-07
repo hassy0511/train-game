@@ -172,8 +172,17 @@ test('the world end after 6-1: page 3, the pages side by side, rainbow rails, th
   const pages = page.locator('.map-page');
   await expect(pages).toHaveCount(3);
   const area = (await page.locator('.map-area').boundingBox())!;
-  // (At the CI's few frames a second the 1.2 s slide takes a little longer to show.)
-  await expect.poll(async () => (await pages.first().boundingBox())?.width ?? 0, { timeout: 10_000 }).toBeLessThan(area.width * 0.34);
+  // (At the CI's few frames a second the 1.2 s slide takes a little longer to show: wait until every page has both
+  // shrunk and slid into its place, not just the first one's size.)
+  await expect
+    .poll(
+      async () => {
+        const now = await Promise.all((await pages.all()).map((p) => p.boundingBox()));
+        return now.every((b, i) => b !== null && b.width < area.width * 0.34 && Math.abs(b.x - (area.x + area.width * 0.34 * i)) < 3);
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(true);
   const boxes = await Promise.all((await pages.all()).map((p) => p.boundingBox()));
   boxes.forEach((b, i) => {
     expect(b, `page ${i + 1}`).not.toBeNull();
