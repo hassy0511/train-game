@@ -349,7 +349,9 @@ test('6-1 cleared: Sakasa rides in the first car behind the title, and gets off 
   await page.screenshot({ path: resolve(OUT, 'title-sakasa-2.png') });
   await page.locator('#title-start').click();
   await expect(page.locator('#title-screen')).toHaveCount(0, { timeout: 10_000 });
-  expect(await app.getAttribute('data-title-crew')).toBeNull();
+  // She gets off once the start has checked for a movie to play first (v1.12 the opening: an await after the title
+  // closes, so on a slow machine a moment later).
+  await expect(app).not.toHaveAttribute('data-title-crew', /./, { timeout: 10_000 });
   expect(errors).toEqual([]);
 });
 
