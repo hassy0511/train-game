@@ -76,6 +76,9 @@ try {
     if (raw.id !== basename(name, '.json')) fail(`src/movies/${name}: "id" is "${raw.id}" (the file name must be the id)`);
     if (!raw.movie) fail(`src/movies/${name}: a movie file needs "movie" (what it plays and its card)`);
     if (stages.some((s) => s.id === raw.id)) fail(`src/movies/${name}: "${raw.id}" is also a stage id`);
+    // v1.12 (the opening): the stage a movie comes before is a playable one.
+    const before = raw.movie?.before;
+    if (before !== undefined && !stages.some((s) => s.id === before && !s.hidden && !s._movie)) fail(`src/movies/${name}: "movie.before" "${before}" is not a playable stage`);
     stages.push({ ...raw, _movie: true });
   }
   for (const s of stages) if (!s._movie && s.movie) fail(`src/stages/${s.id}.json: "movie" belongs in src/movies/`);

@@ -161,7 +161,7 @@ export async function runCutscene(
       await race(ports.say(step.say, step.who ?? 'partner', step.name, step.icon));
     } else if ('spawn' in step) {
       const t = figurePlace(step, network, groundY);
-      events.post({ type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion, mirror: step.mirror, car: t.car, scale: step.scale });
+      events.post({ type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion, mirror: step.mirror, car: t.car, scale: step.scale, silhouette: step.silhouette });
     } else if ('move' in step) {
       const t = figurePlace({ onRail: step.onRail, position: step.position }, network, groundY);
       events.post({ type: 'actor:move', id: step.move, position: t.position, seconds: step.seconds, bob: step.bob, face: step.face });
@@ -196,6 +196,9 @@ export async function runCutscene(
       await race(ports.trainAt(step.trainAt, step.max ?? TRAIN_AT_MAX));
     } else if ('beat' in step) {
       ports.beat(step.beat);
+    } else if ('trainLight' in step) {
+      // v1.12 (the opening): the train's light, looks only (a movie's).
+      events.post({ type: 'light', on: step.trainLight });
     } else if ('camera' in step) {
       void ports.shot(null);
       if (step.camera === 'fixed') {
@@ -249,9 +252,9 @@ export async function runCutscene(
 /**
  * Applies at once only what the steps leave behind (PHASE7_FINISH §4 item 3): cut rails, learned abilities, and the
  * figures they bring on or take off, each where it ends up, and v1.10 (4-2) the evening sky, v1.11 the look (day ⇄ night)
- * and (5-3) mirrors turned round. Lines, waits, cards, captions, cameras and effects are
- * left out (the caller gives the usual camera back). Used for the cutscenes before a resumed mission, and for the
- * rest of one skipped with "▶▶".
+ * and (5-3) mirrors turned round, v1.12 the train's light (a movie's `trainLight`). Lines, waits, cards, captions,
+ * cameras and effects are left out (the caller gives the usual camera back). Used for the cutscenes before a resumed
+ * mission, and for the rest of one skipped with "▶▶".
  */
 export function fastForwardCutscene(
   steps: CutsceneStep[],
@@ -271,7 +274,7 @@ export function fastForwardCutscene(
   for (const step of steps) {
     if ('spawn' in step) {
       const t = figurePlace(step, network, groundY);
-      spawned.set(step.spawn, { type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion, mirror: step.mirror, car: t.car, scale: step.scale });
+      spawned.set(step.spawn, { type: 'actor:spawn', id: step.spawn, model: step.model, position: t.position, quaternion: t.quaternion, mirror: step.mirror, car: t.car, scale: step.scale, silhouette: step.silhouette });
       turns.delete(step.spawn);
     } else if ('act' in step) {
       if (step.act === 'turn') turns.set(step.id, { type: 'actor:act', id: step.id, act: 'turn', seconds: 0, toward: step.toward });
@@ -311,6 +314,9 @@ export function fastForwardCutscene(
     } else if ('crew' in step) {
       // v1.11 (6-1): the friends riding along stay (a "depart" is left out: the train does not roll off).
       events.post({ type: 'crew', ids: step.crew });
+    } else if ('trainLight' in step) {
+      // v1.12 (the opening): the train's light as the steps leave it.
+      events.post({ type: 'light', on: step.trainLight });
     }
   }
   for (const spawn of spawned.values()) events.post(spawn);

@@ -159,6 +159,8 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
     if (st.scale !== undefined && !(isNumber(st.scale) && st.scale >= 0.1 && st.scale <= 5)) fail(`${where}: spawn "scale" must be 0.1 to 5`);
     if (st.rotationY !== undefined && !isNumber(st.rotationY)) fail(`${where}: "rotationY" must be a number`);
     if (st.mirror !== undefined && st.mirror !== 'only' && st.mirror !== 'hide') fail(`${where}: spawn "mirror" must be "only" or "hide"`);
+    // v1.12 (the opening): a dusky shape glimpsed far away.
+    if (st.silhouette !== undefined && typeof st.silhouette !== 'boolean') fail(`${where}: spawn "silhouette" must be true or false`);
   } else if ('move' in st) {
     if (!isString(st.move) || !isNumber(st.seconds)) fail(`${where}: move needs id, onRail, seconds`);
     if ((st.onRail === undefined) === (st.position === undefined)) fail(`${where}: move needs id, onRail, seconds (or v1.12 "position" instead of onRail: exactly one)`);
@@ -246,6 +248,9 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
     if (st.max !== undefined && !(isNumber(st.max) && st.max > 0 && st.max <= 120)) fail(`${where}: trainAt "max" must be 0 to 120 s`);
   } else if ('beat' in st) {
     if (!isString(st.beat) || !/^[a-z0-9-]+$/.test(st.beat)) fail(`${where}: "beat" must be a name (a-z, 0-9, -)`);
+  } else if ('trainLight' in st) {
+    // v1.12 (the opening): the train's light, looks only (a movie's; checked with the movie below).
+    if (typeof st.trainLight !== 'boolean') fail(`${where}: "trainLight" must be true or false`);
   } else {
     fail(`${where}: unknown step`);
   }
@@ -681,6 +686,8 @@ export function validateStageFile(raw: unknown): StageFile {
     for (const [id, steps] of Object.entries(raw.cutscenes)) {
       if (!Array.isArray(steps)) fail(`cutscene "${id}" must be an array of steps`);
       steps.forEach((st, i) => checkCutsceneStep(st, `cutscene "${id}" step ${i}`, railIds));
+      // v1.12 (the opening): the train's light from a cutscene is a movie's only (in a stage the light is the child's).
+      if (raw.movie === undefined && steps.some((st) => isObject(st) && 'trainLight' in st)) fail(`cutscene "${id}": "trainLight" is for a movie only`);
       // v1.11 (5-2): a press that winds (fx "windup") winds a figure this cutscene brought on before it (and has not
       // taken off yet), a reverse-wound one ("-back").
       const on = new Map<string, string>();
@@ -760,6 +767,10 @@ export function validateStageFile(raw: unknown): StageFile {
     if (!isObject(m) || !isString(m.play) || !cutsceneIds.has(m.play)) fail('"movie.play" must name a cutscene');
     const card = (m as Record<string, unknown>).card;
     if (!isObject(card) || !isString(card.title) || !isString(card.button)) fail('"movie.card" needs "title" and "button"');
+    // v1.12 (the opening): the card's picture, and the stage it comes before (check-stages: a playable stage).
+    if (card.icon !== undefined && card.icon !== 'badge' && card.icon !== 'drawing') fail('"movie.card.icon" must be badge or drawing');
+    const before = (m as Record<string, unknown>).before;
+    if (before !== undefined && !(isString(before) && /^\d+-\d+$/.test(before))) fail('"movie.before" must be a stage id ("1-1")');
     if (requireArray(raw, 'missions').length > 0) fail('a movie has no missions');
     if (raw.hidden !== true || raw.chapter !== 0) fail('a movie is hidden: "chapter" 0 and "hidden" true');
   }
@@ -815,12 +826,18 @@ export function validateStageFile(raw: unknown): StageFile {
     if (!isObject(g) || !isString(g.type)) fail(`gimmicks[${i}]: "type" is required`);
     // v1.11 (PR8a, 第 3 部 A8.6): the first plan's reversing point is not made.
     if (g.type === 'reverse') fail(`gimmicks[${i}]: "reverse" is not used any more (reversing works anywhere; a back siding is junctions[].back)`);
-    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound', 'ice', 'thin-ice', 'tunnel', 'hush', 'whistle-reversed', 'rainbow', 'ambience'];
+    const zoned = ['camera', 'updraft', 'fog', 'jump-pad', 'bough', 'flower-bridge', 'fragile', 'slope', 'rocket', 'sound', 'ice', 'thin-ice', 'tunnel', 'hush', 'whistle-reversed', 'rainbow', 'rail-glow', 'ambience'];
     if (zoned.includes(g.type)) {
       if (!isString(g.railId) || !railIds.has(g.railId) || !isNumber(g.from)) fail(`gimmicks[${i}] ${g.type}: needs a known railId and "from"`);
       if (g.type !== 'jump-pad' && (!isNumber(g.to) || (g.to as number) <= (g.from as number))) fail(`gimmicks[${i}] ${g.type}: needs "to" after "from"`);
     }
     const p = (g.params ?? {}) as Record<string, unknown>;
+    // v1.12 (the opening): the World Rail's glow (looks only): how bright, how fast and how far apart its waves run.
+    if (g.type === 'rail-glow') {
+      if (p.strength !== undefined && !(isNumber(p.strength) && p.strength >= 0.1 && p.strength <= 1)) fail(`gimmicks[${i}] rail-glow: params.strength must be 0.1–1`);
+      if (p.speed !== undefined && !(isNumber(p.speed) && p.speed >= 0 && p.speed <= 60)) fail(`gimmicks[${i}] rail-glow: params.speed must be 0–60 m/s`);
+      if (p.spacing !== undefined && !(isNumber(p.spacing) && p.spacing >= 4 && p.spacing <= 200)) fail(`gimmicks[${i}] rail-glow: params.spacing must be 4–200 m`);
+    }
     // v1.11 (PR11a, 第 3 部 B6.5): the sound around the train along a stretch (where a section's look changes).
     if (g.type === 'ambience' && !AMBIENCE_KINDS.includes(p.kind as AmbienceKind)) fail(`gimmicks[${i}] ambience: params.kind must be one of ${AMBIENCE_KINDS.join(', ')}`);
     if (g.type === 'flower-bridge') {

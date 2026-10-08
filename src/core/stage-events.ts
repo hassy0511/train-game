@@ -10,7 +10,8 @@ export type StageEvent =
   | { type: 'actor:state'; id: string; state: string; position?: Vector3; seconds?: number; delay?: number }
   /** v1.11 (5-3) `mirror`: "only" = seen only in a mirror's reflection, "hide" = never reflected. */
   /** v1.12 `car`: it rides in that car (0 = the lead), `position` and `quaternion` in the car's own space. */
-  | { type: 'actor:spawn'; id: string; model: string; position: Vector3; quaternion: Quaternion; mirror?: 'only' | 'hide'; car?: number; scale?: number }
+  /** v1.12 (the opening) `silhouette`: drawn as a soft dusky shape (a figure glimpsed far away). */
+  | { type: 'actor:spawn'; id: string; model: string; position: Vector3; quaternion: Quaternion; mirror?: 'only' | 'hide'; car?: number; scale?: number; silhouette?: boolean }
   /** v1.12 `bob`: little hops on the way; `face`: it turns to the way it goes first. */
   | { type: 'actor:move'; id: string; position: Vector3; seconds: number; bob?: boolean; face?: boolean }
   /** v1.12 (えんしゅつ): a figure's little motion (ActDef). `seconds` 0 with "turn": at once (a fast-forward). */

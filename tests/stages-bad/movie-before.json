@@ -1,0 +1,1 @@
+{"_expect": "\"movie.before\" must be a stage id", "_base": "opening", "_edit": [{"path": "movie.before", "value": "opening"}]}

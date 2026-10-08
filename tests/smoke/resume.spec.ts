@@ -393,16 +393,17 @@ test('"▶▶" only on a stage cleared before; the resume moves on only on the s
   const errors = watchErrors(page);
   const app = page.locator('#app');
   const skip = page.locator('#skip');
+  // v1.12 (the opening): the save has watched the opening movie (movie.spec.ts plays it before a new save's 1-1), so
+  // 「はじめる」 goes on into 1-1, whose own opening is the partner's two lines in the cab.
+  await seed(page, { cleared: [], abilities: [], mapLinks: ['movie:opening'] });
   // Not cleared yet: no "▶▶" through the opening.
   await page.goto('/?stage=1-1');
   await ready(page, '1-1');
   await expect(page.locator('#title-continue')).toHaveCount(0);
   await page.locator('#title-start').click();
   const seen = await watchSkip(page);
-  await tapUntil(page, '#card');
-  await expect(page.locator('#card')).toContainText('にゅうたい');
+  await tapUntilCard(page, 'はじめての うんてん');
   expect(await seen()).toBe(false);
-  await page.locator('#card-button').click();
 
   // Mission 1 to the cherry station; once it is done, the resume is at mission 2 with its stop.
   await mission1(page);
@@ -424,15 +425,12 @@ test('"▶▶" only on a stage cleared before; the resume moves on only on the s
   await ready(page, '1-1');
   await expect(page.locator('#title-continue')).toHaveText('つづきから（1-1 ミッション 3）');
   await page.locator('#title-start').click();
-  await tapUntil(page, '#card');
-  await expect(page.locator('#card')).toContainText('にゅうたい');
-  await page.locator('#card-button').click();
   await mission1(page);
   await page.locator('#card-button').click();
   await expect(page.locator('#card')).toContainText('なかまを のせて', { timeout: 30_000 });
   expect((await saved(page)).resume).toEqual({ stage: '1-1', mission: 2, stops: 3, perfect: 1 });
 
-  // Cleared before (back for the records) while 2-1 waits at mission 2: "▶▶" over the caption, tapped twice.
+  // Cleared before (back for the records) while 2-1 waits at mission 2: "▶▶" over the opening's lines, tapped twice.
   await page.evaluate((key) => {
     localStorage.setItem(
       key,
@@ -457,7 +455,7 @@ test('"▶▶" only on a stage cleared before; the resume moves on only on the s
   expect(s.x + s.width).toBeLessThan(c.x);
   await skip.dispatchEvent('pointerdown');
   await skip.dispatchEvent('pointerdown');
-  // The badge card was part of the rest: straight to mission 1, its button held back a moment.
+  // Straight to mission 1, its button held back a moment.
   await expect(page.locator('#card')).toContainText('はじめての うんてん', { timeout: 30_000 });
   await expect(page.locator('#card-button')).toHaveClass(/is-guarded/);
   await expect(page.locator('#caption')).toBeHidden();

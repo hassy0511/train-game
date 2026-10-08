@@ -1,7 +1,7 @@
 import {
   clearProgress,
   loadProgress,
-  movieSeen,
+  moviesWatchedBy,
   PASSCODE_LETTERS,
   passcodeToProgress,
   progressToPasscode,
@@ -36,14 +36,13 @@ function passcodeError(error: PasscodeError, letters = PASSCODE_LETTERS): string
   }
 }
 
-/** The marks of the movies these clears have opened (every stage of a movie's `unlock.requires` cleared). */
+/**
+ * The marks of the movies these clears count as watched: one they have opened (every stage of its `unlock.requires`
+ * cleared: the ending), v1.12 one that plays before a cleared stage (the opening once 1-1 is cleared).
+ */
 async function moviesSeenBy(cleared: readonly string[]): Promise<string[]> {
-  const marks: string[] = [];
-  for (const id of listMovieIds()) {
-    const needs = (await peekMovie(id))?.unlock.requires ?? [];
-    if (needs.length > 0 && needs.every((stage) => cleared.includes(stage))) marks.push(movieSeen(id));
-  }
-  return marks;
+  const movies = (await Promise.all(listMovieIds().map((id) => peekMovie(id)))).filter((m) => m !== null);
+  return moviesWatchedBy(movies, cleared);
 }
 
 /** Opened as a home-screen app (Safari's "ホーム画面に追加"): its storage is not dropped after a while. */

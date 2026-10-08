@@ -970,6 +970,11 @@ export type CutsceneStep =
        * "hide" = never reflected. The mirror Sakasa ("only") beside Sakasa herself ("hide"), turned the other way.
        */
       mirror?: 'only' | 'hide';
+      /**
+       * v1.12 (the opening, 2026-10-08): drawn as a soft dusky shape, one colour and no detail (a figure glimpsed far away
+       * whose face is not shown: Sakasa's swirly hat on a faraway rail). Looks only.
+       */
+      silhouette?: boolean;
     }
   | {
       move: string;
@@ -1097,7 +1102,12 @@ export type CutsceneStep =
    */
   | { trainAt: number; max?: number }
   /** v1.12: a named point in the cutscene (tests and screenshots read it as `#app[data-beat]`); does nothing else. */
-  | { beat: string };
+  | { beat: string }
+  /**
+   * v1.12 (the opening, 2026-10-08): the train's light (its beam on the rails ahead) on or off, looks only: the light
+   * button is not touched. In a movie only (the game's own light belongs to the child).
+   */
+  | { trainLight: boolean };
 
 /** v1.12: how much of the frame a shot's target fills. */
 export type ShotSize = 'close' | 'medium' | 'wide';
@@ -1175,7 +1185,14 @@ export interface ActDef {
  */
 export interface MovieDef {
   play: string;
-  card: { title: string; button: string };
+  /** v1.12 (the opening) `icon`: the card's picture, as a cutscene card's ("badge": the team's badge). */
+  card: { title: string; button: string; icon?: 'badge' | 'drawing' };
+  /**
+   * v1.12 (the opening, 2026-10-08): the game plays this movie the first time stage `before` is started from its
+   * beginning on a save that has neither cleared that stage nor watched the movie, then goes on into the stage. A save
+   * that has cleared it counts as having watched the movie (an older save, an あいことば that brings it back).
+   */
+  before?: string;
 }
 
 export interface GimmickDef {

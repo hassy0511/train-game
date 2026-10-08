@@ -6,6 +6,12 @@ import { seenMapLinks } from '../../src/world/pages';
 import type { WorldFile } from '../../src/world/types';
 
 /**
+ * v1.12 (the opening, 2026-10-08): the opening movie 「ワンダーごうと ふしぎな せかい」 plays when a new save starts 1-1
+ * (「はじめる」 or the map), from 「▶ みる」 to its card 「たんけんたい にゅうたい！」 with every beat (a screenshot at each:
+ * output/movie-opening-<n>.png), then 1-1 goes on from its start; the first time on a kid's iPad there is no "▶▶",
+ * once watched there is, and the title's 「もういちど みる」 offers it (with the ending too: a choice of the two); a save
+ * that has cleared 1-1 is not sent to it.
+ *
  * v1.12 (えんしゅつ, docs/STAGE_SCHEMA.md §25) on the production build: the ending movie "つながった ワールドレール" plays from
  * 「▶ みる」 to its card with the letterbox on, every beat of its shot list happens in order (a screenshot at each:
  * output/movie-ending-<n>.png), the lines are the usual bubbles above the bottom bar, nothing throws; "▶▶" skips to the
@@ -25,24 +31,28 @@ interface MovieFile {
 const MOVIE = JSON.parse(readFileSync(resolve(here, '../../src/movies/ending.json'), 'utf8')) as MovieFile;
 const STEPS = MOVIE.cutscenes[MOVIE.movie.play];
 /** The beats in the order the shot list has them. */
-const BEATS = STEPS.flatMap((st) => (typeof st.beat === 'string' ? [st.beat] : []));
+const beatsOf = (steps: Record<string, unknown>[]): string[] => steps.flatMap((st) => (typeof st.beat === 'string' ? [st.beat] : []));
+const BEATS = beatsOf(STEPS);
 /**
  * How long after a beat its shot has settled (ms): the longest camera move or fade in the steps just after it (a
  * dolly, the opening's fade-in), and a little more.
  */
-const SETTLE = new Map(
-  STEPS.flatMap((st, i) => {
-    if (typeof st.beat !== 'string') return [];
-    let longest = 0;
-    for (const next of STEPS.slice(i + 1, i + 5)) {
-      if (typeof next.beat === 'string') break;
-      if (typeof next.shot === 'string' || typeof next.fade === 'string') longest = Math.max(longest, Number(next.seconds ?? 0));
-    }
-    return [[st.beat, 900 + longest * 1000 * 0.6]] as [string, number][];
-  }),
-);
+const settleOf = (steps: Record<string, unknown>[]): Map<string, number> =>
+  new Map(
+    steps.flatMap((st, i) => {
+      if (typeof st.beat !== 'string') return [];
+      let longest = 0;
+      for (const next of steps.slice(i + 1, i + 5)) {
+        if (typeof next.beat === 'string') break;
+        if (typeof next.shot === 'string' || typeof next.fade === 'string') longest = Math.max(longest, Number(next.seconds ?? 0));
+      }
+      return [[st.beat, 900 + longest * 1000 * 0.6]] as [string, number][];
+    }),
+  );
+const SETTLE = settleOf(STEPS);
 /** Every line the movie says. */
-const LINES = STEPS.flatMap((st) => (typeof st.say === 'string' ? [st.say] : []));
+const linesOf = (steps: Record<string, unknown>[]): string[] => steps.flatMap((st) => (typeof st.say === 'string' ? [st.say] : []));
+const LINES = linesOf(STEPS);
 
 const FLAG_KEY = 'train-game.kakunin.v1';
 const FLAG_VALUE = '80eaae856b4fc19a430f4f92ea3a592073d382618d7915a5397176eb6c7a1f0f';
@@ -197,6 +207,8 @@ test('ending movie: the check mode lists it; the `?movie=` lock on a kid\'s iPad
   const movie = page.locator('#kakunin-list .kakunin-chapter[data-chapter="movie"]');
   await expect(movie).toContainText('ムービー');
   await expect(movie.locator('[data-movie="ending"]')).toContainText('つながった ワールドレール');
+  // v1.12: and the opening.
+  await expect(movie.locator('[data-movie="opening"]')).toContainText('ワンダーごうと ふしぎな せかい');
   await movie.locator('[data-movie="ending"]').click();
   await expect(page).toHaveURL(/\?movie=ending&kakunin=1/);
   await expect(page.locator('#movie-play')).toBeVisible({ timeout: 90_000 });
@@ -284,7 +296,21 @@ test('「もういちど みる」 on the title (a kid\'s iPad, seen before): th
   await page.goto('/');
   await expect(page.locator('#title-screen')).toBeVisible({ timeout: 90_000 });
   await page.screenshot({ path: resolve(OUT, 'movie-title-again.png') });
+  // v1.12: two movies to watch again (1-1 cleared counts the opening as watched): a small choice, the opening first.
   await page.locator('#title-movie').click();
+  const choices = page.locator('#title-movies .title-movie-choice');
+  await expect(choices).toHaveCount(2);
+  await expect(choices.nth(0)).toHaveAttribute('data-movie', 'opening');
+  await expect(choices.nth(0)).toContainText('ワンダーごうと ふしぎな せかい');
+  await expect(choices.nth(1)).toHaveAttribute('data-movie', 'ending');
+  await expect(choices.nth(1)).toContainText('つながった ワールドレール');
+  await page.screenshot({ path: resolve(OUT, 'movie-title-choice.png') });
+  // 「もどる」 closes it; the title stays.
+  await page.locator('#title-movies-close').click();
+  await expect(page.locator('#title-movies')).toHaveCount(0);
+  await expect(page.locator('#title-screen')).toBeVisible();
+  await page.locator('#title-movie').click();
+  await page.locator('#title-movies [data-movie="ending"]').click();
   await expect(page).toHaveURL(/\?movie=ending$/, { timeout: 30_000 });
   await expect(page.locator('#movie-play')).toBeVisible({ timeout: 90_000 });
   await page.locator('#movie-play').click();
@@ -294,6 +320,151 @@ test('「もういちど みる」 on the title (a kid\'s iPad, seen before): th
   await page.locator('#card-button').click();
   await expect(page.locator('#app')).toHaveAttribute('data-stage', '1-1', { timeout: 60_000 });
   await expect(page.locator('#title-screen')).toBeVisible({ timeout: 30_000 });
+  expect(errors).toEqual([]);
+  await close();
+});
+
+// ---- v1.12 (2026-10-08): the opening movie 「ワンダーごうと ふしぎな せかい」, before a new save's first 1-1 ----
+
+const OPENING = JSON.parse(readFileSync(resolve(here, '../../src/movies/opening.json'), 'utf8')) as MovieFile & { title: string };
+const O_STEPS = OPENING.cutscenes[OPENING.movie.play];
+const O_BEATS = beatsOf(O_STEPS);
+const O_SETTLE = settleOf(O_STEPS);
+const O_LINES = linesOf(O_STEPS);
+const NEW_SAVE = JSON.stringify({ schema: 1, cleared: [], abilities: [], records: [], mapLinks: [] });
+const mapLinksNow = (page: Page): Promise<string[]> => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? '{}').mapLinks ?? [], SAVE_KEY);
+
+test('opening movie: a new save\'s 「はじめる」 plays it to its card (letterbox, every beat, a screenshot per shot), then 1-1 from its start', async ({ page }) => {
+  test.setTimeout(480_000);
+  const errors = watchErrors(page);
+  await recordBubbles(page);
+  await page.goto('/');
+  await expect(page.locator('#title-screen')).toBeVisible({ timeout: 90_000 });
+  // A new save: nothing to watch again yet.
+  await expect(page.locator('#title-movie')).toHaveCount(0);
+  await page.locator('#title-start').click();
+  await expect(page).toHaveURL(/\?movie=opening&then=1-1$/, { timeout: 30_000 });
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  await expect(page.locator('#app')).toHaveAttribute('data-movie', 'opening');
+  await expect(page.locator('#movie-start h1')).toHaveText(OPENING.title);
+  await page.locator('#movie-play').click();
+  await expect(page.locator('#app')).toHaveAttribute('data-movie-state', 'playing');
+  await expect(page.locator('#app')).toHaveAttribute('data-letterbox', '1');
+  for (const id of ['#whistle', '#lever', '#pause']) await expect(page.locator(id)).toHaveCount(0);
+
+  for (const [i, beat] of O_BEATS.entries()) {
+    await page.waitForFunction((b) => (document.getElementById('app')?.dataset.beats ?? '').split(',').includes(b), beat, { timeout: 120_000, polling: 100 });
+    if (beat === 'black') {
+      // The first line on the black screen.
+      await expect(page.locator('#caption')).toBeVisible();
+      await expect(page.locator('#caption')).toHaveText('せかいは、ワールドレールで つながっている。');
+    }
+    await page.waitForTimeout(O_SETTLE.get(beat) ?? 900);
+    const { shot, time } = await page.evaluate(() => ({ shot: document.getElementById('app')?.dataset.shot ?? '', time: document.getElementById('app')?.dataset.time ?? '' }));
+    await page.screenshot({ path: resolve(OUT, `movie-opening-${i + 1}.png`) });
+    console.log(`movie-opening-${i + 1}.png: beat ${beat}, shot ${shot}, ${time} s`);
+  }
+  expect(await beats(page)).toEqual(O_BEATS);
+
+  // The card: 「たんけんたい にゅうたい！」 with the team's badge, 「よろしく！」.
+  await expect(page.locator('#card')).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('#app')).toHaveAttribute('data-movie-state', 'card');
+  await expect(page.locator('#card')).toContainText('たんけんたい にゅうたい');
+  await expect(page.locator('#card svg.card-icon')).toHaveCount(1);
+  await expect(page.locator('#card-button')).toHaveText(OPENING.movie.card.button);
+  await page.screenshot({ path: resolve(OUT, 'movie-opening-card.png') });
+
+  // Every line was said (Piko's), in the usual bubble, above the bottom bar.
+  const { lines, shots } = await page.evaluate(() => {
+    const w = window as unknown as { __lines: { text: string; bottom: number }[]; __shots: string[] };
+    return { lines: w.__lines, shots: w.__shots };
+  });
+  expect(lines.map((l) => l.text)).toEqual(O_LINES);
+  const viewport = page.viewportSize()!;
+  const bar = await page.locator('.letterbox-bar.is-bottom').boundingBox();
+  for (const l of lines) expect(l.bottom, `"${l.text}" above the bottom bar`).toBeLessThanOrEqual((bar?.y ?? viewport.height) + 1);
+  // The ring from the sky, the creatures, the World Rail and the headquarters, the jobs, the train, Piko at its window.
+  for (const want of ['wide:point', 'close:dino', 'close:squirrel', 'close:seal', 'close:hare', 'close:tanuki', 'medium:point', 'medium:car-0', 'close:crew-c', 'medium:train', 'close:car-0', 'close:piko', 'close:point']) {
+    expect(shots, want).toContain(want);
+  }
+  expect(Number(await page.locator('#app').getAttribute('data-acts'))).toBeGreaterThanOrEqual(12);
+  const draws = Number(await page.locator('#app').getAttribute('data-draws-max'));
+  const tris = Number(await page.locator('#app').getAttribute('data-tris-max'));
+  console.log(`opening budget: ${draws} draw calls, ${tris} triangles at most`);
+  expect(draws).toBeLessThanOrEqual(200);
+  expect(tris).toBeLessThanOrEqual(100_000);
+
+  // 「よろしく！」: watched (the save keeps it), and on into 1-1 from its start, no title: the partner's two lines in
+  // the cab, then the first mission's card.
+  await page.locator('#card-button').click();
+  await expect(page).toHaveURL(/\?stage=1-1&go=1$/, { timeout: 30_000 });
+  await expect(page.locator('#app')).toHaveAttribute('data-stage', '1-1', { timeout: 90_000 });
+  expect(await mapLinksNow(page)).toContain('movie:opening');
+  await expect(page.locator('#title-screen')).toHaveCount(0);
+  await expect(page.locator('#bubble')).toHaveAttribute('data-line', 'けいじばんに さいしょの しごとが きてる。', { timeout: 30_000 });
+  await expect(page.locator('#app')).toHaveAttribute('data-camera', 'cab');
+  for (let i = 0; i < 40 && !(await page.locator('#card').isVisible()); i++) {
+    if (await page.locator('#bubble').isVisible()) await page.locator('#bubble').dispatchEvent('pointerdown');
+    await page.waitForTimeout(150);
+  }
+  await expect(page.locator('#card')).toContainText('はじめての うんてん');
+  expect(await page.locator('#app').getAttribute('data-frame-errors')).toBeNull();
+  expect(errors).toEqual([]);
+});
+
+test('opening movie on a kid\'s iPad: the first time (sent by the map\'s 1-1) no "▶▶"; once watched, 「もういちど みる」 plays it with "▶▶"', async ({ browser }) => {
+  test.setTimeout(300_000);
+  const { page, close } = await kidPage(browser, NEW_SAVE);
+  const errors = watchErrors(page);
+  await page.goto('/');
+  await expect(page.locator('#title-screen')).toBeVisible({ timeout: 90_000 });
+  await expect(page.locator('#title-movie')).toHaveCount(0);
+  // The map's 1-1 (the next island, it bounces) on a new save: the opening first.
+  await page.locator('#title-map').click();
+  await expect(page.locator('#map')).toBeVisible();
+  await page.locator('.map-island[data-island="1-1"]').click({ force: true });
+  await expect(page).toHaveURL(/\?movie=opening&then=1-1$/, { timeout: 30_000 });
+  await expect(page.locator('#movie-play')).toBeVisible({ timeout: 90_000 });
+  await page.locator('#movie-play').click();
+  await expect(page.locator('#app')).toHaveAttribute('data-movie-state', 'playing');
+  await page.waitForFunction(() => (document.getElementById('app')?.dataset.beats ?? '').split(',').includes('dino'), undefined, { timeout: 120_000 });
+  await expect(page.locator('#skip')).toHaveCount(0);
+
+  // Watched (as its card leaves it): the title offers it again (the only movie: the button plays it), with "▶▶".
+  await page.evaluate(([k]) => localStorage.setItem(k, JSON.stringify({ schema: 1, cleared: [], abilities: [], records: [], mapLinks: ['movie:opening'] })), [SAVE_KEY] as const);
+  await page.goto('/');
+  await expect(page.locator('#title-screen')).toBeVisible({ timeout: 90_000 });
+  await expect(page.locator('#title-movie')).toHaveText('もういちど みる');
+  await page.locator('#title-movie').click();
+  await expect(page).toHaveURL(/\?movie=opening$/, { timeout: 30_000 });
+  await expect(page.locator('#movie-play')).toBeVisible({ timeout: 90_000 });
+  await page.locator('#movie-play').click();
+  await expect(page.locator('#skip')).toBeVisible({ timeout: 30_000 });
+  await page.locator('#skip').dispatchEvent('pointerdown');
+  await expect(page.locator('#card')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('#card')).toContainText('たんけんたい にゅうたい');
+  await page.screenshot({ path: resolve(OUT, 'movie-opening-skip.png') });
+  // From the title: back to the title after its card.
+  await page.locator('#card-button').click();
+  await expect(page.locator('#title-screen')).toBeVisible({ timeout: 90_000 });
+  expect(new URL(page.url()).search).toBe('');
+  expect(errors).toEqual([]);
+  await close();
+});
+
+test('opening movie: a save that has cleared 1-1 is not sent to it (「はじめる」 starts 1-1 at once); 「もういちど みる」 offers it', async ({ browser }) => {
+  test.setTimeout(180_000);
+  // An older save (before the opening was made): 1-1 cleared, the opening never watched.
+  const { page, close } = await kidPage(browser, JSON.stringify({ schema: 1, cleared: ['1-1'], abilities: ['whistle'], records: [], mapLinks: ['1-1>1-2'] }));
+  const errors = watchErrors(page);
+  await page.goto('/');
+  await expect(page.locator('#title-screen')).toBeVisible({ timeout: 90_000 });
+  await expect(page.locator('#title-movie')).toBeVisible();
+  await page.locator('#title-start').click();
+  await expect(page.locator('#title-screen')).toHaveCount(0);
+  await expect(page.locator('#bubble')).toHaveAttribute('data-line', 'けいじばんに さいしょの しごとが きてる。', { timeout: 30_000 });
+  expect(new URL(page.url()).search).toBe('');
+  expect(await mapLinksNow(page)).not.toContain('movie:opening');
   expect(errors).toEqual([]);
   await close();
 });

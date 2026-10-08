@@ -81,12 +81,15 @@ export function listMovieIds(): string[] {
     .sort();
 }
 
-/** A movie's title and the stages that open it (its `unlock.requires`), without building it; null: no such movie. */
-export async function peekMovie(id: string): Promise<{ id: string; title: string; unlock: { requires: string[] } } | null> {
+/**
+ * A movie's title, the stages that open it (its `unlock.requires`) and (v1.12, the opening) the stage it plays before
+ * (`movie.before`), without building it; null: no such movie.
+ */
+export async function peekMovie(id: string): Promise<{ id: string; title: string; unlock: { requires: string[] }; requires: string[]; before?: string } | null> {
   const load = movieModules[`../movies/${id}.json`];
   if (!load) return null;
   const file = ((await load()) as { default: StageFile }).default;
-  return { id: file.id, title: file.title, unlock: file.unlock };
+  return { id: file.id, title: file.title, unlock: file.unlock, requires: file.unlock.requires, before: file.movie?.before };
 }
 
 /** v1.12: a movie, built like a stage (the checks, the rail network, the props); it must say what it plays. */

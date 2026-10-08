@@ -89,6 +89,47 @@ export function saveProgress(progress: Progress): void {
  */
 export const movieSeen = (id: string): string => `movie:${id}`;
 
+/**
+ * v1.12 (the opening, 2026-10-08): what the save rules of a movie need from its file: the stages that open it
+ * (`unlock.requires`) and the stage it plays before (`movie.before`, src/stage/loader.ts peekMovie).
+ */
+export interface MovieRules {
+  id: string;
+  requires: readonly string[];
+  before?: string;
+}
+
+/**
+ * The save has watched the movie: its mark, or (v1.12) the stage it plays before is cleared (an older save that went
+ * through that stage before the movie was made, or an あいことば that brings the clear back: shown as watched).
+ */
+export function movieWatched(movie: MovieRules, progress: Pick<Progress, 'cleared' | 'mapLinks'>): boolean {
+  return progress.mapLinks.includes(movieSeen(movie.id)) || (movie.before !== undefined && progress.cleared.includes(movie.before));
+}
+
+/**
+ * The title's 「もういちど みる」 offers the movie: watched, or (v1.11, PR11b) opened by its clears (every stage of a
+ * non-empty `requires` cleared: the ending once 6-2 is cleared).
+ */
+export function movieRewatchable(movie: MovieRules, progress: Pick<Progress, 'cleared' | 'mapLinks'>): boolean {
+  return movieWatched(movie, progress) || (movie.requires.length > 0 && movie.requires.every((r) => progress.cleared.includes(r)));
+}
+
+/** v1.12 (the opening): the movie plays now, before stage `stageId` starts from its beginning (not watched yet). */
+export function movieDueBefore(movie: MovieRules, stageId: string, progress: Pick<Progress, 'cleared' | 'mapLinks'>): boolean {
+  return movie.before === stageId && !movieWatched(movie, progress);
+}
+
+/**
+ * The marks of the movies these clears count as watched (an あいことば brings them back: PR12): one its clears have
+ * opened (the ending after 6-2), and (v1.12) one that plays before a cleared stage (the opening once 1-1 is cleared).
+ */
+export function moviesWatchedBy(movies: readonly MovieRules[], cleared: readonly string[]): string[] {
+  return movies
+    .filter((m) => (m.requires.length > 0 && m.requires.every((r) => cleared.includes(r))) || (m.before !== undefined && cleared.includes(m.before)))
+    .map((m) => movieSeen(m.id));
+}
+
 /** Adds items to a list field and saves. Returns true when something new was added. */
 export function addToProgress(field: 'cleared' | 'abilities' | 'records' | 'mapLinks', items: string[]): boolean {
   const progress = loadProgress();

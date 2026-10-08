@@ -1,10 +1,10 @@
-import { BufferGeometry, Color, Float32BufferAttribute, type Group, Vector3 } from 'three';
-import { hash, mix, solid } from './placeholder-kit';
+import { BoxGeometry, BufferGeometry, Color, CylinderGeometry, Float32BufferAttribute, type Group, SphereGeometry, Vector3 } from 'three';
+import { hash, mix, part, solid } from './placeholder-kit';
 
 /**
- * v1.12 (えんしゅつ, ticket 0025): the ending movie's diorama "つながった ワールドレール" (src/movies/ending.json), drawn in code
- * until the models are built: a small round island for each chapter (its ground's colour and a sandy rim at the
- * water). The castle island carries 6-1's own castle ("sakasa-castle", src/view/three/castle-placeholders.ts) at 0.42
+ * v1.12 (えんしゅつ, ticket 0025): the movies' diorama (the ending "つながった ワールドレール", src/movies/ending.json, and
+ * v1.12 the opening, src/movies/opening.json, ticket 0026), drawn in code until the models are built: a small round
+ * island for each chapter (its ground's colour and a sandy rim at the water), and the opening's notice board. The castle island carries 6-1's own castle ("sakasa-castle", src/view/three/castle-placeholders.ts) at 0.42
  * of its size (PR11b: the stand-in "ring-castle" is gone).
  *
  * Pastel colours, no faces, no letters, no crests. Each island stands in a calm sea (it does not float: no rock
@@ -90,8 +90,66 @@ function isle(name: string): Group {
   return solid(name, [g], undefined, false);
 }
 
+/**
+ * v1.12 (the opening movie, ticket 0026): "notice-board", the headquarters' けいじばん: a cork board on two posts under a
+ * little red roof, about 3.0 m wide and 3.1 m tall, with three pictures pinned to it (the day's jobs, no letters): a
+ * station (a roof on two posts over a platform), a team member (a round head in the team's blue cap with its yellow
+ * lamp, a blue coat) and a parcel (a box tied with a red ribbon). Origin at the bottom centre, the pictures face +Z.
+ * About 500 triangles, one mesh.
+ */
+function noticeBoard(): Group {
+  const WOOD = '#8A6440';
+  const DARK = '#6E5238';
+  const parts: BufferGeometry[] = [];
+  const box = (w: number, h: number, d: number, color: string, at: [number, number, number], rot: [number, number, number] = [0, 0, 0]): void => {
+    parts.push(part(new BoxGeometry(w, h, d), color, { at, rot }));
+  };
+  /** A flat round disc facing +Z. */
+  const disc = (r: number, color: string, at: [number, number, number]): void => {
+    parts.push(part(new CylinderGeometry(r, r, 0.012, 14), color, { at, rot: [Math.PI / 2, 0, 0] }));
+  };
+  // Two posts, the board in its frame, the little roof.
+  for (const x of [-1.25, 1.25]) box(0.16, 2.75, 0.16, DARK, [x, 1.375, -0.02]);
+  box(2.8, 1.62, 0.1, '#C99B63', [0, 1.95, 0]);
+  box(2.96, 0.1, 0.14, WOOD, [0, 2.8, 0]);
+  box(2.96, 0.1, 0.14, WOOD, [0, 1.1, 0]);
+  for (const x of [-1.43, 1.43]) box(0.1, 1.8, 0.14, WOOD, [x, 1.95, 0]);
+  box(3.2, 0.1, 0.62, '#C0503F', [0, 3.0, 0.08], [-0.22, 0, 0]);
+  // Three papers, a little askew, a pin at the top of each.
+  const papers: { x: number; tilt: number; pin: string }[] = [
+    { x: -0.88, tilt: 0.05, pin: '#E23B3B' },
+    { x: 0, tilt: -0.03, pin: '#F2C14E' },
+    { x: 0.88, tilt: 0.04, pin: '#3E7BD6' },
+  ];
+  for (const { x, tilt, pin } of papers) {
+    box(0.74, 0.96, 0.02, '#FBF7EC', [x, 1.94, 0.065], [0, 0, tilt]);
+    parts.push(part(new SphereGeometry(0.05, 6, 4), pin, { at: [x, 2.35, 0.09] }));
+  }
+  const z = 0.08;
+  // 1: a station: a blue roof on two posts over a grey platform.
+  const sx = papers[0].x;
+  box(0.56, 0.07, 0.01, '#3E7BD6', [sx, 2.15, z]);
+  for (const dx of [-0.2, 0.2]) box(0.04, 0.34, 0.01, '#6B7B8C', [sx + dx, 1.95, z]);
+  box(0.6, 0.08, 0.01, '#9AA0A8', [sx, 1.74, z]);
+  box(0.6, 0.025, 0.01, '#F2C14E', [sx, 1.79, z]);
+  // 2: a team member: a round face under a blue cap with its yellow lamp, a blue coat (no eyes, no mouth: a sign).
+  const px = papers[1].x;
+  disc(0.12, '#F2C29A', [px, 2.08, z]);
+  box(0.26, 0.08, 0.01, '#2F57A8', [px, 2.19, z + 0.002]);
+  disc(0.035, '#FFD84A', [px, 2.24, z + 0.004]);
+  box(0.32, 0.3, 0.01, '#2F57A8', [px, 1.79, z]);
+  // 3: a parcel: a box with a red ribbon round it both ways.
+  const bx = papers[2].x;
+  box(0.4, 0.34, 0.01, '#C99A5B', [bx, 1.9, z]);
+  box(0.4, 0.05, 0.01, '#D6453A', [bx, 1.9, z + 0.002]);
+  box(0.05, 0.34, 0.01, '#D6453A', [bx, 1.9, z + 0.002]);
+  box(0.12, 0.06, 0.01, '#D6453A', [bx, 2.1, z + 0.004]);
+  return solid('notice-board', parts);
+}
+
 /** The drawn stand-in for `name`, or null when it is not one of these. */
 export function buildEndingPlaceholder(name: string): Group | null {
   if (name in ISLES) return isle(name);
+  if (name === 'notice-board') return noticeBoard();
   return null;
 }

@@ -5,8 +5,8 @@ import { loadSettings, VOLUME_GAIN } from '../core/settings';
 import { CutsceneSkip, runCutscene, type CutscenePorts } from '../cutscene/runner';
 import { TrainWatch } from '../cutscene/train-watch';
 import { loadMovie } from '../stage/loader';
-import type { CutsceneStep, ShotDef } from '../stage/types';
-import { RESOLUTION_MIN_FPS, RESOLUTION_SLOW_SECONDS, RESOLUTION_STEPS } from '../train/params';
+import type { CutsceneStep, ResolvedStation, ShotDef } from '../stage/types';
+import { RESOLUTION_MIN_FPS, RESOLUTION_SLOW_SECONDS, RESOLUTION_STEPS, TRAIN } from '../train/params';
 import { Train } from '../train/train';
 import { createBubbles } from '../ui/bubble';
 import { createCaption } from '../ui/caption';
@@ -52,6 +52,8 @@ export async function playMovie(id: string, app: HTMLElement, viewEl: HTMLElemen
   const events = new StageEventBus();
   const view = createSceneView(new URLSearchParams(location.search));
   await view.init(viewEl, stage, stage.network);
+  // v1.12 (the opening): Piko is the movie's own figure (`spawn` "partner"); the cab's one is not drawn.
+  view.setPartnerShown?.(false);
   events.on('event', (e) => view.onStageEvent(e));
   const settings = loadSettings();
   const audio = new AudioEngine();
@@ -70,11 +72,12 @@ export async function playMovie(id: string, app: HTMLElement, viewEl: HTMLElemen
   app.dataset.shots = '0';
   app.dataset.acts = '0';
 
-  // The movie's own screen: bubbles, captions, the fade (black at first), the letterbox, "▶▶".
+  // The movie's own screen: bubbles, the fade (black at first), captions (over the black: v1.12 the opening's first
+  // line), the letterbox, "▶▶".
   const bubbles = createBubbles(uiEl, PARTNER_NAME);
-  const caption = createCaption(uiEl);
   const fade = createFade(uiEl);
   void fade(true, 0);
+  const caption = createCaption(uiEl);
   const letterbox = createLetterbox(uiEl, app);
   let skip: CutsceneSkip | null = null;
   const skipButton = options.skippable ? createSkipButton(uiEl, () => skip?.request()) : null;
@@ -195,7 +198,13 @@ export async function playMovie(id: string, app: HTMLElement, viewEl: HTMLElemen
     },
     // Nothing to press in a movie.
     press: async () => undefined,
-    door: () => undefined,
+    // v1.12 (the opening): the doors on the platform side of the station the train stands at (looks only).
+    door: (open) => {
+      const station = stationNear(stage.stations, train.state.railId, train.state.s);
+      if (!station) return;
+      events.post({ type: 'door', open, stationId: station.def.id });
+      audio.playDoor(open);
+    },
     festival: async () => {
       events.post({ type: 'festival' });
       await waitSeconds(2.5);
@@ -266,7 +275,7 @@ export async function playMovie(id: string, app: HTMLElement, viewEl: HTMLElemen
   }
   app.dataset.movieState = 'card';
   audio.playFanfare();
-  await showCard(uiEl, movie.card.title, movie.card.button, undefined, skipped ? 0.8 : 0);
+  await showCard(uiEl, movie.card.title, movie.card.button, movie.card.icon, skipped ? 0.8 : 0);
   app.dataset.movieState = 'done';
   drawing = false;
   options.onDone(audio);
@@ -291,6 +300,19 @@ function startTap(root: HTMLElement, title: string): Promise<void> {
     el.append(h, b);
     root.appendChild(el);
   });
+}
+
+/**
+ * v1.12 (the opening): the station the train stands at: on its rail, its stop line within half a train of the lead
+ * car's middle (`s`); null when none.
+ */
+function stationNear(stations: ResolvedStation[], railId: string, s: number): ResolvedStation | null {
+  let best: ResolvedStation | null = null;
+  for (const st of stations) {
+    if (st.def.railId !== railId || Math.abs(st.def.at - s) > TRAIN.length * 1.5) continue;
+    if (!best || Math.abs(st.def.at - s) < Math.abs(best.def.at - s)) best = st;
+  }
+  return best;
 }
 
 /** The cutscene's last shot (what a skip cuts to). */

@@ -1,0 +1,1 @@
+{"_expect": "\"trainLight\" must be true or false", "_base": "opening", "_edit": [{"path": "cutscenes.movie.0", "value": {"trainLight": "on"}}]}

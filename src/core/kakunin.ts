@@ -128,8 +128,9 @@ export function abilitiesTaughtBefore(file: StageFile, from: number): AbilityId[
 /**
  * v1.12 (えんしゅつ): whether `?movie=<id>` must bounce to the title: not with the flag or where the lock is off; a
  * movie the save has opened (every stage of its `unlock.requires` cleared; the ending: 6-2) plays for anyone, so the
- * game can send the child there after 6-2 and from the title's 「もういちど みる」. An unknown movie, one with nothing
- * to open it, and the check mode's own `kakunin=` bounce.
+ * game can send the child there after 6-2 and from the title's 「もういちど みる」. v1.12 (the opening, 2026-10-08): a
+ * movie that needs nothing (`requires: []`, the opening) plays for anyone (a new save is sent there before 1-1). An
+ * unknown movie and the check mode's own `kakunin=` bounce.
  */
 export async function movieBounces(
   params: URLSearchParams,
@@ -141,8 +142,7 @@ export async function movieBounces(
   if (params.has('kakunin')) return true;
   const movie = await peek(id);
   if (!movie) return true;
-  const needs = movie.unlock.requires;
-  return !(needs.length > 0 && needs.every((r) => progress.cleared.includes(r)));
+  return !movie.unlock.requires.every((r) => progress.cleared.includes(r));
 }
 
 /** v1.12: `?movie=<id>&kakunin=1`: a movie watched from the check mode's list (back to the list after its card). */
