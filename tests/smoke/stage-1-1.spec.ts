@@ -38,6 +38,12 @@ test('stage 1-1: title, opening, and a graded stop at the first station', async 
     if (r.status() >= 400) errors.push(`${r.status()} ${r.url()}`);
   });
 
+  // v1.12 (the opening, 2026-10-08): this save has watched the opening movie (movie.spec.ts plays it before a new
+  // save's first 1-1), so 「はじめる」 goes straight into 1-1.
+  await page.addInitScript(() => {
+    const key = 'train-game.progress.v1';
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ schema: 1, cleared: [], abilities: [], records: [], mapLinks: ['movie:opening'] }));
+  });
   await page.goto('/?stage=1-1');
   const app = page.locator('#app');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
@@ -55,15 +61,12 @@ test('stage 1-1: title, opening, and a graded stop at the first station', async 
   await expect(page.locator('#map')).toHaveCount(0);
   await page.locator('#title-start').click();
 
-  // Opening: caption, partner lines with camera moves, the badge card, then the mission 1 card.
-  await expect(page.locator('#caption')).toBeVisible();
-  await page.locator('#caption').dispatchEvent('click');
+  // Opening (v1.12: the rest is the opening movie's): in the cab, the partner's two lines, then the mission 1 card.
   await expect(page.locator('#bubble')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('#bubble')).toHaveAttribute('data-line', 'けいじばんに さいしょの しごとが きてる。');
+  await expect(page.locator('#caption')).toBeHidden();
+  await expect(app).toHaveAttribute('data-camera', 'cab');
   await page.screenshot({ path: resolve(OUT, '11-opening.png') });
-  await tapUntil(page, '#card');
-  await expect(page.locator('#card')).toContainText('にゅうたい');
-  await page.screenshot({ path: resolve(OUT, '11c-badge.png') });
-  await page.locator('#card-button').click();
   await tapUntil(page, '#card');
   await expect(page.locator('#card')).toContainText('はじめての うんてん');
   await page.locator('#card-button').click();

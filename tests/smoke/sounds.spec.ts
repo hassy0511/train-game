@@ -20,7 +20,7 @@ interface Measure {
   joints?: number;
 }
 
-const SONG_IDS = ['title', 'town', 'valley', 'forest', 'meadow', 'volcano', 'hurry', 'sky', 'umi', 'kawa', 'hoshimatsuri', 'koori', 'mura', 'yuki', 'yoru', 'omocha', 'kagami', 'shiro', 'oikake', 'tsunagari', 'ending', 'sekai'];
+const SONG_IDS = ['title', 'opening', 'town', 'valley', 'forest', 'meadow', 'volcano', 'hurry', 'sky', 'umi', 'kawa', 'hoshimatsuri', 'koori', 'mura', 'yuki', 'yoru', 'omocha', 'kagami', 'shiro', 'oikake', 'tsunagari', 'ending', 'sekai'];
 /** v1.11 (5-2): the toy town's effects (PHASE9_CHAPTER5_6 第 5 部 §10). */
 const TOY_SOUNDS = ['wind-up', 'band-fanfare', 'band-step', 'spin-turn', 'spin-good', 'spin-stop', 'ball-pit', 'toy-puff'];
 /** v1.11 (PR5): the magnet light's effects (PHASE9_CHAPTER5_6 第 2 部 M13, the group "じしゃく"). */

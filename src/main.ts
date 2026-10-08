@@ -3,7 +3,7 @@ import { Whistle } from './actions/whistle';
 import { AudioEngine } from './audio/audio';
 import { GAME_TITLE, GAME_TITLE_LINES, PARTNER_NAME } from './config';
 import { StageEventBus } from './core/stage-events';
-import { addToProgress, loadProgress, movieSeen, setResume, startSandbox, type Resume } from './core/progress';
+import { addToProgress, loadProgress, movieDueBefore, movieRewatchable, movieSeen, movieWatched, setResume, startSandbox, type Resume } from './core/progress';
 import { abilitiesTaughtBefore, kakuninMission, kakuninRunAllowed, movieBounces, stageBounces, stageLockActive } from './core/kakunin';
 import { ABILITY_CARD_TITLES, ABILITY_NAMES, abilityInUse, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
@@ -384,11 +384,13 @@ const SKIP_CARD_GUARD_SECONDS = 0.8;
 
 /**
  * v1.12 (えんしゅつ): `?movie=<id>`: a movie (src/movie/player.ts) instead of a stage. Behind the かくにん lock (dev and
- * browser automation are not locked), or opened by the save (the ending once 6-2 is cleared). From the check mode's
- * list (`kakunin=1`) it goes back to the list after its card; otherwise to the title, or v1.11 (PR11b) with `then=map`
- * (the game sent the child here after the clear that opened it) on to the map in the same page (its ends, chapter
- * 6's; the movie's 「▶ みる」 tap has unlocked the sound) and from there to the title. The first time the card is closed
- * the save keeps "movie:<id>" (movieSeen): from then on "▶▶" skips it.
+ * browser automation are not locked), or opened by the save (the ending once 6-2 is cleared; v1.12 the opening, which
+ * needs nothing). From the check mode's list (`kakunin=1`) it goes back to the list after its card; otherwise to the
+ * title, or v1.11 (PR11b) with `then=map` (the game sent the child here after the clear that opened it) on to the map
+ * in the same page (its ends, chapter 6's; the movie's 「▶ みる」 tap has unlocked the sound) and from there to the
+ * title, or v1.12 with `then=<stage id>` (the opening, before the first start of 1-1) on into that stage. The first
+ * time the card is closed the save keeps "movie:<id>" (movieSeen): from then on "▶▶" skips it (movieWatched: or the
+ * stage it plays before is cleared).
  */
 async function bootMovie(params: URLSearchParams, id: string): Promise<void> {
   if (await movieBounces(params, loadProgress(), peekMovie)) {
@@ -397,7 +399,9 @@ async function bootMovie(params: URLSearchParams, id: string): Promise<void> {
   }
   const kakunin = params.get('kakunin') === '1' && kakuninRunAllowed();
   const owner = kakunin || !stageLockActive();
-  const seen = loadProgress().mapLinks.includes(movieSeen(id));
+  const rules = await peekMovie(id);
+  const seen = rules !== null && movieWatched(rules, loadProgress());
+  const then = params.get('then');
   document.title = GAME_TITLE;
   app.dataset.build = __BUILD_ID__;
   await playMovie(id, app, viewEl, uiEl, {
@@ -409,7 +413,12 @@ async function bootMovie(params: URLSearchParams, id: string): Promise<void> {
         return;
       }
       addToProgress('mapLinks', [movieSeen(id)]);
-      if (params.get('then') !== 'map') {
+      // v1.12 (the opening): on into the stage it played before (from its beginning, no title).
+      if (then !== null && listStageIds().includes(then)) {
+        goToStage(then);
+        return;
+      }
+      if (then !== 'map') {
         location.href = location.pathname;
         return;
       }
@@ -438,22 +447,49 @@ async function dueMovie(stageId: string): Promise<string | null> {
   return null;
 }
 
-/** v1.11 (PR11b): a movie the save has opened (every stage of its `unlock.requires` cleared), for the title's button. */
-async function openedMovie(): Promise<string | null> {
-  const cleared = loadProgress().cleared;
+/**
+ * v1.11 (PR11b): the movies the title's 「もういちど みる」 offers (the ending once 6-2 has opened it; v1.12 the opening
+ * once watched), in story order: one that plays before a stage (the opening) first.
+ */
+async function openedMovies(): Promise<{ id: string; title: string }[]> {
+  const progress = loadProgress();
+  const movies = (await Promise.all(listMovieIds().map((id) => peekMovie(id)))).filter((m) => m !== null);
+  return movies
+    .filter((m) => movieRewatchable(m, progress))
+    .sort((a, b) => Number(b.before !== undefined) - Number(a.before !== undefined))
+    .map(({ id, title }) => ({ id, title }));
+}
+
+/**
+ * v1.12 (the opening, 2026-10-08): the movie that plays before stage `stageId` starts from its beginning (its
+ * `movie.before`; the save has neither cleared that stage nor watched the movie), else null.
+ */
+async function movieBefore(stageId: string): Promise<string | null> {
+  const progress = loadProgress();
   for (const id of listMovieIds()) {
-    const needs = (await peekMovie(id))?.unlock.requires ?? [];
-    if (needs.length > 0 && needs.every((r) => cleared.includes(r))) return id;
+    const movie = await peekMovie(id);
+    if (movie && movieDueBefore(movie, stageId, progress)) return id;
   }
   return null;
 }
 
 /**
- * v1.12, v1.11 (PR11b): to a movie (a page of its own: the stage's scene is let go). `thenMap`: after its card the map
- * opens (after the clear that opened it); otherwise back to the title (the title's 「もういちど みる」).
+ * v1.12, v1.11 (PR11b): to a movie (a page of its own: the stage's scene is let go). `then` "map": after its card the
+ * map opens (after the clear that opened it); v1.12 a stage id: on into that stage (the opening, before 1-1);
+ * otherwise back to the title (the title's 「もういちど みる」).
  */
-export function goToMovie(id: string, thenMap = false): void {
-  location.search = `?movie=${encodeURIComponent(id)}${thenMap ? '&then=map' : ''}`;
+export function goToMovie(id: string, then?: string): void {
+  location.search = `?movie=${encodeURIComponent(id)}${then ? `&then=${encodeURIComponent(then)}` : ''}`;
+}
+
+/**
+ * v1.12 (the opening): a stage from the title (its map): the movie that plays before it first, when it is due (from
+ * the beginning only; "つづきから" never shows it).
+ */
+async function startStage(id: string, resume = false): Promise<void> {
+  const movie = resume ? null : await movieBefore(id);
+  if (movie) goToMovie(movie, id);
+  else goToStage(id, resume);
 }
 
 async function boot(): Promise<void> {
@@ -1993,7 +2029,8 @@ async function boot(): Promise<void> {
     // The title's music box (it starts with the first tap: iPad keeps sound locked until then).
     audio.playMusic('title');
     // v1.11 (PR11b): the ending movie once 6-2 has opened it: 「もういちど みる」 (from the second time on "▶▶" skips it).
-    const movieAgain = await openedMovie();
+    // v1.12: and the opening once watched (two movies: a small choice of them).
+    const moviesAgain = await openedMovies();
     const choice = await showTitle(uiEl, GAME_TITLE, {
       lines: GAME_TITLE_LINES,
       chapters: await chapterStars(),
@@ -2007,7 +2044,7 @@ async function boot(): Promise<void> {
       allCleared: !next && progress.cleared.length > 0,
       onMap: () => {
         void openMap(uiEl, audio, { next: next?.id, closeLabel: 'もどる' }).then((choice) => {
-          if (choice.kind === 'stage') goToStage(choice.id, choice.resume);
+          if (choice.kind === 'stage') void startStage(choice.id, choice.resume);
         });
       },
       onSettings: () => {
@@ -2023,7 +2060,8 @@ async function boot(): Promise<void> {
           () => showParents(uiEl, { buildId: __BUILD_ID__, onProgressChanged: () => (location.href = location.pathname) }),
         );
       },
-      onMovie: movieAgain ? () => goToMovie(movieAgain) : undefined,
+      movies: moviesAgain,
+      onMovie: (id) => goToMovie(id),
       onZukan: () => {
         void loadAllRecords().then((all) => {
           const progress = loadProgress();
@@ -2046,8 +2084,17 @@ async function boot(): Promise<void> {
       goToStage(next.id);
       return;
     } else if (choice === 'start' && resume && resume.stage !== stageId) {
-      goToStage(resume.stage);
+      await startStage(resume.stage);
       return;
+    }
+    // v1.12 (the opening, 2026-10-08): a stage started from its beginning that a movie plays before (1-1 on a new
+    // save: the opening, then back into 1-1 with no title). A check run never shows it.
+    if (choice === 'start' && !kakunin) {
+      const movie = await movieBefore(stageId);
+      if (movie) {
+        goToMovie(movie, stageId);
+        return;
+      }
     }
     orbiting = false;
     delete app.dataset.title;
@@ -2486,7 +2533,7 @@ async function boot(): Promise<void> {
   // (chapter 6's end) opens after its card.
   const opened = await dueMovie(stage.file.id);
   if (opened) {
-    goToMovie(opened, true);
+    goToMovie(opened, 'map');
     return;
   }
   // Back to the map: the rail to the next island grows in, and the child taps it to go on.

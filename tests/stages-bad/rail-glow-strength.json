@@ -1,0 +1,1 @@
+{"_expect": "rail-glow: params.strength must be 0.1–1", "_base": "opening", "_edit": [{"path": "gimmicks.0.params.strength", "value": 3}]}

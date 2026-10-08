@@ -77,6 +77,30 @@ const END_VOICING: Record<string, { root: string; fifth: string; third: string; 
   Am: { root: 'A1', fifth: 'E2', third: 'C4', top: 'E4', bell: ['C7', 'A6'] },
   Bm: { root: 'B1', fifth: 'F#2', third: 'D4', top: 'F#4', bell: ['D7', 'B6'] },
 };
+// ---- v1.12 the opening movie (2026-10-08) -------------------------------------------------------------------
+
+// "opening": one chord a bar (4/4, eighth steps), 32 bars: the intro (4), A (8), B (8), A again with a new end (8), the
+// coda (4).
+const OPEN_CHORDS = 'F Bb F C F C Dm Bb F Gm C C Bb C Am Dm Gm C F C F C Dm Bb Gm C F F Bb C F F'.split(' ');
+/** Per chord: the bass's root and fifth, the two pads' notes and the marimba's three notes going up. */
+const OPEN_VOICING: Record<string, { root: string; fifth: string; pad: [string, string]; arp: [string, string, string] }> = {
+  F: { root: 'F2', fifth: 'C3', pad: ['A3', 'C4'], arp: ['F3', 'A3', 'C4'] },
+  Bb: { root: 'Bb1', fifth: 'F2', pad: ['Bb3', 'D4'], arp: ['F3', 'Bb3', 'D4'] },
+  C: { root: 'C2', fifth: 'G2', pad: ['G3', 'E4'], arp: ['E3', 'G3', 'C4'] },
+  Dm: { root: 'D2', fifth: 'A2', pad: ['A3', 'D4'], arp: ['D3', 'F3', 'A3'] },
+  Gm: { root: 'G1', fifth: 'D2', pad: ['Bb3', 'D4'], arp: ['D3', 'G3', 'Bb3'] },
+  Am: { root: 'A1', fifth: 'E2', pad: ['A3', 'C4'], arp: ['E3', 'A3', 'C4'] },
+};
+/** Bar i of the opening's chords through `bar` (rests before bar `from`). */
+const openBars = (bar: (v: (typeof OPEN_VOICING)[string], i: number) => string, from = 0): string =>
+  OPEN_CHORDS.map((c, i) => (i < from ? '-:8' : bar(OPEN_VOICING[c], i))).join(' | ');
+const OPEN_A = 'C5:2 F5:2 A5:3 G5:1 | G5:2 E5:2 C5:4 | D5:2 F5:2 A5:2 D6:2 | C6:3 Bb5:1 A5:2 F5:2';
+const OPEN_B =
+  'F5:1 G5:1 A5:2 Bb5:2 D6:2 | C6:3 Bb5:1 A5:2 G5:2 | E5:1 F5:1 G5:2 A5:2 C6:2 | D6:4 A5:4 | ' +
+  'Bb5:2 A5:2 G5:2 D5:2 | E5:2 G5:2 C6:2 E6:2 | F6:3 E6:1 D6:2 C6:2 | C6:4 G5:2 E5:2';
+const OPEN_A2 = `${OPEN_A} | Bb5:2 D6:2 G6:3 F6:1 | E6:2 D6:2 C6:2 Bb5:2 | A5:2 C6:2 F5:2 A5:2 | F5:6 -:2`;
+const OPEN_CODA = 'D6:4 C6:2 Bb5:2 | C6:4 E6:4 | F6:8 | -:8';
+
 // ---- v1.11 (PR11b) 6-2 "tsunagari" -----------------------------------------------------------------------------
 
 // One bar (eighth steps) per chord: the bass's root and fifth bouncing, the marimba's broken chord, the pad's two notes.
@@ -631,6 +655,37 @@ export const SONGS: Record<string, Song> = {
         voice: 'drums',
         gain: 0.4,
         notes: `${repeat('k:2 h:2 s:2 h:2', 7)} | k:2 h:1 h:1 s:1 s:1 s:2 | ${repeat('k:2 h:2 s:2 h:2', 7)} | k:2 h:1 h:1 s:1 s:1 s:2 | ${repeat('k:2 h:2 s:2 h:2', 7)} | k:2 h:1 h:1 s:1 s:1 s:2 | ${repeat('k:2 h:2 s:2 h:2', 7)} | k:2 s:2 k:2 -:2`,
+      },
+    ],
+  },
+
+  // v1.12 the opening movie「ワンダーごうと ふしぎな せかい」(2026-10-08): a warm, setting-out 4/4 in F at 104, 32 bars
+  // (about 74 s, then again). A quiet start (the bell's little rising calls over the pads, the black screen and the sky),
+  // then the bell sings the tune with the marimba and the bass (A), a soft trumpet takes it higher (B: off on the
+  // adventure), all together for A again, a short coda. Written for this game: its tune leaps up a fourth and a third
+  // and comes down by step (no school song, anthem, station melody or well-known film or show tune starts so).
+  opening: {
+    id: 'opening',
+    title: 'ワンダーごうと ふしぎな せかい',
+    bpm: 104,
+    stepsPerBeat: 2,
+    tracks: [
+      {
+        voice: 'bell',
+        notes:
+          '-:4 A5:1 C6:1 F6:2 | -:4 F6:1 D6:1 Bb5:2 | -:4 A5:1 C6:1 F6:2 | E6:2 G6:2 C6:4 | ' +
+          `${OPEN_A} | A5:2 C6:2 F6:3 E6:1 | D6:2 Bb5:2 G5:2 Bb5:2 | A5:2 G5:2 E5:2 G5:1 A5:1 | G5:6 -:2 | ` +
+          `${repeat('-:8', 8)} | ${OPEN_A2} | ${OPEN_CODA}`,
+      },
+      { voice: 'lead', gain: 0.38, notes: `${repeat('-:8', 12)} | ${OPEN_B} | ${OPEN_A2} | ${OPEN_CODA}` },
+      { voice: 'wood', gain: 0.35, notes: openBars((v, i) => (i >= 30 ? (i === 30 ? `${v.arp[0]}:2 ${v.arp[1]}:2 ${v.arp[2]}:4` : '-:8') : `${v.arp[0]}:1 ${v.arp[1]}:1 ${v.arp[2]}:1 ${v.arp[1]}:1 ${v.arp[0]}:1 ${v.arp[1]}:1 ${v.arp[2]}:1 ${v.arp[1]}:1`), 4) },
+      { voice: 'bass', gain: 0.8, notes: openBars((v, i) => (i >= 30 ? (i === 30 ? `${v.root}:6 -:2` : '-:8') : `${v.root}:2 -:1 ${v.fifth}:1 ${v.root}:2 ${v.fifth}:2`), 4) },
+      { voice: 'pad', gain: 0.45, notes: openBars((v, i) => (i === 31 ? '-:8' : `${v.pad[0]}:8`)) },
+      { voice: 'pad', gain: 0.35, notes: openBars((v, i) => (i === 31 ? '-:8' : `${v.pad[1]}:8`)) },
+      {
+        voice: 'drums',
+        gain: 0.4,
+        notes: `${repeat('-:8', 8)} | ${repeat('k:2 h:2 -:2 h:2', 3)} | k:2 h:1 h:1 s:1 s:1 s:2 | ${repeat('k:2 h:2 s:2 h:2', 7)} | k:2 h:1 h:1 s:1 s:1 s:2 | ${repeat('k:2 h:2 s:2 h:2', 7)} | k:2 h:1 h:1 s:1 s:1 s:2 | k:2 h:2 s:2 h:2 | k:2 s:2 k:2 -:2 | -:8 | -:8`,
       },
     ],
   },

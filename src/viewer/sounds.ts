@@ -138,6 +138,7 @@ for (const kind of [...AMBIENCE_KINDS, null]) {
 // Every song, one at a time, with where it plays (in the order of the stages).
 const SONG_PLACES: Record<string, string> = {
   title: 'タイトル',
+  opening: 'オープニング',
   town: '1-1',
   valley: '1-2',
   sky: '1-3',

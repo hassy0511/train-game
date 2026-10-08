@@ -203,6 +203,12 @@ test('loading screen until ready, then the title over the 3D: the camera swings 
     await gate;
     await route.continue();
   });
+  // v1.12 (the opening): a save that has watched the opening movie (a new one plays it first: movie.spec.ts), so
+  // 「はじめる」 goes on into the stage behind the title.
+  await page.addInitScript(() => {
+    const key = 'train-game.progress.v1';
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ schema: 1, cleared: [], abilities: [], records: [], mapLinks: ['movie:opening'] }));
+  });
   await page.goto('/');
   const loading = page.locator('#loading');
   await expect(loading).toBeVisible();

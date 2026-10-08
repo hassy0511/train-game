@@ -70,6 +70,8 @@ export interface SceneView {
   setShot?(def: ShotDef | null): void;
   /** v1.12: the letterbox bars' part of the screen height (0: off): shots frame inside what is left. Optional. */
   setLetterbox?(part: number): void;
+  /** v1.12 (the opening): the partner in the cab drawn or not (a movie brings its own Piko on). Optional. */
+  setPartnerShown?(on: boolean): void;
   /** v1.12: prefers-reduced-motion: camera moves become cuts, the figures' motions smaller. Optional. */
   setReducedMotion?(on: boolean): void;
   resize(width: number, height: number, devicePixelRatio: number): void;

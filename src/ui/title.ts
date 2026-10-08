@@ -42,10 +42,12 @@ export interface TitleOptions {
   /** Opens the picture book; omitted = no button. */
   onZukan?: () => void;
   /**
-   * v1.11 (PR11b): watch the ending movie again (「もういちど みる」), once the save has opened it (6-2 cleared); omitted =
-   * no button.
+   * v1.11 (PR11b): the movies to watch again (「もういちど みる」): the ending once the save has opened it (6-2 cleared),
+   * v1.12 the opening once watched. Empty or omitted = no button. One: the button plays it; more: a small choice.
    */
-  onMovie?: () => void;
+  movies?: { id: string; title: string }[];
+  /** The movie picked to watch again. */
+  onMovie?: (id: string) => void;
   /** Opens the settings (the gear in the corner); omitted = no gear. */
   onSettings?: () => void;
 }
@@ -106,7 +108,11 @@ export function showTitle(root: HTMLElement, title: string, options: TitleOption
     add('title-start', 'start', options.startLabel ?? 'はじめる', pick('start'));
     if (options.onMap) add('title-map', 'map', 'ちず', options.onMap);
     if (options.onZukan) add('title-zukan', 'zukan', 'ずかん', options.onZukan);
-    if (options.onMovie) add('title-movie', 'movie', 'もういちど みる', options.onMovie);
+    const movies = options.movies ?? [];
+    const onMovie = options.onMovie;
+    if (onMovie && movies.length > 0) {
+      add('title-movie', 'movie', 'もういちど みる', () => (movies.length === 1 ? onMovie(movies[0].id) : pickMovie(el, movies, onMovie)));
+    }
 
     const chapters = options.chapters ?? [];
     let row: HTMLElement | null = null;
@@ -149,4 +155,39 @@ export function showTitle(root: HTMLElement, title: string, options: TitleOption
     }
     root.appendChild(el);
   });
+}
+
+/**
+ * v1.12 (the opening, 2026-10-08): 「どれを みる？」 over the title: a button for each movie (its title; the opening
+ * first) and 「もどる」.
+ */
+function pickMovie(root: HTMLElement, movies: { id: string; title: string }[], onMovie: (id: string) => void): void {
+  if (root.querySelector('#title-movies')) return;
+  const el = document.createElement('div');
+  el.id = 'title-movies';
+  el.className = 'title-movies';
+  el.setAttribute('role', 'dialog');
+  const panel = document.createElement('div');
+  panel.className = 'title-movies-panel';
+  const h = document.createElement('h2');
+  h.textContent = 'どれを みる？';
+  panel.appendChild(h);
+  for (const movie of movies) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'big-button is-secondary title-movie-choice';
+    b.dataset.movie = movie.id;
+    b.textContent = `▶ ${movie.title}`;
+    b.addEventListener('click', () => onMovie(movie.id));
+    panel.appendChild(b);
+  }
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.id = 'title-movies-close';
+  back.className = 'title-movies-close';
+  back.textContent = 'もどる';
+  back.addEventListener('click', () => el.remove());
+  panel.appendChild(back);
+  el.appendChild(panel);
+  root.appendChild(el);
 }

@@ -100,10 +100,21 @@ test('stage 1-1 full run: all three missions and the ending', async ({ page }) =
   await page.goto('/?stage=1-1');
   const app = page.locator('#app');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  // A new save: 「はじめる」 plays the opening movie first (v1.12, movie.spec.ts plays it through; the automation may
+  // skip it with "▶▶"), its card 「たんけんたい にゅうたい！」, then 1-1 from its start (no title).
   await page.locator('#title-start').click();
-  await tapUntil(page, '#card'); // badge card
+  await expect(page).toHaveURL(/\?movie=opening&then=1-1$/, { timeout: 30_000 });
+  await expect(page.locator('#movie-play')).toBeVisible({ timeout: 90_000 });
+  await page.locator('#movie-play').click();
+  await expect(page.locator('#skip')).toBeVisible({ timeout: 30_000 });
+  await page.locator('#skip').dispatchEvent('pointerdown');
+  await expect(page.locator('#card')).toContainText('たんけんたい にゅうたい', { timeout: 30_000 });
   await page.locator('#card-button').click();
+  await expect(page).toHaveURL(/\?stage=1-1&go=1$/, { timeout: 30_000 });
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  expect(JSON.parse((await page.evaluate(() => localStorage.getItem('train-game.progress.v1'))) ?? '{}').mapLinks).toContain('movie:opening');
   await tapUntil(page, '#card'); // mission 1 card
+  await expect(page.locator('#card')).toContainText('はじめての うんてん');
   await page.locator('#card-button').click();
 
   // M1: hq(45) -> sakura(155)

@@ -37,6 +37,7 @@ import { buildVolcanoPlaceholder } from '../view/three/volcano-placeholders';
 import { buildMagnetPlaceholder } from '../view/three/magnet-placeholders';
 import { buildReversePlaceholder } from '../view/three/reverse-placeholders';
 import { buildCastlePlaceholder } from '../view/three/castle-placeholders';
+import { buildEndingPlaceholder } from '../view/three/ending-placeholders';
 
 const GROUPS: [string, RegExp][] = [
   ['のりもの', /^(train-|car-|rocket-unit)/],
@@ -105,6 +106,8 @@ const drawn = (name: string): Group | null =>
   buildMirrorPlaceholder(name) ??
   buildReversePlaceholder(name) ??
   buildCastlePlaceholder(name) ??
+  // v1.12: the movies' islands and the opening's notice board.
+  buildEndingPlaceholder(name) ??
   buildRecordPlaceholder(name);
 /**
  * Stand-ins made from a built model (4-3's blushing Sakasa: the built one with pink cheeks; 5-3's waving and shy mirror

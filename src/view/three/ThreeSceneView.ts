@@ -51,6 +51,7 @@ import { REVERSE_POST, type EnvironmentDef, type RailBaseDef, type ResolvedProp,
 import { ShotCamera, type ShotPose, type ShotSubject } from './shot-camera';
 import { clearWindowCar } from './clear-windows';
 import { RainbowGimmicks } from './rainbow';
+import { RailGlowGimmicks } from './rail-glow';
 import { ActorLayer } from './actors';
 import { addCrewSeat, LeadFigure } from './lead';
 import { LandmarkBoard } from './landmark';
@@ -212,6 +213,8 @@ export class ThreeSceneView implements SceneView {
   private readonly opaqueBodies = new Map<number, Object3D>();
   /** v1.12: a rainbow under a stretch of track (gimmick "rainbow"; null without one). */
   private rainbow: RainbowGimmicks | null = null;
+  /** v1.12 (the opening): the World Rail's glow along a stretch of track (gimmick "rail-glow"; null without one). */
+  private railGlow: RailGlowGimmicks | null = null;
 
   async init(container: HTMLElement, stage: StageData, network: RailNetwork): Promise<void> {
     this.stage = stage;
@@ -360,6 +363,10 @@ export class ThreeSceneView implements SceneView {
     if (RainbowGimmicks.wanted(stage)) {
       this.rainbow = new RainbowGimmicks(stage, network);
       this.scene.add(this.rainbow.group);
+    }
+    if (RailGlowGimmicks.wanted(stage)) {
+      this.railGlow = new RailGlowGimmicks(stage, network);
+      this.scene.add(this.railGlow.group);
     }
     // v1.11 (5-3): a false way ends in a lavender cushion (the mirror world's), not a buffer stop.
     const cushionEnds = MirrorWorldGimmicks.cushionRails(stage).map((id) => network.getRail(id).frameAt(network.getRail(id).length).position);
@@ -790,6 +797,10 @@ export class ThreeSceneView implements SceneView {
       return;
     }
     const subject = this.subjectOf(def.target);
+    // v1.12 (the opening): a figure inside a car (the partner in the cab) is seen through that car's windows.
+    const inside = Array.isArray(def.target) || def.target === 'train' ? null : this.subjectObject(def.target);
+    const car = inside ? [this.train, ...this.cars].findIndex((c) => c !== inside.object && isUnder(inside.object, c)) : -1;
+    if (car >= 0) this.clearWindows(car);
     this.shotPose.position.copy(this.camera.position);
     this.shotPose.lookAt.copy(this.camCurrent.lookAt);
     this.shotPose.fov = this.camera.fov;
@@ -974,6 +985,15 @@ export class ThreeSceneView implements SceneView {
   /** v1.11: the look's lighting now ("day", "evening", "night", "cave"; a test hook). */
   get lighting(): string {
     return this.environment.lighting;
+  }
+
+  /**
+   * v1.12 (the opening): the partner in the cab drawn or not. A movie brings its own Piko on as a figure (a `spawn` of
+   * "partner": through a window, hopping out), so the cab's one is not drawn there (two would show through clear windows).
+   */
+  setPartnerShown(on: boolean): void {
+    const partner = this.train.getObjectByName('partner');
+    if (partner) partner.visible = on;
   }
 
   setTitleCrew(on: boolean): void {
@@ -1169,6 +1189,7 @@ export class ThreeSceneView implements SceneView {
     this.iron?.update(dt);
     this.mirrorWorld?.update(dt, trainFrontOf(pose));
     this.rainbow?.update(dt);
+    this.railGlow?.update(dt);
     this.updateFalling(dt);
     // A little wider view while the rocket burns (not a shake).
     const fov = this.fovBoost + (this.fovTarget - this.fovBoost) * Math.min(1, dt * 4);

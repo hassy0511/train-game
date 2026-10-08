@@ -13,6 +13,11 @@ test('settings from the title gear, and the pause menu in play', async ({ page }
     if (m.type() === 'error') errors.push(m.text());
   });
 
+  // v1.12 (the opening): a save that has watched the opening movie, so 「はじめる」 goes on into 1-1 here.
+  await page.addInitScript(() => {
+    const key = 'train-game.progress.v1';
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ schema: 1, cleared: [], abilities: [], records: [], mapLinks: ['movie:opening'] }));
+  });
   await page.goto('/?stage=1-1');
   const app = page.locator('#app');
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
@@ -329,7 +334,7 @@ const V3_LATER = {
  * stages not built yet), with the map seen as the game saves it once the map has shown it all: every rail laid by
  * the clears (a rail out of a chapter once the chapter is done; a chapter's closing rail once it is done), and
  * "finale:<id>" for a done chapter whose end has no rail, the world's end, and "movie:<id>" for a movie the clears
- * have opened. The fullest progress. `maxPage`: only rails and ends on pages up to it (what a rail-less あいことば of
+ * have opened (v1.12: or that plays before a cleared stage). The fullest progress. `maxPage`: only rails and ends on pages up to it (what a rail-less あいことば of
  * that many pages brings back).
  */
 function fullProgress(only = /./, extra?: { cleared: string[]; abilities: string[]; records: string[] }, maxPage = Infinity): Saved {
@@ -341,7 +346,7 @@ function fullProgress(only = /./, extra?: { cleared: string[]; abilities: string
   const world = JSON.parse(readFileSync(resolve(root, 'src/world/world.json'), 'utf8')) as WorldData;
   const movies = readdirSync(resolve(root, 'src/movies'))
     .filter((f) => f.endsWith('.json'))
-    .map((f) => JSON.parse(readFileSync(resolve(root, 'src/movies', f), 'utf8')) as { id: string; unlock: { requires: string[] } });
+    .map((f) => JSON.parse(readFileSync(resolve(root, 'src/movies', f), 'utf8')) as { id: string; unlock: { requires: string[] }; movie: { before?: string } });
   const more = (have: string[], add: string[] | undefined): string[] => [...have, ...(add ?? []).filter((id) => !have.includes(id))];
   const cleared = more(
     stages.map((s) => s.id),
@@ -378,8 +383,11 @@ function fullProgress(only = /./, extra?: { cleared: string[]; abilities: string
         .filter((key) => !closing.has(key) || done(closing.get(key) ?? 0)),
       ...world.chapters.filter((c) => c.finale && !c.finale.link && done(c.id) && c.page <= maxPage).map((c) => `finale:${c.id}`),
       ...(endSeen ? ['finale:world'] : []),
-      // PR12: a movie the clears have opened (the ending after 6-2) counts as watched, as the game marks it.
-      ...movies.filter((m) => m.unlock.requires.length > 0 && m.unlock.requires.every((id) => cleared.includes(id))).map((m) => `movie:${m.id}`),
+      // PR12: a movie the clears have opened (the ending after 6-2) counts as watched, as the game marks it; v1.12 so
+      // does one that plays before a cleared stage (the opening once 1-1 is cleared).
+      ...movies
+        .filter((m) => (m.unlock.requires.length > 0 && m.unlock.requires.every((id) => cleared.includes(id))) || (m.movie.before !== undefined && cleared.includes(m.movie.before)))
+        .map((m) => `movie:${m.id}`),
     ],
   };
 }
@@ -566,11 +574,13 @@ test('おうちの かたへ: a long press opens it, erasing asks twice, the あ
   await restoredV1;
   await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
   const backV1 = await page.evaluate(() => JSON.parse(localStorage.getItem('train-game.progress.v1') ?? '{}'));
-  // Version 1 carries the rails within chapters 1 and 2 (the rail through the cloud gate grows on the next map).
+  // Version 1 carries the rails within chapters 1 and 2 (the rail through the cloud gate grows on the next map); the
+  // marks that are no rail stay (v1.12: the opening movie watched, 1-1 being cleared).
   const inChapters12 = (id: string) => chapters12.cleared.includes(id);
   expect(sorted(backV1)).toEqual(
-    sorted({ ...chapters12, mapLinks: chapters12.mapLinks.filter((key) => key.split('>').every(inChapters12)) }),
+    sorted({ ...chapters12, mapLinks: chapters12.mapLinks.filter((key) => !key.includes('>') || key.split('>').every(inChapters12)) }),
   );
+  expect(backV1.mapLinks).toContain('movie:opening');
   await expect(page.locator('#title-chapters')).toHaveText(/1しょう ★\s*2しょう ★\s*3しょう ☆/);
   expect(errors).toEqual([]);
 });
@@ -604,7 +614,7 @@ test('あいことば version 3: all of chapters 1 to 6 in 20 letters, on a smal
   const full = fullProgress();
   expect([full.cleared.length, full.abilities.length, full.records.length]).toEqual([17, 8, 51]);
   expect(sorted(full)).toEqual(sorted(fullProgress(/./, V3_LATER)));
-  expect(full.mapLinks).toEqual(expect.arrayContaining(['finale:5', 'finale:world', 'finale:6', 'movie:ending']));
+  expect(full.mapLinks).toEqual(expect.arrayContaining(['finale:5', 'finale:world', 'finale:6', 'movie:ending', 'movie:opening']));
   await page.setViewportSize({ width: 568, height: 320 });
   await page.goto('/');
   await page.evaluate((p) => localStorage.setItem('train-game.progress.v1', JSON.stringify(p)), full);

@@ -825,6 +825,12 @@ export class ActorLayer {
         // v1.11 (5-3): the mirror Sakasa waving sways from side to side ("amanojaku-wave").
         if (placed && event.model === 'amanojaku-wave') this.wavers.set(event.id, { object: placed, base: placed.quaternion.clone(), t: 0 });
         else this.wavers.delete(event.id);
+        // v1.12 (the opening): a soft dusky shape, one colour and no detail (the clone's own meshes only).
+        if (placed && event.silhouette) {
+          placed.traverse((o) => {
+            if (o instanceof Mesh) o.material = silhouetteMaterial();
+          });
+        }
         break;
       }
       case 'actor:move': {
@@ -1130,4 +1136,14 @@ function figureHeight(object: Object3D): number {
   const h = box.isEmpty() ? 1 : box.max.y - box.min.y;
   object.userData.height = h;
   return h;
+}
+
+let silhouette: MeshBasicMaterial | null = null;
+/**
+ * v1.12 (the opening): the one colour of a figure seen as a silhouette (spawn `silhouette`): a soft dusky lilac, not
+ * black (a glimpse far away, nothing frightening). Unlit, so no face or detail shows; the fog still softens it.
+ */
+function silhouetteMaterial(): MeshBasicMaterial {
+  silhouette ??= new MeshBasicMaterial({ color: '#6B5C86' });
+  return silhouette;
 }

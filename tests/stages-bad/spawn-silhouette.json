@@ -1,0 +1,1 @@
+{"_expect": "spawn \"silhouette\" must be true or false", "_base": "opening", "_edit": [{"path": "cutscenes.movie.0", "value": {"spawn": "kage", "model": "amanojaku", "position": [0, 0.45, 92], "silhouette": "yes"}}]}
