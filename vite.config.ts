@@ -10,7 +10,8 @@ const modelManifest = readdirSync('public/models')
   .sort();
 /*
  * v1.13 (みための くらべっこ): other looks of some models, public/looks/<look>/<name>.glb, shown only in a check run
- * with `look=<look>` (src/core/kakunin.ts). `stages`: the stages that use one of them (the check list offers those).
+ * with `look=<look>` (src/core/kakunin.ts). `stages`: the stages they were made for ("_stages" in
+ * assets/looks/<look>.json; the check list offers those).
  */
 const lookModels: Record<string, string[]> = existsSync('public/looks')
   ? Object.fromEntries(
@@ -20,14 +21,15 @@ const lookModels: Record<string, string[]> = existsSync('public/looks')
         .filter(([, names]) => names.length > 0),
     )
   : {};
-const lookNames = new Set(Object.values(lookModels).flat());
 const lookManifest = {
   looks: lookModels,
-  stages: readdirSync('src/stages')
-    .filter((f) => f.endsWith('.json'))
-    .filter((f) => [...readFileSync(`src/stages/${f}`, 'utf8').matchAll(/"model":\s*"([^"]+)"/g)].some(([, m]) => lookNames.has(m)))
-    .map((f) => f.slice(0, -5))
-    .sort(),
+  stages: [
+    ...new Set(
+      Object.keys(lookModels)
+        .filter((look) => existsSync(`assets/looks/${look}.json`))
+        .flatMap((look) => (JSON.parse(readFileSync(`assets/looks/${look}.json`, 'utf8'))._stages ?? []) as string[]),
+    ),
+  ].sort(),
 };
 // Picture-book pictures (public/zukan/<record id>.png, drawn by scripts/render-zukan.mjs).
 const zukanPictures = readdirSync('public/zukan')

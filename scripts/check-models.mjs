@@ -62,6 +62,11 @@ const lookLists = existsSync('assets/looks') ? readdirSync('assets/looks').filte
 let lookCount = 0;
 for (const look of new Set([...looks, ...lookLists])) {
   const list = existsSync(`assets/looks/${look}.json`) ? JSON.parse(readFileSync(`assets/looks/${look}.json`, 'utf8')) : {};
+  // "_stages": the stages the look was made for (the check list's 「みための くらべっこ」 offers those).
+  const stages = list._stages ?? [];
+  delete list._stages;
+  if (stages.length === 0) errors.push(`assets/looks/${look}.json: "_stages" names no stage`);
+  for (const id of stages) if (!existsSync(`src/stages/${id}.json`)) errors.push(`assets/looks/${look}.json: stage ${id} has no file`);
   lookCount += checkFolder(`public/looks/${look}`, list, `assets/looks/${look}.json`);
 }
 

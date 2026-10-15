@@ -21,7 +21,7 @@ const LOOKS: Record<string, string[]> = existsSync(resolve(ROOT, 'assets/looks')
   ? Object.fromEntries(
       readdirSync(resolve(ROOT, 'assets/looks'))
         .filter((f) => f.endsWith('.json'))
-        .map((f) => [f.slice(0, -5), Object.keys(JSON.parse(readFileSync(resolve(ROOT, 'assets/looks', f), 'utf8')))]),
+        .map((f) => [f.slice(0, -5), Object.keys(JSON.parse(readFileSync(resolve(ROOT, 'assets/looks', f), 'utf8'))).filter((k) => !k.startsWith('_'))]),
     )
   : {};
 const LABELS: Record<string, string> = { craft: 'つくりこみ', kit: 'ライブラリ' };
@@ -78,6 +78,8 @@ test('the check list offers the looks first; a tap runs that mission with that l
   // First in the list, above the chapters.
   await expect(page.locator('.kakunin-chapter').first()).toHaveAttribute('data-chapter', 'look');
   await expect(section.locator('h2')).toHaveText('みための くらべっこ');
+  // Only the stage the looks were made for ("_stages"), not every stage that happens to use one of the models.
+  await expect(section.locator('.kakunin-look-stage')).toHaveCount(1);
   const missions = (JSON.parse(readFileSync(resolve(ROOT, `src/stages/${STAGE}.json`), 'utf8')) as { missions: unknown[] }).missions.length;
   const looks = Object.keys(LOOKS);
   // Each mission: 「いま」 and one button per look.
