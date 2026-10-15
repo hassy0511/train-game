@@ -4,7 +4,7 @@ import { AudioEngine } from './audio/audio';
 import { GAME_TITLE, GAME_TITLE_LINES, PARTNER_NAME } from './config';
 import { StageEventBus } from './core/stage-events';
 import { addToProgress, loadProgress, movieDueBefore, movieRewatchable, movieSeen, movieWatched, setResume, startSandbox, type Resume } from './core/progress';
-import { abilitiesTaughtBefore, kakuninMission, kakuninRunAllowed, movieBounces, stageBounces, stageLockActive } from './core/kakunin';
+import { abilitiesTaughtBefore, kakuninLook, kakuninMission, kakuninRunAllowed, movieBounces, stageBounces, stageLockActive } from './core/kakunin';
 import { ABILITY_CARD_TITLES, ABILITY_NAMES, abilityInUse, MissionRunner, type MissionPorts } from './mission/runner';
 import { PhysicsWorld } from './physics/world';
 import { listMovieIds, listStageIds, loadAllRecords, loadStage, peekMovie, peekStage } from './stage/loader';
@@ -590,7 +590,10 @@ async function boot(): Promise<void> {
   audio.setAmbience(stage.file.environment.ambience ?? null, stage.file.props.some((p) => p.model === 'volcano'));
   const events = new StageEventBus();
 
-  const view = createSceneView(params);
+  // v1.13 (みための くらべっこ): a check run may draw another look of some models (`look=`).
+  const modelLook = kakuninLook(params, kakunin);
+  if (modelLook) app.dataset.look = modelLook;
+  const view = createSceneView(params, modelLook);
   await view.init(viewEl, stage, stage.network);
   events.on('event', (e) => view.onStageEvent(e));
   // v1.11 (PR11a, PHASE9_CHAPTER5_6 第 3 部 B6.4・A10): friends riding along from the start (6-2): Sakasa sits behind
@@ -1538,11 +1541,15 @@ async function boot(): Promise<void> {
   // The small 「かくにん」 mark while a check run goes on; a tap opens the stage list over the game (held still).
   if (kakunin) {
     app.dataset.kakunin = '1';
-    createKakuninBadge(uiEl, () => {
-      const was = paused;
-      paused = true;
-      showKakuninList(uiEl, { open: stageId, onClose: () => (paused = was) });
-    });
+    createKakuninBadge(
+      uiEl,
+      () => {
+        const was = paused;
+        paused = true;
+        showKakuninList(uiEl, { open: stageId, onClose: () => (paused = was) });
+      },
+      modelLook,
+    );
   }
 
   // The title shows the stage behind it, the camera circling the train at its start (PHASE7_FINISH §4 item 6).

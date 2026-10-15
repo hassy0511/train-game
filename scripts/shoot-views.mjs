@@ -5,6 +5,7 @@
  * before/after picture by picture:
  *   node scripts/shoot-views.mjs <outDir>            # every stage below
  *   node scripts/shoot-views.mjs <outDir> 1-2 2-1    # just some
+ *   LOOK=craft node scripts/shoot-views.mjs <outDir> 1-3   # v1.13: with another look of some models (public/looks/)
  * Writes <outDir>/<stage>-<rail>-<s>-<camera>.png and one JSON line per shot to <outDir>/stats.jsonl (lines of
  * the stages shot this time are replaced, the others kept). "animated" marks shots whose picture changed
  * between two captures half a second apart (flocks, bending boughs, ...): compare those by eye, not by pixel.
@@ -113,6 +114,8 @@ for (const id of stages) {
 mkdirSync(outDir, { recursive: true });
 // VIEWS_PORT: another port when two run at once (two worktrees).
 const PORT = Number(process.env.VIEWS_PORT) || 5191;
+// v1.13 LOOK=<look>: draw another look of some models (public/looks/<look>/, みための くらべっこ).
+const LOOK = process.env.LOOK ? `&look=${encodeURIComponent(process.env.LOOK)}` : '';
 
 const server = spawn(resolve(root, 'node_modules/.bin/vite'), ['--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
   cwd: root,
@@ -164,7 +167,7 @@ try {
     const page = await browser.newPage({ viewport: { width: 1194, height: 834 }, deviceScaleFactor: 1, serviceWorkers: 'block' });
     page.on('pageerror', (e) => console.error(`  [${id}] ${e.message}`));
     page.on('console', (m) => m.type() === 'error' && console.error(`  [${id}] ${m.text()}`));
-    await page.goto(`http://127.0.0.1:${PORT}/?stage=${id}&go=1`);
+    await page.goto(`http://127.0.0.1:${PORT}/?stage=${id}&go=1${LOOK}`);
     await page.waitForSelector('#app[data-ready="1"]', { state: 'attached', timeout: 120_000 });
     await parkStory(page);
 

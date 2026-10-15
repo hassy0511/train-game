@@ -111,7 +111,8 @@ export class ThreeSceneView implements SceneView {
   private readonly camera = new PerspectiveCamera(TRAIN.cabFovDeg, 1, 0.1, CAMERA_FAR);
   private readonly train = new Group();
   private readonly cars: Group[] = [];
-  private readonly models = new ModelLibrary();
+  /** v1.13: `look` (a check run's `look=`, src/core/kakunin.ts) draws another look of some models. */
+  private readonly models: ModelLibrary;
   private readonly cameraPosition = new Vector3();
   /** The look: sky, fog, far plane, lights, ground, stars, cloud sea, falling snow (PHASE9 B6.1). */
   private readonly environment = new EnvironmentState(this.scene, this.camera);
@@ -215,6 +216,10 @@ export class ThreeSceneView implements SceneView {
   private rainbow: RainbowGimmicks | null = null;
   /** v1.12 (the opening): the World Rail's glow along a stretch of track (gimmick "rail-glow"; null without one). */
   private railGlow: RailGlowGimmicks | null = null;
+
+  constructor(look: string | null = null) {
+    this.models = new ModelLibrary(look);
+  }
 
   async init(container: HTMLElement, stage: StageData, network: RailNetwork): Promise<void> {
     this.stage = stage;

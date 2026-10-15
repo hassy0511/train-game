@@ -265,7 +265,80 @@ export function showKakuninList(root: HTMLElement, options: { open?: string; onC
     }
     // v1.12 (えんしゅつ): the movies (src/movies/), each a tap away (「エンディング」).
     void movieSection().then((section) => body.appendChild(section));
+    // v1.13: the looks to compare go first, while there are any.
+    void lookSection().then((section) => section && body.prepend(section));
   });
+}
+
+/** v1.13 (みための くらべっこ): the names of the looks (folders of public/looks); 「いま」 is the usual models. */
+const LOOK_LABELS: Record<string, string> = { craft: 'つくりこみ', kit: 'ライブラリ' };
+
+export function lookLabel(look: string): string {
+  return LOOK_LABELS[look] ?? look;
+}
+
+/**
+ * v1.13 「みための くらべっこ」: each stage that uses a model of another look (vite.config.ts), its missions each with a
+ * button per look, the usual models (「いま」) first. A tap starts that mission with that look (`look=`).
+ */
+async function lookSection(): Promise<HTMLElement | null> {
+  const known = Object.keys(LOOK_LABELS);
+  const rank = (look: string): number => (known.includes(look) ? known.indexOf(look) : known.length);
+  const looks = Object.keys(__LOOK_MANIFEST__.looks).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  if (looks.length === 0 || __LOOK_MANIFEST__.stages.length === 0) return null;
+  const section = document.createElement('section');
+  section.className = 'kakunin-chapter kakunin-looks';
+  section.dataset.chapter = 'look';
+  const h2 = document.createElement('h2');
+  h2.textContent = 'みための くらべっこ';
+  const note = document.createElement('p');
+  note.className = 'kakunin-note';
+  note.textContent =
+    'おなじ ばしょを、モデルの 作りかた ちがいで くらべます。いま＝コードで くみたてた かりの かたち、つくりこみ＝Blender の スクリプトで 作った もの、ライブラリ＝Kenney の そざい（CC0）から 作った もの。';
+  section.append(h2, note);
+  for (const id of [...__LOOK_MANIFEST__.stages].sort(byStageOrder)) {
+    const peek = await peekStage(id);
+    if (!peek) continue;
+    const head = document.createElement('div');
+    head.className = 'kakunin-stage kakunin-look-stage';
+    const sid = document.createElement('span');
+    sid.className = 'kakunin-stage-id';
+    sid.textContent = id;
+    const title = document.createElement('span');
+    title.className = 'kakunin-stage-title';
+    title.textContent = peek.title;
+    head.append(sid, title);
+    const rows = document.createElement('div');
+    rows.className = 'kakunin-missions';
+    const missions = peek.missionTitles.length > 0 ? peek.missionTitles : ['はしる'];
+    missions.forEach((mission, i) => {
+      const row = document.createElement('div');
+      row.className = 'kakunin-look-row';
+      const label = document.createElement('span');
+      label.className = 'kakunin-look-mission';
+      label.textContent = peek.missionTitles.length > 0 ? `ミッション ${i + 1}: ${mission}` : mission;
+      row.appendChild(label);
+      for (const look of [null, ...looks]) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'kakunin-mission kakunin-look';
+        b.dataset.stage = id;
+        b.dataset.mission = String(i);
+        b.dataset.look = look ?? 'now';
+        b.textContent = look ? lookLabel(look) : 'いま';
+        b.addEventListener('click', () => {
+          location.search = kakuninSearch(id, i, look);
+        });
+        row.appendChild(b);
+      }
+      rows.appendChild(row);
+    });
+    const block = document.createElement('div');
+    block.className = 'kakunin-stage-row is-open';
+    block.append(head, rows);
+    section.appendChild(block);
+  }
+  return section;
 }
 
 /** v1.12: 「ムービー」: a button per movie; a tap plays it (`?movie=…&kakunin=1`; back to this list after its card). */
@@ -300,14 +373,15 @@ async function movieSection(): Promise<HTMLElement> {
 
 /**
  * The small 「かくにん」 mark while a check run goes on. It also opens the stage list again (no tap by a child can
- * reach it: the mode is behind the code, and a run only starts from the list).
+ * reach it: the mode is behind the code, and a run only starts from the list). v1.13: `look`, the look it draws.
  */
-export function createKakuninBadge(root: HTMLElement, onTap: () => void): HTMLButtonElement {
+export function createKakuninBadge(root: HTMLElement, onTap: () => void, look: string | null = null): HTMLButtonElement {
   const badge = document.createElement('button');
   badge.type = 'button';
   badge.id = 'kakunin-badge';
   badge.className = 'kakunin-badge';
-  badge.textContent = 'かくにん';
+  // v1.13: which look a 「みための くらべっこ」 run draws.
+  badge.textContent = look ? `かくにん・${lookLabel(look)}` : 'かくにん';
   badge.addEventListener('click', onTap);
   root.appendChild(badge);
   return badge;

@@ -3080,6 +3080,33 @@ body {
   background: #dbe9f7;
 }
 
+/* v1.13 「みための くらべっこ」: a mission and a button per look on one line. */
+.kakunin-look-stage {
+  cursor: default;
+}
+
+.kakunin-look-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.kakunin-look-mission {
+  flex: 1 1 14em;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.kakunin-mission.kakunin-look {
+  min-width: 7.5em;
+  text-align: center;
+}
+
+.kakunin-mission.kakunin-look[data-look='now'] {
+  border-color: #9aa4af;
+}
+
 /* Small and quiet, bottom centre: clear of the lever, the round buttons, the corner buttons and the cargo strip
    (a bubble sits higher, left of the buttons), also with the layout swapped. */
 .kakunin-badge {

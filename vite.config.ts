@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -8,6 +8,27 @@ const modelManifest = readdirSync('public/models')
   .filter((f) => f.endsWith('.glb'))
   .map((f) => f.replace(/\.glb$/, ''))
   .sort();
+/*
+ * v1.13 (みための くらべっこ): other looks of some models, public/looks/<look>/<name>.glb, shown only in a check run
+ * with `look=<look>` (src/core/kakunin.ts). `stages`: the stages that use one of them (the check list offers those).
+ */
+const lookModels: Record<string, string[]> = existsSync('public/looks')
+  ? Object.fromEntries(
+      readdirSync('public/looks', { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d): [string, string[]] => [d.name, readdirSync(`public/looks/${d.name}`).filter((f) => f.endsWith('.glb')).map((f) => f.slice(0, -4)).sort()])
+        .filter(([, names]) => names.length > 0),
+    )
+  : {};
+const lookNames = new Set(Object.values(lookModels).flat());
+const lookManifest = {
+  looks: lookModels,
+  stages: readdirSync('src/stages')
+    .filter((f) => f.endsWith('.json'))
+    .filter((f) => [...readFileSync(`src/stages/${f}`, 'utf8').matchAll(/"model":\s*"([^"]+)"/g)].some(([, m]) => lookNames.has(m)))
+    .map((f) => f.slice(0, -5))
+    .sort(),
+};
 // Picture-book pictures (public/zukan/<record id>.png, drawn by scripts/render-zukan.mjs).
 const zukanPictures = readdirSync('public/zukan')
   .filter((f) => f.endsWith('.png'))
@@ -69,6 +90,7 @@ export default defineConfig({
   base: process.env.BASE_PATH ?? '/',
   define: {
     __MODEL_MANIFEST__: JSON.stringify(modelManifest),
+    __LOOK_MANIFEST__: JSON.stringify(lookManifest),
     __ZUKAN_PICTURES__: JSON.stringify(zukanPictures),
     __BUILD_ID__: JSON.stringify(BUILD_ID),
   },
