@@ -43,6 +43,13 @@ export class ModelLibrary {
   private readonly loader = new GLTFLoader();
   private readonly cache = new Map<string, Promise<Group>>();
   private readonly available = new Set<string>(__MODEL_MANIFEST__);
+  /** v1.13 (みための くらべっこ): the models of `look` (public/looks/<look>/), drawn instead of the usual ones. */
+  private readonly lookModels: Set<string>;
+
+  /** `look`: another look of some models (a check run's `look=`, src/core/kakunin.ts); null for the usual ones. */
+  constructor(private readonly look: string | null = null) {
+    this.lookModels = new Set(look ? (__LOOK_MANIFEST__.looks[look] ?? []) : []);
+  }
 
   /** True when a .glb for this name exists in the build. */
   has(name: string): boolean {
@@ -52,6 +59,12 @@ export class ModelLibrary {
   load(name: string): Promise<Group> {
     const cached = this.cache.get(name);
     if (cached) return cached;
+
+    if (this.lookModels.has(name)) {
+      const other = this.loader.loadAsync(`${import.meta.env.BASE_URL}looks/${this.look}/${name}.glb`).then((gltf) => gltf.scene);
+      this.cache.set(name, other);
+      return other;
+    }
 
     // v1.10 (4-3): Sakasa blushing (pink cheeks on the built model), until ticket 0017 builds one of its own.
     if (name === 'amanojaku-blush' && !this.available.has(name)) {

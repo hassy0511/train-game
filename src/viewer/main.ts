@@ -2,6 +2,7 @@
  * Standalone model viewer (models.html): every .glb in public/models, one at a time, with orbit
  * controls. Used to review Blender deliveries on the iPad without playing a stage. Models that are not
  * built yet ("_pending" in assets/models.json) show the stand-in the game draws in code, marked 「かり」.
+ * v1.13: other looks of a model are "<look>/<name>" (`?compare=island-a,craft/island-a,kit/island-a`).
  */
 import {
   AmbientLight,
@@ -40,6 +41,8 @@ import { buildCastlePlaceholder } from '../view/three/castle-placeholders';
 import { buildEndingPlaceholder } from '../view/three/ending-placeholders';
 
 const GROUPS: [string, RegExp][] = [
+  // v1.13 (みための くらべっこ): another look of a model, "<look>/<name>" (public/looks/<look>/<name>.glb).
+  ['くらべっこ', /\//],
   ['のりもの', /^(train-|car-|rocket-unit)/],
   ['しらべもの', /^(dino-egg|footprint)/],
   ['ひと・いきもの', /^(cat|partner|amanojaku|passenger|dino|ptero|bird|squirrel|grasshopper|butterfly|spider|seabird|seal|snowbird|frog|duck|sea-turtle|lantern-jelly|snowman|snow-hare|bunny|fawn|hedgehog|tanuki|firefly-swarm|firefly-wait)/],
@@ -117,7 +120,13 @@ const COMPOSED = new Set(['amanojaku-blush', 'amanojaku-lantern', 'amanojaku-lan
 const library = new ModelLibrary();
 const pending = manifest._pending.models.filter((n) => !built.has(n) && (COMPOSED.has(n) || drawn(n) !== null));
 const load = async (name: string): Promise<Group> =>
-  built.has(name) ? (await loader.loadAsync(`${base}models/${name}.glb`)).scene : COMPOSED.has(name) ? (await library.load(name)).clone(true) : drawn(name)!;
+  name.includes('/')
+    ? (await loader.loadAsync(`${base}looks/${name}.glb`)).scene
+    : built.has(name)
+      ? (await loader.loadAsync(`${base}models/${name}.glb`)).scene
+      : COMPOSED.has(name)
+        ? (await library.load(name)).clone(true)
+        : drawn(name)!;
 
 function resize(): void {
   const w = stage.clientWidth;
@@ -185,7 +194,8 @@ async function show(names: string[]): Promise<void> {
   controls.update();
 }
 
-const names = [...__MODEL_MANIFEST__, ...pending];
+const looked = Object.entries(__LOOK_MANIFEST__.looks).flatMap(([look, models]) => models.map((n) => `${look}/${n}`));
+const names = [...__MODEL_MANIFEST__, ...pending, ...looked];
 const grouped = new Map<string, string[]>();
 for (const n of names) {
   const g = GROUPS.find(([, re]) => re.test(n))![0];
@@ -203,7 +213,7 @@ for (const [label] of GROUPS) {
     const b = document.createElement('button');
     b.type = 'button';
     b.dataset.model = n;
-    b.textContent = built.has(n) ? n : `${n}（かり）`;
+    b.textContent = built.has(n) || n.includes('/') ? n : `${n}（かり）`;
     b.addEventListener('click', () => void show([n]));
     listEl.appendChild(b);
   }

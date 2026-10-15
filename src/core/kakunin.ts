@@ -96,9 +96,23 @@ export async function stageBounces(
   return !stage.unlock.requires.every((r) => progress.cleared.includes(r));
 }
 
-/** `?stage=…&go=1&kakunin=1&mission=<0-based index>`: a stage run in the sandbox from that mission (0 is from the start). */
-export function kakuninSearch(stageId: string, mission = 0): string {
-  return `?stage=${encodeURIComponent(stageId)}&go=1&kakunin=1${mission > 0 ? `&mission=${mission}` : ''}`;
+/**
+ * `?stage=…&go=1&kakunin=1&mission=<0-based index>`: a stage run in the sandbox from that mission (0 is from the start).
+ * v1.13: `look`: with another look of some models (みための くらべっこ, `kakuninLook`).
+ */
+export function kakuninSearch(stageId: string, mission = 0, look: string | null = null): string {
+  return `?stage=${encodeURIComponent(stageId)}&go=1&kakunin=1${mission > 0 ? `&mission=${mission}` : ''}${look ? `&look=${encodeURIComponent(look)}` : ''}`;
+}
+
+/**
+ * v1.13 (みための くらべっこ): the look of a run's models, `look=` naming a folder of public/looks (vite.config.ts), or
+ * null for the usual ones. Only in a check run (`kakunin`) or where the stage lock is off (the dev server, the tests):
+ * a kid's address bar cannot change the look.
+ */
+export function kakuninLook(params: URLSearchParams, kakunin: boolean): string | null {
+  const look = params.get('look');
+  if (look === null || !(kakunin || !stageLockActive())) return null;
+  return Object.hasOwn(__LOOK_MANIFEST__.looks, look) ? look : null;
 }
 
 /** The mission a check run starts at: `mission=` when it names one of the stage's missions, else 0. */

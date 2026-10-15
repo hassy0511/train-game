@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -7,7 +7,14 @@ import { fileURLToPath } from 'node:url';
 // is invisible in play but looks fine in Blender, which renders both sides. For every model in the manifest
 // this renders each material front-only vs double-sided and fails when a material mostly disappears.
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const MODELS = Object.keys(JSON.parse(readFileSync(resolve(ROOT, 'assets/models.json'), 'utf8'))).filter((k) => !k.startsWith('_'));
+const listed = (file: string): string[] => Object.keys(JSON.parse(readFileSync(resolve(ROOT, file), 'utf8'))).filter((k) => !k.startsWith('_'));
+// v1.13 (みための くらべっこ): the other looks too (assets/looks/<look>.json → public/looks/<look>/), as "<look>/<name>".
+const LOOKS = existsSync(resolve(ROOT, 'assets/looks'))
+  ? readdirSync(resolve(ROOT, 'assets/looks'))
+      .filter((f) => f.endsWith('.json'))
+      .flatMap((f) => listed(`assets/looks/${f}`).map((name) => `${f.slice(0, -5)}/${name}`))
+  : [];
+const MODELS = [...listed('assets/models.json'), ...LOOKS];
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.glb': 'model/gltf-binary' };
 
 // Decal edges overhanging a curved body show a sliver of their back from behind; that stays well below this.
@@ -29,7 +36,7 @@ test('no model part is hidden by back-face culling', async ({ page }) => {
   for (const model of MODELS) {
     const rows = await page.evaluate(
       (url) => (window as unknown as { measure: (u: string) => Promise<{ name: string; seen: number; hidden: number }[]> }).measure(url),
-      `/__culling/public/models/${model}.glb`,
+      model.includes('/') ? `/__culling/public/looks/${model}.glb` : `/__culling/public/models/${model}.glb`,
     );
     for (const { name, seen, hidden } of rows) {
       if (hidden / seen > 0.02) console.log(`${model}: "${name}" ${hidden}/${seen} px seen only from behind`);
