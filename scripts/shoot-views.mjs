@@ -111,7 +111,8 @@ for (const id of stages) {
   }
 }
 mkdirSync(outDir, { recursive: true });
-const PORT = 5191;
+// VIEWS_PORT: another port when two run at once (two worktrees).
+const PORT = Number(process.env.VIEWS_PORT) || 5191;
 
 const server = spawn(resolve(root, 'node_modules/.bin/vite'), ['--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
   cwd: root,
