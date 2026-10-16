@@ -19,6 +19,7 @@ import type { RailFrame } from '../../rail/types';
 import { FLOWER_BRIDGE } from '../../train/params';
 import { resolvePlacement } from '../../stage/loader';
 import type { GimmickDef, StageData } from '../../stage/types';
+import { bakeModel } from './bake';
 import type { ModelLibrary } from './models';
 import { buildSilkBridge, buildTrack, type TrackLook } from './rail-mesh';
 
@@ -206,7 +207,7 @@ export class MeadowGimmicks {
     }
   }
 
-  private addFlowerBridge(index: number, g: GimmickDef, butterflyModel: Object3D, flowerModel: Object3D): void {
+  private addFlowerBridge(index: number, g: GimmickDef, butterflyModel: Object3D, flowerModel: Group): void {
     const railId = g.railId as string;
     const from = g.from as number;
     const to = g.to as number;
@@ -223,7 +224,8 @@ export class MeadowGimmicks {
     const flowerBase = f.position.clone().addScaledVector(f.right, lateral);
     const railY = flowerBase.y;
     if (groundY !== null) flowerBase.y = groundY;
-    const flower = flowerModel.clone(true);
+    // Baked like a prop: its coloured parts in one draw call.
+    const flower = (bakeModel(flowerModel) ?? flowerModel).clone(true);
     flower.name = `butterfly-flower:${index}`;
     flower.position.copy(flowerBase);
     // meadow-flower is 30 m tall: scale it so its head is at the perch.

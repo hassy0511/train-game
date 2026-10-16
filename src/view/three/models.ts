@@ -4,7 +4,6 @@ import { placeholderSize } from '../placeholder-sizes';
 import { buildHarbourPlaceholder } from './harbour-placeholders';
 import { buildIcePlaceholder } from './ice-placeholders';
 import { buildVillagePlaceholder } from './village-placeholders';
-import { buildMeadowPlaceholder } from './meadow-placeholders';
 import { addHandLantern, buildNightPlaceholder } from './night-placeholders';
 import { buildRiverPlaceholder } from './river-placeholders';
 import { buildSeaPlaceholder } from './sea-placeholders';
@@ -102,7 +101,6 @@ export class ModelLibrary {
     if (!this.available.has(name)) {
       const drawn =
         buildSkyPlaceholder(name) ??
-        buildMeadowPlaceholder(name) ??
         buildVolcanoPlaceholder(name) ??
         buildSeaPlaceholder(name) ??
         buildIcePlaceholder(name) ??

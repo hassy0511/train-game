@@ -56,6 +56,14 @@ const VIEWS = {
     ['flip', 200, 'chase'],
     ['top', 240, 'side'], // こずえのえき
   ],
+  '2-2': [
+    ['main', 240, 'cab'], // the grass tunnel, the dandelion seed ahead
+    ['main', 460, 'chase'], // grasshopper 1's leaf, the puddle ahead
+    ['main', 1000, 'side'], // on the clover leaves
+    ['main', 1300, 'cab'], // stream 1 and its bud ahead
+    ['main', 1620, 'top'], // the S bends between tall flowers
+    ['silk', 1000, 'cab'], // くものすえき, the web of rails ahead
+  ],
   '3-2': [
     ['kawa', 60, 'cab'], // ささぶねえき: the valley, the falls far ahead
     ['kawa', 300, 'chase'], // the raft
