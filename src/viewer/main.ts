@@ -27,7 +27,6 @@ import { buildIcePlaceholder } from '../view/three/ice-placeholders';
 import { buildVillagePlaceholder } from '../view/three/village-placeholders';
 import { buildSnowPlaceholder } from '../view/three/snow-placeholders';
 import { ModelLibrary } from '../view/three/models';
-import { buildMeadowPlaceholder } from '../view/three/meadow-placeholders';
 import { buildNightPlaceholder } from '../view/three/night-placeholders';
 import { buildMirrorPlaceholder } from '../view/three/mirror-placeholders';
 import { buildRecordPlaceholder } from '../view/three/record-placeholders';
@@ -96,7 +95,6 @@ const built = new Set<string>(__MODEL_MANIFEST__);
 const drawn = (name: string): Group | null =>
   buildSkyPlaceholder(name) ??
   buildForestPlaceholder(name) ??
-  buildMeadowPlaceholder(name) ??
   buildVolcanoPlaceholder(name) ??
   buildSeaPlaceholder(name) ??
   buildIcePlaceholder(name) ??

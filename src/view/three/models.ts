@@ -5,7 +5,6 @@ import { buildForestPlaceholder } from './forest-placeholders';
 import { buildHarbourPlaceholder } from './harbour-placeholders';
 import { buildIcePlaceholder } from './ice-placeholders';
 import { buildVillagePlaceholder } from './village-placeholders';
-import { buildMeadowPlaceholder } from './meadow-placeholders';
 import { addHandLantern, buildNightPlaceholder } from './night-placeholders';
 import { buildRecordPlaceholder } from './record-placeholders';
 import { buildRiverPlaceholder } from './river-placeholders';
@@ -105,7 +104,6 @@ export class ModelLibrary {
       const drawn =
         buildSkyPlaceholder(name) ??
         buildForestPlaceholder(name) ??
-        buildMeadowPlaceholder(name) ??
         buildVolcanoPlaceholder(name) ??
         buildSeaPlaceholder(name) ??
         buildIcePlaceholder(name) ??
