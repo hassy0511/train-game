@@ -532,20 +532,20 @@
     },
     {
       "model": "bough-slab",
-      "position": [30, 47.4, 1020]
+      "position": [30, 47.4, 1025]
     },
     {
       "model": "bough-slab",
-      "position": [30, 47.4, 1060]
-    },
-    {
-      "model": "bough-slab",
-      "position": [30, 47.4, 1100]
+      "position": [30, 47.4, 1075]
     },
     {
       "model": "bough-slab-cap",
-      "position": [30, 47.4, 1120],
+      "position": [30, 47.4, 1100],
       "rotationY": 0
+    },
+    {
+      "model": "branch-log",
+      "position": [36, 47.35, 1120]
     },
     {
       "model": "bough-slab-cap",
@@ -567,6 +567,16 @@
       "position": [24, 54.0, 800],
       "rotationY": 90,
       "scale": 0.3
+    },
+    {
+      "model": "branch-stub",
+      "onRail": { "railId": "main", "at": 1064.88, "lateral": 5, "heightFromRail": 0 },
+      "rotationY": -90
+    },
+    {
+      "model": "branch-stub",
+      "onRail": { "railId": "main", "at": 925.3, "lateral": -5, "heightFromRail": 0 },
+      "rotationY": 90
     },
     {
       "model": "tree-a",

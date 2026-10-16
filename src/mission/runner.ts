@@ -2378,8 +2378,9 @@ export class MissionRunner {
     }
     for (const squirrel of this.squirrels) {
       squirrel.reset();
-      this.events.post({ type: 'squirrel', id: squirrel.actor.id, state: 'hold' });
+      // Its nut back in its paws: hidden wherever it fell first, then held (the other way round left it hidden).
       this.events.post({ type: 'nut', id: squirrel.actor.id, state: 'hide', railId: squirrel.railId, at: squirrel.at });
+      this.events.post({ type: 'squirrel', id: squirrel.actor.id, state: 'hold' });
     }
     for (const rock of this.rollingRocks) {
       rock.reset();

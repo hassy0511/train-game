@@ -1,13 +1,11 @@
 import { Box3, BoxGeometry, BufferAttribute, Group, Mesh, MeshLambertMaterial, Quaternion, Raycaster, SphereGeometry, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { placeholderSize } from '../placeholder-sizes';
-import { buildForestPlaceholder } from './forest-placeholders';
 import { buildHarbourPlaceholder } from './harbour-placeholders';
 import { buildIcePlaceholder } from './ice-placeholders';
 import { buildVillagePlaceholder } from './village-placeholders';
 import { buildMeadowPlaceholder } from './meadow-placeholders';
 import { addHandLantern, buildNightPlaceholder } from './night-placeholders';
-import { buildRecordPlaceholder } from './record-placeholders';
 import { buildRiverPlaceholder } from './river-placeholders';
 import { buildSeaPlaceholder } from './sea-placeholders';
 import { buildSkyPlaceholder } from './sky-placeholders';
@@ -104,7 +102,6 @@ export class ModelLibrary {
     if (!this.available.has(name)) {
       const drawn =
         buildSkyPlaceholder(name) ??
-        buildForestPlaceholder(name) ??
         buildMeadowPlaceholder(name) ??
         buildVolcanoPlaceholder(name) ??
         buildSeaPlaceholder(name) ??
@@ -120,8 +117,7 @@ export class ModelLibrary {
         buildReversePlaceholder(name) ??
         buildCastlePlaceholder(name) ??
         buildEndingPlaceholder(name) ??
-        buildWorldPlaceholder(name) ??
-        buildRecordPlaceholder(name);
+        buildWorldPlaceholder(name);
       if (!drawn) console.warn(`[models] "${name}.glb" is not built yet; using a placeholder box`);
       const placeholder = Promise.resolve(drawn ?? makePlaceholder(name));
       this.cache.set(name, placeholder);
