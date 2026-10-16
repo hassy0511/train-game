@@ -137,7 +137,6 @@ export const PLACEHOLDER_SIZES: Record<string, [number, number, number]> = {
   'up-raindrop': [0.5, 0.8, 0.5],
   'upside-top': [0.6, 0.7, 0.6],
   'backward-book': [0.8, 0.2, 0.6],
-  'upside-flower': [0.6, 0.8, 0.6],
 };
 
 export function placeholderSize(model: string): [number, number, number] {

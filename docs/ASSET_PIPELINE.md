@@ -1,6 +1,6 @@
 # 3D モデルの作り方（Claude Code）
 
-最終更新: 2026-09-24
+最終更新: 2026-10-16
 状態: 運用中。モデルはすべて Claude Code が作る（Codex 製は `archive/codex/` に移動済み）
 
 ---
@@ -11,7 +11,8 @@
 - 出力: `public/models/<名前>.glb` と `assets/previews/<名前>.png`
 - 一覧と予算: `assets/models.json`（スクリプト、三角形の上限、ファイルサイズの上限）。`npm run build` のたびに `scripts/check-models.mjs` が全モデルを確認する（一覧との一致、予算、原点が床にあるか、ステージ JSON が参照するモデルがあるか、閉じた部品が裏返っていないか）。スモークテストの `tests/smoke/model-culling.spec.ts` は全モデルを 32 方向から「ゲームと同じ表だけ描画」と「両面描画」で撮り比べ、ゲームで消えてしまう部品（裏返ったデカール・屋根など）があると落ちる
 - 確認: `https://hassy0511.github.io/train-game/models.html?model=<名前>`、並べて比べるときは `?compare=<名前>,<名前>`
-- 地図の島の絵（`public/map/<ステージ>.png`）は、モデルを島の上に並べて描いたもの。モデルを足したり直したりしたら `node scripts/render-map.mjs` で描き直す（並べ方は `src/world/world.json` の `diorama`。`docs/PHASE4_DESIGN.md` §3。夜の 島（5-1）は `"lighting": "night"` で 青い 月あかり 70% の 光で 描く）
+- 2026-10-15 だいさん: 見た目は つくりこみ（この やり方）で 統一。ライブラリ（Kenney）と 比べた 結果（1-3 の 島・雲・浮き標を コードの 仮の 形・つくりこみ・ライブラリの 3 つで 見くらべた。つくりこみの 一式が `assets/blender/sky.py`）
+- 地図の島の絵（`public/map/<ステージ>.png`）は、モデルを島の上に並べて描いたもの（島は どれも `island-b`。直したら 全部の 絵が かわる）。モデルを足したり直したりしたら `node scripts/render-map.mjs` で描き直す（並べ方は `src/world/world.json` の `diorama`。`docs/PHASE4_DESIGN.md` §3。夜の 島（5-1）は `"lighting": "night"` で 青い 月あかり 70% の 光で 描く）
 
 ## 2. 共通のルール
 - 単位 1 = 1 m。+Y が上、+Z が前（顔・正面・進行方向）。原点は底面の中心（例外は各スクリプトの冒頭に書く。車両は車体中心の真下、ホームは線路側の縁）
@@ -34,7 +35,7 @@
 - 街と乗り物はおもちゃの街: 台座、厚い屋根と軒、枠付きのへこんだ窓、玄関のひさし。色はクリーム・コーラル・深い青・紫・金を基調にする
 - ワンダー号は青い車体、クリームの屋根、黄色の帯。先頭車の屋根にピコと同じランプ
 
-## 5. モデル一覧（2026-09-24 時点）
+## 5. モデル一覧（2026-10-16 時点）
 | 種類 | モデル | スクリプト |
 |---|---|---|
 | キャラクター | partner（ピコ）、amanojaku（サカサ）、cat-stand / cat-sleep（猫）、passenger（なかま） | 各名前の `.py`（猫は `cat_cc.py` を共有） |
@@ -44,5 +45,7 @@
 | 木 | tree-a、tree-b | `tree-a.py`、`tree-b.py` |
 | 恐竜の谷（1-2） | fern-a/b、cycad、cliff-a/b（壁パネル、端は x=±6 で平ら）、rock-a/b、boulder、direction-sign（矢印はゲームが描く）、jump-unit、dino-egg、footprint-slab | `valley.py` |
 | 恐竜の谷の生き物 | dino-mid-sleep / dino-mid-stand、dino-small-walk、dino-large-body ＋ dino-large-neck（首は付け根が原点）、ptero、ptero-far（群れ用の遠景版。絵なしの 2 色・400 三角形以下） | `dinos.py` |
+| くものうえ（1-3） | island-a / island-b / island-c（浮島。原点は 上面の 中心で、岩は 下。`assets/models.json` の `"origin": "top"`）、island-flip ＋ island-flip-cap（線路が 回りこむ 板と その 丸い 端）、cloud-a / cloud-b、cloud-bounce（ぽよん雲）、sky-buoy（浮き標）、jump-pad（汽笛で 出る ジャンプ台）、updraft-ring（線路を くぐる 風の 輪）、記録 cloud-crystal・weathervane・upside-flower（さかさに さく 花。原点は くきの 根もと＝上） | `sky.py` |
+| 記録（1-1・1-2） | record-town-board（まちの かんばん）、record-hq-plans（ほんぶの せっけいず）、record-balloon（原点は ひもの 下の はし）、record-nest（がけの うえの す） | `records.py` |
 
 名前の `-proto` は、ゲームのコードが参照している名前なので残している（中身は本番用）。

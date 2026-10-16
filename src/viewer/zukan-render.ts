@@ -35,6 +35,8 @@ const VIEWS: Record<string, { yaw?: number; pitch?: number }> = {
   'hq-plans': { yaw: 20, pitch: 8 },
   'roof-balloon': { yaw: 20, pitch: 10 },
   treetop: { yaw: 10, pitch: 10 },
+  // 1-3's flower hangs upside down: seen a little from below, into its bell.
+  'upside-island': { yaw: 25, pitch: -14 },
 };
 
 const stages = import.meta.glob('../stages/*.json', { eager: true, import: 'default' }) as Record<string, StageFile>;

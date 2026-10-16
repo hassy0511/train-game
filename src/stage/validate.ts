@@ -259,7 +259,7 @@ function checkCutsceneStep(st: unknown, where: string, railIds: Set<string>): vo
 /**
  * The parts of an environment that may be written on their own (v1.11: a cutscene's "environment" step writes only
  * some of them; the stage's own environment is checked with them too): the sky, the fog, the light, the ground, the
- * stars, v1.11 the moon and the fireflies, the sound around.
+ * stars, v1.11 the moon and the fireflies, the sound around, v1.13 the light from below.
  */
 function checkEnvironmentParts(env: Record<string, unknown>, where: string, step = false): void {
   if (env.sky !== undefined && (!isObject(env.sky) || !isString(env.sky.top) || !isString(env.sky.bottom))) fail(`${where}: "sky" needs top/bottom`);
@@ -272,6 +272,8 @@ function checkEnvironmentParts(env: Record<string, unknown>, where: string, step
   // v1.11 (5-2): the play mat's pastel squares.
   if (isObject(env.ground) && env.ground.look !== undefined && env.ground.look !== 'playmat') fail(`${where}: "ground.look" must be "playmat"`);
   if (env.lighting !== undefined && !['day', 'evening', 'night', 'cave'].includes(String(env.lighting))) fail(`${where}: "lighting" must be day, evening, night or cave`);
+  // v1.13 (2026-10-15): the colour of the light from below (1-3's warm stone).
+  if (env.groundLight !== undefined && !(typeof env.groundLight === 'string' && COLOR.test(env.groundLight))) fail(`${where}: "groundLight" must be #rrggbb`);
   if (env.ambience !== undefined && !AMBIENCE_KINDS.includes(env.ambience as AmbienceKind)) fail(`${where}: "ambience" must be one of ${AMBIENCE_KINDS.join(', ')}`);
   if (env.stars !== undefined) {
     const st = env.stars;
