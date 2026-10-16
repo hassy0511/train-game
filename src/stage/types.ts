@@ -12,6 +12,12 @@ export interface EnvironmentDef {
   sky: { top: string; bottom: string };
   fog: { color: string; near: number; far: number } | null;
   lighting: 'day' | 'evening' | 'night' | 'cave';
+  /**
+   * v1.13 (2026-10-15): the colour of the light from below (#rrggbb, the hemisphere light's ground colour), for a stage
+   * where what lies below is not grass: 1-3's islands over the sea of clouds, whose rock would read olive in a green
+   * one. Omitted: grass green by day, a blue at evening, the night's own, white on snow.
+   */
+  groundLight?: string;
   /** v1.11 (5-2) `look` "playmat": pastel squares (4 m) over the ground's colour (a shader, no texture). */
   ground: { y: number; size: number; color: string; look?: 'playmat' } | null;
   /** Song id in src/audio/songs.ts (Phase 4), or null for silence. */

@@ -1,0 +1,1 @@
+{"_expect": "\"groundLight\" must be #rrggbb", "_base": "1-3", "_edit": [{"path": "environment.groundLight", "value": "warm"}]}

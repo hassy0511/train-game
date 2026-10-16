@@ -1,6 +1,6 @@
 # 0006 Blender発注: 1-3 くものうえ のモデル一式
 
-- 状態: **未着手（後回し、2026-09-24 だいさん）**。1-3 はコードで作った仮の形（`src/view/three/sky-placeholders.ts`）で遊べる。下の「1-3 の実装に合わせた変更」を先に読む
+- 状態: **完了（2026-10-16）**。つくりこみ（`assets/blender/sky.py`）で 作った。2026-10-15 に だいさんが コードの 仮の 形・つくりこみ・ライブラリ（Kenney）を 1-3 で 見くらべて つくりこみに 決め、島・雲・浮き標の 9 こを そのまま `public/models` に うつし、のこりの ジャンプ台・風の 輪・記録 2 こ（と 0021 の `upside-flower`）を 同じ やり方で 足した。作らなかった もの: `cloud-wall`（視界ゼロの 区間は ゲームが 霧で 描くので、どこにも 置いて いない。コードの 仮の 形が のこる）、生き物 `bird-glide`・`bird-perch`（1-3 に 鳥の むれを 置いて いない）、集合プレビュー（地図の 島の 絵 `public/map/1-3.png` が その 代わり）。1-3 は 下からの 光を あたたかい 石の 色に した（`environment.groundLight`、`docs/STAGE_SCHEMA.md` §26）。下の「1-3 の実装に合わせた変更」が 寸法の 正
 - 担当: Claude Code（2026-09-24 に Codex から変更）
 - 依存: なし（作り方は `docs/ASSET_PIPELINE.md`）
 - 関連: `docs/GAME_SPEC.md` §7「1-3 くものうえ」、`docs/POC_PLAN.md` Phase 3、`docs/STORY.md`

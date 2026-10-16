@@ -21,6 +21,7 @@
       "far": 520
     },
     "lighting": "day",
+    "groundLight": "#e8dcc8",
     "ground": null,
     "bgm": "sky",
     "ambience": "sky",

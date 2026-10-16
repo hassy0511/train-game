@@ -1,24 +1,28 @@
-"""Sky islands of stage 1-3 (くものうえ), the crafted look (つくりこみ) — Claude Code. Ticket 0006.
+"""Stage 1-3 (くものうえ) — Claude Code. Ticket 0006 (and 1-3's record of ticket 0021).
 
+The crafted look (つくりこみ), chosen for every model on 2026-10-15 (docs/ASSET_PIPELINE.md §1).
 island-a, island-b, island-c (floating islands), island-flip (the slab the rail wraps round) and island-flip-cap (its
-rounded end), cloud-a, cloud-b, cloud-bounce, sky-buoy. Same names, sizes, origins and orientation as the code
-stand-ins (src/view/three/sky-placeholders.ts), so the stage JSON does not change:
+rounded end), cloud-a, cloud-b, cloud-bounce, sky-buoy; the gimmicks jump-pad and updraft-ring; the records
+cloud-crystal, weathervane and upside-flower. Same names, sizes, origins and orientation as the code stand-ins they
+replace, so the stage JSON does not change:
 - Islands: origin at the top centre, the grass top at y = 0, the rock below (y < 0).
   island-a 24 x 12 x 24, island-b 40 x 16 x 28, island-c 12 x 8 x 12 (w x h x d, h measured down from the top).
   island-flip 30.4 x 18.8 x 40: grass on top (y = 0) and underneath (y = -18.8), rock sides; the ends at z = +-20 are
   cut flat with one cross-section, so slabs line up end to end and the cap closes the last one.
   island-flip-cap: the half-round end (grass radius 9.4 about y = -9.4, z = 0), out toward +Z; origin at the top of
   the end it closes.
-- Everything else: origin at the bottom centre. +Z is forward (the rail's direction for the buoy).
+- upside-flower: origin at the root of its stem (the top), the flower hanging below it (it grows down from the
+  underside of the upside-down island-c behind さかさのえき).
+- Everything else: origin at the bottom centre. +Z is forward (the rail's direction for the buoy, the jump pad and the
+  updraft ring; the side facing the rail for the records).
 Wherever 1-3 runs a rail across an island top, the top stays flat and clear: island-b's whole top is crossed by some
 copy, so its charm is all on the rim (grass lip with drips, moss ledge, strata, roots, floating pebbles); island-a and
 island-c carry tufts and flowers only in the corners no rail crosses; the slab and cap keep |x| < 10 clear (rails at
 x = +-6 on top, an S-curve between them underneath). Those plants stand on the surfaces, so they reach past the sizes
 above (island-a up to y = 1.3, island-c 0.75, the slab 0.9 over the top and 0.85 under the underside, the cap 0.6 out
-from its curve); the surfaces themselves are exactly where the stand-ins have them.
-Output: public/looks/craft/<name>.glb and assets/previews/looks/craft/<name>.png (the game loads public/looks/<look>/
-when that look is chosen; public/models keeps the default set).
-Run: python3 scripts/run-bpy.py assets/blender/sky-craft.py [-- name ...]
+from its curve); the surfaces themselves are exactly where the stand-ins had them.
+Output: public/models/<name>.glb and assets/previews/<name>.png.
+Run: python3 scripts/run-bpy.py assets/blender/sky.py [-- name ...]
 """
 from __future__ import annotations
 
@@ -35,8 +39,6 @@ import bmesh  # noqa: E402
 import bpy  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
-k.MODEL_DIR = k.ROOT / "public" / "looks" / "craft"
-k.PREVIEW_DIR = k.ROOT / "assets" / "previews" / "looks" / "craft"
 TAU = 2 * math.pi
 
 # Palette (ticket 0006) and a few accents.
@@ -775,9 +777,288 @@ def sky_buoy():
     return parts, 400
 
 
+# ---------------------------------------------------------------- flat parts (gimmicks and records)
+
+GLOW = "#FFF3B0"
+
+
+def rounded_rect(x0, x1, z0, z1, r_back, r_front, per_corner=4):
+    """Outline (x, z) of the rectangle x0..x1 by z0..z1, its back corners (z0) rounded by r_back and its front ones
+    (z1) by r_front."""
+    pts = []
+    for cx, cz, r, a0 in ((x1 - r_front, z1 - r_front, r_front, 0), (x0 + r_front, z1 - r_front, r_front, 90),
+                          (x0 + r_back, z0 + r_back, r_back, 180), (x1 - r_back, z0 + r_back, r_back, 270)):
+        for i in range(per_corner + 1):
+            a = math.radians(a0 + 90 * i / per_corner)
+            pts.append((cx + r * math.cos(a), cz + r * math.sin(a)))
+    return pts
+
+
+def inset(pts, d):
+    """The outline moved `d` m inward (about its centroid)."""
+    cx = sum(p[0] for p in pts) / len(pts)
+    cz = sum(p[1] for p in pts) / len(pts)
+    nrm = outward_normals([(x - cx, z - cz) for x, z in pts])
+    return [(x - d * nx, z - d * nz) for (x, z), (nx, nz) in zip(pts, nrm)]
+
+
+def slab(parts, name, pts, y0, y1, m, bevel=0.0):
+    """A flat slab standing on the outline `pts` (x, z) from y0 to y1; `bevel` chamfers its top edge."""
+    n = len(pts)
+    rings = [[(x, y0, z) for x, z in pts]]
+    if bevel:
+        rings.append([(x, y1 - bevel, z) for x, z in pts])
+        rings.append([(x, y1, z) for x, z in inset(pts, bevel)])
+    else:
+        rings.append([(x, y1, z) for x, z in pts])
+    verts = [p for r in rings for p in r]
+    faces = [tuple(range(n - 1, -1, -1))]
+    for r in range(len(rings) - 1):
+        faces += ring_faces(r * n, (r + 1) * n, n)
+    last = (len(rings) - 1) * n
+    faces.append(tuple(range(last, last + n)))
+    return solid(parts, name, verts, faces, [m], None, [False] * len(faces))
+
+
+def plate(parts, name, center, u, v, outline, thick, materials, indices=None):
+    """A flat closed plate: `outline` [(a, b)] in the plane through `center` spanned by u and v, `thick` m thick
+    across it. Faces: the two sides first, then the edge quads."""
+    u, v = Vector(u).normalized(), Vector(v).normalized()
+    nrm = u.cross(v).normalized()
+    c = Vector(center)
+    m = len(outline)
+    verts = [tuple(c + u * a + v * b + nrm * (s * thick / 2)) for s in (-1, 1) for a, b in outline]
+    faces = [tuple(range(m)), tuple(range(2 * m - 1, m - 1, -1))] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
+    return solid(parts, name, verts, faces, materials, indices, [False] * len(faces))
+
+
+def disc(parts, name, center, radius, y0, y1, m, segments=16, dome=0.0):
+    """A round flat disc on the floor plane (y0..y1), its top a little domed by `dome` m."""
+    rings = [(y0, radius, radius, center[0], center[1]), (y1, radius, radius, center[0], center[1])]
+    if dome:
+        rings.append((y1 + dome * 0.75, radius * 0.72, radius * 0.72, center[0], center[1]))
+        rings.append((y1 + dome, radius * 0.3, radius * 0.3, center[0], center[1]))
+    obj = k.add_profiled_volume(parts, name, rings, m, segments=segments, smooth=bool(dome))
+    fix_normals(obj)
+    return obj
+
+
+def pyramid(parts, name, base, tip, a, b, m):
+    """A four-sided point from the diamond base (base +- a, base +- b) to `tip` (6 triangles)."""
+    p = [Vector(base) + Vector(a), Vector(base) + Vector(b), Vector(base) - Vector(a), Vector(base) - Vector(b), Vector(tip)]
+    obj = k.add_mesh(parts, name, [tuple(v) for v in p], [(0, 1, 2, 3), (0, 4, 1), (1, 4, 2), (2, 4, 3), (3, 4, 0)], [m])
+    fix_normals(obj)
+    return obj
+
+
+# ---------------------------------------------------------------- gimmicks
+
+def jump_pad():
+    """The vanishing jump pad (a whistle brings it out for a few seconds): a low deck over the track, 4 x 6 m, gold
+    round a sky-blue inlay, its front edge curled up to 0.6 m like a ski tip, a round glowing middle (#FFF3B0) in a gold
+    ring and two coral arrows pointing on along the rail (+Z). Everything glows a little: it is magic, and it shows up
+    against the white of the sky. 'pad' look only (3-1's whale and 4-2's ski jump are other models)."""
+    gold = mat("Pad gold", GOLD, 0.45, 0.25)
+    inlay = mat("Pad deck", "#CDE7F7", 0.6, 0.12)
+    glow = mat("Pad glow", GLOW, 0.4, 0.45)
+    coral = mat("Pad arrow", CORAL, 0.55, 0.2)
+    parts: list = []
+    deck_top = 0.18
+    # The curled front: a 0.12 m plate following a circle (radius R) up to 55 degrees, its top flush with the deck at
+    # z0; R and z0 put the tip's top at y = 0.6 and its front at z = 3.0.
+    t, theta, yc0 = 0.12, math.radians(55), deck_top - 0.06
+    radius = (0.6 - yc0 - t / 2 * math.cos(theta)) / (1 - math.cos(theta))
+    z0 = 3.0 - (radius + t / 2) * math.sin(theta)
+    top, bottom = [], []
+    for i in range(7):
+        a = theta * i / 6
+        cz, cy = z0 + radius * math.sin(a), yc0 + radius * (1 - math.cos(a))
+        top.append((cz - t / 2 * math.sin(a), cy + t / 2 * math.cos(a)))
+        bottom.append((cz + t / 2 * math.sin(a), cy - t / 2 * math.cos(a)))
+    cz, cy = z0 + radius * math.sin(theta), yc0 + radius * (1 - math.cos(theta))
+    rim = (cz + t * 0.4 * math.cos(theta), cy + t * 0.4 * math.sin(theta))  # the tip's rounded edge
+    profile = top + [rim] + bottom[::-1]
+    verts = [(sx * 2.0, y, z) for sx in (-1, 1) for z, y in profile]
+    m = len(profile)
+    faces = [tuple(range(m)), tuple(range(2 * m - 1, m - 1, -1))] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
+    solid(parts, "lip", verts, faces, [gold], None, [False, False] + [True] * m)
+    # The deck (gold, rounded at the back) and its sky-blue inlay, a little proud of it.
+    slab(parts, "deck", rounded_rect(-2.0, 2.0, -3.0, z0, 0.5, 0.08), 0.0, deck_top, gold, bevel=0.05)
+    slab(parts, "inlay", rounded_rect(-1.7, 1.7, -2.7, z0 - 0.25, 0.3, 0.12), deck_top - 0.03, deck_top + 0.025, inlay)
+    # The glowing middle in its gold ring, then the arrows toward the lip.
+    middle = -0.75
+    disc(parts, "glow-ring", (0.0, middle), 1.28, deck_top, deck_top + 0.06, gold)
+    disc(parts, "glow", (0.0, middle), 1.08, deck_top + 0.02, deck_top + 0.08, glow, dome=0.05)
+    chevron = [(0.0, 0.42), (0.62, -0.08), (0.46, -0.24), (0.0, 0.16), (-0.46, -0.24), (-0.62, -0.08)]
+    for i, z in enumerate((0.75, 1.3)):
+        plate(parts, f"arrow-{i}", (0.0, deck_top + 0.035, z), (1, 0, 0), (0, 0, 1), chevron, 0.05, [coral])
+    return parts, 500
+
+
+def updraft_ring():
+    """A hoop of wind the train runs through on an updraft stretch: centre 3.6 m over the rail, radius 3.4 m, so its
+    foot just touches the rail; glowing white (its inner side a pale blue), and four sky-blue arrowheads on it
+    pointing on along the rail (+Z)."""
+    white = mat("Ring", CLOUD, 0.8, 0.45)
+    shade = mat("Ring inside", CLOUD_SHADE, 0.8, 0.5)
+    blue = mat("Ring arrow", "#6EC1F2", 0.5, 0.3)
+    parts: list = []
+    seg, sides, big, small, cy = 24, 5, 3.4, 0.2, 3.6
+    verts = []
+    for i in range(seg):
+        a = TAU * i / seg
+        radial = Vector((math.cos(a), math.sin(a), 0.0))
+        for j in range(sides):
+            b = TAU * j / sides
+            p = Vector((0.0, cy, 0.0)) + radial * (big + small * math.cos(b)) + Vector((0.0, 0.0, small * math.sin(b)))
+            verts.append(tuple(p))
+    faces = []
+    for i in range(seg):
+        a, b = i * sides, ((i + 1) % seg) * sides
+        faces += [(a + j, a + (j + 1) % sides, b + (j + 1) % sides, b + j) for j in range(sides)]
+    ring = solid(parts, "ring", verts, faces, [white, shade], None, [True] * len(faces))
+    for poly in ring.data.polygons:
+        c, nm = k.gltf(poly.center), k.gltf(poly.normal)
+        toward = Vector((-c.x, cy - c.y, 0.0)).normalized()
+        poly.material_index = 1 if nm.dot(toward) > 0.3 else 0
+    for i in range(4):
+        a = TAU * (i + 0.5) / 4
+        radial = Vector((math.cos(a), math.sin(a), 0.0))
+        along = Vector((-math.sin(a), math.cos(a), 0.0))
+        base = Vector((0.0, cy, -0.32)) + radial * big
+        pyramid(parts, f"arrow-{i}", base, base + Vector((0.0, 0.0, 0.92)), radial * 0.36, along * 0.2, blue)
+    return parts, 300
+
+
+# ---------------------------------------------------------------- records
+
+def crystal(parts, name, base, up, length, radius, turn, materials):
+    """A six-sided crystal from `base` along `up`, ending in a point (22 triangles). Its sides alternate two tones;
+    the point's facets are white."""
+    q = rotate_to(up)
+    body = length * 0.74
+    verts = []
+    for y in (0.0, body):
+        for i in range(6):
+            a = turn + TAU * i / 6
+            verts.append(place(base, q, (math.cos(a) * radius, y, math.sin(a) * radius)))
+    verts.append(place(base, q, (0.0, length, 0.0)))
+    faces = [tuple(range(5, -1, -1))] + ring_faces(0, 6, 6) + [(6 + i, 6 + (i + 1) % 6, 12) for i in range(6)]
+    indices = [0] + [i % 2 for i in range(6)] + [2] * 6
+    return solid(parts, name, verts, faces, materials, indices, [False] * len(faces))
+
+
+def cloud_crystal():
+    """Record "くもの けっしょう": a cluster of pale blue-white hexagonal crystals (#DCE9F5, not see-through) growing
+    out of a little puff of cloud; they glow a little so they glitter at the island's edge."""
+    cloud = mat("Cloud", CLOUD, 0.9, 0.42)
+    tones = [mat("Crystal", CLOUD_SHADE, 0.35, 0.35), mat("Crystal light", "#EEF5FD", 0.35, 0.35), mat("Crystal tip", WHITE, 0.3, 0.45)]
+    parts: list = []
+    for i, (x, y, z, w, h, d) in enumerate([(0.0, 0.07, 0.0, 0.5, 0.2, 0.46), (0.17, 0.06, 0.1, 0.28, 0.15, 0.28),
+                                            (-0.15, 0.05, -0.12, 0.3, 0.14, 0.28)]):
+        k.add_ellipsoid(parts, f"puff-{i}", (w, h, d), (x, y, z), cloud, segments=8, rings=4)
+    for i, (x, z, lean_x, lean_z, length, radius, turn) in enumerate([
+            (0.0, 0.0, 0.0, 0.05, 0.84, 0.085, 0.2), (0.12, 0.06, 0.45, 0.2, 0.5, 0.065, 0.7),
+            (-0.1, 0.08, -0.4, 0.35, 0.44, 0.06, 0.1), (0.04, -0.12, 0.15, -0.45, 0.4, 0.055, 0.9),
+            (-0.12, -0.06, -0.5, -0.2, 0.3, 0.045, 0.4)]):
+        crystal(parts, f"crystal-{i}", (x, 0.04, z), (lean_x, 1.0, lean_z), length, radius, turn, tones)
+    return parts, 300
+
+
+def weathervane():
+    """Record "かざみどり", found in the cloud by the light: a navy post on a scrap of rock and grass, a gold knob, the
+    four compass arms with diamond plates (no letters), the arrow (gold head toward +Z, coral tail feathers) and, on
+    it, a round made-up bird (sky blue, a cream breast, a gold beak; no comb, nothing like a real rooster)."""
+    pal = Palette()
+    navy = mat("Vane post", NAVY, 0.6)
+    gold = mat("Vane gold", GOLD, 0.45, 0.15)
+    coral = mat("Vane tail", CORAL, 0.6, 0.1)
+    blue = mat("Bird", "#5FA8E6", 0.6)
+    cream = mat("Bird breast", "#F4EEDC", 0.6)
+    dark = mat("Bird eye", NAVY, 0.4)
+    parts: list = []
+    pebble(parts, "foot", (0.62, 0.34, 0.54), (0.0, 0.12, 0.0), pal.rock_dark, pal.grass, 5, top_from=0.45)
+    tuft(parts, "foot-tuft", (0.2, 0.22, 0.12), 0.24, 4, 9, pal.tuft, spread=0.1)
+    k.add_tapered_segment(parts, "post", (0, 0.2, 0), (0, 2.78, 0), 0.05, 0.035, navy, vertices=6, smooth=False)
+    k.add_ellipsoid(parts, "knob", (0.15, 0.15, 0.15), (0, 2.02, 0), gold, segments=8, rings=4)
+    # Compass arms (x and z) with a diamond plate at each end, the front one coral.
+    k.add_box(parts, "arm-x", (1.14, 0.035, 0.035), (0, 2.25, 0), gold)
+    k.add_box(parts, "arm-z", (0.035, 0.035, 1.14), (0, 2.25, 0), gold)
+    diamond = [(0.0, 0.1), (0.1, 0.0), (0.0, -0.1), (-0.1, 0.0)]
+    for i, (x, z) in enumerate(((0.58, 0), (-0.58, 0), (0, 0.58), (0, -0.52))):
+        u = (0, 0, 1) if x else (1, 0, 0)
+        plate(parts, f"plate-{i}", (x, 2.25, z), u, (0, 1, 0), [(a * 0.8, b) for a, b in diamond], 0.03,
+              [coral if z > 0 else gold])
+    # The arrow: shaft, gold head (+Z) and two coral tail feathers.
+    k.add_box(parts, "shaft", (0.04, 0.04, 1.0), (0, 2.78, -0.02), gold)
+    plate(parts, "head", (0, 2.78, 0.48), (0, 0, 1), (0, 1, 0), [(0.12, 0.0), (-0.05, 0.11), (0.0, 0.0), (-0.05, -0.11)], 0.04, [gold])
+    for i, s in enumerate((1, -1)):
+        plate(parts, f"feather-{i}", (0, 2.78, -0.5), (0, 0, 1), (0, 1, 0),
+              [(0.12, 0.0), (-0.1, s * 0.16), (-0.04, s * 0.02)], 0.03, [coral])
+    # The bird, standing on the arrow over the post, looking along it.
+    k.add_ellipsoid(parts, "body", (0.32, 0.28, 0.44), (0, 2.96, -0.04), blue, segments=10, rings=6)
+    k.add_ellipsoid(parts, "breast", (0.22, 0.2, 0.2), (0, 2.93, 0.1), cream, segments=8, rings=5)
+    k.add_ellipsoid(parts, "head", (0.2, 0.2, 0.2), (0, 3.1, 0.13), blue, segments=8, rings=5)
+    k.add_tapered_segment(parts, "beak", (0, 3.1, 0.21), (0, 3.09, 0.31), 0.035, 0.0, gold, vertices=4, smooth=False)
+    for s in (-1, 1):
+        k.add_ellipsoid(parts, f"eye-{s}", (0.03, 0.04, 0.03), (s * 0.085, 3.13, 0.17), dark, segments=6, rings=3)
+        wing = k.add_ellipsoid(parts, f"wing-{s}", (0.06, 0.16, 0.3), (s * 0.15, 2.98, -0.07), blue, segments=6, rings=4)
+        wing.rotation_euler = (math.radians(-12), 0, 0)
+    plate(parts, "tail", (0, 3.0, -0.3), (0, 0, 1), (0, 1, 0), [(0.06, -0.02), (-0.14, 0.1), (-0.17, 0.0), (-0.12, -0.08)], 0.05, [blue])
+    return parts, 700
+
+
+def upside_flower():
+    """Record "さかさじまの うら": a pink flower blooming upside down under the upside-down island. Origin at the root of
+    the stem (the top); the stem with two leaves hangs down to a bell of five pointed petals opening downward (deep
+    pink at its top, pink petals curling out, pink inside round a small yellow heart) and a stamen hanging out of it."""
+    green = mat("Stem", "#5DAE4B", 0.7)
+    leaf_green = mat("Leaf", "#7CC85E", 0.7)
+    deep = mat("Petal deep", "#E75BA0", 0.55, 0.15)
+    pink = mat("Petal", "#F59AC6", 0.55, 0.15)
+    yellow = mat("Heart", "#FFE27A", 0.5, 0.25)
+    parts: list = []
+    k.add_tapered_segment(parts, "stem", (0, 0, 0), (0.02, -0.36, 0.01), 0.026, 0.022, green, vertices=5)
+    for i, (s, y) in enumerate(((1, -0.11), (-1, -0.21))):
+        base, tip = Vector((0.01 * s, y, 0)), Vector((0.19 * s, y - 0.08, 0.04 * s))
+        mid = base + (tip - base) * 0.45
+        side = Vector((-0.035, 0, 0.085 * s))
+        verts = [tuple(base), tuple(mid + side), tuple(tip), tuple(mid - side), tuple(mid + Vector((0, 0.02, 0))), tuple(mid - Vector((0, 0.02, 0)))]
+        leaf = k.add_mesh(parts, f"leaf-{i}", verts, [(0, 1, 4), (0, 4, 3), (0, 3, 5), (0, 5, 1), (2, 4, 1), (2, 3, 4), (2, 5, 3), (2, 1, 5)], [leaf_green], smooth=True)
+        fix_normals(leaf)
+    # The bell: ten-sided rings down to the rim, a five-pointed star whose points flare out and curl up a little, then
+    # back up inside to the yellow heart.
+    seg = 10
+    rings = [(-0.33, 0.035, 0.0, 0.0), (-0.48, 0.16, 0.08, 0.0), (-0.68, 0.25, 0.3, 0.08), (-0.61, 0.09, 0.0, 0.0)]
+    verts = []
+    for y, r, lobe, curl in rings:
+        for i in range(seg):
+            a = TAU * i / seg
+            point = i % 2 == 0
+            rr = r * (1 + lobe if point else 1 - lobe * 0.6)
+            verts.append((math.cos(a) * rr + 0.02, y + (curl if point else 0.0), math.sin(a) * rr + 0.01))
+    faces = [tuple(range(seg))]
+    indices = [0]
+    for r in range(len(rings) - 1):
+        faces += ring_faces(r * seg, (r + 1) * seg, seg)
+        indices += [0 if r == 0 else 1] * seg
+    faces.append(tuple(range(len(verts) - 1, len(verts) - seg - 1, -1)))
+    indices.append(2)
+    bell = k.add_mesh(parts, "bell", verts, faces, [deep, pink, yellow], indices)
+    fix_normals(bell)  # a closed shell: outside down to the rim, then back up inside to the heart
+    for poly in bell.data.polygons:
+        poly.use_smooth = poly.material_index != 2
+    k.add_tapered_segment(parts, "stamen", (0.02, -0.61, 0.01), (0.02, -0.8, 0.01), 0.035, 0.0, yellow, vertices=5)
+    return parts, 120
+
+
 # ---------------------------------------------------------------- export and preview
 
 ISLANDS = {"island-a", "island-b", "island-c", "island-flip", "island-flip-cap"}
+# Not set on the floor by normalize(): the islands and the hanging flower keep their origin at the top; the ring stays
+# centred on its rail, the weathervane on its post.
+KEEP_ORIGIN = ISLANDS | {"upside-flower"}
+KEEP_XZ = {"updraft-ring", "weathervane"}
 
 
 def export_glb(model, name, budget, max_kb=250):
@@ -857,9 +1138,14 @@ def preview(model, name, direction=(0.55, -0.72, 0.42), size=(512, 400), exposur
 
 BUILDERS = {"island-a": island_a, "island-b": island_b, "island-c": island_c, "island-flip": island_flip,
             "island-flip-cap": island_flip_cap, "cloud-a": cloud_a, "cloud-b": cloud_b, "cloud-bounce": cloud_bounce,
-            "sky-buoy": sky_buoy}
+            "sky-buoy": sky_buoy, "jump-pad": jump_pad, "updraft-ring": updraft_ring, "cloud-crystal": cloud_crystal,
+            "weathervane": weathervane, "upside-flower": upside_flower}
+# Camera directions (Blender axes: -Y is the model's front, +Z up). The jump pad is seen as the train comes to it.
 VIEWS = {"island-flip": (0.62, -0.62, -0.38), "island-flip-cap": (0.8, -0.55, 0.25), "sky-buoy": (0.75, -0.55, 0.3),
-         "island-a": (0.55, -0.72, 0.32), "island-b": (0.55, -0.72, 0.32), "island-c": (0.55, -0.72, 0.32)}
+         "island-a": (0.55, -0.72, 0.32), "island-b": (0.55, -0.72, 0.32), "island-c": (0.55, -0.72, 0.32),
+         "jump-pad": (0.5, 0.62, 0.6), "updraft-ring": (0.72, -0.62, 0.22), "weathervane": (0.6, -0.72, 0.3),
+         "upside-flower": (0.6, -0.72, -0.3)}
+TALL = {"weathervane", "upside-flower", "cloud-crystal"}
 
 if __name__ == "__main__":
     names = [a for a in sys.argv[1:] if a in BUILDERS] or list(BUILDERS)
@@ -869,7 +1155,8 @@ if __name__ == "__main__":
         model = built if isinstance(built, bpy.types.Object) else k.join(built, name)
         model.name = name
         model.data.name = name
-        if name not in ISLANDS:
-            k.normalize(model, None)
+        if name not in KEEP_ORIGIN:
+            k.normalize(model, None, center=name not in KEEP_XZ)
         export_glb(model, name, budget)
-        preview(model, name, VIEWS.get(name, (0.55, -0.72, 0.42)), exposure=-1.0 if name.startswith("cloud") else 0.0)
+        preview(model, name, VIEWS.get(name, (0.55, -0.72, 0.42)), size=(400, 512) if name in TALL else (512, 400),
+                exposure=-1.0 if name.startswith("cloud") else 0.0)

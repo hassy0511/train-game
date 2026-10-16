@@ -53,6 +53,12 @@ function railRing(radius: number): Group {
   return g;
 }
 
+/**
+ * The island's own greens (assets/blender/sky.py: the grass lip, the mossy ledge and the tufts on it, the grass on a
+ * floating pebble): all of them take a ground colour of its own, wherever they are.
+ */
+const ISLAND_GREENS = new Set(['Grass', 'Moss', 'Tuft']);
+
 /** Paints the upward faces of `root`'s meshes `color` (vertex colours on a copy of each geometry, else the material). */
 function tintTop(root: Group, color: string): void {
   const c = new Color(color);
@@ -78,11 +84,13 @@ function tintTop(root: Group, color: string): void {
       painted.color = new Color('#ffffff');
       mesh.material = painted;
     }
-    // The top and its grassy edge (everything within 2 m of the island's top, in world height); the rock keeps its colour.
+    // The top and its grassy edge (everything within 2 m of the island's top, in world height, and the island's greens
+    // further down); the rock keeps its colour.
     root.updateMatrixWorld(true);
     const positions = geometry.getAttribute('position');
     const p = new Vector3();
-    for (let i = 0; i < positions.count; i++) if (p.fromBufferAttribute(positions, i).applyMatrix4(mesh.matrixWorld).y > top - 2) out.setXYZ(i, c.r, c.g, c.b);
+    const green = ISLAND_GREENS.has(material.name);
+    for (let i = 0; i < positions.count; i++) if (green || p.fromBufferAttribute(positions, i).applyMatrix4(mesh.matrixWorld).y > top - 2) out.setXYZ(i, c.r, c.g, c.b);
     out.needsUpdate = true;
     mesh.geometry = geometry;
   });
