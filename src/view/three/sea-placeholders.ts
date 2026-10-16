@@ -336,17 +336,6 @@ function rockCrack(): Group {
   return solid('rock-crack', parts);
 }
 
-/** The mouth of a bubble spring (`spring-vent`, 5 × 1 × 5 m): a sandy hump with three round holes. */
-function springVent(): Group {
-  const parts: BufferGeometry[] = [];
-  parts.push(part(new SphereGeometry(2.5, 12, 4, 0, Math.PI * 2, 0, Math.PI / 2), SAND, { scale: [1, 0.4, 1] }));
-  for (let i = 0; i < 3; i++) {
-    const a = (i / 3) * Math.PI * 2;
-    parts.push(part(new CircleGeometry(0.4, 10), '#7FB5C9', { at: [Math.cos(a) * 0.8, 0.98, Math.sin(a) * 0.8], rot: [-Math.PI / 2 + 0.25, 0, 0] }));
-  }
-  return solid('spring-vent', parts);
-}
-
 // ---- living things ---------------------------------------------------------------------------------------
 
 /** The whale's tail, pivoting at its root (0, 0, 0 in its own space), for sea.ts to wave. */
@@ -511,7 +500,6 @@ const BUILDERS: Record<string, () => Group> = {
   'coral-arch': coralArch,
   'coral-pillar': coralPillar,
   'rock-crack': rockCrack,
-  'spring-vent': springVent,
   whale,
   'fish-a': () => fish('fish-a', FISH_YELLOW),
   'fish-b': () => fish('fish-b', FISH_BLUE),

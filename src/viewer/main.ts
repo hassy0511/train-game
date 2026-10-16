@@ -31,7 +31,6 @@ import { buildMirrorPlaceholder } from '../view/three/mirror-placeholders';
 import { buildSeaPlaceholder } from '../view/three/sea-placeholders';
 import { buildRiverPlaceholder } from '../view/three/river-placeholders';
 import { buildSkyPlaceholder } from '../view/three/sky-placeholders';
-import { buildVolcanoPlaceholder } from '../view/three/volcano-placeholders';
 import { buildMagnetPlaceholder } from '../view/three/magnet-placeholders';
 import { buildReversePlaceholder } from '../view/three/reverse-placeholders';
 import { buildCastlePlaceholder } from '../view/three/castle-placeholders';
@@ -92,7 +91,6 @@ const built = new Set<string>(__MODEL_MANIFEST__);
 /** The game's code-drawn stand-in for a model that is not built yet. */
 const drawn = (name: string): Group | null =>
   buildSkyPlaceholder(name) ??
-  buildVolcanoPlaceholder(name) ??
   buildSeaPlaceholder(name) ??
   buildIcePlaceholder(name) ??
   buildRiverPlaceholder(name) ??
