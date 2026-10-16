@@ -17,8 +17,14 @@ import type { ModelLibrary } from './models';
 import { buildTrack } from './rail-mesh';
 
 const BARK = new Color('#7A5A3C');
-/** The nut rolls with its centre this far above the rail (m). */
+/** The nut's foot is this far above the rail when it stands or lies on it (m). */
 const NUT_LIFT = 0.1;
+/**
+ * The acorn model (assets/blender/forest.py) has its origin at its foot, and the nut turns about its middle: this far up
+ * its axis (m). A rolling nut lies on its side (its axis across the rail), its middle this far above its lowest point.
+ */
+const NUT_MIDDLE = 0.85;
+const NUT_RADIUS = 0.77;
 /** Where a squirrel sits over its rail, and where it holds the nut (m above the rail). */
 const SQUIRREL_HEIGHT = 6;
 const SQUIRREL_LATERAL = 1.8;
@@ -33,7 +39,11 @@ interface BoughVisual {
 }
 
 interface NutVisual {
+  /** Turns about the acorn's middle; `body` (the model) sits in it upright or lying on its side. */
   object: Object3D;
+  body: Object3D;
+  /** A rolling nut lies on its side; the squirrel's stands up (held, dropped). */
+  lying: boolean;
   railId: string;
   /** "roll": rolling from `at` at `speed`, `t` s ago; "fall": falling from `from` to `to` in `seconds`. */
   mode: 'wait' | 'roll' | 'rest' | 'fall' | 'bonk' | 'hidden';
@@ -80,11 +90,15 @@ export class ForestGimmicks {
     const acorn = await models.load('acorn');
     for (const actor of this.stage.actors) {
       if ((actor.type !== 'nut' && actor.type !== 'squirrel') || !actor.onRail) continue;
-      const nut = acorn.clone(true);
+      const nut = new Group();
+      const body = acorn.clone(true);
+      nut.add(body);
       this.group.add(nut);
       const range = Number((actor.params as { range?: number }).range ?? 160);
       const visual: NutVisual = {
         object: nut,
+        body,
+        lying: actor.type === 'nut',
         railId: actor.onRail.railId,
         mode: 'wait',
         at: actor.onRail.at,
@@ -97,13 +111,18 @@ export class ForestGimmicks {
         range,
       };
       this.nuts.set(actor.id, visual);
+      this.pose(visual);
       if (actor.type === 'squirrel') {
         const squirrel = (await models.load('squirrel')).clone(true);
         const f = this.frame(actor.onRail.railId, actor.onRail.at);
-        squirrel.position.copy(f.position).addScaledVector(f.up, SQUIRREL_HEIGHT).addScaledVector(f.right, SQUIRREL_LATERAL);
+        // The holder faces the squirrel; the model sways inside it (setting rotation.z on the turned object itself
+        // would undo the turn and stand it on its head).
+        const holder = new Group();
+        holder.add(squirrel);
+        holder.position.copy(f.position).addScaledVector(f.up, SQUIRREL_HEIGHT).addScaledVector(f.right, SQUIRREL_LATERAL);
         // Face across the rail, towards the approaching train a little.
-        squirrel.lookAt(squirrel.position.clone().sub(f.right).addScaledVector(f.tangent, -0.6));
-        this.group.add(squirrel);
+        holder.lookAt(holder.position.clone().sub(f.right).addScaledVector(f.tangent, -0.6));
+        this.group.add(holder);
         this.squirrels.set(actor.id, squirrel);
         this.hold(visual);
       } else {
@@ -117,17 +136,36 @@ export class ForestGimmicks {
     return rail.frameAt(Math.max(0, Math.min(rail.length, s)));
   }
 
+  /** Sets the acorn in its turning group: its middle at the group's origin, upright or lying with its axis along X. */
+  private pose(nut: NutVisual): void {
+    if (nut.lying) {
+      nut.body.rotation.set(0, 0, Math.PI / 2);
+      nut.body.position.set(NUT_MIDDLE, 0, 0);
+    } else {
+      nut.body.rotation.set(0, 0, 0);
+      nut.body.position.set(0, -NUT_MIDDLE, 0);
+    }
+  }
+
+  /** How high the turning middle is over what the nut stands or lies on (m). */
+  private middleHeight(nut: NutVisual): number {
+    return (nut.lying ? NUT_RADIUS : NUT_MIDDLE) + NUT_LIFT;
+  }
+
   /** Puts a nut on its rail at `s`. */
   private place(nut: NutVisual, s: number): void {
     const f = this.frame(nut.railId, s);
-    nut.object.position.copy(f.position).addScaledVector(f.up, NUT_LIFT);
+    nut.object.position.copy(f.position).addScaledVector(f.up, this.middleHeight(nut));
     nut.object.visible = true;
   }
 
   /** A squirrel's nut, held over the rail. */
   private hold(nut: NutVisual): void {
     const f = this.frame(nut.railId, nut.at);
-    nut.object.position.copy(f.position).addScaledVector(f.up, HELD_NUT_HEIGHT).addScaledVector(f.right, SQUIRREL_LATERAL * 0.6);
+    nut.object.position
+      .copy(f.position)
+      .addScaledVector(f.up, HELD_NUT_HEIGHT + NUT_MIDDLE)
+      .addScaledVector(f.right, SQUIRREL_LATERAL * 0.6);
     nut.object.rotation.set(0, 0, 0);
     nut.object.visible = true;
     nut.mode = 'rest';
@@ -169,7 +207,7 @@ export class ForestGimmicks {
           break;
         case 'rest': {
           const f = this.frame(nut.railId, e.at);
-          this.fall(nut, f.position.clone().addScaledVector(f.up, NUT_LIFT), 0.45, 'rest');
+          this.fall(nut, f.position.clone().addScaledVector(f.up, this.middleHeight(nut)), 0.45, 'rest');
           break;
         }
         case 'bonk': {
@@ -185,6 +223,7 @@ export class ForestGimmicks {
         case 'reset':
           nut.mode = 'wait';
           nut.at = e.at;
+          nut.object.rotation.set(0, 0, 0);
           this.place(nut, e.at);
           break;
       }
@@ -208,8 +247,8 @@ export class ForestGimmicks {
         nut.t += dt;
         const travelled = Math.min(nut.range, nut.speed * nut.t);
         this.place(nut, nut.at - travelled);
-        // Rolling towards the train: it turns about its side axis.
-        nut.object.rotation.x -= (nut.speed * dt) / 0.8;
+        // Rolling towards the train: lying on its side, it turns about its own axis.
+        nut.object.rotation.x -= (nut.speed * dt) / NUT_RADIUS;
         if (travelled >= nut.range) {
           nut.mode = 'hidden';
           nut.object.visible = false;
@@ -218,9 +257,11 @@ export class ForestGimmicks {
         nut.t += dt;
         const k = Math.min(1, nut.t / nut.seconds);
         nut.object.position.lerpVectors(nut.from, nut.to, k);
-        // A small hop at the start of the fall.
+        // A small hop at the start of the fall. A nut that comes to rest on the rail turns over once and lands the way
+        // it was; one falling out of sight just tumbles.
         nut.object.position.y += Math.sin(k * Math.PI) * 1.2;
-        nut.object.rotation.z += dt * 6;
+        if (nut.then === 'rest') nut.object.rotation.z = k * Math.PI * 2;
+        else nut.object.rotation.z += dt * 6;
         if (k >= 1) {
           nut.mode = nut.then;
           if (nut.then === 'hidden') nut.object.visible = false;

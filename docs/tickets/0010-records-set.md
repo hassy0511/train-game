@@ -1,8 +1,8 @@
 # 0010 記録の 形（コードで 描く 5 つ）
 
-- 状態: **完了（コードで 描いた 形）**。1-1・1-2 の 4 つ（`record-town-board`・`record-hq-plans`・`record-balloon`・`record-nest`）は 2026-10-16 に Blender で 作った（つくりこみ、`assets/blender/records.py`。1-1 の まち・1-2 の 谷の 見た目に そろえた）。2-1 の `record-feather` は コードの 形の まま（2-1 の 一式 0007 と いっしょに 作る）
+- 状態: **完了（コードで 描いた 形）**。1-1・1-2 の 4 つ（`record-town-board`・`record-hq-plans`・`record-balloon`・`record-nest`）は 2026-10-16 に Blender で 作った（つくりこみ、`assets/blender/records.py`。1-1 の まち・1-2 の 谷の 見た目に そろえた）。2-1 の `record-feather` も 2026-10-16 に 2-1 の 一式（0007、`assets/blender/forest.py`）と いっしょに 作った。コードで 描く 記録は もう ない
 - 担当: Claude Code
-- 関連: `docs/PHASE7_FINISH.md` §4 の 1・4、`docs/STAGE_SCHEMA.md` §11、`src/view/three/record-placeholders.ts`
+- 関連: `docs/PHASE7_FINISH.md` §4 の 1・4、`docs/STAGE_SCHEMA.md` §11、`assets/blender/records.py`・`forest.py`
 
 ## 目的
 仕上げ PR3「きろく」で 足した 記録を、世界と 図鑑に 出す 形。図鑑の 絵は `node scripts/render-zukan.mjs` が この 形から 描く。
