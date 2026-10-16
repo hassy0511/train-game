@@ -2,15 +2,17 @@
 
 The crafted look (つくりこみ), chosen for every model on 2026-10-15 (docs/ASSET_PIPELINE.md §1), in the toy style of
 1-3's set (sky.py, whose mesh helpers and preview this script shares).
-tree-trunk (the giant tree), canopy (a clump of leaves), branch-log (the branch under the rail), bough-slab and
-bough-slab-cap (the flat upside-down bough the rail wraps round, and its rounded end), leaf-pad (the big leaf that
-catches a falling train; 2-2 builds floors, roofs and lily pads of it), mushroom, acorn (the nut that rolls down the
-branch; the squirrel holds one), squirrel, and the records acorn-big, squirrel-nest and record-feather. Same names,
-sizes, origins and orientation as the code stand-ins they replace, so the stage JSON does not change:
+tree-trunk (the giant tree), canopy (a clump of leaves), branch-log (the branch under the rail), branch-stub (a short
+side branch a record sits on), bough-slab and bough-slab-cap (the flat upside-down bough the rail wraps round, and its
+rounded end), leaf-pad (the big leaf that catches a falling train; 2-2 builds floors, roofs and lily pads of it),
+mushroom, acorn (the nut that rolls down the branch; the squirrel holds one), squirrel, and the records acorn-big,
+squirrel-nest and record-feather. Same names, origins and orientation as the code stand-ins they replace:
 - branch-log: origin at the centre of its top line, the top at y = 0 all along (the track sits on it), 3.8 x 3.8 x 40,
   thinner toward +Z; the thick end's collar hides the thin end of the log before it (logs are laid end to end).
-- bough-slab 30 x 18.8 x 40: origin at the top centre, moss on top (y = 0) and underneath (y = -18.8), bark sides; the
-  ends at z = +-20 are cut flat with one cross-section, so slabs line up end to end and the cap closes the last one.
+- branch-stub: out of a branch-log's flank, +Z away from the log; origin at the record's spot on its top (y = 0).
+- bough-slab 30 x 18.8 x 50: origin at the top centre, moss on top (y = 0) and underneath (y = -18.8), bark sides; the
+  ends at z = +-25 are cut flat with one cross-section, so slabs line up end to end and the cap closes the last one
+  (50 m, not island-flip's 40: 2-1's loops are 100 m apart, and the caps sit on the loops' centres).
   bough-slab-cap: the rounded end (radius 9.4 about y = -9.4, z = 0), out toward +Z; origin at the top of the end it
   closes. Rails run at x = +-6 on top and between x = -6 and 6 underneath: |x| < 10.5 stays flat and clear.
 - Everything else: origin at the bottom centre, +Z forward (the squirrel's face; the side facing the rail for the
@@ -462,6 +464,71 @@ def branch_log():
     return parts, 800
 
 
+def branch_stub():
+    """A short side branch for a record to sit on beside the track (2-1's squirrel-nest and acorn-big, 5 m out from the
+    rail): it grows out of a branch-log's flank, its top line rising 1.35 m as it leaves the log and levelling off
+    under the record, and ends 1.5 m beyond it in a pale cut end, a sprig of leaves at its tip. Faceted bark in long
+    strips of three browns as on branch-log, a lighter collar where it leaves the log, a cushion of moss on its flank,
+    a cut-off twig underneath. +Z points away from the log (the stage turns it across the rail); the origin is the
+    record's spot on its top (y = 0 there). The root, 5.4 m back and 2.2 m down, sinks into the log's middle; where it
+    leaves the log its top is still 0.35 m under the log's, clear of the train."""
+    bark, dark, light = mat("Bark", BARK, 0.9), mat("Bark dark", BARK_DARK, 0.9), mat("Bark light", BARK_LIGHT, 0.9)
+    moss = mat("Moss", LEAF, 0.9)
+    leaf, leaf_light = mat("Leaf", LEAF, 0.8), mat("Leaf light", LEAF_LIGHT, 0.8)
+    rng = random.Random(43)
+    parts: list = []
+    sides, wide = 10, 1.12  # a little wider than deep, so the record's foot has room on top
+    # (z, height of the top line, radius, wobble): the root in the log, the collar where it leaves it, the seat (z = 0),
+    # the cut end.
+    stations = [(-5.4, -1.35, 0.85, 0.0), (-3.5, -1.02, 0.95, 0.0), (-2.9, -0.86, 0.84, 0.03), (-2.0, -0.56, 0.74, 0.04),
+                (-1.0, -0.2, 0.66, 0.04), (0.0, 0.0, 0.6, 0.0), (0.9, -0.03, 0.55, 0.03), (1.5, -0.09, 0.5, 0.0)]
+    tops = [Vector((0.0, y, z)) for z, y, _, _ in stations]
+    ups = []
+    rings = []
+    for i, (z, y, r, wobble) in enumerate(stations):
+        along = (tops[min(i + 1, len(tops) - 1)] - tops[max(i - 1, 0)]).normalized()
+        up = along.cross(Vector((1, 0, 0))).normalized()
+        ups.append(up)
+        rings.append([tuple(tops[i] + Vector((wide * x, 0, 0)) + up * yy) for x, yy in log_section(r, wobble, rng, sides=sides, grain=0.08)])
+    rows = (len(rings) - 1) * sides
+    strip_tone = [0, 2, 0, 1, 0, 2, 1, 0, 1, 2]
+
+    def colour(c, nm, i):
+        if i >= rows:
+            return 1 if i == rows else 2  # the root's end (inside the log), the cut end
+        if i // sides == 1:
+            return 2  # the collar
+        return strip_tone[i % sides]
+
+    loft_rings(parts, "stub", rings, [bark, dark, light], colour)
+    # The cut end: pale wood inside a rim of bark.
+    end_top, end_up, end_r = tops[-1], ups[-1], stations[-1][2]
+    along = (tops[-1] - tops[-2]).normalized()
+    oval(parts, "cut", tuple(end_top - end_up * (end_r * math.cos(math.pi / sides))), tuple(along), tuple(end_up),
+         2 * wide * end_r * 0.72, 2 * end_r * 0.72, mat("Cut wood", "#C9A272", 0.85), segments=8, lift=0.012)
+    # A cushion of moss on the upper flank, short of the record's spot.
+    side, a = -1, math.radians(50)
+    mid_top, mid_up, mid_r = (tops[3] + tops[4]) / 2, (ups[3] + ups[4]).normalized(), 0.7
+    centre = mid_top - mid_up * (mid_r * math.cos(math.pi / sides))
+    c = centre + Vector((side * wide * mid_r * math.sin(a), 0, 0)) + mid_up * (mid_r * math.cos(a) - 0.04)
+    cushion = k.add_ellipsoid(parts, "moss", (0.7, 0.3, 1.4), tuple(c), moss, segments=6, rings=3)
+    cushion.rotation_euler[1] = side * a  # lie along the flank (Blender Y is the branch's axis)
+    k.set_smooth(cushion, True)
+    # A cut-off twig underneath.
+    root = tops[4] - ups[4] * 1.1 + Vector((0.25, 0, 0))
+    tip = root + Vector((0.45, -0.5, 0.25))
+    tube(parts, "twig-stub", [tuple(root), tuple(tip)], [0.17, 0.13], dark, sides=5)
+    oval(parts, "twig-stub-end", tuple(tip), (0.55, -0.62, 0.3), (0, 1, 0), 0.24, 0.24, light, segments=6, lift=0.01)
+    # A sprig of leaves out of the tip, below the top (clear of the record), fanning out away from the log.
+    root = tops[-2] - ups[-2] * 0.45 + Vector((0.42, 0, 0))
+    tip = root + Vector((0.7, 0.15, 0.85))
+    tube(parts, "twig", [tuple(root), tuple(tip)], [0.11, 0.06], dark, sides=5)
+    for q, (dx, dy, dz, length) in enumerate(((0.35, 0.15, 1.0, 1.35), (1.0, 0.05, 0.35, 1.2), (-0.45, -0.05, 1.0, 1.1))):
+        leaf_blade(parts, f"sprig-{q}", tuple(tip), (dx, dy, dz), length, 0.44, leaf_light if q % 2 else leaf, leaf, droop=0.22,
+                   thick=0.05, sections=2)
+    return parts, 400
+
+
 # ---------------------------------------------------------------- the upside-down bough and its rounded end
 
 SLAB_THICK = 18.8
@@ -502,18 +569,22 @@ def bough_materials(under_glow=0.32):
     }
 
 
+SLAB_LENGTH = 50.0
+
+
 def bough_slab():
-    """The flat upside-down bough (1-3's island-flip in the forest): 30 m wide, 18.8 thick, 40 long. A carpet of moss
+    """The flat upside-down bough (1-3's island-flip in the forest): 30 m wide, 18.8 thick, 50 long. A carpet of moss
     on top (y = 0) and underneath (y = -18.8, glowing a little, as 1-3's underside grass does, so it stays bright lit
     only from below), its lip rounded with drips hanging over; between them the bark bulges out in ridges of grain
     along the bough, in three browns; |x| < 12 stays flat for the rails."""
     m = bough_materials()
     parts: list = []
     rng = random.Random(51)
-    columns = 4
+    columns = 5
+    half = SLAB_LENGTH / 2
     rings = []
     for c in range(columns + 1):
-        z = -20 + 40 * c / columns
+        z = -half + SLAB_LENGTH * c / columns
         inner = 0 < c < columns
         ring = []
         for x, y in BARK_SIDE + [(x, SLAB_MID * 2 - y) for x, y in reversed(BARK_SIDE[:-1])]:
@@ -526,7 +597,7 @@ def bough_slab():
         drips_r, drips_l = s.strip_drips(8, 61 if glow else 63, 1.1), s.strip_drips(8, 62 if glow else 64, 1.1)
         rings = []
         for c in range(9):
-            z = -20 + 40 * c / 8
+            z = -half + SLAB_LENGTH * c / 8
             rings.append([(x, (-SLAB_THICK - y) if glow else y, z) for x, y in moss_section(drips_r[c], drips_l[c])])
         loft_rings(parts, f"moss-{face}", rings, [m["moss under" if glow else "moss"]], None, lambda c, nm: abs(nm.y) < 0.97)
     return parts, 600
@@ -952,13 +1023,13 @@ def export_glb(model, name, budget, max_kb=250, origin="floor"):
     }, sort_keys=True))
 
 
-BUILDERS = {"tree-trunk": tree_trunk, "canopy": canopy, "branch-log": branch_log, "bough-slab": bough_slab, "bough-slab-cap": bough_slab_cap, "leaf-pad": leaf_pad, "mushroom": mushroom, "acorn": acorn, "acorn-big": acorn_big, "squirrel": squirrel, "squirrel-nest": squirrel_nest, "record-feather": record_feather}
+BUILDERS = {"tree-trunk": tree_trunk, "canopy": canopy, "branch-log": branch_log, "branch-stub": branch_stub, "bough-slab": bough_slab, "bough-slab-cap": bough_slab_cap, "leaf-pad": leaf_pad, "mushroom": mushroom, "acorn": acorn, "acorn-big": acorn_big, "squirrel": squirrel, "squirrel-nest": squirrel_nest, "record-feather": record_feather}
 # Camera directions (Blender axes: -Y is the model's front, +Z up).
 VIEWS = {"tree-trunk": (0.55, -0.72, 0.25), "canopy": (0.55, -0.72, 0.1), "bough-slab": (0.62, -0.62, -0.38),
          "bough-slab-cap": (0.8, -0.55, 0.25), "leaf-pad": (0.45, -0.6, 0.65),
          "record-feather": (0.2, -0.9, 0.25)}
 TALL = {"tree-trunk", "acorn", "acorn-big", "squirrel", "record-feather"}
-ORIGIN = {"branch-log": "top", "bough-slab": "top", "bough-slab-cap": "top"}
+ORIGIN = {"branch-log": "top", "branch-stub": "top", "bough-slab": "top", "bough-slab-cap": "top"}
 KB = {"squirrel": 350}
 UNDER_BODY = {"squirrel", "record-feather"}  # set on the floor, the origin kept under the body
 

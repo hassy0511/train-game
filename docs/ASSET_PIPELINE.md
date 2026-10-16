@@ -47,6 +47,6 @@
 | 恐竜の谷の生き物 | dino-mid-sleep / dino-mid-stand、dino-small-walk、dino-large-body ＋ dino-large-neck（首は付け根が原点）、ptero、ptero-far（群れ用の遠景版。絵なしの 2 色・400 三角形以下） | `dinos.py` |
 | くものうえ（1-3） | island-a / island-b / island-c（浮島。原点は 上面の 中心で、岩は 下。`assets/models.json` の `"origin": "top"`）、island-flip ＋ island-flip-cap（線路が 回りこむ 板と その 丸い 端）、cloud-a / cloud-b、cloud-bounce（ぽよん雲）、sky-buoy（浮き標）、jump-pad（汽笛で 出る ジャンプ台）、updraft-ring（線路を くぐる 風の 輪）、記録 cloud-crystal・weathervane・upside-flower（さかさに さく 花。原点は くきの 根もと＝上） | `sky.py` |
 | 記録（1-1・1-2） | record-town-board（まちの かんばん）、record-hq-plans（ほんぶの せっけいず）、record-balloon（原点は ひもの 下の はし）、record-nest（がけの うえの す） | `records.py` |
-| おおきなきのくに（2-1） | tree-trunk（巨木。根は 38 m の 円まで）、canopy（葉の かたまり。色を ぬって 焼いた 絵 1 枚）、branch-log（線路の 下の 枝。原点は 上面の 中心で、上面は 端から 端まで y = 0）、bough-slab ＋ bough-slab-cap（さかさえだの 板と その 丸い 端。island-flip と 同じ 決まり）、leaf-pad（落ちた 電車を 受ける 大きな 葉。2-2 でも 床・屋根・はすの 葉に 使う）、mushroom、acorn（転がる 木の実。ゲームが まん中で 回す）、squirrel（リス。原点は 体の 下）、記録 acorn-big・squirrel-nest・record-feather | `forest.py`（`sky.py` の 道具を 使う） |
+| おおきなきのくに（2-1） | tree-trunk（巨木。根は 38 m の 円まで）、canopy（葉の かたまり。色を ぬって 焼いた 絵 1 枚）、branch-log（線路の 下の 枝。原点は 上面の 中心で、上面は 端から 端まで y = 0）、branch-stub（記録を のせる 横の 小枝。原点は 記録を のせる 上面、+Z が 枝の 外）、bough-slab ＋ bough-slab-cap（さかさえだの 板と その 丸い 端。island-flip と 同じ 決まりで、板は 50 m）、leaf-pad（落ちた 電車を 受ける 大きな 葉。2-2 でも 床・屋根・はすの 葉に 使う）、mushroom、acorn（転がる 木の実。ゲームが まん中で 回す）、squirrel（リス。原点は 体の 下）、記録 acorn-big・squirrel-nest・record-feather | `forest.py`（`sky.py` の 道具を 使う） |
 
 名前の `-proto` は、ゲームのコードが参照している名前なので残している（中身は本番用）。

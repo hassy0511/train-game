@@ -25,10 +25,16 @@ const NUT_LIFT = 0.1;
  */
 const NUT_MIDDLE = 0.85;
 const NUT_RADIUS = 0.77;
-/** Where a squirrel sits over its rail, and where it holds the nut (m above the rail). */
+/** Where a squirrel sits over its rail (m above the rail, m to its right). */
 const SQUIRREL_HEIGHT = 6;
 const SQUIRREL_LATERAL = 1.8;
-const HELD_NUT_HEIGHT = 5.4;
+/**
+ * The held nut: small in the squirrel's paws (the 2 m acorn would hide the 1.5 m squirrel), its middle this far up and
+ * forward of the squirrel's origin (m, in the squirrel's own frame: assets/blender/forest.py puts the paws at y 0.63,
+ * z 0.3). It grows back to full size as it falls, so the nut on the rail is the one the train jumps.
+ */
+const HELD_NUT_SCALE = 0.28;
+const HELD_NUT_AT = new Vector3(0, 0.63, 0.47);
 
 /** A bough's track and log, bent every frame (vertices move down by sag × u², u = 0 at the trunk, 1 at the tip). */
 interface BoughVisual {
@@ -55,7 +61,11 @@ interface NutVisual {
   seconds: number;
   /** After a fall onto the rail it rests; off the rail it hides. */
   then: 'rest' | 'hidden';
+  /** Its size when the fall began (a held nut is small); it ends full size. */
+  fromScale: number;
   range: number;
+  /** A squirrel's nut: where its paws hold it (the turning middle, in the group's frame). */
+  paws: Vector3 | null;
 }
 
 /**
@@ -108,7 +118,9 @@ export class ForestGimmicks {
         to: new Vector3(),
         seconds: 0,
         then: 'rest',
+        fromScale: 1,
         range,
+        paws: null,
       };
       this.nuts.set(actor.id, visual);
       this.pose(visual);
@@ -122,6 +134,8 @@ export class ForestGimmicks {
         holder.position.copy(f.position).addScaledVector(f.up, SQUIRREL_HEIGHT).addScaledVector(f.right, SQUIRREL_LATERAL);
         // Face across the rail, towards the approaching train a little.
         holder.lookAt(holder.position.clone().sub(f.right).addScaledVector(f.tangent, -0.6));
+        holder.updateMatrix();
+        visual.paws = HELD_NUT_AT.clone().applyMatrix4(holder.matrix);
         this.group.add(holder);
         this.squirrels.set(actor.id, squirrel);
         this.hold(visual);
@@ -156,23 +170,23 @@ export class ForestGimmicks {
   private place(nut: NutVisual, s: number): void {
     const f = this.frame(nut.railId, s);
     nut.object.position.copy(f.position).addScaledVector(f.up, this.middleHeight(nut));
+    nut.object.scale.setScalar(1);
     nut.object.visible = true;
   }
 
-  /** A squirrel's nut, held over the rail. */
+  /** A squirrel's nut, small in its paws over the rail. */
   private hold(nut: NutVisual): void {
-    const f = this.frame(nut.railId, nut.at);
-    nut.object.position
-      .copy(f.position)
-      .addScaledVector(f.up, HELD_NUT_HEIGHT + NUT_MIDDLE)
-      .addScaledVector(f.right, SQUIRREL_LATERAL * 0.6);
+    if (!nut.paws) return;
+    nut.object.position.copy(nut.paws);
     nut.object.rotation.set(0, 0, 0);
+    nut.object.scale.setScalar(HELD_NUT_SCALE);
     nut.object.visible = true;
     nut.mode = 'rest';
   }
 
   private fall(nut: NutVisual, to: Vector3, seconds: number, then: 'rest' | 'hidden'): void {
     nut.from.copy(nut.object.position);
+    nut.fromScale = nut.object.scale.x;
     nut.to.copy(to);
     nut.t = 0;
     nut.seconds = seconds;
@@ -257,6 +271,8 @@ export class ForestGimmicks {
         nut.t += dt;
         const k = Math.min(1, nut.t / nut.seconds);
         nut.object.position.lerpVectors(nut.from, nut.to, k);
+        // A held nut grows back to full size on the way down (quickly, so it lands as big as a rolling one).
+        nut.object.scale.setScalar(nut.fromScale + (1 - nut.fromScale) * Math.min(1, k * 1.6));
         // A small hop at the start of the fall. A nut that comes to rest on the rail turns over once and lands the way
         // it was; one falling out of sight just tumbles.
         nut.object.position.y += Math.sin(k * Math.PI) * 1.2;

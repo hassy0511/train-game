@@ -67,6 +67,7 @@
   "tree-trunk": { "script": "forest.py", "triangles": 3000, "kb": 250 },
   "canopy": { "script": "forest.py", "triangles": 2000, "kb": 250 },
   "branch-log": { "script": "forest.py", "triangles": 800, "kb": 250, "origin": "top" },
+  "branch-stub": { "script": "forest.py", "triangles": 400, "kb": 250, "origin": "top" },
   "bough-slab": { "script": "forest.py", "triangles": 600, "kb": 250, "origin": "top" },
   "bough-slab-cap": { "script": "forest.py", "triangles": 600, "kb": 250, "origin": "top" },
   "leaf-pad": { "script": "forest.py", "triangles": 500, "kb": 250 },
