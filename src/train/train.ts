@@ -31,7 +31,7 @@ import {
   TRAIN,
 } from './params';
 import type { TrainPose, TrainState } from './types';
-import { Trail, type ReverseStop } from './consist';
+import { frameOn, Trail, type ReverseStop } from './consist';
 
 export type JunctionSide = 'left' | 'right';
 
@@ -366,6 +366,11 @@ export class Train {
   /** v1.11 (PR8a): the lead bogie's trail distance last frame (for the flown and dived marks). */
   private markFrom: number | null = null;
   /**
+   * v1.11 (2026-10-16, PHASE9_0 §5): the fork ahead of the lead car centre whose decided way the lead car's front bogie
+   * has gone onto (its point passed); kept while the train turns round short of the fork. Null: none.
+   */
+  private leadFork: { junction: JunctionDef; to: string } | null = null;
+  /**
    * v1.11 (PR7): the lead car's height at trail distances it passed (the last 60 m or so), to see the cars behind ride
    * the same heights there (carLiftErr, the test hook data-car-lift-err).
    */
@@ -525,6 +530,14 @@ export class Train {
   /** The rear end's trail distance (the lead car centre's less REVERSE.tail). */
   private get tailX(): number {
     return this.odo(this.state.s) - REVERSE.tail;
+  }
+
+  /**
+   * v1.11 (第 2 部 M3.3, 第 3 部 A7): how far back along the trail (the way the train goes reversing) from the rear end
+   * the point `at` on `railId` is, or null when the trail behind the rear end does not pass there (the magnet reversing).
+   */
+  distanceBehind(railId: string, at: number): number | null {
+    return this.trail.behind(this.tailX, railId, at);
   }
 
   /** The tail car's centre: its rail and s (records reversing, the rear window). */
@@ -917,6 +930,7 @@ export class Train {
     this.backAhead = null;
     this.atStop = false;
     this.markFrom = null;
+    this.leadFork = null;
     this.refreshPending();
     this.resetDive();
     this.resetPlow();
@@ -2163,6 +2177,7 @@ export class Train {
     this.trail.rebuild(railId, at, 'portal');
     this.liftTrack.length = 0;
     this.markFrom = null;
+    this.leadFork = null;
     this.backAhead = null;
     this.refreshPending();
     this.resetDive();
@@ -2222,17 +2237,76 @@ export class Train {
   }
 
   /**
+   * v1.11 (2026-10-16, PHASE9_0 §5): the side the train takes at fork `j` when that is decided already: its arrows are
+   * locked (the side chosen, else the default) or the mission locks it. Null: not yet (and never before the lead car
+   * centre gets there at a dive fork or a spinning one: diving or the spin may still change it).
+   */
+  private decidedSide(j: JunctionDef): JunctionSide | null {
+    if ((j.dive && j.diveSide) || (j.spin && this.spinSides)) return null;
+    const rule = this.junctionRules?.[j.id];
+    if (rule?.lock) return rule.lock;
+    if (j !== this.announced || !this.locked) return null;
+    return this.choice ?? rule?.default ?? j.default;
+  }
+
+  /**
+   * v1.11 (2026-10-16): going forward, once the lead car's front bogie (TRAIN.bogieOffset m ahead of the lead car centre)
+   * is past the point of the fork ahead and the way there is decided, it goes onto that way (leadFork). Kept until the
+   * lead car centre passes the fork or leaves the rail (a turn round short of it keeps it).
+   */
+  private updateLeadFork(): void {
+    const st = this.state;
+    const j = this.pending[0];
+    if (st.direction === 1 && j && j.railId === st.railId && j.at <= st.s + TRAIN.bogieOffset) {
+      const side = this.decidedSide(j);
+      if (side) this.leadFork = { junction: j, to: j[side] ?? st.railId };
+    }
+    const f = this.leadFork;
+    if (f && (f.junction.railId !== st.railId || f.junction.at <= st.s)) this.leadFork = null;
+  }
+
+  /**
+   * v1.11 (2026-10-16, PHASE9_0 §5): where the point `dx` m ahead of the lead car centre is (the lead car's front bogie;
+   * the trail ends at the centre). Reversing and retracing, along the way the train came (the trail's ghost); going
+   * forward, past a fork's point onto its decided way (leadFork) and past the rail's end into the rail it merges into;
+   * else on along the lead car's rail.
+   */
+  private aheadAt(dx: number): { railId: string; s: number } {
+    const along = this.trail.ghostAhead(dx);
+    if (along) return along;
+    const st = this.state;
+    const s = st.s + dx;
+    const f = this.leadFork;
+    if (f && f.to !== st.railId && f.junction.railId === st.railId && f.junction.at > st.s && f.junction.at <= s) return { railId: f.to, s: s - f.junction.at };
+    const rail = this.currentRail;
+    if (rail.end.type === 'merge' && rail.end.railId !== rail.id && s > rail.length) return { railId: rail.end.railId, s: rail.end.at + (s - rail.length) };
+    return { railId: st.railId, s };
+  }
+
+  /** v1.11 (2026-10-16): the rail the lead car's front bogie is on (the test hook data-lead-bogie). */
+  get leadBogieRail(): string {
+    return this.aheadAt(TRAIN.bogieOffset).railId;
+  }
+
+  /** The rail and s of a bogie at trail distance `x`: on the trail, or (the lead car's front one) ahead of its end. */
+  private bogieAt(x: number): { railId: string; s: number } {
+    const head = this.trail.head;
+    return x > head + 1e-9 ? this.aheadAt(x - head) : this.trail.at(x);
+  }
+
+  /**
    * Writes the body transform of the car centred `back` m behind the lead car centre (along the trail) into
    * `position`/`quaternion`. v1.11 (PR7): each bogie on the rail the trail has there; lifts and dips by trail distance.
+   * v1.11 (2026-10-16): the lead car's front bogie, ahead of the trail, by aheadAt.
    */
   private carPose(back: number, position: Vector3, quaternion: Quaternion): void {
     const x = this.odo(this.state.s) - back;
     const xf = x + TRAIN.bogieOffset;
     const xr = x - TRAIN.bogieOffset;
-    const atFront = this.trail.at(xf);
-    const atRear = this.trail.at(xr);
-    const front = this.trail.frameAt(xf);
-    const rear = this.trail.frameAt(xr);
+    const atFront = this.bogieAt(xf);
+    const atRear = this.bogieAt(xr);
+    const front = frameOn(this.network.getRail(atFront.railId), atFront.s);
+    const rear = frameOn(this.network.getRail(atRear.railId), atRear.s);
     // The car rides the arc at its center and keeps only a hint of the arc's slope, so the cab view
     // stays on the horizon ("ぴょん" like a toy, not a ski jump). Falling tips it forward.
     // v1.10: a dive lowers the car the same way (at its middle, with a hint of the arc's slope).
@@ -2264,6 +2338,7 @@ export class Train {
     const st = this.state;
     const pose = this.pose;
     if (st.direction === 1) this.trail.moveTo(st.s);
+    this.updateLeadFork();
     pose.railId = st.railId;
     pose.s = st.s;
     pose.speed = st.speed;

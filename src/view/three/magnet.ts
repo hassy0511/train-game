@@ -34,7 +34,8 @@ import type { ModelLibrary } from './models';
  * rings flowing from the lamp to what is pulled, the flight (a fetched thing stops before the lamp, pops into sparkles
  * and floats back home), the piece dropping into its gap, the gate sliding aside, the mirror turning round; on the
  * train, once the magnet light is learned, the U magnet on the roof and the ring round the lamp; the light's beam in
- * pale green in the magnet step. Never a beam, a bolt or a zap; nothing flies into the train.
+ * pale green in the magnet step. Never a beam, a bolt or a zap; nothing flies into the train. Reversing (うしろむき, 第 2 部
+ * M3.3) the lamp is the beam's at the back of the last car: the rings flow back from there and a pick stops behind it.
  */
 
 const RING_COUNT = 6;
@@ -46,6 +47,8 @@ const RING_START = 5;
 const SPARKS = 64;
 /** The lamp on the lead car (car frame, +Z forward), as the light's beam has it. */
 const LAMP = new Vector3(0, 3.3, 6.3);
+/** Reversing, the beam shines back from the last car (ThreeSceneView turns it round there): its lamp, facing −Z. */
+const LAMP_REAR = new Vector3(0, 3.3, -6.3);
 const BEAM_GREEN = new Color('#b8ffe6');
 const FILM_SHOW = 100;
 const FILM_RADIUS = 3;
@@ -102,7 +105,10 @@ export class MagnetGimmicks {
   private readonly quat = new Quaternion();
   private readonly scaleV = new Vector3();
   private readonly zPlus = new Vector3(0, 0, 1);
-  private readonly forward = new Vector3();
+  /** The way the lamp faces (world): the lead car's forward, reversing the last car's backward. */
+  private readonly ahead = new Vector3(0, 0, 1);
+  /** v1.11: reversing (the lamp is the last car's, at its back). */
+  private rear = false;
   /** The train's speed (m/s), set every frame by the scene. */
   trainSpeed = 0;
   /** The cab's camera is on (the lamp's ring is not drawn: it would fill the window). Set every frame by the scene. */
@@ -114,6 +120,8 @@ export class MagnetGimmicks {
     private readonly actors: ActorLayer,
     private readonly beam: Object3D,
     private readonly trackPiece: (railId: string, from: number, to: number) => BufferGeometry | null,
+    /** The last car (the lamp's holder reversing). */
+    private readonly tailCar: () => Object3D = () => train,
   ) {
     this.group.name = 'magnet';
   }
@@ -314,10 +322,24 @@ export class MagnetGimmicks {
       new MeshBasicMaterial({ color: '#7ff0c8', transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false }),
     );
     rim.name = 'magnet-lamp-rim';
-    rim.position.copy(LAMP);
     rim.visible = false;
     this.lampRim = rim;
-    this.train.add(rim);
+    this.placeRim();
+  }
+
+  /** The car the lamp is on now: the lead car, reversing the last car. */
+  private holder(): Object3D {
+    return this.rear ? this.tailCar() : this.train;
+  }
+
+  /** The lamp's ring goes with the beam (to the back of the last car reversing). */
+  private placeRim(): void {
+    const rim = this.lampRim;
+    if (!rim) return;
+    const holder = this.holder();
+    if (rim.parent !== holder) holder.add(rim);
+    rim.position.copy(this.rear ? LAMP_REAR : LAMP);
+    rim.rotation.y = this.rear ? Math.PI : 0;
   }
 
   /** The light's beam in pale green in the magnet step (its own colours back otherwise). */
@@ -342,6 +364,10 @@ export class MagnetGimmicks {
     if (e.type === 'light:mode') {
       this.mode = e.mode;
       this.tintBeam();
+    }
+    if (e.type === 'reverse') {
+      this.rear = e.on;
+      this.placeRim();
     }
     if (e.type === 'magnet:hint') this.hintId = e.id;
     if (e.type === 'magnet:pull') this.startPull(e.id, e.seconds, e.distance);
@@ -435,9 +461,11 @@ export class MagnetGimmicks {
 
   update(dt: number): void {
     this.clock += dt;
-    this.train.updateMatrixWorld();
-    this.lamp.copy(LAMP);
-    this.train.localToWorld(this.lamp);
+    const holder = this.holder();
+    holder.updateMatrixWorld();
+    this.lamp.copy(this.rear ? LAMP_REAR : LAMP);
+    holder.localToWorld(this.lamp);
+    this.ahead.set(0, 0, this.rear ? -1 : 1).applyQuaternion(holder.quaternion);
     const trainPos = this.train.position;
     for (const v of this.visuals.values()) this.updateTarget(v, dt, trainPos);
     this.updateFetch(dt);
@@ -456,9 +484,9 @@ export class MagnetGimmicks {
     }
   }
 
-  /** Where a fetched thing stops: MAGNET.catchGap m before the lamp. */
+  /** Where a fetched thing stops: MAGNET.catchGap m before the lamp (reversing, behind the last car). */
   private catchPoint(out: Vector3): Vector3 {
-    out.set(0, 0, 1).applyQuaternion(this.train.quaternion).multiplyScalar(MAGNET.catchGap).add(this.lamp);
+    out.copy(this.ahead).multiplyScalar(MAGNET.catchGap).add(this.lamp);
     return out;
   }
 
@@ -607,7 +635,7 @@ export class MagnetGimmicks {
       const dist = goal ? goal.distanceTo(this.lamp) : 0;
       const travelled = RING_START + this.ringAge[i] * RING_SPEED;
       // No ring to something behind the lamp (a gate the train is already through).
-      const ahead = goal ? this.tmp.subVectors(goal, this.lamp).dot(this.forward.set(0, 0, 1).applyQuaternion(this.train.quaternion)) > 0 : false;
+      const ahead = goal ? this.tmp.subVectors(goal, this.lamp).dot(this.ahead) > 0 : false;
       if (!goal || !ahead || travelled >= dist || dist < RING_START + 1) {
         this.ringAge[i] = -1;
         this.matrix.makeScale(0, 0, 0);

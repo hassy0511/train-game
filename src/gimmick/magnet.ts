@@ -35,6 +35,10 @@ export function pullSeconds(distance: number): number {
  * the pull starts. Outside the magnet step (with the magnet light learned) the light button glows green before a target
  * still waiting: a hint only. Unopened gaps and gates are blocks the train bounces off ("ぽよん"), whether it has the
  * magnet or not. Judged along the rails (no Rapier bodies): the flight is looks only.
+ *
+ * Reversing (うしろむき, 第 2 部 M3.3, 第 3 部 A7・A11) the lamp is at the rear end of the last car: only picks (records
+ * too) are pulled, by the same rules measured from the rear end back along the trail (the way the train goes back);
+ * gaps, gates and mirrors are all passed already (open). The glow works the same; the lines ("near") are not said.
  */
 export class MagnetSystem {
   /** The magnet light is learned (the button has three steps). */
@@ -92,9 +96,18 @@ export class MagnetSystem {
     return out;
   }
 
-  /** The distance along the way ahead from the train front to `t` (to a gap's or gate's face), or null. */
+  /**
+   * The distance along the way ahead from the train front to `t` (to a gap's or gate's face), or null. Reversing: from
+   * the rear end back along the trail (a pick behind it).
+   */
   distance(t: MagnetTarget): number | null {
-    return this.train.routeDistance(t.railId, t.at);
+    return this.train.reversing ? this.train.distanceBehind(t.railId, t.at) : this.train.routeDistance(t.railId, t.at);
+  }
+
+  /** How far the train front is from braking to a stop line: ahead of it, or reversing, behind it (null: elsewhere). */
+  private stopLineDistance(line: { railId: string; at: number }): number | null {
+    const d = this.train.routeDistance(line.railId, line.at);
+    return d === null ? null : this.train.reversing ? -d : d;
   }
 
   /** Whether `t` is within `range` m ahead (a pick or turn no nearer than its minAhead; a face not passed). */
@@ -118,13 +131,16 @@ export class MagnetSystem {
     this.checkTurns();
     this.keepTurns();
     const active = ctx.phase === 'driving' || ctx.phase === 'stopped';
+    // Reversing, everything but a pick is behind the train already (open; 第 3 部 A7).
+    const back = this.train.reversing;
     let hint: MagnetTarget | null = null;
     let nearest: { t: MagnetTarget; d: number } | null = null;
     for (const t of this.targets) {
-      if (!this.waiting(t)) continue;
+      if (!this.waiting(t) || (back && t.kind !== 'pick')) continue;
       const d = this.distance(t);
       if (!this.within(t, d, MAGNET.hintAhead)) continue;
-      if (this.enabled && active && !this.nearSaid.has(t.id)) {
+      // (Reversing, no line: the hints passed are not said again, A7.)
+      if (this.enabled && active && !back && !this.nearSaid.has(t.id)) {
         this.nearSaid.add(t.id);
         this.events.emit('near', { target: t });
       }
@@ -133,7 +149,7 @@ export class MagnetSystem {
       if (t.recordId && this.isFound(t.recordId)) continue;
       // Pick targets do not glow while the train brakes for the station it stops at (the child is busy there).
       if (t.kind === 'pick' && ctx.stopLine) {
-        const s = this.train.routeDistance(ctx.stopLine.railId, ctx.stopLine.at);
+        const s = this.stopLineDistance(ctx.stopLine);
         if (s !== null && s >= -1 && s <= MAGNET.stationQuiet) continue;
       }
       if (hint === null || (this.distance(hint) ?? Infinity) > d) hint = t;
