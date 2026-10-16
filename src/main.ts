@@ -1682,8 +1682,9 @@ async function boot(): Promise<void> {
     // v1.11 (PR5): the magnet light pulls (its phase: the runner's; on the test course driving, stopped or failing),
     // the odds and ends by the line, and the speed caps (the light's and the magnet's 0.7, pulling 0.5).
     const magnetPhase = runner ? runner.phase : testCourseFailing || train.isBouncing || train.isFalling ? 'failing' : train.state.speed < 0.05 ? 'stopped' : 'driving';
-    // v1.11 (PR8a, A7): the magnet's targets passed stay as they are reversing (open ones stay open); no odds and ends.
-    magnet.update(dt, { mode: lightSwitch.mode, phase: still ? 'stopped' : magnetPhase, stopLine: runner?.stopLine ?? null });
+    // v1.11 (PR8a, A7): reversing and retracing, no odds and ends; the targets passed stay as they are (open ones stay
+    // open). Reversing, the magnet pulls only picks (records too), from the rear end back along the trail (第 2 部 M3.3).
+    magnet.update(dt, { mode: lightSwitch.mode, phase: magnetPhase, stopLine: runner?.stopLine ?? null });
     ironProps.update(dt, { mode: still ? 'off' : lightSwitch.mode, pulling: magnet.pulling !== null, phase: magnetPhase });
     const pulling = magnet.pulling !== null;
     train.setSpeedCap('magnet', pulling ? { scale: MAGNET.pullScale } : null);
@@ -1903,6 +1904,8 @@ async function boot(): Promise<void> {
     // car's at the same trail distance.
     app.dataset.carGap = train.carGap.toFixed(3);
     app.dataset.carLiftErr = train.carLiftErr.toFixed(3);
+    // v1.11 (2026-10-16): the rail the lead car's front bogie is on (past a fork's point: its decided way).
+    app.dataset.leadBogie = train.leadBogieRail;
     // v1.11 (PR8a, 第 3 部 A17) test hooks.
     app.dataset.direction = String(train.direction);
     app.dataset.reverse = train.switchPending !== null ? 'pending' : train.turning ? 'turning' : train.atReverseStop ? 'stop' : train.reversing ? 'on' : '';

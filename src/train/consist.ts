@@ -91,6 +91,28 @@ export class Trail {
     return this.ghost.length > 0;
   }
 
+  /**
+   * v1.11 (2026-10-16, PHASE9_0 §5): the rail and s `dx` m ahead of the lead car centre along the ghost (the way the
+   * train came by before it reversed: the lead car's front bogie reversing and retracing), or null when the ghost does
+   * not reach that far and stays on the lead car's rail (past the end of a ghost that went onto another rail, that
+   * rail runs on).
+   */
+  ghostAhead(dx: number): { railId: string; s: number } | null {
+    const head = this.last;
+    const first = this.ghost[0];
+    if (!first || first.railId !== head.railId || first.from < head.to - 0.5) return null;
+    let left = dx - (first.from - head.to);
+    if (left <= 0) return { railId: head.railId, s: head.to + dx };
+    for (const g of this.ghost) {
+      const len = g.to - g.from;
+      if (left <= len) return { railId: g.railId, s: g.from + left };
+      left -= len;
+    }
+    if (this.ghost.length === 1) return null;
+    const end = this.ghost[this.ghost.length - 1];
+    return { railId: end.railId, s: end.to + left };
+  }
+
   /** v1.11 (PR8a): the rail the ghost goes on to after its piece on `railId` (a fork retraced takes it), or null. */
   ghostAfter(railId: string): string | null {
     if (this.ghost[0]?.railId !== railId) return null;
@@ -298,6 +320,20 @@ export class Trail {
         if (x > tailX + 1e-6) continue;
         if (!best || x > best.x) best = { junction: j, x, distance: tailX - x };
       }
+    }
+    return best;
+  }
+
+  /**
+   * v1.11 (第 2 部 M3.3): how far back along the trail from trail distance `x` the point `at` on rail `railId` is (the
+   * nearest pass behind `x`), or null when the trail behind `x` does not go through it.
+   */
+  behind(x: number, railId: string, at: number): number | null {
+    let best: number | null = null;
+    for (const p of this.pieces) {
+      if (p.railId !== railId || at < p.from - 1e-6 || at > p.to + 1e-6) continue;
+      const d = x - (p.d0 + (at - p.from));
+      if (d >= 0 && (best === null || d < best)) best = d;
     }
     return best;
   }

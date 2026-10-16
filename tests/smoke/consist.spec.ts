@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { card, FRONT, NORMAL, pressOnGlowBefore, setNotch, waitDriving, waitFront } from './drive';
+import { card, FRONT, NORMAL, pressOnGlow, pressOnGlowBefore, setDirection, setNotch, SLOW, standStill, waitDriving, waitFront } from './drive';
 
 /**
  * PR7「車両の 置き方と 通った 道」(PHASE9_CHAPTER5_6 第 3 部 A5): the cars sit along the trail the train came by
@@ -7,6 +7,9 @@ import { card, FRONT, NORMAL, pressOnGlowBefore, setNotch, waitDriving, waitFron
  * - On 0-0's straight the first two cars are 12.5 m apart (#app[data-car-gap]).
  * - 1-3 M3: over the updraft's gap on `wind` (a junction behind, a merge ahead) no car behind is higher or lower than
  *   the lead car was at the same trail distance (#app[data-car-lift-err] ≤ 0.05 m, kept every frame in the page).
+ * - 0-0 to-jishaku (2026-10-16, PHASE9_0 §5): once the lead car's front bogie (4 m ahead of its centre) is past a fork's
+ *   point with the way locked, it is on that way (#app[data-lead-bogie]), before the lead car centre gets there; and
+ *   reversing back through the fork the same.
  */
 
 interface LiftLog {
@@ -108,5 +111,70 @@ test('1-3 M3: over the updraft gap every car rides the lead car arc', async ({ p
   console.log(`1-3 updraft: max car lift err ${log.maxErr.toFixed(3)} m (${log.at}); ${log.inAir} frames in the air`);
   expect(log.inAir).toBeGreaterThan(0);
   expect(log.maxErr).toBeLessThanOrEqual(0.05);
+  expect(errors).toEqual([]);
+});
+
+test('0-0 to-jishaku: the lead bogie takes the chosen way once past the point, forward and reversing', async ({ page }) => {
+  test.setTimeout(420_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  // Every frame with the lead car centre on main 548–560 (the fork's point at 560): where its front bogie is.
+  await page.addInitScript(() => {
+    const rows: { s: number; bogie: string; dir: string }[] = [];
+    (window as unknown as { __bogie: typeof rows }).__bogie = rows;
+    new MutationObserver(() => {
+      const d = document.getElementById('app')?.dataset;
+      if (!d || d.rail !== 'main') return;
+      const s = Number(d.s);
+      if (s < 548 || s >= 560) return;
+      const last = rows[rows.length - 1];
+      if (last && last.s === s && last.dir === d.direction) return;
+      rows.push({ s, bogie: d.leadBogie ?? '', dir: d.direction ?? '' });
+    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-s'] });
+  });
+  const app = page.locator('#app');
+  await page.goto('/?stage=0-0');
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  await expect(app).toHaveAttribute('data-lead-bogie', 'main');
+  await setNotch(page, NORMAL);
+  // The rocket up the steep bit (main 240–310), then the right arrow at to-jishaku (tapped in the page as it shows).
+  await pressOnGlow(page, 'rocket');
+  const tapped = await page.waitForFunction(
+    () => {
+      const box = document.getElementById('junction');
+      const b = box?.querySelector<HTMLElement>('.arrow[data-side="right"]');
+      const d = document.getElementById('app')?.dataset;
+      if (!box || box.hidden || !b || b.hidden || d?.rail !== 'main' || Number(d.s) < 480) return false;
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      return true;
+    },
+    null,
+    { timeout: 180_000, polling: 'raf' },
+  );
+  expect(await tapped.jsonValue()).toBe(true);
+  // ゆっくり through the fork (more frames there), on until the whole train is on jishaku; then back through it.
+  await setNotch(page, SLOW);
+  await waitFront(page, 'jishaku', 30);
+  await standStill(page);
+  await setDirection(page, 'back');
+  await setNotch(page, NORMAL);
+  await page.waitForFunction(() => {
+    const d = document.getElementById('app')?.dataset;
+    return d?.rail === 'main' && Number(d.s) < 545;
+  }, null, { timeout: 120_000 });
+  await standStill(page);
+  const rows = await page.evaluate(() => (window as unknown as { __bogie: { s: number; bogie: string; dir: string }[] }).__bogie);
+  const past = (dir: string): { s: number; bogie: string }[] => rows.filter((r) => r.dir === dir && r.s > 556.2);
+  const before = (dir: string): { s: number; bogie: string }[] => rows.filter((r) => r.dir === dir && r.s < 555.8);
+  console.log(`lead bogie at to-jishaku: forward ${past('1').map((r) => `${r.s} ${r.bogie}`).join(', ')}; reversing ${past('-1').map((r) => `${r.s} ${r.bogie}`).join(', ')}`);
+  for (const dir of ['1', '-1']) {
+    expect(past(dir).length, `frames past the point (direction ${dir})`).toBeGreaterThan(0);
+    expect(past(dir).every((r) => r.bogie === 'jishaku'), `on jishaku past the point (direction ${dir})`).toBe(true);
+    expect(before(dir).length, `frames before the point (direction ${dir})`).toBeGreaterThan(0);
+    expect(before(dir).every((r) => r.bogie === 'main'), `on main before the point (direction ${dir})`).toBe(true);
+  }
   expect(errors).toEqual([]);
 });
