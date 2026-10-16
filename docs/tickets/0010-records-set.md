@@ -1,6 +1,6 @@
 # 0010 記録の 形（コードで 描く 5 つ）
 
-- 状態: **完了（コードで 描いた 形）**。Blender で 作りなおすのは 後回し（0006〜0009 と 同じ）
+- 状態: **完了（コードで 描いた 形）**。1-1・1-2 の 4 つ（`record-town-board`・`record-hq-plans`・`record-balloon`・`record-nest`）は 2026-10-16 に Blender で 作った（つくりこみ、`assets/blender/records.py`。1-1 の まち・1-2 の 谷の 見た目に そろえた）。2-1 の `record-feather` は コードの 形の まま（2-1 の 一式 0007 と いっしょに 作る）
 - 担当: Claude Code
 - 関連: `docs/PHASE7_FINISH.md` §4 の 1・4、`docs/STAGE_SCHEMA.md` §11、`src/view/three/record-placeholders.ts`
 

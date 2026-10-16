@@ -3,7 +3,7 @@
  * Rendering budget probe (TECH_SPEC §6: at most 200 draw calls and 100,000 triangles per frame):
  *   npm run budget                 # every playable stage
  *   npm run budget -- 1-2 2-1      # just some
- *   LOOK=craft npm run budget -- 1-3   # v1.13: another look of some models (public/looks/<look>/)
+ *   LOOK=<look> npm run budget -- 1-3   # v1.13: another look of some models (public/looks/<look>/)
  *   npm run budget -- --movie ending   # v1.12: a movie (src/movies/), every frame of it played through to its card
  * For each stage (src/stages/*.json without "hidden") and each camera, puts the train on every rail every 50 m
  * (every 20 m within 60 m of a station), draws one frame and reads renderer.info. Prints the heaviest frames per

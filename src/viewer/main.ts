@@ -2,7 +2,7 @@
  * Standalone model viewer (models.html): every .glb in public/models, one at a time, with orbit
  * controls. Used to review Blender deliveries on the iPad without playing a stage. Models that are not
  * built yet ("_pending" in assets/models.json) show the stand-in the game draws in code, marked 「かり」.
- * v1.13: other looks of a model are "<look>/<name>" (`?compare=island-a,craft/island-a,kit/island-a`).
+ * v1.13: other looks of a model are "<look>/<name>" (`?compare=island-a,<look>/island-a`).
  */
 import {
   AmbientLight,

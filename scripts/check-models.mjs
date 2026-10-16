@@ -40,7 +40,8 @@ function checkFolder(dir, listed, label) {
     if (kb > spec.kb) errors.push(`${name}: ${kb.toFixed(0)} KB > ${spec.kb} KB`);
     // "origin": "joint" = a part the game rotates about its origin (the big dinosaur's neck), not placed on the floor.
     // v1.13: "top" = the top surface at the origin (1-3's floating islands: the rail runs on the top, the rock hangs below;
-    // grass tufts and flowers off the line may stand up to 2 m above it).
+    // grass tufts and flowers off the line may stand up to 2 m above it; and 1-3's upside-down flower, hanging from the
+    // root of its stem).
     if (spec.origin === 'top') {
       if (maxY < -0.02 || maxY > 2) errors.push(`${name}: highest point y=${maxY.toFixed(3)} (the top must be at the origin)`);
       if (minY > -0.02) errors.push(`${name}: lowest point y=${minY.toFixed(3)} (the rock hangs below the top)`);

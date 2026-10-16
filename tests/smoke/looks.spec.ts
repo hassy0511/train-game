@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
  * shown in a check run with `look=`. The check list offers them first (each mission once per look, the usual models
  * 「いま」 first); a run draws that look's models (fetched from looks/<look>/) and says which on the badge. Without the
  * check mode (a kid's iPad), `look=` does nothing.
+ * With no look in the build (once one is chosen, its models move to public/models), the list has no such section and
+ * `look=` does nothing even in a check run.
  */
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), 'output');
@@ -17,16 +19,16 @@ const FLAG_KEY = 'train-game.kakunin.v1';
 /** The hash the flag must hold (src/core/kakunin.ts KAKUNIN_HASH). */
 const FLAG_VALUE = '80eaae856b4fc19a430f4f92ea3a592073d382618d7915a5397176eb6c7a1f0f';
 
-const LOOKS: Record<string, string[]> = existsSync(resolve(ROOT, 'assets/looks'))
-  ? Object.fromEntries(
-      readdirSync(resolve(ROOT, 'assets/looks'))
-        .filter((f) => f.endsWith('.json'))
-        .map((f) => [f.slice(0, -5), Object.keys(JSON.parse(readFileSync(resolve(ROOT, 'assets/looks', f), 'utf8'))).filter((k) => !k.startsWith('_'))]),
-    )
-  : {};
+const lists: [string, Record<string, unknown>][] = existsSync(resolve(ROOT, 'assets/looks'))
+  ? readdirSync(resolve(ROOT, 'assets/looks'))
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => [f.slice(0, -5), JSON.parse(readFileSync(resolve(ROOT, 'assets/looks', f), 'utf8')) as Record<string, unknown>])
+  : [];
+const LOOKS: Record<string, string[]> = Object.fromEntries(lists.map(([look, list]) => [look, Object.keys(list).filter((k) => !k.startsWith('_'))]));
 const LABELS: Record<string, string> = { craft: 'つくりこみ', kit: 'ライブラリ' };
-/** The stage the looks are made for (1-3 くものうえ: its islands, clouds and buoys). */
-const STAGE = '1-3';
+/** The stage the (first) look was made for ("_stages"). */
+const STAGE = ((lists[0]?.[1]._stages as string[] | undefined) ?? [])[0] ?? '1-3';
+const FROM_A_LOOK = /\/looks\/([^/]+)\/([^/]+)\.glb$/;
 
 function watchErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -42,7 +44,7 @@ function watchLooks(page: Page): { got: Map<string, Set<string>>; failed: string
   const got = new Map<string, Set<string>>();
   const failed: string[] = [];
   page.on('response', (r) => {
-    const m = /\/looks\/([^/]+)\/([^/]+)\.glb$/.exec(new URL(r.url()).pathname);
+    const m = FROM_A_LOOK.exec(new URL(r.url()).pathname);
     if (!m) return;
     if (!r.ok()) failed.push(`${m[1]}/${m[2]}: ${r.status()}`);
     got.set(m[1], (got.get(m[1]) ?? new Set()).add(m[2]));
@@ -55,16 +57,9 @@ async function ready(page: Page, stage: string): Promise<void> {
   await expect(page.locator('#app')).toHaveAttribute('data-stage', stage);
 }
 
-test.beforeAll(() => {
-  expect(Object.keys(LOOKS).length, 'assets/looks/ lists no look').toBeGreaterThan(0);
-});
-
-test('the check list offers the looks first; a tap runs that mission with that look, its models fetched and named on the badge', async ({ page }) => {
-  test.setTimeout(240_000);
-  const errors = watchErrors(page);
-  const { got, failed } = watchLooks(page);
+/** Title → the gear → 「おうちの かたへ」 (held) → 「かくにん モード」 (unlocked before: the list at once). */
+async function openList(page: Page): Promise<void> {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [FLAG_KEY, FLAG_VALUE] as const);
-  // Title → the gear → 「おうちの かたへ」 (held) → 「かくにん モード」 (unlocked before: the list at once).
   await page.goto('/');
   await ready(page, '1-1');
   await page.locator('#title-settings').click();
@@ -73,6 +68,32 @@ test('the check list offers the looks first; a tap runs that mission with that l
   await page.locator('#settings-parents').dispatchEvent('pointerup');
   await page.locator('#parents-kakunin').click();
   await expect(page.locator('#kakunin-list')).toBeVisible();
+}
+
+if (Object.keys(LOOKS).length === 0) {
+  test('with no look in the build: no 「みための くらべっこ」 in the list, and look= in a check run draws the usual models', async ({ page }) => {
+    test.setTimeout(180_000);
+    const errors = watchErrors(page);
+    const { got } = watchLooks(page);
+    await openList(page);
+    // The chapters are there; the comparison section is not.
+    await expect(page.locator('.kakunin-chapter[data-chapter="1"]')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.kakunin-chapter[data-chapter="movie"]')).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.locator('.kakunin-chapter[data-chapter="look"]')).toHaveCount(0);
+    await page.goto(`/?stage=${STAGE}&go=1&kakunin=1&look=craft`);
+    await ready(page, STAGE);
+    await expect(page.locator('#app')).not.toHaveAttribute('data-look', /./);
+    await expect(page.locator('#kakunin-badge')).toHaveText('かくにん');
+    expect(got.size).toBe(0);
+    expect(errors).toEqual([]);
+  });
+}
+
+if (Object.keys(LOOKS).length > 0) test('the check list offers the looks first; a tap runs that mission with that look, its models fetched and named on the badge', async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors = watchErrors(page);
+  const { got, failed } = watchLooks(page);
+  await openList(page);
   const section = page.locator('.kakunin-chapter[data-chapter="look"]');
   await expect(section).toBeVisible({ timeout: 15_000 });
   // First in the list, above the chapters.
@@ -124,7 +145,7 @@ test('without the check mode (a kid\'s iPad) look= does nothing', async ({ page 
   test.setTimeout(120_000);
   const { got } = watchLooks(page);
   await page.addInitScript(() => Object.defineProperty(navigator, 'webdriver', { get: () => false }));
-  const look = Object.keys(LOOKS)[0];
+  const look = Object.keys(LOOKS)[0] ?? 'craft';
   await page.goto(`/?stage=1-1&go=1&look=${look}`);
   await ready(page, '1-1');
   await expect(page.locator('#app')).not.toHaveAttribute('data-look', /./);

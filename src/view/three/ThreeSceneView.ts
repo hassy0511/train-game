@@ -351,10 +351,17 @@ export class ThreeSceneView implements SceneView {
     }
     // v1.11 (PR5): the magnet light's targets (a gap's piece is built like the track round it) and the odds and ends.
     if (MagnetGimmicks.wanted(stage)) {
-      this.magnet = new MagnetGimmicks(stage, this.train, this.actors, this.lightBeam, (railId, from, to) => {
-        const rail = network.rails.get(railId);
-        return rail ? buildTrack(rail, from, to, this.railLooks[railId] ?? 'rail', this.trackLooks) : null;
-      });
+      this.magnet = new MagnetGimmicks(
+        stage,
+        this.train,
+        this.actors,
+        this.lightBeam,
+        (railId, from, to) => {
+          const rail = network.rails.get(railId);
+          return rail ? buildTrack(rail, from, to, this.railLooks[railId] ?? 'rail', this.trackLooks) : null;
+        },
+        () => this.cars[this.cars.length - 1] ?? this.train,
+      );
       this.scene.add(this.magnet.group);
     }
     if (IronPropsView.wanted(stage)) {
@@ -1188,7 +1195,8 @@ export class ThreeSceneView implements SceneView {
     this.landmark?.update(this.camera);
     if (this.magnet) {
       this.magnet.trainSpeed = pose.speed;
-      this.magnet.cabView = cab;
+      // (The rear window sits by the lamp reversing as the cab does going forward.)
+      this.magnet.cabView = cab || rear;
       this.magnet.update(dt);
     }
     this.iron?.update(dt);

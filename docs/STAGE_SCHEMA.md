@@ -1,6 +1,6 @@
 # ステージJSON スキーマ v1
 
-最終更新: 2026-10-06（PHASE9 PR12 仕上げ: 5・6章の 分を コードと つきあわせた。その前は v1.12 えんしゅつ の 分。§25）
+最終更新: 2026-10-16（v1.13 下からの 光 `environment.groundLight`。§26。その前は 2026-10-06 PHASE9 PR12 仕上げ・v1.12 えんしゅつ の 分。§25）
 状態: v1 確定（2026-09-13）。型の実体は `src/stage/types.ts`、検証は `src/stage/validate.ts`
 
 1ステージ = 1ファイル。`src/stages/<chapter>-<n>.json`。
@@ -372,7 +372,7 @@ type LineKey = /* v1.2 */ | 'padGone' | 'padAppear';   // 消えたジャンプ�
 | `fog` | 視界ゼロの雲。霧が濃くなり空も白くなる。ライトを点けると `lightFar` m 先まで見える | `{ near: 2, far: 22, lightFar: 70 }` |
 | `flock` | 空を回る群れ（見た目だけ。1-2 の翼竜） | `{ model, count, center, radius, speed }` |
 
-モデルがまだないもの（`assets/models.json` の `_pending`）は、ゲームがコードで作る仮の形で表示する（`src/view/three/sky-placeholders.ts`）。本物ができたら `_pending` から外す。
+モデルがまだないもの（`assets/models.json` の `_pending`）は、ゲームがコードで作る仮の形で表示する（`src/view/three/sky-placeholders.ts`）。本物ができたら `_pending` から外す。1-3 の 形は 2026-10-15 に ぜんぶ できた（`assets/blender/sky.py`。のこりは どこも 使って いない `cloud-wall` だけ）。
 
 ジャンプの着地後の待ち時間は 0 秒（2026-09-24 変更）。空中の間は押せない。
 
@@ -1133,7 +1133,7 @@ type LineKey = /* v1.10 (4-3) */
 ```
 - ステージの `environment` に、書いた 欄 だけ 上書きした 見た目に かわる（6-2 の 区画の `environment` と 同じ 考え）。`{}` で ステージの もとの 見た目に もどる。その あとは ステージの おわりまで その まま（しっぱいの 巻き戻しでも かわらない）
 - `seconds`（既定 1.2）: うすい 夜空色の フェード（`#look-fade`）の うしろで かわる。0 なら すぐ。▶▶・つづき では すぐ かわる
-- かえる 欄: `sky`・`fog`・`lighting`・`ground`・`stars`・`moon`・`fireflies`・`ambience`（曲 `bgm`・しっぱいの 色 `fall`・走る 音 `surface` は かわらない）。`water`・`snow`・`festival`・`cloudSea` は ステージの もの なので 書かない（検査）
+- かえる 欄: `sky`・`fog`・`lighting`・`ground`・`stars`・`moon`・`fireflies`・`ambience`・`groundLight`（v1.13 §26）（曲 `bgm`・しっぱいの 色 `fall`・走る 音 `surface` は かわらない）。`water`・`snow`・`festival`・`cloudSea` は ステージの もの なので 書かない（検査）
 - 0-1 は 入りで 昼 → 夜、出で 夜 → 昼
 
 ### しーっ の ばしょ（`gimmicks[]` の `hush`）
@@ -1316,6 +1316,7 @@ type LineKey = /* v1.11 (5-2) */ 'spinCall' | 'spinStop' | 'paradeNear' | 'parad
 - **じしゃくの 段の とき だけ**、前 50 m（`MAGNET.reach`）の まとを 近い 順に 1 つずつ **自動で** ひっぱる（押すのは 段を かえる とき だけ）。`pick`・`turn` は `minAhead`（4 m か 線路からの はなれ √(横² ＋ 高さ²) の 大きい 方）〜 50 m、`bridge`・`gate` は 面まで 0〜50 m。とぶ 時間 0.6 ＋ きょり ÷ 40 秒（0.8〜2 秒）。**`bridge`・`gate`・`turn` は ひっぱりはじめた しゅんかんに ひらいた と 数える**（見た目は 早回し）
 - **光る**（ヒント）: まとの 80 m 手前（`hintAhead`）から、じしゃくライトを 持って いて いまが じしゃくで ない とき ライトの ボタンが みどりに 光る（`data-glow-for="magnet"`。ライトの 黄色・しーっ の 光より 先）。止まる 駅の 80 m 手前〜停止線の あいだ、`pick` では 光らない。見つけた 記録では 光らない（ひっぱれば きらきら だけ）
 - 1 つの まとは 1 回 とおる あいだに 1 回（`pick` は 巻き戻し・やりなおしで また）。ひらいた すきま・とびら・かがみは その ステージを やりなおすまで ひらいた まま（しっぱいで 戻っても）
+- うしろむきの あいだ（2026-10-16）: `pick`（記録も）だけ、いちばん うしろの はしから 通った 道を うしろへ はかって 同じ 決まりで ひっぱる・光る（せりふ `line` は 言わない）。`bridge`・`gate`・`turn` は もう とおった 所に しか ない ので ひっぱらない。JSON に 書く ものは ない
 - `line`: この まとで みどりに 光りはじめた とき（もう じしゃくの 段でも 同じ 所で）1 回の ためしに 1 回。ほかの せりふが 出て いない ときだけ（`sayIfQuiet`。光る 所の 前半の あいだ まつ）。`done`: とどいた・ひらいた とき（既定 `bridge`「つながった！」・`gate`「あいた！」）。`miss`（`turn`）: じしゃく なしで 分かれ道を すぎた とき
 - `turn` の 分かれ道（`junction`、`signReversed`）は **矢印を 出さない**・ライトでは 見やぶれない・まちがえた あとの ライトの 黄色の 光も ない（ローダーが `JunctionDef.turn` を つける。手で 書かない）。`mirror`（書けば）: まわす `mirror` の `params.id`（5-3 の かがみ、PR6a）。書かない ときは 仮の かがみ `turn-mirror-small` を 描いて それを まわす
 - `model`: 形を かえる とき。既定は `star` → `iron-star-small`、`bell` → `iron-bell-small`、`rail-piece` → すきまと 同じ 線路、`door` → `iron-door`、`crossing` → `crossing-bar-iron`、`mirror` → `turn-mirror-small`（5-3 の かがみの うらの `turn-mirror` とは べつ）、`toy-blocks` → `toy-blocks-loose`
@@ -1583,7 +1584,7 @@ type LineKey = /* v1.11 (PR8a) */ 'backNear' | 'backArrows' | 'reverseNudge' | '
 ]
 ```
 - ステージを とおく（3 km）はなれた 区画に わける。**どの 線路も ちょうど 1 つの 区画に 入る**。2 つ 以上
-- 区画の `environment` は ステージの `environment` に **書いた 欄だけ 上書き**: `sky`・`fog`・`lighting`・`ground`・`cloudSea`・`ambience`（まわりの 音）・`surface`（走る 音）・`fall`（しっぱいの 色）・`moon`・`fireflies`・`stars`・`snow`・`landmark`。`water` は ステージ ぜんたいの 一覧の まま（海は `area` で その 区画の 場所に 置く）、曲（`bgm`）は ステージで 1 つ（書くと はじく）
+- 区画の `environment` は ステージの `environment` に **書いた 欄だけ 上書き**: `sky`・`fog`・`lighting`・`groundLight`（v1.13 §26）・`ground`・`cloudSea`・`ambience`（まわりの 音）・`surface`（走る 音）・`fall`（しっぱいの 色）・`moon`・`fireflies`・`stars`・`snow`・`landmark`。`water` は ステージ ぜんたいの 一覧の まま（海は `area` で その 区画の 場所に 置く）、曲（`bgm`）は ステージで 1 つ（書くと はじく）
 - どの 区画の 見た目に するかは **毎フレーム** 見る 位置（`train.viewAnchor`: 前向きは 先頭、うしろむきは いちばん うしろの 車両）の 線路で きめる。巻き戻し・つづき・`npm run budget` の 置きなおしで 区画を とびこえても、すぐ その 区画の 見た目に なる
 - 地面の 板は 1 枚の まま、区画ごとに 色と 位置（その 区画の 線路の まん中）を かえる。雪の 床（`surface: "snow"`）は その 区画の 線路 だけ
 - ほかの 区画は カメラの 遠い 面（霧の 先 ＋ 40 m）の 外なので 描かれない（線路も 小物も 75 m の ます ごと。じしゃくの 小物 `ironProps` も 区画ごとに わけて 描く）
@@ -1753,3 +1754,14 @@ type LineKey = /* v1.11 (PR8a) */ 'backNear' | 'backArrows' | 'reverseNudge' | '
 - ならび: `shot` の ねらい・`act` の id・`turn` の `toward` は その 前に 出した 役者（とって いない）・ステージの 役者・`partner`・`train`・`car-<n>`。`ride` の 役者を `move` しない
 - ムービー: `movie.play` が 寸劇、`movie.card` に `title` と `button`（`icon` は `badge`／`drawing`）、`movie.before` は ステージの id（あそべる ステージ）、ミッション なし、`hidden`。`src/stages/` には `movie` を 書かない（`scripts/check-stages.mjs`）。`trainLight` は ムービー だけ。`spawn` の `silhouette` は true／false。`rail-glow` の `strength`・`speed`・`spacing` の はんい
 - わざと まちがえた 形: `tests/stages-bad/shot-*.json`・`act-*.json`・`spawn-*.json`・`move-riding.json`・`drive-*.json`・`train-at-max.json`・`fade-kind.json`・`letterbox-type.json`・`beat-name.json`・`movie-*.json`・`rainbow-no-to.json`・`train-light-*.json`・`rail-glow-strength.json`
+
+## 26. v1.13 の追加（下からの 光 `environment.groundLight`、2026-10-15）
+
+```json
+"environment": { "lighting": "day", "groundLight": "#e8dcc8" }
+```
+
+- `environment.groundLight`（省略可、`#rrggbb`）: 下からの 光の 色（半球ライトの 地面の 色）。省略すると 昼は 草の 緑（`#99bb77`）、夕方は 青、夜は 夜の 色、雪の ステージは 白。書くと どの `lighting` でも その 色
+- 1-3 は `#e8dcc8`（あたたかい 石の 色）。下が 草では なく 雲の 海なので、緑の 光だと 島の 岩の 影が オリーブ色に 見えた（2026-10-15、つくりこみの 島に した とき）。ほかの ステージは 書かない（見た目は かわらない）
+- 区画（§24）・寸劇の `environment`（§18）でも 書ける（書いた 欄 だけ 上書き）
+- 検査: `#rrggbb` で なければ はじく。わざと まちがえた 形: `tests/stages-bad/ground-light-color.json`

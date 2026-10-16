@@ -17,9 +17,12 @@
  * (3) Retracing (PR8a, うしろむき): the train drives forward through a junction or a merge, stops, turns round and
  *     reverses back along its trail to the floor; every frame each car's position is compared with where that car was
  *     at the same trail distance going forward (up to 0.05 m), and the rails must be the same (0-0 to-jishaku,
- *     1-3 kaze-michi, 2-2 to-mizutamari, 3-1 the loop uso-1 back into umi).
+ *     1-3 kaze-michi, 2-2 to-mizutamari, 3-1 the loop uso-1 back into umi). The lead car within 4 m before a rail change
+ *     (its front bogie ahead of the trail) is listed apart, up to 0.05 m too: since 2026-10-16 that bogie is on the
+ *     decided way past a fork's point going forward and on the way it came reversing (before, forward it stayed on
+ *     the old rail until the lead car centre changed rails, up to about 0.1 m off).
  * Runs the dev server (the __debugTrain handle only exists in dev builds). Needs Playwright's Chromium
- * (PW_CHROMIUM_PATH to reuse an installed one). Exits 1 when (1) or (2) is out of bounds.
+ * (PW_CHROMIUM_PATH to reuse an installed one). Exits 1 when anything is out of bounds.
  */
 import { spawn } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -188,9 +191,9 @@ async function retraceOne(run) {
   let max = 0;
   let at = '';
   let samples = 0;
-  // Going forward, the lead car's front bogie (4 m ahead of its centre, past the trail's head) runs on along the rail
-  // it is on until the lead car centre changes rail (as before PR7): up to 4 m before a branch taken it is a little
-  // off the branch. Retracing it is on the branch (the way back is known). Those samples are kept apart.
+  // The lead car's front bogie (4 m ahead of its centre, past the trail's head) is placed ahead of the trail: forward on
+  // the decided way past a fork's point, reversing on the way it came (2026-10-16; before, forward it ran on along the
+  // old rail until the lead car centre changed rail). Those samples are kept apart (and held to the same bound).
   const changes = [];
   for (let i = 1; i < ahead.length; i++) if (ahead[i].rail !== ahead[i - 1].rail) changes.push(ahead[i].x);
   const bogie = 4;
@@ -287,11 +290,11 @@ try {
     await page.evaluate(() => window.__debugView.onStageEvent({ type: 'ability', id: 'reverse' }));
     const r = await page.evaluate(retraceOne, run);
     const back = r.back.split(' → ').reverse().join(' → ');
-    const over = r.max > LIFT_TOLERANCE || back !== r.forward || r.turned !== 'turned';
+    const over = r.max > LIFT_TOLERANCE || r.lead > LIFT_TOLERANCE || back !== r.forward || r.turned !== 'turned';
     if (r.turned !== 'turned') console.log(`    the switch: ${r.turned}`);
     if (over) bad++;
     console.log(`${run.stage} ${run.name}: max ${r.max.toFixed(3)} m${r.at ? ` (${r.at})` : ''}, ${r.samples} frames; forward ${r.forward}; back ${r.back}; stopped: ${r.stop}${over ? '  OUT OF BOUNDS' : ''}`);
-    if (r.lead > 0) console.log(`    lead car, 4 m before a branch taken (forward its front bogie was still on the old rail): ${r.lead.toFixed(3)} m (${r.leadAt})`);
+    if (r.lead > 0) console.log(`    lead car, 4 m before a rail change (its front bogie ahead of the trail): ${r.lead.toFixed(3)} m (${r.leadAt})`);
     await page.close();
   }
 } finally {

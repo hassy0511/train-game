@@ -144,12 +144,12 @@ function skyDirection(az: number, el: number): { x: number; y: number; z: number
  * Sets the lights for `environment.lighting` ("day", or v1.10 (3-3) "evening": a warm low sun from the pink side of
  * the sky and a bluer ground light, not darker overall; v1.11 (5-1) "night": a blue moonlight from where the moon
  * stands, 70% of the day's light in all, NIGHT). On snow the light from below is white, not the grass green of the
- * other islands (v1.10, 4-1).
+ * other islands (v1.10, 4-1); v1.13: a stage's `groundLight` sets it outright (1-3's warm stone).
  */
 export function lightUp(hemisphere: HemisphereLight, sun: DirectionalLight, environment: EnvironmentDef): void {
   if (environment.lighting === 'night') {
     hemisphere.color.set(NIGHT.hemiSky);
-    hemisphere.groundColor.set(environment.surface === 'snow' ? SNOW_BOUNCE : NIGHT.hemiGround);
+    hemisphere.groundColor.set(environment.groundLight ?? (environment.surface === 'snow' ? SNOW_BOUNCE : NIGHT.hemiGround));
     hemisphere.intensity = NIGHT.hemi;
     hemisphere.name = 'night-hemisphere';
     sun.color.set(NIGHT.moonColor);
@@ -162,7 +162,7 @@ export function lightUp(hemisphere: HemisphereLight, sun: DirectionalLight, envi
   }
   const evening = environment.lighting === 'evening';
   hemisphere.color.set(evening ? 0xffd9b8 : 0xffffff);
-  hemisphere.groundColor.set(environment.surface === 'snow' ? SNOW_BOUNCE : evening ? 0x6a7ab0 : 0x99bb77);
+  hemisphere.groundColor.set(environment.groundLight ?? (environment.surface === 'snow' ? SNOW_BOUNCE : evening ? 0x6a7ab0 : 0x99bb77));
   hemisphere.intensity = evening ? 0.95 : 0.9;
   hemisphere.name = `${environment.lighting}-hemisphere`;
   sun.color.set(evening ? 0xffc89a : 0xffffff);

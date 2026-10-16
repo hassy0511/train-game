@@ -5,7 +5,7 @@
  * before/after picture by picture:
  *   node scripts/shoot-views.mjs <outDir>            # every stage below
  *   node scripts/shoot-views.mjs <outDir> 1-2 2-1    # just some
- *   LOOK=craft node scripts/shoot-views.mjs <outDir> 1-3   # v1.13: with another look of some models (public/looks/)
+ *   LOOK=<look> node scripts/shoot-views.mjs <outDir> 1-3   # v1.13: with another look of some models (public/looks/)
  * Writes <outDir>/<stage>-<rail>-<s>-<camera>.png and one JSON line per shot to <outDir>/stats.jsonl (lines of
  * the stages shot this time are replaced, the others kept). "animated" marks shots whose picture changed
  * between two captures half a second apart (flocks, bending boughs, ...): compare those by eye, not by pixel.

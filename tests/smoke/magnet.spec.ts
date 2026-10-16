@@ -2,7 +2,25 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { budget, card, FRONT, lightOnGlow, lightTo, NORMAL, pressOnGlow, progress, recordLines, setNotch, SLOW, STOP, waitCaught, waitDriving, waitFront } from './drive';
+import {
+  budget,
+  card,
+  FRONT,
+  lightOnGlow,
+  lightTo,
+  NORMAL,
+  pressOnGlow,
+  progress,
+  recordLines,
+  setDirection,
+  setNotch,
+  SLOW,
+  standStill,
+  STOP,
+  waitCaught,
+  waitDriving,
+  waitFront,
+} from './drive';
 
 /**
  * PR5「じしゃくライトの 土台」(PHASE9_CHAPTER5_6 第 2 部 M20, PHASE9_0): the light button's three steps (ライト → じしゃく →
@@ -264,6 +282,101 @@ test('0-0 jishaku: three steps, the green hint, the pull, mashing, the gap (in t
   console.log(`0-0 jishaku: draws ${b.draws}, triangles ${b.tris}`);
   expect(b.draws).toBeLessThanOrEqual(200);
   expect(b.tris).toBeLessThanOrEqual(100_000);
+  expect(errors).toEqual([]);
+});
+
+test('0-0 jishaku reversing: the magnet pulls a star and a record from the rear end back along the trail, nothing ahead', async ({ page }) => {
+  // PHASE9_CHAPTER5_6 第 2 部 M3.3・第 3 部 A7/A11 (PHASE9_0 §5, 2026-10-16): reversing, the lamp is the last car's; only
+  // picks (records too) are pulled, by the same rules measured from the rear end back along the trail; the gap ahead
+  // of the front is not; no odds and ends. The glow still shows (a hint), the lines do not.
+  test.setTimeout(600_000);
+  const errors = watchErrors(page);
+  const app = page.locator('#app');
+  const light = page.locator('#light');
+  await page.goto('/?stage=0-0');
+  await expect(app).toHaveAttribute('data-ready', '1', { timeout: 90_000 });
+  // Right at to-jishaku (main 560) with the light off; slowly past the star (jishaku 90, 7 right, 3 up: minAhead 7.6),
+  // standing with the front at about 186: the rear end 59 m past the star (beyond the reach, within the glow), the
+  // gap's film (200) 14 m ahead of the front.
+  await setNotch(page, NORMAL);
+  await pressOnGlow(page, 'rocket');
+  await waitFront(page, 'main', 505);
+  await expect(page.locator('#junction')).toBeVisible({ timeout: 180_000 });
+  await page.locator('.arrow[data-side="right"]').dispatchEvent('pointerdown');
+  await expect(app).toHaveAttribute('data-rail', 'jishaku', { timeout: 180_000 });
+  await setNotch(page, SLOW);
+  await waitFront(page, 'jishaku', 182);
+  await standStill(page);
+  await expect(app).toHaveAttribute('data-magnet-hoshi', 'idle');
+  const front = Number(await app.getAttribute('data-s')) + FRONT;
+  console.log(`magnet reversing: standing with the front at jishaku ${front.toFixed(1)}`);
+  expect(front).toBeLessThan(195);
+  expect(front - 37 - 90).toBeGreaterThan(50);
+
+  // うしろ: the light button glows green for the star behind (a hint); in the magnet step nothing is pulled standing
+  // there (the star is out of reach behind, the gap ahead is not looked at reversing).
+  await setDirection(page, 'back');
+  await expect(light).toHaveAttribute('data-glow-for', 'magnet', { timeout: 10_000 });
+  await expect(light).toHaveAttribute('data-glow', '1');
+  await expect(app).toHaveAttribute('data-magnet-target', 'hoshi');
+  await lightTo(page, 'magnet');
+  await page.waitForTimeout(1000);
+  await expect(app).toHaveAttribute('data-magnet-pulls', '0');
+  await expect(app).toHaveAttribute('data-magnet-hanare', 'idle');
+  const iron = await app.getAttribute('data-iron');
+  // Back slowly: the star is pulled once the rear end is 50 m from it (the tail car's centre 6 m further on).
+  await setNotch(page, NORMAL);
+  const pulled = await page.waitForFunction(
+    () => {
+      const d = document.getElementById('app')?.dataset;
+      return d?.magnet === 'pull' ? { target: d.magnetTarget, tailRail: d.tailRail, tailS: Number(d.tailS), direction: d.direction } : false;
+    },
+    null,
+    { timeout: 120_000, polling: 'raf' },
+  );
+  const p = (await pulled.jsonValue()) as { target: string; tailRail: string; tailS: number; direction: string };
+  console.log(`magnet reversing: the star pulled with the tail car's centre at ${p.tailRail} ${p.tailS.toFixed(1)}`);
+  await page.screenshot({ path: resolve(OUT, 'magnet-reverse.png') });
+  expect(p.target).toBe('hoshi');
+  expect(p.direction).toBe('-1');
+  expect(p.tailRail).toBe('jishaku');
+  expect(p.tailS).toBeLessThanOrEqual(90 + 50 + 6 + 0.6);
+  expect(p.tailS).toBeGreaterThanOrEqual(90 + 50 + 6 - 3);
+  await waitCaught(page, 'hoshi');
+  await expect(app).toHaveAttribute('data-magnet-hoshi', 'pulled');
+  await expect(app).toHaveAttribute('data-magnet-pulls', '1');
+  await expect(app).toHaveAttribute('data-magnet-hanare', 'idle');
+  // No odds and ends reversing.
+  await expect(app).toHaveAttribute('data-iron', iron ?? '0');
+
+  // まえ again in the magnet step (retracing: the star is not pulled twice), the gap and the gate open as before; the
+  // light (not the magnet) past the record (jishaku 620, 12 right, 6 up: minAhead 13.4), standing with the rear end
+  // within its reach behind.
+  await setDirection(page, 'front');
+  await setNotch(page, NORMAL);
+  await expect(app).toHaveAttribute('data-magnet-hanare', 'open', { timeout: 180_000 });
+  await expect(app).toHaveAttribute('data-magnet-tobira', 'open', { timeout: 180_000 });
+  await waitFront(page, 'jishaku', 450);
+  await setNotch(page, SLOW);
+  await lightTo(page, 'light');
+  expect(Number(await app.getAttribute('data-s')) + FRONT).toBeLessThan(570);
+  await setNotch(page, NORMAL);
+  await waitFront(page, 'jishaku', 680);
+  await standStill(page);
+  expect((await app.getAttribute('data-records')) ?? '').not.toContain('test-bell');
+  expect(await app.getAttribute('data-magnet-pulls')).toBe('3');
+  const rearEnd = Number(await app.getAttribute('data-s')) + FRONT - 37;
+  console.log(`magnet reversing: standing with the rear end ${(rearEnd - 620).toFixed(1)} m past the record`);
+  expect(rearEnd - 620).toBeGreaterThan(14);
+  expect(rearEnd - 620).toBeLessThan(49);
+  // うしろ, then the magnet: the record flies to the back of the last car and is found.
+  await setDirection(page, 'back');
+  await lightTo(page, 'magnet');
+  await waitCaught(page, 'record:test-bell', 30_000);
+  await expect(app).toHaveAttribute('data-records', /test-bell/, { timeout: 10_000 });
+  await expect(app).toHaveAttribute('data-direction', '-1');
+  expect(await app.getAttribute('data-magnet-pulls')).toBe('4');
+  expect(await app.getAttribute('data-fails')).toBeNull();
   expect(errors).toEqual([]);
 });
 
