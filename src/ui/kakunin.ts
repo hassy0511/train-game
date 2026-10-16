@@ -293,8 +293,7 @@ async function lookSection(): Promise<HTMLElement | null> {
   h2.textContent = 'みための くらべっこ';
   const note = document.createElement('p');
   note.className = 'kakunin-note';
-  note.textContent =
-    'おなじ ばしょを、モデルの 作りかた ちがいで くらべます。いま＝コードで くみたてた かりの かたち、つくりこみ＝Blender の スクリプトで 作った もの、ライブラリ＝Kenney の そざい（CC0）から 作った もの。';
+  note.textContent = 'おなじ ばしょを、モデルの 作りかた ちがいで くらべます。「いま」は ふだんの モデルです。';
   section.append(h2, note);
   for (const id of [...__LOOK_MANIFEST__.stages].sort(byStageOrder)) {
     const peek = await peekStage(id);
