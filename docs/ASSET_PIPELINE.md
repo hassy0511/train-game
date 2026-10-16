@@ -47,5 +47,6 @@
 | 恐竜の谷の生き物 | dino-mid-sleep / dino-mid-stand、dino-small-walk、dino-large-body ＋ dino-large-neck（首は付け根が原点）、ptero、ptero-far（群れ用の遠景版。絵なしの 2 色・400 三角形以下） | `dinos.py` |
 | くものうえ（1-3） | island-a / island-b / island-c（浮島。原点は 上面の 中心で、岩は 下。`assets/models.json` の `"origin": "top"`）、island-flip ＋ island-flip-cap（線路が 回りこむ 板と その 丸い 端）、cloud-a / cloud-b、cloud-bounce（ぽよん雲）、sky-buoy（浮き標）、jump-pad（汽笛で 出る ジャンプ台）、updraft-ring（線路を くぐる 風の 輪）、記録 cloud-crystal・weathervane・upside-flower（さかさに さく 花。原点は くきの 根もと＝上） | `sky.py` |
 | 記録（1-1・1-2） | record-town-board（まちの かんばん）、record-hq-plans（ほんぶの せっけいず）、record-balloon（原点は ひもの 下の はし）、record-nest（がけの うえの す） | `records.py` |
+| かざんのしま（2-3） | volcano（火山の 島 ぜんぶ。はだは 線路の 円すいの 上に 頂点、面は その 内側）、mesa-a / mesa-b（はなれやま・みさき。上面は y 48 で 表の 大きさ いっぱい 平ら）、old-bridge（ぐらぐらばし 20 m ぶん。原点は 床板の 上＝`"origin": "joint"`）、observatory（かんそくじょ）、seabird / seabird-sleep（うみどり。顔は 目だけ）、sign-steep / sign-slide / sign-no-rocket（さかと ロケット おやすみの 札）、rocket-unit（屋根の ロケット。後の ステージでも のる）、記録 pumice（かるいし。ころがる 石・おちる 石にも）・sulfur-crystal・spring-vent（あわの いずみ。3-1・3-2 でも つかう） | `volcano.py`（`sky.py` の 道具を 使う） |
 
 名前の `-proto` は、ゲームのコードが参照している名前なので残している（中身は本番用）。

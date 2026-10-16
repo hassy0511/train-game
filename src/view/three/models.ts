@@ -17,7 +17,6 @@ import { buildMagnetPlaceholder } from './magnet-placeholders';
 import { buildMirrorPlaceholder } from './mirror-placeholders';
 import { buildReversePlaceholder } from './reverse-placeholders';
 import { buildCastlePlaceholder } from './castle-placeholders';
-import { buildVolcanoPlaceholder } from './volcano-placeholders';
 import { buildEndingPlaceholder } from './ending-placeholders';
 import { buildWorldPlaceholder } from './world-placeholders';
 
@@ -106,7 +105,6 @@ export class ModelLibrary {
         buildSkyPlaceholder(name) ??
         buildForestPlaceholder(name) ??
         buildMeadowPlaceholder(name) ??
-        buildVolcanoPlaceholder(name) ??
         buildSeaPlaceholder(name) ??
         buildIcePlaceholder(name) ??
         buildRiverPlaceholder(name) ??
