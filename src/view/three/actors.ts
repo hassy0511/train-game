@@ -199,6 +199,8 @@ interface SparkleEffect {
 
 interface StationFrame {
   station: ResolvedStation;
+  /** +1: the platform is on the frame's +X side (left, not reversed); −1: on its −X side. */
+  sideSign: number;
   side: Vector3;
   forward: Vector3;
   up: Vector3;
@@ -209,6 +211,7 @@ function stationFrame(station: ResolvedStation): StationFrame {
   const sideSign = (station.def.platformSide === 'right' ? -1 : 1) * (station.def.reverse ? -1 : 1);
   return {
     station,
+    sideSign,
     side: new Vector3(sideSign, 0, 0).applyQuaternion(station.quaternion),
     forward: new Vector3(0, 0, 1).applyQuaternion(station.quaternion),
     up: new Vector3(0, 1, 0).applyQuaternion(station.quaternion),
@@ -403,11 +406,16 @@ export class ActorLayer {
       .clone()
       .addScaledVector(frame.side, clearance)
       .addScaledVector(frame.forward, PLATFORM_OVERHANG - platformLength / 2);
-    placements.push({ model: 'platform', position: platformPosition, quaternion: station.quaternion, scale: 1 });
+    // The platform and its roof extend along their own +X from the rail-side edge (station.py): a platform on the
+    // frame's −X side (on the right, or on the left of a reverse platform) is turned round, or it would lie across
+    // the track (2026-10-17: it did, at every right-side station since 2-3).
+    const platformQuaternion =
+      frame.sideSign > 0 ? station.quaternion : station.quaternion.clone().multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI));
+    placements.push({ model: 'platform', position: platformPosition, quaternion: platformQuaternion, scale: 1 });
     placements.push({
       model: 'platform-roof',
       position: platformPosition.clone().addScaledVector(frame.up, PLATFORM_HEIGHT),
-      quaternion: station.quaternion,
+      quaternion: platformQuaternion,
       scale: 1,
     });
 
