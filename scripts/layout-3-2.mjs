@@ -509,24 +509,33 @@ function scatter(models, count, { zones, lat, scale: [s0, s1], footprint, minRai
 const inValley = (x, z) => inArea(WATERS[0].area, x, z);
 const onMeadow = (x, z) => !WATERS.some((w) => inArea(w.area, x, z, 4));
 
-// The islets: beside the lily pads (the kingfisher's feather on the second), and a few more in the valley.
+// The islets: beside the lily pads (the kingfisher's feather on the second), and a few more in the valley. The islet
+// (20 m high on the river bed, 16 m under the water) shows its sand shore and grassy top at scale 0.9 and more; the one
+// at kawa 1300 stands 5 m off the valley's west cliff.
 for (const [s, lateral, scale] of [
   [825, -13, 1],
   [941, -13, 1],
-  [560, 30, 0.8],
+  [560, 30, 0.9],
   [1180, -40, 0.9],
-  [1300, 38, 0.8],
+  [1300, 32, 0.9],
   [700, -45, 1.1],
 ]) {
   const q = kawa.point(s, lateral);
   addWorld('islet', [q.x, VALLEY_FLOOR, q.z], { scale, rotationY: (q.h / RAD) });
   keepOut.push({ x: q.x, z: q.z, r: 9 * scale });
 }
-// The stations' banks in the river, under their platforms (left).
-for (const at of [45, 1120]) {
-  const q = kawa.point(at - 15, -9);
-  addWorld('river-bank', [q.x, VALLEY_FLOOR, q.z], { rotationY: q.h / RAD, scale: 0.7 });
-  keepOut.push({ x: q.x, z: q.z, r: 16 });
+// The stations' banks in the river, under their platforms (left): the bank (19 m high, 29 x 120) at scale 0.95 has its
+// sandy top at y -5.95 (§8: -5.9), under the rail as the meadow is, and shows 1.7 m past the track's right. Its rounded
+// ends keep it 50 m from its middle under the platform; せせらぎえき's starts past the rise from the floating stretch
+// (kawa 1045-1080), so its middle is 8 m on from the station. Nothing is scattered on it.
+const BANK_SCALE = 0.95;
+for (const [at, along] of [[45, -15], [1120, 8]]) {
+  const q = kawa.point(at + along, -9);
+  addWorld('river-bank', [q.x, VALLEY_FLOOR, q.z], { rotationY: q.h / RAD, scale: BANK_SCALE });
+  for (let d = -45; d <= 45; d += 15) {
+    const k = kawa.point(at + along + d, -9);
+    keepOut.push({ x: k.x, z: k.z, r: 14 });
+  }
 }
 // The rapids under the gap, the arch at the valley's south end (the sea beyond), the falls' lip.
 addOnRail('rapids', 'kawa', 476, { height: VALLEY_Y - EMB - 0.6 });
