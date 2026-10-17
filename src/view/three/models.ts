@@ -4,7 +4,6 @@ import { placeholderSize } from '../placeholder-sizes';
 import { buildIcePlaceholder } from './ice-placeholders';
 import { buildVillagePlaceholder } from './village-placeholders';
 import { addHandLantern, buildNightPlaceholder } from './night-placeholders';
-import { buildRiverPlaceholder } from './river-placeholders';
 import { prepareSeaModel } from './sea-models';
 import { buildSkyPlaceholder } from './sky-placeholders';
 import { buildSnowPlaceholder } from './snow-placeholders';
@@ -100,7 +99,6 @@ export class ModelLibrary {
       const drawn =
         buildSkyPlaceholder(name) ??
         buildIcePlaceholder(name) ??
-        buildRiverPlaceholder(name) ??
         buildVillagePlaceholder(name) ??
         buildSnowPlaceholder(name) ??
         buildNightPlaceholder(name) ??
