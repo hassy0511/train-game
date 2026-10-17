@@ -336,17 +336,6 @@ function rockCrack(): Group {
   return solid('rock-crack', parts);
 }
 
-/** The mouth of a bubble spring (`spring-vent`, 5 × 1 × 5 m): a sandy hump with three round holes. */
-function springVent(): Group {
-  const parts: BufferGeometry[] = [];
-  parts.push(part(new SphereGeometry(2.5, 12, 4, 0, Math.PI * 2, 0, Math.PI / 2), SAND, { scale: [1, 0.4, 1] }));
-  for (let i = 0; i < 3; i++) {
-    const a = (i / 3) * Math.PI * 2;
-    parts.push(part(new CircleGeometry(0.4, 10), '#7FB5C9', { at: [Math.cos(a) * 0.8, 0.98, Math.sin(a) * 0.8], rot: [-Math.PI / 2 + 0.25, 0, 0] }));
-  }
-  return solid('spring-vent', parts);
-}
-
 // ---- living things ---------------------------------------------------------------------------------------
 
 /** The whale's tail, pivoting at its root (0, 0, 0 in its own space), for sea.ts to wave. */
@@ -499,18 +488,6 @@ function ironStar(): Group {
   return solid('iron-star', parts);
 }
 
-/** 2-2's record: a big glass marble lying in the puddle (`record-marble`, 1.6 m): a clear blue ball with a coloured twist. */
-function recordMarble(): Group {
-  const parts: BufferGeometry[] = [];
-  parts.push(part(new SphereGeometry(0.8, 14, 10), (p) => mix('#CFEFFF', '#8FD0F0', (p.y + 0.8) / 1.6), { at: [0, 0.8, 0] }));
-  // Coloured twists on its surface (drawn on, as the glass is not see-through here).
-  for (let i = 0; i < 3; i++) {
-    parts.push(part(new TorusGeometry(0.79, 0.06, 4, 24, Math.PI * 1.3), ['#FF8FB1', '#FFD166', '#7CD992'][i], { at: [0, 0.8, 0], rot: [0.4 + i * 0.9, i * 1.1, 0] }));
-  }
-  parts.push(part(new SphereGeometry(0.14, 6, 4), '#FFFFFF', { at: [-0.35, 1.3, 0.45] }));
-  return solid('record-marble', parts);
-}
-
 const BUILDERS: Record<string, () => Group> = {
   sandbar,
   reef,
@@ -523,7 +500,6 @@ const BUILDERS: Record<string, () => Group> = {
   'coral-arch': coralArch,
   'coral-pillar': coralPillar,
   'rock-crack': rockCrack,
-  'spring-vent': springVent,
   whale,
   'fish-a': () => fish('fish-a', FISH_YELLOW),
   'fish-b': () => fish('fish-b', FISH_BLUE),
@@ -534,7 +510,6 @@ const BUILDERS: Record<string, () => Group> = {
   'rainbow-shell': rainbowShell,
   'pearl-clam': pearlClam,
   'iron-star': ironStar,
-  'record-marble': recordMarble,
 };
 
 /** The names this module draws (ticket 0011). */

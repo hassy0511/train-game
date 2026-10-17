@@ -16,7 +16,7 @@
 
 ## 2. 共通のルール
 - 単位 1 = 1 m。+Y が上、+Z が前（顔・正面・進行方向）。原点は底面の中心（例外は各スクリプトの冒頭に書く。車両は車体中心の真下、ホームは線路側の縁）
-- 1 ファイル 1 メッシュ（マテリアルは複数可）。キャラクターは 350 KB、ほかは 250 KB まで
+- 1 ファイル 1 メッシュ（マテリアルは複数可）。キャラクターは 350 KB、ほかは 250 KB まで。例外は ゲームが 動かす 部品（2-2 の バッタの 頭・触角・後ろ足、ちょうちょの はね）: 同じ GLB の 中の 名前つきの ノードに して、ノードの 原点を 回る 軸に 置く。`check-models` は ノードの 位置を 足して 床の 高さを はかる
 - 実在の車両・キャラクターに似せない。電車に顔を付けない（ライトは横長の帯とランプ 1 つ）
 - 面の表裏を守る。ゲームは面の表側しか描かない（裏は透ける）が、Blender のプレビューは両面を描くので裏返りに気づけない。デカールは `poly_decal` / `disc_decal` / `ribbon_decal` を使えば頂点の並び順に関係なく +Z 向き（`facing=-1` で -Z）になる。手で面を組んだときは法線の向きを確かめる
 - 権利の心配がある素材（写真・既存のテクスチャ）は使わない。色は単色マテリアルか、スクリプトで塗って焼き込んだ画像だけ
@@ -47,5 +47,8 @@
 | 恐竜の谷の生き物 | dino-mid-sleep / dino-mid-stand、dino-small-walk、dino-large-body ＋ dino-large-neck（首は付け根が原点）、ptero、ptero-far（群れ用の遠景版。絵なしの 2 色・400 三角形以下） | `dinos.py` |
 | くものうえ（1-3） | island-a / island-b / island-c（浮島。原点は 上面の 中心で、岩は 下。`assets/models.json` の `"origin": "top"`）、island-flip ＋ island-flip-cap（線路が 回りこむ 板と その 丸い 端）、cloud-a / cloud-b、cloud-bounce（ぽよん雲）、sky-buoy（浮き標）、jump-pad（汽笛で 出る ジャンプ台）、updraft-ring（線路を くぐる 風の 輪）、記録 cloud-crystal・weathervane・upside-flower（さかさに さく 花。原点は くきの 根もと＝上） | `sky.py` |
 | 記録（1-1・1-2） | record-town-board（まちの かんばん）、record-hq-plans（ほんぶの せっけいず）、record-balloon（原点は ひもの 下の はし）、record-nest（がけの うえの す） | `records.py` |
+| おおきなきのくに（2-1） | tree-trunk（巨木。根は 38 m の 円まで）、canopy（葉の かたまり。色を ぬって 焼いた 絵 1 枚）、branch-log（線路の 下の 枝。原点は 上面の 中心で、上面は 端から 端まで y = 0）、branch-stub（記録を のせる 横の 小枝。原点は 記録を のせる 上面、+Z が 枝の 外）、bough-slab ＋ bough-slab-cap（さかさえだの 板と その 丸い 端。island-flip と 同じ 決まりで、板は 50 m）、leaf-pad（落ちた 電車を 受ける 大きな 葉。2-2 でも 床・屋根・はすの 葉に 使う）、mushroom、acorn（転がる 木の実。ゲームが まん中で 回す）、squirrel（リス。原点は 体の 下）、記録 acorn-big・squirrel-nest・record-feather | `forest.py`（`sky.py` の 道具を 使う） |
+| むしのはらっぱ（2-2） | grass-blade（草の 森。根もとから 先へ 色が かわる 頂点カラー）、clover（上面は 1.5 m で 平ら。線路と 駅が のる）、meadow-flower（まんなかの 上が ちょうど 30 m）、water-strip（半透明 0.8、まんなかが こい 頂点カラー）、grasshopper（動く 部品 body・head・antenna-left/right・leg-left/right）、butterfly（原点は 体の まんなか、`"origin": "joint"`。動く 部品 wing-left/right）、spider（おわりの 寸劇）、rail-web（線路で できた くもの す。原点は いちばん 下、+Z が 正面）、記録 clover-four・dandelion-seed・record-marble（池の そこの ビーだま。半透明の ガラスの 中に 3 色の ひねり） | `meadow.py` |
+| かざんのしま（2-3） | volcano（火山の 島 ぜんぶ。はだは 線路の 円すいの 上に 頂点、面は その 内側）、mesa-a / mesa-b（はなれやま・みさき。上面は y 48 で 表の 大きさ いっぱい 平ら）、old-bridge（ぐらぐらばし 20 m ぶん。原点は 床板の 上＝`"origin": "joint"`）、observatory（かんそくじょ）、seabird / seabird-sleep（うみどり。顔は 目だけ）、sign-steep / sign-slide / sign-no-rocket（さかと ロケット おやすみの 札）、rocket-unit（屋根の ロケット。後の ステージでも のる）、記録 pumice（かるいし。ころがる 石・おちる 石にも）・sulfur-crystal・spring-vent（あわの いずみ。3-1・3-2 でも つかう） | `volcano.py`（`sky.py` の 道具を 使う） |
 
 名前の `-proto` は、ゲームのコードが参照している名前なので残している（中身は本番用）。

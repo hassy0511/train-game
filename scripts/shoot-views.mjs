@@ -56,6 +56,22 @@ const VIEWS = {
     ['flip', 200, 'chase'],
     ['top', 240, 'side'], // こずえのえき
   ],
+  '2-2': [
+    ['main', 240, 'cab'], // the grass tunnel, the dandelion seed ahead
+    ['main', 460, 'chase'], // grasshopper 1's leaf, the puddle ahead
+    ['main', 1000, 'side'], // on the clover leaves
+    ['main', 1300, 'cab'], // stream 1 and its bud ahead
+    ['main', 1620, 'top'], // the S bends between tall flowers
+    ['silk', 1000, 'cab'], // くものすえき, the web of rails ahead
+  ],
+  '2-3': [
+    ['main', 100, 'chase'], // みなとえき: the seabird on the rail, the floating pumice, the volcano ahead
+    ['main', 300, 'side'], // steep slope ①: its sign, the flank of the volcano
+    ['main', 1000, 'chase'], // the stony way (rolling pumice waiting by the rail)
+    ['main', 1400, 'side'], // the seabird cliff: the sleeping birds, the rocket-rest sign
+    ['kudari', 450, 'chase'], // かんそくじょえき on はなれやま, the observatory
+    ['kudari', 800, 'side'], // on ぐらぐらばし: the trestle, みさき ahead
+  ],
   '3-2': [
     ['kawa', 60, 'cab'], // ささぶねえき: the valley, the falls far ahead
     ['kawa', 300, 'chase'], // the raft

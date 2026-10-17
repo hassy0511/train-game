@@ -21,20 +21,16 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import manifest from '../../assets/models.json';
-import { buildForestPlaceholder } from '../view/three/forest-placeholders';
 import { buildHarbourPlaceholder } from '../view/three/harbour-placeholders';
 import { buildIcePlaceholder } from '../view/three/ice-placeholders';
 import { buildVillagePlaceholder } from '../view/three/village-placeholders';
 import { buildSnowPlaceholder } from '../view/three/snow-placeholders';
 import { ModelLibrary } from '../view/three/models';
-import { buildMeadowPlaceholder } from '../view/three/meadow-placeholders';
 import { buildNightPlaceholder } from '../view/three/night-placeholders';
 import { buildMirrorPlaceholder } from '../view/three/mirror-placeholders';
-import { buildRecordPlaceholder } from '../view/three/record-placeholders';
 import { buildSeaPlaceholder } from '../view/three/sea-placeholders';
 import { buildRiverPlaceholder } from '../view/three/river-placeholders';
 import { buildSkyPlaceholder } from '../view/three/sky-placeholders';
-import { buildVolcanoPlaceholder } from '../view/three/volcano-placeholders';
 import { buildMagnetPlaceholder } from '../view/three/magnet-placeholders';
 import { buildReversePlaceholder } from '../view/three/reverse-placeholders';
 import { buildCastlePlaceholder } from '../view/three/castle-placeholders';
@@ -95,9 +91,6 @@ const built = new Set<string>(__MODEL_MANIFEST__);
 /** The game's code-drawn stand-in for a model that is not built yet. */
 const drawn = (name: string): Group | null =>
   buildSkyPlaceholder(name) ??
-  buildForestPlaceholder(name) ??
-  buildMeadowPlaceholder(name) ??
-  buildVolcanoPlaceholder(name) ??
   buildSeaPlaceholder(name) ??
   buildIcePlaceholder(name) ??
   buildRiverPlaceholder(name) ??
@@ -110,8 +103,7 @@ const drawn = (name: string): Group | null =>
   buildReversePlaceholder(name) ??
   buildCastlePlaceholder(name) ??
   // v1.12: the movies' islands and the opening's notice board.
-  buildEndingPlaceholder(name) ??
-  buildRecordPlaceholder(name);
+  buildEndingPlaceholder(name);
 /**
  * Stand-ins made from a built model (4-3's blushing Sakasa: the built one with pink cheeks; 5-3's waving and shy mirror
  * Sakasa, posed; v1.11 (6-1) Sakasa sitting), as the game makes them.

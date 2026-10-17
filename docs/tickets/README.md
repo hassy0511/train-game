@@ -22,9 +22,9 @@
 | [0004](0004-three-stage-1-1-visuals.md) | Three.js: 1-1 の見た目と演出 | Codex | 完了（b2246c8）。コードは Claude Code が引き継ぎ |
 | [0005](0005-blender-dino-valley-set.md) | Blender: 1-2 きょうりゅうの谷 のモデル一式 | Claude Code | 完了（2026-09-24） |
 | [0006](0006-blender-sky-islands-set.md) | Blender: 1-3 くものうえ のモデル一式 | Claude Code | 完了（2026-10-16、つくりこみ `sky.py`。使う 所の ない `cloud-wall`・鳥 2 こは 作って いない） |
-| [0007](0007-blender-giant-tree-set.md) | Blender: 2-1 おおきなきのくに のモデル一式 | Claude Code | 後回し（2-1 はコードの仮の形で遊べる。2026-09-25） |
-| [0008](0008-blender-meadow-set.md) | Blender: 2-2 むしのはらっぱ のモデル一式 | Claude Code | 後回し（2-2 はコードの仮の形で遊べる。2026-09-25） |
-| [0009](0009-blender-volcano-set.md) | Blender: 2-3 かざんのしま のモデル一式 | Claude Code | 後回し（2-3 はコードの仮の形で遊べる。2026-09-26） |
+| [0007](0007-blender-giant-tree-set.md) | Blender: 2-1 おおきなきのくに のモデル一式 | Claude Code | 完了（2026-10-16、つくりこみ `forest.py`。2-1 の 記録 3 こも） |
+| [0008](0008-blender-meadow-set.md) | Blender: 2-2 むしのはらっぱ のモデル一式 | Claude Code | 完了（2026-10-16、つくりこみ `meadow.py`。2-2 の もぐる 記録 `record-marble` も） |
+| [0009](0009-blender-volcano-set.md) | Blender: 2-3 かざんのしま のモデル一式 | Claude Code | 完了（2026-10-16、つくりこみ `volcano.py`。13 こと 2-3 の 記録③ `spring-vent`） |
 | [0010](0010-records-set.md) | 記録の 形（1-1 の 3 つ、1-2 の 巣、2-1 の はね。コードで 描く） | Claude Code | 完了（コードの 形、2026-09-26。1-1・1-2 の 4 つは 2026-10-16 に Blender `records.py`。2-1 の はねは コードの まま） |
 | [0011](0011-sea-set.md) | 3-1 うみのそこ の 形の 一式（くじら・さんご・こんぶ・あわ・記録。2-2・2-3 の もぐる 記録も） | Claude Code | 作業中（コードの 仮の 形で 遊べる。Blender は 後回し。2026-09-27） |
 | [0012](0012-river-set.md) | 3-2 たきのかわ の 形の 一式（かもの おやこ・かえる・なかす・たきの 口・かみの ふね・記録） | Claude Code | 作業中（コードの 仮の 形で 遊べる。Blender は 後回し。2026-09-27） |

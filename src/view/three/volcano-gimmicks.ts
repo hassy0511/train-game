@@ -201,7 +201,8 @@ export class VolcanoGimmicks {
           object.add(upright);
         }
       } else {
-        body = pumice.clone(true);
+        // Baked: the stone's few flat colours in one draw call.
+        body = (bakeModel(pumice) ?? pumice).clone(true);
         const scale = (kind === 'roll' ? ROLL_SIZE : DROP_SIZE) / unit;
         body.scale.setScalar(scale);
         // Centre the rock on its own origin so it can roll about it.
@@ -241,7 +242,9 @@ export class VolcanoGimmicks {
   async addRocketUnit(models: ModelLibrary): Promise<void> {
     if (this.unit) return;
     this.unit = new Object3D();
-    const unit = (await models.load('rocket-unit')).clone(true);
+    const template = await models.load('rocket-unit');
+    // Baked: its flat colours in one draw call (the unit only ever moves with the train).
+    const unit = (bakeModel(template) ?? template).clone(true);
     unit.name = 'rocket-unit';
     unit.position.copy(ROCKET_UNIT);
     this.unit = unit;

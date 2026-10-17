@@ -704,8 +704,8 @@ const glimpse = [
 const MESA_TOP = 48;
 const onMesa = (railId, at, lateral) => ({ railId, at, lateral, heightFromRail: round(MESA_TOP - LINES[railId].point(at, lateral).y, 2) });
 /**
- * mesa-b (§6.5): centre, turn (degrees, three.js rotation.y) and top, the placeholder's rounded rectangle
- * (src/view/three/volcano-placeholders.ts mesa(): 125 × 155 m, corners 22 m).
+ * mesa-b (§6.5): centre, turn (degrees, three.js rotation.y) and top, the model's rounded rectangle
+ * (assets/blender/volcano.py mesa(): 125 × 155 m, corners 22 m).
  */
 const MESA_B = { x: -266, z: 308.5, rotationY: 8, width: 125, depth: 155, corner: 22 };
 /** How far a point (x, z) is inside mesa-b's top edge (m; negative = beyond it). */
