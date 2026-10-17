@@ -1561,7 +1561,7 @@
       "id": "dino-nebosuke",
       "type": "dino-mid",
       "onRail": { "railId": "main", "at": 680 },
-      "rotationY": 90,
+      "rotationY": -90,
       "reactsTo": "whistle",
       "params": {
         "wakeDistance": 60,
