@@ -6,7 +6,7 @@ import { buildIcePlaceholder } from './ice-placeholders';
 import { buildVillagePlaceholder } from './village-placeholders';
 import { addHandLantern, buildNightPlaceholder } from './night-placeholders';
 import { buildRiverPlaceholder } from './river-placeholders';
-import { buildSeaPlaceholder } from './sea-placeholders';
+import { prepareSeaModel } from './sea-models';
 import { buildSkyPlaceholder } from './sky-placeholders';
 import { buildSnowPlaceholder } from './snow-placeholders';
 import { buildToyPlaceholder } from './toy-placeholders';
@@ -100,7 +100,6 @@ export class ModelLibrary {
     if (!this.available.has(name)) {
       const drawn =
         buildSkyPlaceholder(name) ??
-        buildSeaPlaceholder(name) ??
         buildIcePlaceholder(name) ??
         buildRiverPlaceholder(name) ??
         buildHarbourPlaceholder(name) ??
@@ -121,7 +120,8 @@ export class ModelLibrary {
     }
 
     const url = `${import.meta.env.BASE_URL}models/${name}.glb`;
-    const loading = this.loader.loadAsync(url).then((gltf) => gltf.scene);
+    // v1.10 (3-1): the kelp sways in its shader, the whale glows a little (ticket 0011).
+    const loading = this.loader.loadAsync(url).then((gltf) => prepareSeaModel(name, gltf.scene));
     this.cache.set(name, loading);
     return loading;
   }

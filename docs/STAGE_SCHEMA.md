@@ -816,7 +816,7 @@ type CutsceneStep = /* ... */
 | `bubbleNear` / `bubbleTrue` / `bubbleRevealed` | あわの 分かれ道 | あわが ふたつ！ どっちかな？／せいかい！ ほんものの あわ！／ぐるぐる もよう！ サカサの あわだ |
 
 - 能力 `magnetLight` の 名前は「じしゃくライト」（5 章。まだ どこでも もらえない。3-1 の 記録③は 図鑑と 地図で「？」、絵は じしゃく）
-- 見た目: 水の 上の 線路（`Rail.surfaces`）は 道床の かわりに 木の 板と 左右の うき（6 m おき、しろ と みずいろ）。水の 中の カメラでは 光の すじ。くじら・ながれ・あわの 柱・ふかい ところの ひかる つぶ は `src/view/three/sea.ts`、仮の 形は `sea-placeholders.ts`（チケット 0011）
+- 見た目: 水の 上の 線路（`Rail.surfaces`）は 道床の かわりに 木の 板と 左右の うき（6 m おき、しろ と みずいろ）。水の 中の カメラでは 光の すじ。くじら・ながれ・あわの 柱・ふかい ところの ひかる つぶ は `src/view/three/sea.ts`、形は `assets/blender/sea.py`（チケット 0011。こんぶの ゆれと くじらの 光は `sea-models.ts`）
 - 読み込み時の 検査: `bubbles` は 片方 rise・片方 sink、左右 両方 あり、`dive`・`needs`・`signReversed` と いっしょに しない、sink の 側は 手前へ 合流する ループ か deadEnd。`whale` は onRail・reactsTo "whistle"・`until` が 自分より 先、数は 正しい 形。`updraft` の `look` は wind／current、`whale` は くじらの id、`speed` > 0。`jump-pad` の `look` は pad／whale。`fog` の `color` は `#rrggbb`。うきものの `say` は 文字。`card.mirror` は true／false、`fx` は sneeze／pop（`id` は pop だけ）
 - テスト用の しるし: `#app` の `data-whales`（`kujira:follow` など）、`data-bubble-revealed`（ライトで ぐるぐるが 光った あわの 分かれ道の id）。矢印の `data-bubbles`（`rise`／`sink`）。紙の 札は `#card.is-mirror`
 
