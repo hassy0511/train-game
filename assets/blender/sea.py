@@ -1450,6 +1450,9 @@ if __name__ == "__main__":
         model.data.name = name
         model.data.validate()
         finish(model, name)
+        if name == "current-ring":
+            # Its flat colours into vertex colours of one material: the game takes its one mesh as it is.
+            md.bake_colours(model, md.paint_material("Current ring", 0.4))
         if name in VERTEX:
             md.export_glb([model], name, budget)
             md.preview([model], name, VIEWS.get(name, (0.55, -0.72, 0.42)), size=size)
