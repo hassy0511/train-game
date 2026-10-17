@@ -72,6 +72,16 @@ const VIEWS = {
     ['kudari', 450, 'chase'], // かんそくじょえき on はなれやま, the observatory
     ['kudari', 800, 'side'], // on ぐらぐらばし: the trestle, みさき ahead
   ],
+  '3-1': [
+    ['umi', 100, 'chase'], // すなはまえき: the beach, its palms, the floating rail out to sea
+    ['umi', 400, 'side'], // on the floating rail: the sea floor's kelp and coral through the water
+    ['umi', 760, 'cab'], // under the sea: the kelp forest, the coral arch ahead
+    ['umi', 1040, 'chase'], // さんごえき among the corals
+    ['umi', 1300, 'side'], // the whale's current between the kelp
+    ['umi', 1715, 'side'], // up on the reef, the whale's gap and しおふきじま beyond
+    ['umi', 1900, 'top'], // しおふきじま: its palms and grass
+    ['umi', 2480, 'cab'], // the deep: the bubble forks, the crack of the fallen star
+  ],
   '3-2': [
     ['kawa', 60, 'cab'], // ささぶねえき: the valley, the falls far ahead
     ['kawa', 300, 'chase'], // the raft
