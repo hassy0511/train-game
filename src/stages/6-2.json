@@ -911,7 +911,7 @@
       "id": "dino-kodomo",
       "type": "dino-small",
       "onRail": { "railId": "p1", "at": 205 },
-      "rotationY": 90,
+      "rotationY": -90,
       "reactsTo": "none",
       "params": { "startDistance": 60, "crossSeconds": 4, "dangerDistance": 6, "lateral": 8 }
     },
