@@ -26,7 +26,7 @@ import { dotTexture } from './river';
  * the ending's festival.
  */
 
-/** The lamp room's height on the lighthouse model (m, see harbour-placeholders.ts). */
+/** The lamp room's height on the lighthouse model (m, see assets/blender/harbour.py: its glass is centred there). */
 const LAMP_HEIGHT = 20.6;
 /** The beam: this long, turning once in this many seconds. */
 const BEAM_LENGTH = 60;
@@ -38,7 +38,7 @@ const MOON_SIZE = 70;
 const BALLS = 40;
 const BALL_RISE = 12;
 const BALL_OPEN = 7;
-/** A festival raft's lanterns in its own frame (see harbour-placeholders.ts festivalRaft). */
+/** A festival raft's lanterns in its own frame (see assets/blender/harbour.py festival_raft). */
 const RAFT_LANTERNS: [number, number, number][] = [
   [-2.6, 2.6, -1.6],
   [-2.6, 2.6, 1.6],

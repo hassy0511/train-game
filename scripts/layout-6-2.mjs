@@ -259,8 +259,9 @@ const GIMMICKS = [
 ];
 
 const ACTORS = [
-  // p1 205: the dino child crosses the line (1-2's); the train waits for it.
-  { id: 'dino-kodomo', type: 'dino-small', onRail: { railId: 'p1', at: DINO }, rotationY: 90, reactsTo: 'none', params: { startDistance: 60, crossSeconds: 4, dangerDistance: 6, lateral: 8 } },
+  // p1 205: the dino child crosses the line (1-2's); the train waits for it. It crosses to the rail's right, so it
+  // faces right (rotationY is relative to the rail's heading; -90 turns +Z right).
+  { id: 'dino-kodomo', type: 'dino-small', onRail: { railId: 'p1', at: DINO }, rotationY: -90, reactsTo: 'none', params: { startDistance: 60, crossSeconds: 4, dangerDistance: 6, lateral: 8 } },
   // p1 670: the squirrel with its nut over the rail (2-1's): the whistle and it drops the nut aside.
   { id: 'risu', type: 'squirrel', onRail: { railId: 'p1', at: SQUIRREL }, reactsTo: 'whistle', params: { whistleRange: 70, drop: 28 } },
   // p2 700: the snowman on the line (4-3's): the whistle and it waddles aside.

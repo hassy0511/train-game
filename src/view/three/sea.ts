@@ -11,6 +11,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  MeshStandardMaterial,
   Object3D,
   Points,
   PointsMaterial,
@@ -26,25 +27,27 @@ import { TRAIN, WHALE } from '../../train/params';
 import { waterAt } from '../../stage/water';
 import type { ModelLibrary } from './models';
 import { sourceMeshes } from './props';
-import { SEA_TIME, WHALE_BLOWHOLE, WHALE_TAIL_ROOT, whaleBodyGeometry, whaleTailGeometry } from './sea-placeholders';
+import { SEA_TIME, selfGlow } from './sea-models';
 
 /**
- * v1.10 (3-1) the sea's moving things (PHASE8 part 3 §8, drawn in code): the whale that swims along after the whistle,
- * the whale whose back and spout are a jump pad, the current's bubble rings and streams, the columns of a bubble fork
- * (real bubbles rising, Sakasa's pink swirly ones sinking; the light makes the swirls glow), the glowing motes of the
- * deep place, and a big bubble popping in a cutscene. The sways of the kelp read the clock this ticks.
+ * v1.10 (3-1) the sea's moving things (PHASE8 part 3 §8): the whale that swims along after the whistle, the whale whose
+ * back and spout are a jump pad, the current's bubble rings and streams, the columns of a bubble fork (real bubbles
+ * rising, Sakasa's pink swirly ones sinking; the light makes the swirls glow), the glowing motes of the deep place, and
+ * a big bubble popping in a cutscene. The sways of the kelp read the clock this ticks (sea-models.ts).
  */
 
-/** Whale colours (their own material each, so one can fade away without touching anything else). */
-function whaleMaterial(): MeshLambertMaterial {
-  return new MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true, opacity: 1 });
-}
+/**
+ * The whale model (assets/blender/sea.py): the nodes `body` (at the origin, under the belly) and `tail`, whose origin is
+ * its joint (0, 2.4, -5.2): it beats about its X. The blowhole on top of its back, where the spout and the song come
+ * out (model space).
+ */
+const WHALE_BLOWHOLE = new Vector3(0, 5, 1.8);
 
 interface WhaleVisual {
   id: string;
-  root: Group;
-  tail: Group;
-  material: MeshLambertMaterial;
+  root: Object3D;
+  tail: Object3D;
+  material: MeshStandardMaterial;
   params: Required<Omit<WhaleParams, 'until'>>;
   home: Vector3;
   homeQuat: Quaternion;
@@ -56,8 +59,8 @@ interface WhaleVisual {
 
 interface WhalePad {
   index: number;
-  root: Group;
-  tail: Group;
+  root: Object3D;
+  tail: Object3D;
   /** Where it waits deep down, and where its back is up at the surface. */
   deep: Vector3;
   up: Vector3;
@@ -183,6 +186,8 @@ export class SeaGimmicks {
   private floorY: number;
   /** v1.10 (3-3): the deep places' glowing motes, and how long they still flash after a whistle (s). */
   private readonly deepMotes: Points[] = [];
+  /** The whale model every whale is a copy of (loaded in init when the stage has one). */
+  private whaleModel: Group | null = null;
   private flash = 0;
   private flashShown = false;
 
@@ -226,6 +231,10 @@ export class SeaGimmicks {
 
   async init(models: ModelLibrary): Promise<void> {
     const f = this.stage.file;
+    const whales =
+      this.stage.actors.some((a) => a.type === 'whale') ||
+      f.gimmicks.some((g) => g.type === 'jump-pad' && (g.params as { look?: string } | undefined)?.look === 'whale');
+    if (whales) this.whaleModel = await models.load('whale');
     for (const actor of this.stage.actors) {
       if (actor.type !== 'whale') continue;
       const p = actor.params as Partial<WhaleParams>;
@@ -270,23 +279,28 @@ export class SeaGimmicks {
   // ---- whales ----
 
   private makeWhale(id: string): WhaleVisual {
-    const material = whaleMaterial();
-    const root = new Group();
+    const root = this.whaleModel ? this.whaleModel.clone(true) : new Group();
     root.name = `whale:${id}`;
-    const body = new Mesh(whaleBodyGeometry(), material);
-    body.name = 'whale-body';
-    const tail = new Group();
-    tail.position.copy(WHALE_TAIL_ROOT);
-    const tailMesh = new Mesh(whaleTailGeometry(), material);
-    tailMesh.name = 'whale-tail';
-    tail.add(tailMesh);
-    root.add(body, tail);
+    // Its own material (one per whale, shared by its body and tail), so one can fade away without touching the other.
+    let material: MeshStandardMaterial | null = null;
+    root.traverse((o) => {
+      const mesh = o as Mesh;
+      if (!mesh.isMesh) return;
+      material ??= (mesh.material as MeshStandardMaterial).clone();
+      mesh.material = material;
+    });
+    const own = (material as MeshStandardMaterial | null) ?? new MeshStandardMaterial();
+    own.transparent = true;
+    own.opacity = 1;
+    // A copy does not keep the model's glow (sea-models.ts).
+    selfGlow(own);
+    const tail = root.getObjectByName('tail') ?? new Group();
     this.group.add(root);
     return {
       id,
       root,
       tail,
-      material,
+      material: own,
       params: { callRange: WHALE.callRange, lead: WHALE.lead, lateral: WHALE.lateral, height: WHALE.height, trail: WHALE.trail },
       home: new Vector3(),
       homeQuat: new Quaternion(),

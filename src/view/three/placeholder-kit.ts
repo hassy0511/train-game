@@ -15,9 +15,9 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
- * The building blocks of the stand-ins drawn in code for the chapter 3 sets (river-placeholders.ts, 3-2;
- * harbour-placeholders.ts, 3-3), the same way as the sea set (sea-placeholders.ts): parts painted by vertex colour,
- * merged into one mesh per model in one shared material, the origin at the bottom centre, +Z forward.
+ * The building blocks of the stand-ins drawn in code for the sets not built yet (river-placeholders.ts, 3-2, and later
+ * ones), the way the chapter 3 sea and harbour sets were drawn until sea.py and harbour.py built them: parts painted by
+ * vertex colour, merged into one mesh per model in one shared material, the origin at the bottom centre, +Z forward.
  */
 
 export type Vec = readonly [number, number, number];
