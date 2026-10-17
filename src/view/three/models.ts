@@ -1,7 +1,6 @@
 import { Box3, BoxGeometry, BufferAttribute, Group, Mesh, MeshLambertMaterial, Quaternion, Raycaster, SphereGeometry, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { placeholderSize } from '../placeholder-sizes';
-import { buildHarbourPlaceholder } from './harbour-placeholders';
 import { buildIcePlaceholder } from './ice-placeholders';
 import { buildVillagePlaceholder } from './village-placeholders';
 import { addHandLantern, buildNightPlaceholder } from './night-placeholders';
@@ -102,7 +101,6 @@ export class ModelLibrary {
         buildSkyPlaceholder(name) ??
         buildIcePlaceholder(name) ??
         buildRiverPlaceholder(name) ??
-        buildHarbourPlaceholder(name) ??
         buildVillagePlaceholder(name) ??
         buildSnowPlaceholder(name) ??
         buildNightPlaceholder(name) ??

@@ -21,7 +21,6 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import manifest from '../../assets/models.json';
-import { buildHarbourPlaceholder } from '../view/three/harbour-placeholders';
 import { buildIcePlaceholder } from '../view/three/ice-placeholders';
 import { buildVillagePlaceholder } from '../view/three/village-placeholders';
 import { buildSnowPlaceholder } from '../view/three/snow-placeholders';
@@ -92,7 +91,6 @@ const drawn = (name: string): Group | null =>
   buildSkyPlaceholder(name) ??
   buildIcePlaceholder(name) ??
   buildRiverPlaceholder(name) ??
-  buildHarbourPlaceholder(name) ??
   buildVillagePlaceholder(name) ??
   buildSnowPlaceholder(name) ??
   buildNightPlaceholder(name) ??

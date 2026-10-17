@@ -143,6 +143,14 @@ const STATIONS = [
   { id: 'teibou', name: 'ていぼうえき', railId: 'main', at: 2710, platformSide: 'right' },
   { id: 'toudai', name: 'とうだいえき', railId: 'main', at: 3180, platformSide: 'left' },
 ];
+/**
+ * とうだいえき's 8 lantern posts (§5.5, §12), on its platform (left: main 3138–3183, 1.7–5.7 m out, its top 0.96 m
+ * over the rail) in a row 5 m out by the sea-side edge, in line with the roof's outer posts: three that Sakasa slips
+ * along behind (seen from the ending's door shot over the sea) to the last car's door at 3150, one past the door, four
+ * past the roof (3154.5–3166.5), either side of the station sign (3174.8–3177.2). None at 3147–3152: the door shot
+ * looks at the door there and Sakasa jumps off the platform across it.
+ */
+const TOUDAI_LANTERNS = [3139.5, 3142.5, 3145.5, 3153, 3169, 3172.5, 3179.5, 3182.5];
 
 // ---------------------------------------------------------------------------------------------------------------
 // Gimmicks, actors, records, missions (§4, §7, §9, §13)
@@ -217,7 +225,10 @@ const RECORDS = [
     note: 'さんばしの はしらで ゆうやけ いろ',
     requires: null,
     model: 'starfish',
-    onRail: { railId: 'main', at: 860, lateral: -2.6, heightFromRail: -0.3 },
+    // On a pier post just over the water (§9): the left post at 856 (the pier's posts stand every 8 m, 1.8 m out,
+    // 0.5 m square, rail 5 over the sea), stuck to its outer face 0.9 m over the surface, its top turned out to sea.
+    onRail: { railId: 'main', at: 856, lateral: -2.06, heightFromRail: -4.1 },
+    rotation: [0, 0, -90],
   },
   {
     id: 'star-sand',
@@ -383,10 +394,11 @@ const ending = [
   { say: 'くじらさんも きてくれた！', emote: 'jump' },
   { say: 'ほしまつりの はじまり〜！' },
   { door: 'open' },
-  // From over the sea beside the platform (left): the last car's door and the platform.
+  // From over the sea beside the platform (left): the last car's door and the platform. Sakasa comes in (from out of
+  // the picture) along the platform behind its lanterns (TOUDAI_LANTERNS, 1 m further out) and out by the door.
   cam(3150, -24, 6, 3152, -2, 2),
-  { spawn: 'sakasa', model: 'amanojaku', onRail: { railId: 'main', at: 3128, lateral: -7, heightFromRail: 1 }, rotationY: 150 },
-  { move: 'sakasa', onRail: { railId: 'main', at: 3148, lateral: -4.2, heightFromRail: 1 }, seconds: 3 },
+  { spawn: 'sakasa', model: 'amanojaku', onRail: { railId: 'main', at: 3134, lateral: -4, heightFromRail: 1 }, rotationY: 150 },
+  { move: 'sakasa', onRail: { railId: 'main', at: 3147, lateral: -4, heightFromRail: 1 }, seconds: 3 },
   { say: '…あれ？ うしろの ドアに…', emote: 'tilt' },
   { move: 'sakasa', onRail: { railId: 'main', at: 3150, lateral: -2.8, heightFromRail: 1 }, seconds: 0.8 },
   { say: 'サカサ！', emote: 'jump' },
@@ -473,8 +485,10 @@ function scatter(models, count, { zones, lat, scale: [s0, s1], footprint, minRai
   addWorld('lighthouse', [LIGHTHOUSE.x, WALL - 0.6, LIGHTHOUSE.z], { rotationY: END.h / RAD + 180 });
   const shore = main.point(3130, -110);
   addWorld('cape-rock', [shore.x, -0.4 - 34.6 + 2, shore.z], { rotationY: END.h / RAD, scale: 1 });
+  // The houses in two rows along the shore cape (its top 110 m along the rail, centred on main 3130), 15 m apart, the
+  // end ones about 14 m in from its ends.
   for (let i = 0; i < 6; i++) {
-    const h = main.point(3060 + i * 18, -98 - (i % 2) * 12);
+    const h = main.point(3130 + (i - 2.5) * 15, -98 - (i % 2) * 12);
     addWorld('harbour-house', [h.x, 1.6, h.z], { rotationY: 90 + (i % 3) * 15 });
   }
 }
@@ -490,8 +504,9 @@ for (let s = 1350; s <= 1900; s += 40) {
   }
 }
 // Glowing coral in the trench and most in the star garden before ほしぞこえき; kelp, coral and rocks in the shallows.
-scatter(['glow-coral'], 20, { zones: [['main', 1360, 1690]], lat: [8, 17], scale: [0.8, 1.5], footprint: 1.5, y: () => TRENCH - 0.5 });
-scatter(['glow-coral'], 40, { zones: [['main', 1700, 1900]], lat: [7, 30], scale: [0.8, 1.6], footprint: 1.5, y: () => TRENCH - 0.5 });
+// The coral stands on the trench's floor (FLOOR): 8 m and more out, the rail's rock bed has already come down to it.
+scatter(['glow-coral'], 20, { zones: [['main', 1360, 1690]], lat: [8, 17], scale: [0.8, 1.5], footprint: 1.5 });
+scatter(['glow-coral'], 40, { zones: [['main', 1700, 1900]], lat: [7, 30], scale: [0.8, 1.6], footprint: 1.5 });
 scatter(['kelp'], 140, { zones: [['main', 2090, 2240], ['main', 2330, 2600]], lat: [8, 40], scale: [0.8, 1.2], footprint: 0.8 });
 scatter(['coral-a', 'coral-b', 'coral-c'], 50, { zones: [['main', 2090, 2600]], lat: [9, 45], scale: [0.8, 1.6], footprint: 1.8 });
 scatter(['rock-a', 'rock-b'], 20, { zones: [['main', 400, 680], ['main', 2090, 2600]], lat: [10, 50], scale: [1.2, 2.4], footprint: 1.4 });
@@ -509,7 +524,7 @@ for (const [s, lateral] of [
   [3070, 12],
 ]) addOnRail('festival-raft', 'main', s, { lateral, height: -FLOAT, rotationY: (s * 13) % 30 });
 for (const s of [2690, 2700, 2715, 2725]) addOnRail('lantern-post', 'main', s, { lateral: 2.8, height: -0.3 });
-for (let i = 0; i < 8; i++) addOnRail('lantern-post', 'main', 3150 + i * 5, { lateral: 2.8, height: -0.3 });
+for (const s of TOUDAI_LANTERNS) addOnRail('lantern-post', 'main', s, { lateral: -5, height: 0.95 });
 
 // ---------------------------------------------------------------------------------------------------------------
 // The stage
