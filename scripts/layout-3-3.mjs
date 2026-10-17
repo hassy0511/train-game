@@ -151,6 +151,12 @@ const STATIONS = [
  * looks at the door there and Sakasa jumps off the platform across it.
  */
 const TOUDAI_LANTERNS = [3139.5, 3142.5, 3145.5, 3153, 3169, 3172.5, 3179.5, 3182.5];
+/**
+ * ていぼうえき's 4 lantern posts, on its platform (right: main 2668–2713, 1.7–5.7 m out, its top 0.96 m over the rail)
+ * 5 m out like とうだいえき's, clear of the roof (2684.5–2696.5) and the station sign (about 2705–2707). 2026-10-17:
+ * right-side platforms used to be drawn across the track; the posts stood at 2.8 m, half sunk, two past the platform.
+ */
+const TEIBOU_LANTERNS = [2671, 2678, 2700, 2710.5];
 
 // ---------------------------------------------------------------------------------------------------------------
 // Gimmicks, actors, records, missions (§4, §7, §9, §13)
@@ -523,7 +529,7 @@ for (const [s, lateral] of [
   [3055, -15],
   [3070, 12],
 ]) addOnRail('festival-raft', 'main', s, { lateral, height: -FLOAT, rotationY: (s * 13) % 30 });
-for (const s of [2690, 2700, 2715, 2725]) addOnRail('lantern-post', 'main', s, { lateral: 2.8, height: -0.3 });
+for (const s of TEIBOU_LANTERNS) addOnRail('lantern-post', 'main', s, { lateral: 5, height: 0.95 });
 for (const s of TOUDAI_LANTERNS) addOnRail('lantern-post', 'main', s, { lateral: -5, height: 0.95 });
 
 // ---------------------------------------------------------------------------------------------------------------
