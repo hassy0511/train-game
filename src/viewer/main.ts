@@ -29,7 +29,6 @@ import { ModelLibrary } from '../view/three/models';
 import { buildNightPlaceholder } from '../view/three/night-placeholders';
 import { buildMirrorPlaceholder } from '../view/three/mirror-placeholders';
 import { buildSeaPlaceholder } from '../view/three/sea-placeholders';
-import { buildRiverPlaceholder } from '../view/three/river-placeholders';
 import { buildSkyPlaceholder } from '../view/three/sky-placeholders';
 import { buildMagnetPlaceholder } from '../view/three/magnet-placeholders';
 import { buildReversePlaceholder } from '../view/three/reverse-placeholders';
@@ -93,7 +92,6 @@ const drawn = (name: string): Group | null =>
   buildSkyPlaceholder(name) ??
   buildSeaPlaceholder(name) ??
   buildIcePlaceholder(name) ??
-  buildRiverPlaceholder(name) ??
   buildHarbourPlaceholder(name) ??
   buildVillagePlaceholder(name) ??
   buildSnowPlaceholder(name) ??

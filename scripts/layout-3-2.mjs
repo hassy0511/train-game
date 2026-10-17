@@ -244,6 +244,8 @@ const ACTORS = [
     type: 'dino-small',
     reactsTo: 'none',
     onRail: { railId: 'kawa', at: 2060.6 },
+    // Facing the way it walks: to the rail's right (rotationY is relative to the rail's heading; -90 turns +Z right).
+    rotationY: -90,
     params: { startDistance: 60, crossSeconds: 5, dangerDistance: 6, lateral: 8, look: 'duck' },
   },
 ];

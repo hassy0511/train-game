@@ -899,6 +899,7 @@
       "type": "dino-small",
       "reactsTo": "none",
       "onRail": { "railId": "kawa", "at": 2060.6 },
+      "rotationY": -90,
       "params": { "startDistance": 60, "crossSeconds": 5, "dangerDistance": 6, "lateral": 8, "look": "duck" }
     }
   ],
