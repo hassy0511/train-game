@@ -23,7 +23,7 @@ import type { ActorLayer } from './actors';
 import { bakeModel } from './bake';
 import { dotTexture } from './environment';
 import type { ModelLibrary } from './models';
-import { setFakeLanternGlow } from './night-placeholders';
+import { setFakeLanternGlow } from './night-models';
 
 /** A sleeper (a sleeping rabbit prop, or a hush record's figure) that hides when its hush stretch is startled. */
 interface Sleeper {

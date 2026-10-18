@@ -39,7 +39,7 @@ export const PLACEHOLDER_SIZES: Record<string, [number, number, number]> = {
   'dino-large-neck': [2, 5, 6],
   'dino-egg': [0.8, 0.8, 0.8],
   'footprint-slab': [3, 0.45, 2.4],
-  // v1.11 (5-1, ticket 0018): the night forest pieces of the PR2c mechanisms (drawn in code: night-placeholders.ts).
+  // v1.11 (5-1, ticket 0018): the night forest pieces of the PR2c mechanisms (built: assets/blender/night.py).
   'sign-hush': [1.2, 2.2, 0.2],
   'sign-whistle-reversed': [1.2, 2.2, 0.2],
   'bunny-sleep': [0.5, 0.35, 0.7],
@@ -50,7 +50,7 @@ export const PLACEHOLDER_SIZES: Record<string, [number, number, number]> = {
   tanuki: [0.6, 0.8, 0.6],
   'fake-lantern': [0.5, 2.6, 0.5],
   'firefly-grass': [1.4, 0.7, 1.0],
-  // The rest of 5-1's set (PR3).
+  // The rest of 5-1's set (PR3; built: assets/blender/night.py).
   'night-tree-a': [6, 14, 6],
   'night-tree-b': [8, 18, 8],
   'night-bush': [3, 1.6, 3],

@@ -22,7 +22,6 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import manifest from '../../assets/models.json';
 import { ModelLibrary } from '../view/three/models';
-import { buildNightPlaceholder } from '../view/three/night-placeholders';
 import { buildMirrorPlaceholder } from '../view/three/mirror-placeholders';
 import { buildSkyPlaceholder } from '../view/three/sky-placeholders';
 import { buildMagnetPlaceholder } from '../view/three/magnet-placeholders';
@@ -85,7 +84,6 @@ const built = new Set<string>(__MODEL_MANIFEST__);
 /** The game's code-drawn stand-in for a model that is not built yet. */
 const drawn = (name: string): Group | null =>
   buildSkyPlaceholder(name) ??
-  buildNightPlaceholder(name) ??
   buildMagnetPlaceholder(name) ??
   buildMirrorPlaceholder(name) ??
   buildReversePlaceholder(name) ??
