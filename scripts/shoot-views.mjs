@@ -160,6 +160,20 @@ const VIEWS = {
     ['main', 2900, 'chase'], // the root slope, the great tree ahead
     ['main', 3140, 'side'], // ひろばえき: the deck and the great tree
   ],
+  '5-2': [
+    ['main', 45, 'chase'], // つみきえき: its screw lamp posts, the block town
+    ['main', 200, 'cab'], // the reverse-wound chick on the rail ahead
+    ['main', 300, 'chase'], // the block bridge and ball pit A
+    ['main', 700, 'cab'], // the short screw post with the gold screw (record ①)
+    ['main', 1090, 'side'], // ねじまきえき (platform on the right)
+    ['main', 1500, 'chase'], // the parade street: the band, the folk watching
+    ['main', 1790, 'side'], // ひろばえき and the square
+    ['main', 2060, 'chase'], // spinning fork 1: the turntable and its flag
+    ['main', 2400, 'side'], // up the screw hill round the big screw
+    ['main', 2560, 'chase'], // down the slide over the line below
+    ['main', 2625, 'cab'], // the toy box's open lid ahead
+    ['main', 3060, 'side'], // おしろえき and the toy castle
+  ],
 };
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -211,6 +225,12 @@ async function parkStory(page) {
     }
     if (await page.locator('#bubble').isVisible()) await page.locator('#bubble').dispatchEvent('pointerdown');
     if (await page.locator('#caption').isVisible()) await page.locator('#caption').dispatchEvent('click');
+    // A cutscene waiting for a press (5-2's opening: the whistle winds the chick): pressed as soon as it glows.
+    await page.evaluate(() => {
+      const press = document.getElementById('app')?.dataset.cutscenePress;
+      const button = press ? document.getElementById(press) : null;
+      if (button?.dataset.glow === '1') button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+    });
     await page.waitForTimeout(150);
   }
   await page.evaluate(() => {

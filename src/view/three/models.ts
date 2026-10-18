@@ -6,7 +6,6 @@ import { prepareSeaModel } from './sea-models';
 import { prepareVillageModel } from './village-models';
 import { buildSkyPlaceholder } from './sky-placeholders';
 import { prepareSnowModel } from './snow-models';
-import { buildToyPlaceholder } from './toy-placeholders';
 import { buildMagnetPlaceholder } from './magnet-placeholders';
 import { buildMirrorPlaceholder } from './mirror-placeholders';
 import { buildReversePlaceholder } from './reverse-placeholders';
@@ -105,7 +104,6 @@ export class ModelLibrary {
     if (!this.available.has(name)) {
       const drawn =
         buildSkyPlaceholder(name) ??
-        buildToyPlaceholder(name) ??
         buildMagnetPlaceholder(name) ??
         buildMirrorPlaceholder(name) ??
         buildReversePlaceholder(name) ??

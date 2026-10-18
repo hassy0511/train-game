@@ -222,7 +222,8 @@ const RECORDS = [
     requires: 'light',
     model: 'glow-marble',
     hint: 'すみっこで なにか きらっ！',
-    onRail: { railId: 'main', at: 2730, lateral: -3, heightFromRail: 0.6 },
+    // On the toy box's floor (FLOOR in src/view/three/snow.ts: 0.8 m under the rail).
+    onRail: { railId: 'main', at: 2730, lateral: -3, heightFromRail: -0.8 },
   },
   {
     id: 'tin-key',
@@ -328,6 +329,8 @@ const JUNCTIONS = [
 /** A close shot: it sees no further than the stage fog (`reach` 1), so the camera after it does not either. */
 const cam = (s, lateral, up, ls, llat, lup) => ({ camera: 'fixed', at: at(s, lateral, up), lookAt: at(ls, llat, lup), reach: 1 });
 const onMain = (s, lateral, heightFromRail = 0) => ({ railId: 'main', at: s, lateral, heightFromRail });
+/** On the play mat beside main (a cutscene figure stands at the rail's height unless told: the rail is 1 m up). */
+const onMat = (s, lateral) => onMain(s, lateral, -RAIL_Y);
 const RAPPA = 'おもちゃの ラッパふき';
 const BAND = ['band-drum', 'band-cymbal', 'band-glock', 'band-trumpet', 'band-flag'];
 
@@ -355,43 +358,48 @@ const opening = [
 const glimpse = [
   // From the edge of the square, behind a block house: Sakasa alone, pushing a little block train to and fro.
   cam(1801, -13, 3.5, 1816, -28, 1),
-  { spawn: 'sakasa', model: 'amanojaku', onRail: onMain(1815, -28), rotationY: 0 },
-  { spawn: 'block-train', model: 'toy-block-train', onRail: onMain(1817, -28) },
-  { move: 'sakasa', onRail: onMain(1822, -28), seconds: 3, nowait: true },
-  { move: 'block-train', onRail: onMain(1824, -28), seconds: 3 },
-  { move: 'sakasa', onRail: onMain(1812, -28), seconds: 3, nowait: true },
-  { move: 'block-train', onRail: onMain(1814, -28), seconds: 3 },
+  { spawn: 'sakasa', model: 'amanojaku', onRail: onMat(1815, -28), rotationY: 0 },
+  { spawn: 'block-train', model: 'toy-block-train', onRail: onMat(1817, -28) },
+  { move: 'sakasa', onRail: onMat(1822, -28), seconds: 3, nowait: true },
+  { move: 'block-train', onRail: onMat(1824, -28), seconds: 3 },
+  { move: 'sakasa', onRail: onMat(1812, -28), seconds: 3, nowait: true },
+  { move: 'block-train', onRail: onMat(1814, -28), seconds: 3 },
   { say: '…あれ？ サカサ？', emote: 'tilt' },
   { say: 'サカサも、でんしゃ ごっこ？' },
   { wait: 0.6 },
   { say: 'こ、こんにちは〜！', who: 'amanojaku' },
-  { move: 'sakasa', onRail: onMain(1840, -60), seconds: 1.5 },
+  { move: 'sakasa', onRail: onMat(1840, -60), seconds: 1.5 },
   { remove: 'sakasa' },
   { say: '…ひとりで あそんでたのかな' },
 ];
 
 const ending = [
-  // The castle's big key, turning backwards on its wall.
-  cam(3034, 4, 7, 3076, -23, 11),
-  { spawn: 'big-key', model: 'castle-key-back', onRail: onMain(3076, -23, 8) },
+  // The castle's big key, turning backwards on its wall: flat on the front of the castle's middle block (its face at
+  // 36 m left of main, its foot on the base block's top 10.2 m up). Seen from beyond the platform's far side, over its
+  // roof, so the band marching out in front of the castle comes into the picture too.
+  cam(3036, -9, 7, 3072, -26, 7),
+  { spawn: 'big-key', model: 'castle-key-back', onRail: onMain(3080, -35.4, 9.2), rotationY: 90 },
   { say: 'おしろの おおぜんまいも ぎゃくまき！', emote: 'tilt' },
   { say: 'さいごの ひとまき、いっしょに いこう！' },
   { press: 'whistle', say: 'きてきを ならして！', fx: 'windup', target: 'big-key' },
   { say: 'ぜんまい、ぜんぶ もとどおり！', emote: 'cheer' },
   // The band marches out in front of the castle.
-  ...BAND.map((model, i) => ({ spawn: `band-${i + 1}`, model, onRail: onMain(3025 + i * 3, -16) })),
-  ...BAND.map((_, i) => ({ move: `band-${i + 1}`, onRail: onMain(3052 + i * 3, -16), seconds: 6, nowait: true })),
+  ...BAND.map((model, i) => ({ spawn: `band-${i + 1}`, model, onRail: onMat(3025 + i * 3, -16) })),
+  ...BAND.map((_, i) => ({ move: `band-${i + 1}`, onRail: onMat(3052 + i * 3, -16), seconds: 6, nowait: true })),
   { say: 'パレードだ〜！', emote: 'jump' },
   { wait: 3.5 },
-  { move: 'band-4', onRail: onMain(3066, -6), seconds: 2 },
-  { spawn: 'held-train', model: 'toy-block-train', onRail: onMain(3066.8, -6, 1.2) },
+  // The trumpet player comes over past the platform's end, turned to the train, and sets the little block train down
+  // in front of it on the mat.
+  { move: 'band-4', onRail: onMat(3066, -6), seconds: 2, face: true },
+  { spawn: 'held-train', model: 'toy-block-train', onRail: onMat(3066.4, -5.1) },
   { say: 'あれ？ その でんしゃ…', emote: 'tilt' },
   { say: 'あの こは、みんなと あそびたい だけ', who: 'passenger', name: RAPPA },
-  cam(3052, 1, 3, 3066, -6, 1.4),
+  // In front of the train's nose: the trumpet player and the block train close by, the castle behind.
+  cam(3069, -0.5, 2, 3066, -9, 1.5),
   { say: 'みんなと… あそびたい だけ' },
   { say: 'サカサ、ずっと ひとり だったんだ' },
-  // On a tower of the castle: Sakasa, for a moment (no words).
-  { spawn: 'sakasa-far', model: 'amanojaku', onRail: onMain(3095, -40, 18), rotationY: -90 },
+  // Up on the castle, on a block of its battlement (no words): Sakasa, for a moment.
+  { spawn: 'sakasa-far', model: 'amanojaku', onRail: onMain(3069.2, -32.4, 11), rotationY: -90 },
   { wait: 1.2 },
   { remove: 'sakasa-far' },
   { say: '…こんど いっしょに あそべたら いいね' },
@@ -401,6 +409,8 @@ const ending = [
 // Props (§5.6)
 // ---------------------------------------------------------------------------------------------------------------
 
+/** The screw post's height to the flat top of its lamp (assets/blender/toy.py). */
+const SCREW_POST_TOP = 7.94;
 const rand = mulberry32(52);
 const between = (a, b) => a + (b - a) * rand();
 const props = [];
@@ -450,9 +460,9 @@ function scatter(models, count, { zones, lat, footprint, minRail = 12, side = 0 
     if (reserved.some((o) => Math.hypot(o.x - q.x, o.z - q.z) < o.r + footprint)) continue;
     if (placed.some((o) => Math.hypot(o.x - q.x, o.z - q.z) < o.r + footprint + 2)) continue;
     placed.push({ x: q.x, z: q.z, r: footprint });
-    // Turned to face the rail (the model's front is +Z).
-    const face = Math.atan2(-Math.sin(q.h) * sign, -Math.cos(q.h) * sign) / RAD;
-    addWorld(models[Math.floor(rand() * models.length)], [q.x, 0, q.z], { rotationY: round(face + 90 * sign) });
+    // Turned to face the rail (the model's front is +Z; world rotationY turns +Z towards +X, and the rail's right is
+    // (−cos h, sin h)): a quarter turn from the rail's heading, towards it.
+    addWorld(models[Math.floor(rand() * models.length)], [q.x, 0, q.z], { rotationY: round(q.h / RAD + 90 * sign) });
     n++;
   }
   if (n < count) problems.push(`${models.join('/')}: placed ${n} of ${count}`);
@@ -470,7 +480,8 @@ for (const st of STATIONS) {
   for (const d of [-30, -12, 6]) addOnRail('screw-post', 'main', st.at + d, { lateral: side * 6.6, height: -RAIL_Y });
 }
 for (let s = 1490; s <= 1650; s += 32) for (const side of [-1, 1]) addOnRail('screw-post', 'main', s, { lateral: side * 6, height: -RAIL_Y });
-addOnRail('screw-post', 'main', 720, { lateral: -6, height: -RAIL_Y, scale: 0.42 });
+// Scaled so its lamp's flat top (7.94 m, assets/blender/toy.py) is just where the record stands, 3 m over the rail.
+addOnRail('screw-post', 'main', 720, { lateral: -6, height: -RAIL_Y, scale: (RAIL_Y + RECORDS[0].onRail.heightFromRail) / SCREW_POST_TOP });
 // The ball pits under the three block bridges.
 for (const g of GAPS) addOnRail('ball-pit', 'main', (g.from + g.to) / 2, { height: -main.at((g.from + g.to) / 2).y });
 // The big screw in the middle of the spiral.
@@ -487,7 +498,8 @@ for (let i = 0; i < 24; i++) {
 for (let i = 0; i < 20; i++) {
   const s = 1495 + i * 8;
   const side = i % 2 ? 1 : -1;
-  addOnRail(i % 3 ? 'block-folk-a' : 'block-folk-b', 'main', s, { lateral: side * (9 + (i % 4)), height: -RAIL_Y, rotationY: side > 0 ? -90 : 90 });
+  // Facing the street: rotationY 90 turns +Z to the rail's left, so the folk on the right turn 90 and those on the left −90.
+  addOnRail(i % 3 ? 'block-folk-a' : 'block-folk-b', 'main', s, { lateral: side * (9 + (i % 4)), height: -RAIL_Y, rotationY: side > 0 ? 90 : -90 });
 }
 // The castle (its door towards the rail) and the reverse-wound decorations of the town (they turn round in the ending).
 addOnRail('toy-castle', 'main', 3080, { lateral: -42, height: -RAIL_Y, rotationY: -90 });
@@ -497,7 +509,8 @@ for (const [s, lateral, model] of [
   [3090, -13, 'windup-chick-back'],
   [60, -12, 'windup-car-back'],
   [1100, 12, 'windup-chick-back'],
-]) addOnRail(model, 'main', s, { lateral, height: -RAIL_Y, rotationY: 90, windup: true });
+  // Their back (the key with Sakasa's swirl) to the rail, like the ones in the toy box.
+]) addOnRail(model, 'main', s, { lateral, height: -RAIL_Y, rotationY: lateral > 0 ? -90 : 90, windup: true });
 // In the toy box: toys against its walls (reverse-wound too).
 for (let i = 0; i < 8; i++) {
   const s = TOYBOX.from + 12 + i * 15;
@@ -505,7 +518,8 @@ for (let i = 0; i < 8; i++) {
   addOnRail(i % 3 ? 'windup-chick-back' : 'windup-car-back', 'main', s, { lateral: side * 4.2, height: -0.8, rotationY: side > 0 ? -90 : 90, windup: true });
 }
 // The side track's shelf (the tin key waits on top). Its block bridge's loose blocks are the magnet target's (PR6b).
-addOnRail('toy-shelf', 'tana', 150, { lateral: -7, height: -RAIL_Y, rotationY: 90 });
+// Its front (+Z) to the side track on its right (rotationY −90 turns +Z to the rail's right).
+addOnRail('toy-shelf', 'tana', 150, { lateral: -7, height: -RAIL_Y, rotationY: -90 });
 
 // ---------------------------------------------------------------------------------------------------------------
 // Checks (§5.7)
