@@ -22,7 +22,7 @@ import {
   Vector3,
 } from 'three';
 import { clamp01, eyes, glowMaterial, hash, kitMaterial, merge, mix, part, solid } from './placeholder-kit';
-import { traceGlowMaterial } from './village-placeholders';
+import { traceGlowMaterial } from './village-models';
 
 /**
  * Stand-ins drawn in code for the night forest pieces the PR2c mechanisms use (ticket 0018 「よるの もり」,

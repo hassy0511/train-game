@@ -193,7 +193,6 @@
     { "model": "lantern", "position": [-670.3, 0, 2402.8] },
     { "model": "lantern", "position": [-675.2, 0, 2407.7] },
     { "model": "lantern", "position": [-680.2, 0, 2412.7] },
-    { "model": "frozen-fall", "position": [-345.6, 0, 567.7], "rotationY": 31, "scale": 1.4 },
     { "model": "ski-lift-tower", "position": [-534, 0, 1227], "rotationY": -45, "scale": 1.94 },
     { "model": "ski-lift-tower", "position": [-618.8, 0, 1311.9], "rotationY": -45, "scale": 2.31 },
     { "model": "ski-lift-tower", "position": [-703.9, 0, 1398.9], "rotationY": -38, "scale": 2.31 },
@@ -217,50 +216,50 @@
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2432, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true,
       "traceLine": "ぐるぐるの しるし… サカサだ！"
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2452, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2472, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2492, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2512, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2532, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2552, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2572, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     { "model": "snow-fence-small", "position": [-344.1, 0, 603], "rotationY": -52 },
@@ -539,7 +538,8 @@
       "requires": null,
       "model": "frozen-fall",
       "hint": "みぎの たき… こおってる！",
-      "onRail": { "railId": "main", "at": 760, "lateral": 12, "heightFromRail": 1 }
+      "onRail": { "railId": "main", "at": 760, "lateral": 12, "heightFromRail": -0.55 },
+      "rotationY": 115
     },
     {
       "id": "spiral-mitten",
@@ -556,7 +556,7 @@
       "requires": "magnetLight",
       "model": "tin-shovel",
       "hint": "てっぺんに スコップ！ ひっぱろう！",
-      "onRail": { "railId": "main", "at": 1600, "lateral": 14, "heightFromRail": 11 }
+      "onRail": { "railId": "main", "at": 1600, "lateral": 14, "heightFromRail": 10.1 }
     }
   ],
   "missions": [
