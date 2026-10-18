@@ -34,7 +34,8 @@ change; origin at the bottom centre, +Z forward, the model's own left is +X):
   guard rails, the lip at the origin (where the train takes off), the ramp behind it (-Z).
 - ski-ramp-folded 2 x 4.3 x 6.2: the same ski jump folded up on end on the model's left (+X, x 3.85-5.86), its wooden
   underside to the track, propped from outside.
-- ski-lift-tower 3.6 x 12.5 x 3.6: a blue steel lift tower, a cross arm with two wheel sets on top, snow on it.
+- ski-lift-tower 3.6 x 12.48 x 3.6: a blue steel lift tower, a cross arm with two wheel sets on top, snow on it and a
+  pillow of snow on the pole's head (its top at 12.48: record ③ sticks in it, scripts/layout-4-2.mjs).
 - snow-ravine 30 x 2.6 x 40: the soft drifts at the bottom of the snowy valley under the ski jump.
 - frozen-fall 6.6 x 7.5 x 4.9 (record ①): a small rocky cliff whose waterfall froze as it fell, a frozen pool below.
 - spiral-mitten 0.4 x 0.5 x 0.2 (record ②): one mitten, purple and green stripes winding round it, a white cuff.
@@ -775,9 +776,9 @@ def ski_ramp_folded():
 # ---------------------------------------------------------------- ski-lift-tower
 
 def ski_lift_tower():
-    """リフトの てっぴん（鉄塔）: a blue steel pole with a white band near the top, standing in a mound of snow; a cross
-    arm on top with snow along it and a set of two dark wheels under each end (where the lift's rope runs), a round cap
-    on the pole's head."""
+    """リフトの てっとう: a blue steel pole with a white band near the top, standing in a mound of snow; a cross arm on
+    top with snow along it and a set of two dark wheels under each end (where the lift's rope runs), a round head on
+    the pole under a pillow of snow (its top, at 12.48 m, is where record ③ sticks)."""
     paint = snow_paint(0.6, extra={STEEL: 0.05, RIM: 0.15})
     parts: list = []
     v.lathe_y(parts, "mound", [(0.0, 1.8, SNOW_SHADE), (0.22, 1.45, SNOW), (0.42, 0.9, SNOW), (0.5, 0.0, SNOW)], (0, 0), 8, paint, smooth=True)
@@ -791,8 +792,10 @@ def ski_lift_tower():
         for z in (-0.48, 0.48):
             k.add_tapered_segment(parts, f"wheel-{side}-{z}", (x - 0.07, 11.42, z), (x + 0.07, 11.42, z), 0.28, 0.28, paint(WHEEL), vertices=6,
                                   smooth=False)
-    v.lathe_y(parts, "cap", [(12.1, 0.3, STEEL_LIGHT), (12.34, 0.26, STEEL_LIGHT), (12.48, 0.0, STEEL_LIGHT)], (0, 0), 8, paint, smooth=True,
-              phase=TAU / 16)
+    # The pole's round head under a pillow of snow (record ③, the tin shovel, sticks in it: layout-4-2.mjs puts it a
+    # quarter of its length into the top at 12.48 m times the tower's scale).
+    v.lathe_y(parts, "cap", [(12.08, 0.3, STEEL_LIGHT), (12.18, 0.3, SNOW_SHADE), (12.23, 0.38, SNOW), (12.38, 0.33, SNOW), (12.48, 0.0, SNOW)],
+              (0, 0), 8, paint, smooth=lambda c, n: n.y > -0.5, phase=TAU / 16)
     return parts, 300
 
 
