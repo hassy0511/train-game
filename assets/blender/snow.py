@@ -14,7 +14,7 @@ change; origin at the bottom centre, +Z forward, the model's own left is +X):
   little snowballs rolling at its foot; white on top to a light blue below.
 - snowman 3.2 x 2.8 x 1.8 (the body 1.8 wide, its twig arms reach 1.6 out), face +Z; snowman-big the same 2.2 times;
   snowman-upside 2.4 x 2.8 x 1.9: the big ball on top (eyes and nose), the hat upside down round the small one.
-- snow-pile 3 x 1.6 x 2.5 (the heap 1.3 high, a twig sticking out of it).
+- snow-pile 3 x 1.56 x 2.5 (the heap 1.1 high with lumps on it, a twig sticking out of it).
 - snow-ridge 1100 x 200 x 500: the ridge's surface is exactly the stand-in's (scripts/layout-4-3.mjs puts the pines on
   it and checks the tunnel's roof by the same formula): level at 200 within 80 m of its middle line, down to 88 at
   214 m out, a steep cliff to 0 at 242 m; the ends rounded down past 480 m. Where the tunnel comes out of the cliffs
@@ -30,10 +30,11 @@ change; origin at the bottom centre, +Z forward, the model's own left is +X):
 - ice-pillar 3 x 18 x 3, fake-exit 10 x 8 x 1.1 (picture +Z; materials "fake-exit-light" and "fake-exit-swirl", which
   the game swaps for a light the fog does not hide and the swirl it lights when the light sees through it,
   src/view/three/snow-models.ts), exit-glow 8 x 7 (both sides, material "exit-glow", made a fog-free light by the game).
-- snow-fence 70.2 x 5.8 x 1.2: a gate over the track (6.3 m clear between the posts, 5 m under the beam) and a wooden
+- snow-fence 70.3 x 5.8 x 0.8: a gate over the track (6.3 m clear between the posts, 5 m under the beam) and a wooden
   fence 30 m each side along X.
 - lodge 14 x 10 x 10: a log cabin, door +Z.
-- Records snow-hare 0.6 x 0.55 x 0.8, ice-flower 1.2 x 0.8 x 1.2, sleigh-bell 0.5 x 0.6 x 0.5.
+- Records snow-hare 0.6 x 0.55 x 0.8, ice-flower 1.2 x 0.72 x 1.04, sleigh-bell 0.5 x 0.49 x 0.45 (the flower and the
+  bells scaled evenly to their width).
 Output: public/models/<name>.glb and assets/previews/<name>.png.
 Run: python3 scripts/run-bpy.py assets/blender/snow.py [-- name ...]
 """
