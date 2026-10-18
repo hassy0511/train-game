@@ -444,7 +444,7 @@ const HILL = (() => {
   const c = main.point(2988, 74);
   return { x: c.x, z: c.z, scale: 0.15 };
 })();
-/** Height of the hill (the snow-mountain model's profile, src/view/three/ice-placeholders.ts) at world (x, z). */
+/** Height of the hill (the snow-mountain model's profile, MOUNTAIN in assets/blender/ice.py) at world (x, z). */
 function hillY(x, z) {
   const prof = [[190, 0], [150, 35], [110, 80], [70, 122], [35, 155], [8, 170], [0, 176]];
   const d = Math.hypot(x - HILL.x, z - HILL.z) / HILL.scale;
