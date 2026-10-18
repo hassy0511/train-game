@@ -80,10 +80,10 @@ EYE = v.EYE
 
 # A little of their own colour as light (the code stand-ins lit snow by 0.45 of its colour): the snow stays white and
 # soft blue on its shaded side, the ice and the icicles glint, the lodge's windows are warm.
-GLOW = {SNOW: 0.36, SNOW_SOFT: 0.33, SNOW_SHADE: 0.3, SNOW_DEEP: 0.26, ICE: 0.3, ICE_LIGHT: 0.34, ICE_MID: 0.26,
+GLOW = {SNOW: 0.38, SNOW_SOFT: 0.4, SNOW_SHADE: 0.42, SNOW_DEEP: 0.38, ICE: 0.3, ICE_LIGHT: 0.34, ICE_MID: 0.26,
         ICE_DEEP: 0.2, ICICLE: 0.4, HARE: 0.3, HARE_SHADE: 0.26, POMPOM: 0.3, WINDOW: 0.65, LANTERN: 0.7,
-        GOLD_LIGHT: 0.18, GOLD: 0.12, EXIT_LIGHT: 0.6, HILL_SHADOW: 0.3, SWIRL: 0.2, ROCK: 0.24, ROCK_LIGHT: 0.26,
-        ROCK_DARK: 0.18}
+        GOLD_LIGHT: 0.18, GOLD: 0.12, EXIT_LIGHT: 0.6, HILL_SHADOW: 0.3, SWIRL: 0.2, ROCK: 0.3, ROCK_LIGHT: 0.32,
+        ROCK_DARK: 0.24}
 
 
 def snow_paint(roughness=0.9):
@@ -594,9 +594,9 @@ def snow_ridge():
         az = abs(c.z)
         if az > RIDGE_SHOULDER and c.y < 88:
             stratum = j if c.z > 0 else len(zs) - j
-            if stratum % 2 == 0 or v.hash01(i // 2, stratum, 3) > 0.8:
-                return SNOW_SHADE if stratum % 4 else SNOW_SOFT
-            return ROCK_LIGHT if v.hash01(i // 3, stratum, 5) > 0.35 else ROCK
+            if stratum % 3 != 0 or v.hash01(i // 2, stratum, 3) > 0.85:
+                return SNOW_SHADE if stratum % 3 == 1 else SNOW_SOFT
+            return ROCK_LIGHT if v.hash01(i // 3, stratum, 5) > 0.3 else ROCK
         if 186 < az < RIDGE_SHOULDER and v.hash01(i, 0, 11) > 0.6:
             return ROCK_LIGHT if az < 200 else ROCK
         if c.y > RIDGE_TOP - 1:
