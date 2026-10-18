@@ -96,13 +96,15 @@ def prism(parts, paint, name, center, y0, y1, r0, r1, sides, tones, phase=0.0, b
     for y, r in ((y0, r0), (y1, r1)):
         verts += [(cx + math.cos(phase + TAU * i / sides) * r, y, cz + math.sin(phase + TAU * i / sides) * r) for i in range(sides)]
     n = sides
-    faces = [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
+    # Wound outward as built (an open frustum, a trunk or post whose ends are hidden, is not turned by fix_normals): the
+    # angle grows from +X toward +Z, so the sides go up then round, the bottom cap round, the top cap back round.
+    faces = [(i, n + i, n + (i + 1) % n, (i + 1) % n) for i in range(n)]
     colours = [tones[i % len(tones)] for i in range(n)]
     if bottom:
-        faces.append(tuple(range(n - 1, -1, -1)))
+        faces.append(tuple(range(n)))
         colours.append(cap or tones[0])
     if top:
-        faces.append(tuple(range(n, 2 * n)))
+        faces.append(tuple(range(2 * n - 1, n - 1, -1)))
         colours.append(cap or tones[0])
     return v.painted(parts, name, verts, faces, paint, colours, closed=bottom and top)
 
