@@ -23,7 +23,6 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import manifest from '../../assets/models.json';
 import { buildIcePlaceholder } from '../view/three/ice-placeholders';
 import { buildVillagePlaceholder } from '../view/three/village-placeholders';
-import { buildSnowPlaceholder } from '../view/three/snow-placeholders';
 import { ModelLibrary } from '../view/three/models';
 import { buildNightPlaceholder } from '../view/three/night-placeholders';
 import { buildMirrorPlaceholder } from '../view/three/mirror-placeholders';
@@ -90,7 +89,6 @@ const drawn = (name: string): Group | null =>
   buildSkyPlaceholder(name) ??
   buildIcePlaceholder(name) ??
   buildVillagePlaceholder(name) ??
-  buildSnowPlaceholder(name) ??
   buildNightPlaceholder(name) ??
   buildMagnetPlaceholder(name) ??
   buildMirrorPlaceholder(name) ??

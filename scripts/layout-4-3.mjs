@@ -148,7 +148,7 @@ check(SPANS.ike.surfaces.length === 1 && SPANS.ike.surfaces[0].from <= 60 && SPA
 // ---------------------------------------------------------------------------------------------------------------
 
 const RIDGE = { x: -817, z: -174 };
-/** Height of the ridge model at world (x, z) (src/view/three/snow-placeholders.ts snowRidge). */
+/** Height of the ridge model at world (x, z) (assets/blender/snow.py snow_ridge: the same surface). */
 function ridgeY(x, z) {
   const a = Math.abs(z - RIDGE.z);
   let h = 0;
@@ -159,6 +159,22 @@ function ridgeY(x, z) {
   const along = ax < 480 ? 1 : Math.max(0, Math.cos(((ax - 480) / 70) * (Math.PI / 2)));
   return ax > 550 ? 0 : h * along;
 }
+/** The ground's height (environment.ground.y). */
+const GROUND_Y = 0;
+/**
+ * Height of the snow `lateral` m beside main at `at`: the snowy bank rail-mesh.ts builds under the track (a toGround
+ * base: the ballast's top edge 1.6 m out 0.3 m under the rail, its foot 2.2 m out 0.6 m under it, then 2 m down for
+ * every 1 m out), the ridge, or the ground, whichever is highest (records lie on the snow, not in the air).
+ */
+function snowY(at, lateral) {
+  const railY = main.at(at).y;
+  const a = Math.abs(lateral);
+  const bank = a <= 2.2 ? railY - 0.3 - (0.3 * Math.max(0, a - 1.6)) / 0.6 : railY - 0.6 - (a - 2.2) * 2;
+  const p = main.point(at, lateral);
+  return Math.max(bank, ridgeY(p.x, p.z), GROUND_Y);
+}
+/** heightFromRail for something `sink` m into the snow `lateral` m beside main at `at`. */
+const onSnow = (at, lateral, sink) => round(snowY(at, lateral) - sink - main.at(at).y, 2);
 const TUNNEL = { from: 1257, to: 1700 };
 {
   let low = Infinity;
@@ -253,6 +269,8 @@ const ACTORS = [
     type: 'cat',
     reactsTo: 'whistle',
     onRail: { railId: 'main', at: 250, heightFromRail: 0 },
+    // Turned round so the snowman (its face +Z) looks at the train coming (the whistle's roll aside goes by the rail).
+    rotationY: 180,
     params: { look: 'snowman', wakeDistance: 60, dangerDistance: 8, fleeLateral: 6, fleeSeconds: 2 },
   },
   {
@@ -309,7 +327,8 @@ const RECORDS = [
     requires: null,
     model: 'snow-hare',
     hint: 'あっ、ゆきの なかに なにか いる！',
-    onRail: { railId: 'main', at: 170, lateral: 9, heightFromRail: 0 },
+    // Curled up on the snow (a little in it), not at the rail's height.
+    onRail: { railId: 'main', at: 170, lateral: 9, heightFromRail: onSnow(170, 9, 0.05) },
   },
   {
     id: 'ice-flower',
@@ -327,7 +346,8 @@ const RECORDS = [
     model: 'sleigh-bell',
     // v1.11 (PR6b, PHASE9_CHAPTER5_6 第 2 部 M7.2): fetched with the magnet light now: its hint, the note as the answer.
     hint: 'ゆきの なかに すず！ ひっぱろう！',
-    onRail: { railId: 'main', at: 1830, lateral: -10, heightFromRail: -0.4 },
+    // Half buried in the bank's shoulder just past the ballast (seen from the cab, clear of the train and its plow).
+    onRail: { railId: 'main', at: 1830, lateral: -2.4, heightFromRail: onSnow(1830, -2.4, 0.22) },
   },
 ];
 
@@ -745,7 +765,7 @@ const stage = {
     sky: { top: '#9cc6ea', bottom: '#f3f7fb' },
     fog: { color: '#e6eef6', near: 180, far: 560 },
     lighting: 'day',
-    ground: { y: 0, size: 3600, color: '#eef3f8' },
+    ground: { y: GROUND_Y, size: 3600, color: '#eef3f8' },
     bgm: 'yuki',
     ambience: 'snow',
     fall: 'snow',

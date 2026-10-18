@@ -24,7 +24,7 @@ import { bakeModel } from './bake';
 import type { EnvironmentState } from './environment-state';
 import { hash, mix } from './placeholder-kit';
 import type { ModelLibrary } from './models';
-import { setFakeExitGlow } from './snow-placeholders';
+import { setFakeExitGlow } from './snow-models';
 
 const UP = new Vector3(0, 1, 0);
 /** The tube's floor under the rail top (m). */
