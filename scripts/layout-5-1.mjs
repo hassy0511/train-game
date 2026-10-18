@@ -374,6 +374,36 @@ const GREAT_TREE = (() => {
 const ENDING_EYE = [round(-777.9 + END_SHIFT.x, 1), 21.4, round(2727.8 + END_SHIFT.z, 1)];
 const HIROBA_Y = MAIN_Y(3140);
 
+/**
+ * The great tree's root hill (`root-mound`, assets/blender/night.py with the same numbers): the square and the great
+ * tree stand on it at the square's ground (the rail's height less 0.6), instead of hanging 15 m over the forest. Its
+ * top is a rounded rectangle along the final straight (main 3062–3282, lateral −31…17, corners 14 m round): the four
+ * decks (lateral −28…−8, main 3070–3229) and the great tree (main 3260 straight on, roots 14 m round) lie on it, the
+ * track's rock bank runs into it. Its sides slope down all round by MOUND.profile ([m out from the top's edge, height
+ * over the forest floor]) to the floor 20 m out. The model's origin is the middle of its foot: main 3172, lateral −7.
+ */
+const MOUND = { at: 3172, lateral: -7, halfAlong: 110, halfAcross: 24, corner: 14, profile: [[0, 15.4], [2, 14.9], [6, 11.8], [12, 5.6], [20, 0]] };
+/** How far (m) a point (along the final straight `at`, `lateral`) is outside the hill's top (negative: on it). */
+const moundOffset = (at, lateral) => {
+  const x = Math.abs(lateral - MOUND.lateral) - (MOUND.halfAcross - MOUND.corner);
+  const z = Math.abs(at - MOUND.at) - (MOUND.halfAlong - MOUND.corner);
+  return Math.hypot(Math.max(x, 0), Math.max(z, 0)) + Math.min(Math.max(x, z), 0) - MOUND.corner;
+};
+/** The hill's ground there over the rail (heightFromRail; the top is GROUND_Y). */
+const moundRel = (at, lateral) => {
+  const off = moundOffset(at, lateral);
+  const p = MOUND.profile;
+  let h = p[0][1];
+  for (let i = 1; i < p.length; i++) {
+    if (off >= p[i - 1][0] && off <= p[i][0]) h = p[i - 1][1] + ((p[i][1] - p[i - 1][1]) * (off - p[i - 1][0])) / (p[i][0] - p[i - 1][0]);
+    else if (off > p[p.length - 1][0]) h = 0;
+  }
+  return round(GROUND_Y + h - HIROBA_Y, 2);
+};
+/** Where Sakasa runs down off the hill's side in the ending: over its edge, then into the roots' shadow below it. */
+const SAKASA_EDGE = { at: 3209, lateral: -32 };
+const SAKASA_DOWN = { at: 3209, lateral: -37 };
+
 const CUTSCENES = {
   opening: [
     { caption: 'よるの もり', seconds: 2.5 },
@@ -406,7 +436,8 @@ const CUTSCENES = {
     // Sakasa in the roots' shadow on the deck past the train (seen beside the tree), its lantern out; the fireflies
     // flow down and light it up.
     { spawn: 'sakasa', model: 'amanojaku-lantern-off', onRail: on(3204, -9, 0), rotationY: face(3204, -9, 3140, 4) },
-    { move: 'swarm', onRail: on(3204, -9, -4), seconds: 2 },
+    // Its lowest dots (2.3 m over its origin) just over the hill's top round Sakasa.
+    { move: 'swarm', onRail: on(3204, -9, -2), seconds: 2 },
     { say: 'あっ、サカサ！', emote: 'jump' },
     { say: 'こ、こんにちは〜！', who: 'amanojaku' },
     // Off it runs; halfway it turns round and looks back; then away.
@@ -415,9 +446,10 @@ const CUTSCENES = {
     { spawn: 'sakasa', model: 'amanojaku-lantern-off', onRail: on(3208, -26, 0), rotationY: face(3208, -26, 3140, 4) },
     { wait: 1.2 },
     { remove: 'sakasa' },
-    { spawn: 'sakasa', model: 'amanojaku-lantern-off', onRail: on(3208, -26, 0), rotationY: face(3208, -26, 3209, -45) },
-    // Down off the deck's far side, into the roots' shadow.
-    { move: 'sakasa', onRail: on(3209, -45, -8), seconds: 1.5 },
+    { spawn: 'sakasa', model: 'amanojaku-lantern-off', onRail: on(3208, -26, 0), rotationY: face(3208, -26, SAKASA_DOWN.at, SAKASA_DOWN.lateral) },
+    // Down off the deck's far side to the hill's edge, then down its side into the roots' shadow (on the slope).
+    { move: 'sakasa', onRail: on(SAKASA_EDGE.at, SAKASA_EDGE.lateral, moundRel(SAKASA_EDGE.at, SAKASA_EDGE.lateral) + 0.02), seconds: 0.5 },
+    { move: 'sakasa', onRail: on(SAKASA_DOWN.at, SAKASA_DOWN.lateral, moundRel(SAKASA_DOWN.at, SAKASA_DOWN.lateral) + 0.02), seconds: 1 },
     { remove: 'sakasa' },
     { say: 'いま、こっちを みてた', emote: 'tilt' },
     { say: 'なにか いいたそう だったね' },
@@ -425,6 +457,13 @@ const CUTSCENES = {
   ],
 };
 check(Math.abs(HIROBA_Y - SLOPE.rise) < 0.01, 'the square is on the top of the root slope');
+{
+  // The decks' corners and the great tree's roots (14 m round) on the hill's top; the ending's eye over it.
+  const decks = [3070, 3229].flatMap((at) => [-28, -8].map((lat) => moundOffset(at, lat)));
+  const tree = Math.max(...[0, 90, 180, 270].map((a) => moundOffset(3260 + 14 * Math.cos(a * RAD), 14 * Math.sin(a * RAD))));
+  check(Math.max(...decks) < -1 && tree < 0, `the decks and the great tree's roots on the root hill (${Math.max(...decks).toFixed(1)}, ${tree.toFixed(1)} m from its edge)`);
+  check(moundRel(SAKASA_DOWN.at, SAKASA_DOWN.lateral) < -2, `Sakasa's way down the hill's side ends ${moundRel(SAKASA_DOWN.at, SAKASA_DOWN.lateral)} m under the rail`);
+}
 
 // ---------------------------------------------------------------------------------------------------------------
 // Scenery (§5.4)
@@ -476,13 +515,15 @@ for (const [at, lateral, rotationY] of [[15, -3, 0], [35, 3, 180], [55, -3, 0]])
 onRail('bell-branch', 'main', 2600, { lateral: 11, height: 9.6, rotationY: 180 });
 onRail('night-tree-b', 'main', 2600, { lateral: 14.4, scale: 1.1, r: 4 });
 world('great-tree', GREAT_TREE.x, GREAT_TREE.z, { y: HIROBA_Y + GROUND_Y, rotationY: 120, r: 26 });
+// The root hill under the square and the great tree (on the forest floor: the default height).
+onRail('root-mound', 'main', MOUND.at, { lateral: MOUND.lateral });
 // The square's deck left of the station and on past it (main 3080–3210).
 for (const at of [3090, 3130, 3170, 3209]) onRail('plaza-deck', 'main', at, { lateral: -18, height: -0.9, r: 0 });
 placed.push({ ...(() => { const q = main.point(3145, -18); return { x: q.x, z: q.z }; })(), r: 70 });
 // Lanterns on each platform (2), the stump by the stump station, the log bridge's broken ends and its brook.
 for (const st of STATIONS) {
   const side = st.platformSide === 'left' ? -1 : 1;
-  for (const d of [-32, -8]) onRail('lantern-post', 'main', st.at + d, { lateral: side * 7.2, r: 1 });
+  for (const d of [-32, -8]) onRail('lantern-post', 'main', st.at + d, { lateral: side * 7.2, height: GROUND_Y, r: 1 });
 }
 onRail('big-stump', 'main', 1975, { lateral: 17, r: 7 });
 onRail('log-bridge-end', 'main', GAP.from - 2.4, { height: -1.45 });
@@ -618,6 +659,26 @@ for (let i = 0; i < 20000 && bushes < 40; i++) {
   if (d < 7 || d > 60 || nearStation(x, z) || inPond(x, z, 4) || !clearOfPlaced(x, z, 1.5)) continue;
   world('night-bush', x, z, { rotationY: between(0, 360), scale: between(0.8, 1.2), r: 1.5 });
   bushes += 1;
+}
+// Nothing of the forest stands on the root hill's slopes (taken out after the rest is placed, so every other tree
+// stays where it was).
+{
+  const straight = main.at(MOUND.at);
+  const tx = Math.sin(straight.h);
+  const tz = Math.cos(straight.h);
+  let off = 0;
+  for (let i = props.length - 1; i >= 0; i--) {
+    const p = props[i];
+    if (!p.position || !['night-tree-a', 'night-tree-b', 'night-bush'].includes(p.model)) continue;
+    const dx = p.position[0] - straight.x;
+    const dz = p.position[2] - straight.z;
+    if (moundOffset(MOUND.at + dx * tx + dz * tz, -dx * tz + dz * tx) > 24) continue;
+    if (p.model === 'night-bush') bushes -= 1;
+    else trees -= 1;
+    props.splice(i, 1);
+    off += 1;
+  }
+  report.push(`root hill: ${off} trees and bushes taken off its slopes`);
 }
 report.push(`scenery: ${trees} trees (${darkTrees} in the dark forests), ${bushes} bushes, ${mushrooms} mushrooms, ${reeds} reeds, ${meadowBoards} meadow boards`);
 

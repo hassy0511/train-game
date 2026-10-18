@@ -237,5 +237,6 @@
   "hedgehog-walk": { "script": "night.py", "triangles": 200, "kb": 250 },
   "hedgehog-ball": { "script": "night.py", "triangles": 150, "kb": 250 },
   "tanuki": { "script": "night.py", "triangles": 300, "kb": 250 },
-  "fake-lantern": { "script": "night.py", "triangles": 140, "kb": 250 }
+  "fake-lantern": { "script": "night.py", "triangles": 140, "kb": 250 },
+  "root-mound": { "script": "night.py", "triangles": 800, "kb": 250 }
 }

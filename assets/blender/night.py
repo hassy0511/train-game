@@ -58,6 +58,10 @@ JSON does not change; origin at the bottom centre, +Z forward, the model's own l
 - fake-lantern 0.64 x 2.6 x 0.36: Sakasa's fake light: a bamboo pole stuck in the ground, its arm, a cord and a round
   pink festival lantern hanging from it (never floating). Vertex colours, two materials: "fake-lantern-paper" is the
   paper, which the game swaps for its glowing pink (it goes out when the light sees through it); the rest "night-paint".
+- root-mound 91.4 x 16.3 x 263.7: the great tree's root hill under the square (scripts/layout-5-1.mjs MOUND, the same
+  numbers): its top a rounded rectangle 48 x 220 (corners 14 m round) flat at y 15.4 (the square's ground), its sides
+  down to the forest floor 20 m out (MOUND_PROFILE), earth with moss on the shoulder, ten roots running down them, a
+  few mossy lumps. Origin at the middle of its foot, +Z along the track.
 Output: public/models/<name>.glb and assets/previews/<name>.png.
 Run: python3 scripts/run-bpy.py assets/blender/night.py [-- name ...]
 """
@@ -1207,6 +1211,113 @@ def paper_split(material_name):
     return "fake-lantern-paper" if any(c in material_name for c in (PINK, PINK_DEEP, PINK_LIGHT)) else None
 
 
+# ---------------------------------------------------------------- the great tree's root hill
+
+# The square's hill (scripts/layout-5-1.mjs MOUND uses the same numbers): its top a rounded rectangle 48 x 220 m
+# (corners 14 m round) flat at y 15.4 (the square's ground, the rail's height less 0.6), its sides one profile all round:
+# (metres out from the top's edge, height) — a soft shoulder, a steep middle, a gentle foot 20 m out.
+MOUND_HALF_X, MOUND_HALF_Z, MOUND_CORNER = 24.0, 110.0, 14.0
+MOUND_PROFILE = [(20.0, 0.0), (12.0, 5.6), (6.0, 11.8), (2.0, 14.9), (0.0, 15.4)]
+EARTH, EARTH_DARK, MOSS, MOSS_LIGHT, FLOOR = "#4A3B2E", "#3D3127", "#3E6A4E", "#4E7A5A", "#33503F"
+GLOW.update({EARTH: 0.04, EARTH_DARK: 0.03, MOSS: 0.05, MOSS_LIGHT: 0.06, FLOOR: 0.03})
+
+
+def mound_outline(off):
+    """The rounded rectangle `off` m out from the top's edge (off < 0: inside it), the same parameter places for every
+    offset (a corner arc in 3 steps, the long sides in 9, the short ones in 2), counter-clockwise from above."""
+    hx, hz, r = MOUND_HALF_X - MOUND_CORNER, MOUND_HALF_Z - MOUND_CORNER, MOUND_CORNER + off
+    pts, normals = [], []
+    corners = [(hx, hz, 0.0), (-hx, hz, 90.0), (-hx, -hz, 180.0), (hx, -hz, 270.0)]
+    sides = [2, 9, 2, 9]  # after each corner, the straight side to the next one: the far end, -X, the near end, +X
+    for k, (cx, cz, a0) in enumerate(corners):
+        for i in range(3):
+            a = math.radians(a0 + 90.0 * i / 3)
+            pts.append((cx + math.cos(a) * r, cz + math.sin(a) * r))
+            normals.append((math.cos(a), math.sin(a)))
+        nx, nz, _ = corners[(k + 1) % 4]
+        a = math.radians(a0 + 90.0)
+        sx, sz = cx + math.cos(a) * r, cz + math.sin(a) * r
+        ex, ez = nx + math.cos(a) * r, nz + math.sin(a) * r
+        for i in range(sides[k]):
+            t = i / sides[k]
+            pts.append((sx + (ex - sx) * t, sz + (ez - sz) * t))
+            normals.append((math.cos(a), math.sin(a)))
+    return pts, normals
+
+
+def mound_height(off):
+    """The hill's height `off` m out from the top's edge (15.4 on the top)."""
+    if off <= 0.0:
+        return MOUND_PROFILE[-1][1]
+    for (o1, y1), (o0, y0) in zip(MOUND_PROFILE, MOUND_PROFILE[1:]):
+        if o0 <= off <= o1:
+            return y0 + (y1 - y0) * (off - o0) / (o1 - o0)
+    return 0.0
+
+
+def root_mound():
+    """おおきな きの ねっこの おか: the hill of dark forest earth under the fireflies' square and the great tree. Its
+    top is flat at the square's ground (the decks lie on it, the great tree's roots meet it) in a moss-green forest
+    floor; its sides slope down all round to the forest floor in earth browns with moss on the shoulder, and thick
+    roots (the great tree's) run down them; a few mossy lumps. Origin at the middle of its foot, +Z along the track."""
+    paint = paints(0.95)
+    parts: list = []
+    rings = []
+    for off, y in MOUND_PROFILE:
+        pts, nrm = mound_outline(off)
+        ring_pts = []
+        for i, ((x, z), (nx, nz)) in enumerate(zip(pts, nrm)):
+            # The foot wanders in and out, the slope's middle a little (gullies); not where Sakasa runs down in the
+            # ending (+X, z 20..60: layout-5-1.mjs reads the slope's height there from MOUND_PROFILE).
+            calm = x > 0 and 20.0 < z < 60.0
+            wob = 0.0
+            if off >= 20.0:
+                wob = (hash01(i, 3, 7) - 0.5) * 4.0
+            elif off >= 6.0 and not calm:
+                wob = (hash01(i, 5, off) - 0.5) * 2.4
+            ring_pts.append((x + nx * wob, y, z + nz * wob))
+        rings.append(ring_pts)
+    verts, faces, tags = rv.body(rings)
+
+    def colour(idx):
+        tag = tags[idx]
+        if tag[0] == "cap_top":
+            return FLOOR
+        if tag[0] == "cap_bottom":
+            return EARTH_DARK
+        band, j = tag[1], tag[2]
+        h = hash01(j, band, 11)
+        if band == 3:
+            return MOSS if h < 0.7 else MOSS_LIGHT
+        if band == 2:
+            return MOSS if h < 0.35 else (EARTH if h < 0.75 else EARTH_DARK)
+        if band == 1:
+            return EARTH if h < 0.55 else (EARTH_DARK if h < 0.85 else MOSS)
+        return EARTH_DARK if h < 0.6 else EARTH
+
+    closed(parts, "hill", verts, faces, paint, [colour(i) for i in range(len(faces))])
+    # The great tree's roots running down the sides (most round its end, +Z): from inside the top's edge down to the
+    # foot, thinning, a third sunk into the ground all the way.
+    pts0, nrm0 = mound_outline(0.0)
+    for k, i in enumerate((0, 2, 3, 5, 7, 10, 14, 20, 26, 32)):
+        (x, z), (nx, nz) = pts0[i], nrm0[i]
+        # A little sideways drift, so the roots do not run straight down.
+        sx, sz = -nz * (hash01(k, 9) - 0.5) * 0.4, nx * (hash01(k, 9) - 0.5) * 0.4
+        line, radii = [], []
+        for off, r in ((-3.0, 1.45), (1.5, 1.3), (6.5, 1.05), (12.5, 0.8), (18.5, 0.5)):
+            y = mound_height(off) - r * 0.35
+            line.append((x + nx * off + sx * off, y, z + nz * off + sz * off))
+            radii.append(r)
+        tube(parts, f"root-{k}", line, radii, paint(TRUNK if k % 2 else TRUNK_DARK), sides=4)
+    # Mossy lumps on the slopes.
+    for k, (i, off) in enumerate(((9, 9.0), (24, 7.0), (30, 10.0))):
+        (x, z), (nx, nz) = pts0[i], nrm0[i]
+        cx, cz = x + nx * off, z + nz * off
+        puff(parts, f"moss-{k}", (cx, mound_height(off) + 0.3, cz), (3.6, 1.6, 3.6), paint, lambda c, n: MOSS_LIGHT if n.y > 0.5 else MOSS,
+             n=5, lat=2, seed=70 + k, jitter=0.15, smooth=True)
+    return parts, 800
+
+
 # ---------------------------------------------------------------- export and preview
 
 def vertex_coloured(model, split):
@@ -1221,7 +1332,7 @@ BUILDERS = {"night-tree-a": night_tree_a, "night-tree-b": night_tree_b, "night-b
             "moonstone": moonstone, "lantern-bell": lantern_bell, "firefly-wait": firefly_wait, "firefly-grass": firefly_grass,
             "sign-hush": sign_hush, "sign-whistle-reversed": sign_whistle_reversed, "bunny-sleep": bunny_sleep,
             "bunny-family": bunny_family, "fawn": fawn, "hedgehog-walk": hedgehog_walk, "hedgehog-ball": hedgehog_ball, "tanuki": tanuki,
-            "fake-lantern": fake_lantern}
+            "fake-lantern": fake_lantern, "root-mound": root_mound}
 SWARMS = {"firefly-swarm": (3.0, 60), "firefly-swarm-big": (6.0, 160)}
 # The stand-ins' exact sizes (w, h, d) the shapes are scaled to.
 EXACT = {"night-tree-a": (5.037, 12.438, 6.17), "night-tree-b": (7.062, 16.104, 8.252), "night-bush": (2.366, 1.361, 2.482),
@@ -1235,7 +1346,7 @@ EXACT = {"night-tree-a": (5.037, 12.438, 6.17), "night-tree-b": (7.062, 16.104, 
 CENTRED = {"night-bush", "big-stump", "thicket", "birdhouse-upside", "moonstone", "lantern-bell", "bunny-sleep", "bunny-family", "hedgehog-ball"}
 # Vertex-coloured, with the second material the game swaps.
 VERTEX = {"birdhouse-upside": trace_split, "fake-lantern": paper_split}
-VIEWS = {"moon-meadow": (0.45, -0.6, 0.55), "plaza-deck": (0.55, -0.72, 0.4), "great-tree": (0.5, -0.8, 0.25), "log-bridge-end": (0.6, 0.62, 0.42),
+VIEWS = {"root-mound": (0.75, -0.45, 0.35), "moon-meadow": (0.45, -0.6, 0.55), "plaza-deck": (0.55, -0.72, 0.4), "great-tree": (0.5, -0.8, 0.25), "log-bridge-end": (0.6, 0.62, 0.42),
          "thicket": (0.35, 0.85, 0.3), "bell-branch": (0.3, -0.9, 0.2), "sign-hush": (0.3, -0.9, 0.15), "sign-whistle-reversed": (0.3, -0.9, 0.15),
          "birdhouse-upside": (0.45, -0.85, 0.2), "fake-lantern": (0.45, -0.85, 0.2), "fawn": (0.75, -0.6, 0.25), "tanuki": (0.5, -0.8, 0.25),
          "hedgehog-walk": (0.65, -0.7, 0.3), "bunny-family": (0.45, -0.75, 0.5), "bunny-sleep": (0.55, -0.7, 0.45), "firefly-wait": (0.4, 0.85, 0.2),
