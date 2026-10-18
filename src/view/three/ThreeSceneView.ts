@@ -365,7 +365,7 @@ export class ThreeSceneView implements SceneView {
       this.scene.add(this.magnet.group);
     }
     if (IronPropsView.wanted(stage)) {
-      this.iron = new IronPropsView(stage, this.train);
+      this.iron = new IronPropsView(stage, this.train, () => this.rails);
       this.scene.add(this.iron.group);
     }
     if (MirrorWorldGimmicks.wanted(stage)) {
@@ -419,6 +419,8 @@ export class ThreeSceneView implements SceneView {
       this.toy?.init(this.models),
       this.castle?.init(this.models),
       this.mirrorWorld?.init(this.models),
+      // v1.11 (ticket 0020): the odds and ends by the line, from their built models.
+      this.iron?.init(this.models),
     ]);
     this.setLandmark(stage.file.environment);
     this.lookChanged();

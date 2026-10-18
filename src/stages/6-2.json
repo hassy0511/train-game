@@ -860,7 +860,7 @@
     { "model": "block-folk-a", "position": [-2830.8, 0, 180.4], "rotationY": 246.6 },
     { "model": "band-trumpet", "onRail": { "railId": "p3", "at": 508, "lateral": -4.5 }, "rotationY": 90 },
     { "model": "band-drum", "onRail": { "railId": "p3", "at": 505, "lateral": -4.5 }, "rotationY": 90 },
-    { "model": "mirror-frame", "onRail": { "railId": "p3", "at": 660, "heightFromRail": 0 } },
+    { "model": "mirror-frame", "onRail": { "railId": "p3", "at": 660, "heightFromRail": 0 }, "rotationY": 180 },
     { "model": "crystal-tree-a", "position": [-2795.1, 0, 177.9], "rotationY": 211.1 },
     { "model": "crystal-tree-a", "position": [-2767.8, 0, 141.8], "rotationY": 273.3 },
     { "model": "crystal-tree-b", "position": [-2799.8, 0, 112.4], "rotationY": 74.5 },

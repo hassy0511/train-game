@@ -567,7 +567,8 @@ scatter(['block-house-a', 'block-house-b', 'block-house-c'], 26, { zones: [['p3'
 scatter(['screw-post', 'block-folk-a'], 20, { zones: [['p3', TOY.from, TOY.to]], lat: [5, 14], footprint: 0.8, minRail: 4.5 });
 addOnRail('band-trumpet', 'p3', 520 - 12, { lateral: -4.5, rotationY: 90 });
 addOnRail('band-drum', 'p3', 520 - 15, { lateral: -4.5, rotationY: 90 });
-addOnRail('mirror-frame', 'p3', MIRROR_GATE, { height: 0 });
+// The mirror the line runs into: its glass (+Z) turned to the coming train (its back, with Sakasa's swirl, beyond).
+addOnRail('mirror-frame', 'p3', MIRROR_GATE, { height: 0, rotationY: 180 });
 scatter(['crystal-tree-a', 'crystal-tree-b'], 16, { zones: [['p3', 620, 700]], lat: [8, 30], footprint: 2 });
 scatter(['tree-upside', 'house-upside-a'], 20, { zones: [['p3', CASTLE_FROM, 900]], lat: [14, 50], footprint: 5 });
 const CASTLE = { at: 820, lateral: -110 };

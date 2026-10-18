@@ -101,7 +101,7 @@ export const PLACEHOLDER_SIZES: Record<string, [number, number, number]> = {
   'gold-screw': [0.4, 0.8, 0.4],
   'glow-marble': [0.3, 0.3, 0.3],
   'tin-key': [0.5, 0.7, 0.12],
-  // v1.11 (5-3, ticket 0020): the mirror world (drawn in code: mirror-placeholders.ts).
+  // v1.11 (5-3, ticket 0020): the mirror world (built: assets/blender/mirror.py; the wireframe view's boxes).
   'mirror-cushion': [6, 3, 2],
   'mirror-board': [1.3, 1.8, 0.1],
   'crystal-tree-a': [2.4, 4, 2.4],

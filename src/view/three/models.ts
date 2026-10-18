@@ -6,8 +6,7 @@ import { prepareSeaModel } from './sea-models';
 import { prepareVillageModel } from './village-models';
 import { buildSkyPlaceholder } from './sky-placeholders';
 import { prepareSnowModel } from './snow-models';
-import { buildMagnetPlaceholder } from './magnet-placeholders';
-import { buildMirrorPlaceholder } from './mirror-placeholders';
+import { prepareMirrorModel } from './mirror-models';
 import { buildReversePlaceholder } from './reverse-placeholders';
 import { buildCastlePlaceholder } from './castle-placeholders';
 import { buildEndingPlaceholder } from './ending-placeholders';
@@ -84,7 +83,7 @@ export class ModelLibrary {
     }
 
     // v1.11 (5-3): the mirror Sakasa waving, and shy (hands together, head a little on one side), posed from the built
-    // amanojaku until ticket 0020 builds them.
+    // amanojaku (ticket 0020 keeps them so).
     if ((name === 'amanojaku-wave' || name === 'amanojaku-shy') && !this.available.has(name)) {
       const posed = this.load('amanojaku').then((m) => poseAmanojaku(m, name));
       this.cache.set(name, posed);
@@ -104,8 +103,6 @@ export class ModelLibrary {
     if (!this.available.has(name)) {
       const drawn =
         buildSkyPlaceholder(name) ??
-        buildMagnetPlaceholder(name) ??
-        buildMirrorPlaceholder(name) ??
         buildReversePlaceholder(name) ??
         buildCastlePlaceholder(name) ??
         buildEndingPlaceholder(name) ??
@@ -120,10 +117,13 @@ export class ModelLibrary {
     // v1.10 (3-1): the kelp sways in its shader, the whale glows a little (ticket 0011). v1.10 (4-2): the lanterns'
     // paper and the swirl on the upside-down fences take the materials the game lights (ticket 0016). v1.10 (4-3): the
     // exits' light and the false exit's swirl (ticket 0017). v1.11 (5-1): the fake lanterns' paper, the birdhouse's
-    // swirl, the great tree's halo and the firefly swarms' dots (ticket 0018).
+    // swirl, the great tree's halo and the firefly swarms' dots (ticket 0018). v1.11 (5-3): two records' pictures on a
+    // canvas (ticket 0020).
     const loading = this.loader
       .loadAsync(url)
-      .then((gltf) => prepareNightModel(name, prepareSnowModel(name, prepareVillageModel(name, prepareSeaModel(name, gltf.scene)))));
+      .then((gltf) =>
+        prepareMirrorModel(name, prepareNightModel(name, prepareSnowModel(name, prepareVillageModel(name, prepareSeaModel(name, gltf.scene))))),
+      );
     this.cache.set(name, loading);
     return loading;
   }

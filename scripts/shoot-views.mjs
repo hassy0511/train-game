@@ -174,6 +174,20 @@ const VIEWS = {
     ['main', 2625, 'cab'], // the toy box's open lid ahead
     ['main', 3060, 'side'], // おしろえき and the toy castle
   ],
+  '5-3': [
+    ['main', 60, 'chase'], // かがみぐちえき, the first mirror, the glass trees
+    ['main', 450, 'side'], // up onto the glass bridge
+    ['main', 670, 'cab'], // the parted rail ahead and its loose piece
+    ['main', 950, 'cab'], // inside the mirror: record ①'s board
+    ['main', 1250, 'side'], // きらきらえき (platform on the right)
+    ['main', 1680, 'cab'], // the iron door ahead
+    ['main', 1815, 'chase'], // the tall mirror shelf (record ②)
+    ['kagami1', 70, 'cab'], // a false way's cushion
+    ['main', 2250, 'chase'], // めいろえき and its mirror
+    ['main', 3050, 'cab'], // the turned-away mirror
+    ['ura', 40, 'chase'], // the glass side way, record ③
+    ['main', 3480, 'chase'], // おおかがみえき, the big mirror
+  ],
 };
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');

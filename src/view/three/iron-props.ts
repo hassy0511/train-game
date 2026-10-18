@@ -1,21 +1,23 @@
-import { BufferGeometry, DynamicDrawUsage, Group, InstancedMesh, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from 'three';
+import { DynamicDrawUsage, Group, InstancedMesh, Matrix4, Mesh, Object3D, Quaternion, Raycaster, Vector3 } from 'three';
 import type { StageEvent } from '../../core/stage-events';
 import type { IronLook, IronProp, StageData } from '../../stage/types';
 import { sectionOf } from '../../stage/sections';
 import { IRON_PROPS, TRAIN } from '../../train/params';
-import { ironBucketGeometry, ironCanGeometry, SIGN_BELL_AT, signBellGeometry, signPostGeometry } from './magnet-placeholders';
-import { kitMaterial } from './placeholder-kit';
+import { loadIronPieces, type IronPiece, type IronPieces } from './magnet-models';
+import type { ModelLibrary } from './models';
 
 /**
  * v1.11 (PR5, PHASE9_0 §3, PHASE9_CHAPTER5_6 第 2 部 M3.4・M12): the iron odds and ends by the line: tin cans, tin
  * buckets and signs with a bell, each kind drawn in one call (InstancedMesh), and the one being tugged: a can or a
  * bucket flies to the lower corner of the train's front on its own side ("びよん"; away from the lamp and the windows,
  * never two), drops off and rolls to a stop by the line ("からん"); a bell stretches out towards the train and springs
- * back. Hidden until the magnet light is learned (the stages before 5-3 look as they always did).
+ * back. Hidden until the magnet light is learned (the stages before 5-3 look as they always did). The shapes are the
+ * built models (assets/blender/magnet-set.py), baked to one mesh each (magnet-models.ts); they are put in by init().
  */
 
 /** Where a can sticks on the lead car (car frame, +Z forward; x by the side it came from). */
 const STICK = new Vector3(1.05, 0.45, TRAIN.length / 2 + 0.15);
+const DOWN = new Vector3(0, -1, 0);
 /** How far a bell stretches towards the train (m). */
 const BELL_REACH = 1.8;
 
@@ -37,26 +39,36 @@ export class IronPropsView {
   private readonly meshes = new Map<string, InstancedMesh>();
   private flying: { placed: Placed; phase: 'fly' | 'stuck' | 'fall' | 'bell' | 'spring'; t: number; from: Vector3; to: Vector3; side: number } | null = null;
   private flyer: Mesh | null = null;
+  private pieces: IronPieces | null = null;
   private readonly matrix = new Matrix4();
   private readonly tmp = new Vector3();
   private readonly one = new Vector3(1, 1, 1);
   private readonly zero = new Vector3(0, 0, 0);
   private readonly spin = new Quaternion();
+  private readonly ray = new Raycaster();
+  private readonly above = new Vector3();
 
   constructor(
     private readonly stage: StageData,
     private readonly train: Object3D,
+    /** The track (ballast and the rock or snow under it): what a can by a high rail stands on. */
+    private readonly track: () => Object3D | null = () => null,
   ) {
     this.group.name = 'iron-props';
     this.group.visible = false;
-    this.build();
+  }
+
+  /** Loads the built odds and ends and puts every one in its place. */
+  async init(models: ModelLibrary): Promise<void> {
+    this.pieces = await loadIronPieces(models);
+    this.build(this.pieces);
   }
 
   static wanted(stage: StageData): boolean {
     return stage.ironProps.length > 0;
   }
 
-  private build(): void {
+  private build(pieces: IronPieces): void {
     const props = this.stage.ironProps;
     const groundY = this.stage.file.environment.ground?.y ?? null;
     // v1.11 (PR11a, 第 3 部 B13): a stage in sections draws each section's in batches of their own (one batch over
@@ -72,10 +84,10 @@ export class IronPropsView {
       count(key(p.look, p));
       if (drawsPost(p)) count(key('post', p));
     }
-    const geos: Record<string, () => BufferGeometry> = { can: ironCanGeometry, bucket: ironBucketGeometry, post: signPostGeometry, bell: signBellGeometry };
+    const kinds: Record<string, IronPiece> = { can: pieces.can, bucket: pieces.bucket, post: pieces.post, bell: pieces.bell };
     for (const [k, n] of counts) {
       const kind = k.split('|')[0];
-      const mesh = new InstancedMesh(geos[kind](), kitMaterial(), n);
+      const mesh = new InstancedMesh(kinds[kind].geometry, kinds[kind].material, n);
       mesh.name = `iron-${kind}`;
       mesh.instanceMatrix.setUsage(DynamicDrawUsage);
       mesh.count = 0;
@@ -86,7 +98,7 @@ export class IronPropsView {
       const rail = this.stage.network.getRail(p.railId);
       const frame = rail.frameAt(p.at);
       const position = frame.position.clone().addScaledVector(frame.right, p.lateral);
-      if (groundY !== null) position.y = Math.max(groundY, position.y - 0.3);
+      if (groundY !== null) position.y = this.groundAt(position, groundY);
       // It faces the rail (a sign's arm reaches over towards it).
       const toward = frame.right.clone().multiplyScalar(-Math.sign(p.lateral || 1));
       toward.y = 0;
@@ -104,7 +116,7 @@ export class IronPropsView {
       }
       const bells = this.meshes.get(key('bell', p)) as InstancedMesh;
       const bellSlot = bells.count++;
-      const bellAt = SIGN_BELL_AT.clone().applyQuaternion(quaternion).add(position);
+      const bellAt = pieces.bellAt.clone().applyQuaternion(quaternion).add(position);
       this.matrix.compose(bellAt, quaternion, this.one);
       bells.setMatrixAt(bellSlot, this.matrix);
       let mesh = bells;
@@ -121,6 +133,24 @@ export class IronPropsView {
       mesh.instanceMatrix.needsUpdate = true;
       mesh.computeBoundingSphere();
     }
+  }
+
+  /**
+   * How high the ground is under `at` (world x, z): the stage's ground, or the side of the track's bed or of the rock
+   * (or snow) a high rail stands on (a toGround base slopes 2 m down for every 1 m out, so a can 3.5–6 m from a rail
+   * a few metres up stands on it). Before, odds and ends stood at 0.3 m under the rail: in the air beside a rail on the
+   * ground at −0.6 (most stages) and high in the air beside a raised one (6-1's bucket on the ridge).
+   */
+  private groundAt(at: Vector3, groundY: number): number {
+    const track = this.track();
+    if (!track) return groundY;
+    // The track's pieces are placed by their own transforms, not yet worked out before the first frame.
+    track.updateMatrixWorld(true);
+    const top = Math.max(at.y, groundY) + 3;
+    this.ray.set(this.above.set(at.x, top, at.z), DOWN);
+    this.ray.far = top - groundY;
+    const hit = this.ray.intersectObject(track, true)[0];
+    return hit ? Math.max(groundY, hit.point.y) : groundY;
   }
 
   onEvent(e: StageEvent): void {
@@ -168,22 +198,24 @@ export class IronPropsView {
     this.group.add(flyer);
     flyer.position.copy(this.tmp);
     const out = new Vector3(f.side * 2.6, 0, -1.5).applyQuaternion(this.train.quaternion);
-    const ground = this.stage.file.environment.ground?.y ?? this.tmp.y - 1;
+    const groundY = this.stage.file.environment.ground?.y ?? null;
     f.from = this.tmp.clone();
     f.to = this.tmp.clone().add(out);
-    f.to.y = ground;
+    f.to.y = groundY === null ? this.tmp.y - 1 : this.groundAt(f.to, groundY);
     f.phase = 'fall';
     f.t = 0;
   }
 
   private flyerFor(look: IronLook): Mesh {
-    const geometry = look === 'bucket' ? ironBucketGeometry() : ironCanGeometry();
+    const pieces = this.pieces as IronPieces;
+    const { geometry, material } = look === 'bucket' ? pieces.bucket : pieces.can;
     if (!this.flyer) {
-      this.flyer = new Mesh(geometry, kitMaterial());
+      this.flyer = new Mesh(geometry, material);
       this.flyer.name = 'iron-flying';
     } else {
-      this.flyer.geometry.dispose();
+      // The shared baked geometry and material: swapped, never disposed.
       this.flyer.geometry = geometry;
+      this.flyer.material = material;
     }
     this.flyer.removeFromParent();
     this.group.add(this.flyer);

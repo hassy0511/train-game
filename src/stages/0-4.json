@@ -186,7 +186,7 @@
         "kind": "turn",
         "look": "mirror",
         "lateral": -12,
-        "height": 4,
+        "height": -0.6,
         "junction": "usono",
         "line": "そっぽの かがみ！ じしゃくで くるっ！",
         "done": "くるっ！ ほんとうの みちが みえた！",
