@@ -217,50 +217,50 @@
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2432, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true,
       "traceLine": "ぐるぐるの しるし… サカサだ！"
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2452, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2472, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2492, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2512, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2532, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2552, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     {
       "model": "snow-fence-trace",
       "onRail": { "railId": "main", "at": 2572, "lateral": -3.6, "heightFromRail": -0.5 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true
     },
     { "model": "snow-fence-small", "position": [-344.1, 0, 603], "rotationY": -52 },

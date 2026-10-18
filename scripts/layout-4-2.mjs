@@ -550,14 +550,15 @@ for (const at of [1480, 1600, 1720]) {
   world('snow-ravine', p.x, p.z, 0, 90 - p.phi / RAD);
 }
 
-// The snow shed (the dim wooden tunnel), one piece every 10 m, and its fences: upside down, Sakasa's swirl on them.
+// The snow shed (the dim wooden tunnel), one piece every 10 m, and its fences: upside down, Sakasa's swirl on them
+// (turned -90: the model's front, +Z, with the swirl, faces the track; +90 put it toward the shed's wall).
 let traces = 0;
 for (let at = SHED.from + 5; at < SHED.to; at += 10) {
   const prop = { model: 'snow-shed', onRail: on('main', at, 0, -0.5) };
   props.push(prop);
 }
 for (let at = SHED.from + 12; at < SHED.to - 5; at += 20) {
-  const prop = { model: 'snow-fence-trace', onRail: on('main', at, -3.6, -0.5), rotationY: 90, trace: true };
+  const prop = { model: 'snow-fence-trace', onRail: on('main', at, -3.6, -0.5), rotationY: -90, trace: true };
   if (traces === 0) prop.traceLine = 'ぐるぐるの しるし… サカサだ！';
   props.push(prop);
   traces += 1;

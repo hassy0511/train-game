@@ -1,7 +1,7 @@
 import { Color, Scene, ShaderMaterial } from 'three';
 import type { StageEvent } from '../../core/stage-events';
 import type { EnvironmentState } from './environment-state';
-import { setLanternGlow, setTraceGlow } from './village-placeholders';
+import { setLanternGlow, setTraceGlow } from './village-models';
 
 /**
  * The snowy village of 4-2 in the scene (docs/PHASE8_CHAPTER3_4.md 第 6 部 第 B 部 §8, §12): the evening a cutscene
@@ -56,7 +56,11 @@ export class VillageGimmicks {
       },
     };
     this.lanternTarget = 1;
-    if (e.seconds <= 0) this.lanterns = 1;
+    // At once (seconds 0): lit now (update() only eases toward the target, and here there is nothing left to ease).
+    if (e.seconds <= 0) {
+      this.lanterns = 1;
+      setLanternGlow(1);
+    }
   }
 
   /** v1.11: a new look was applied (day ⇄ night): an evening still turning stops where the new look put things. */

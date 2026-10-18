@@ -28,6 +28,7 @@ import type { RailNetwork } from '../../rail/types';
 import { resolvePlacement } from '../../stage/loader';
 import type { GapDef, JunctionDef, StageData } from '../../stage/types';
 import { buildAbilitySign } from './ability-picture';
+import { bakeModel } from './bake';
 import type { ModelLibrary } from './models';
 import { LEAP, MAGNET } from '../../train/params';
 import { addModelPlacements, sourceMeshes, type ModelPlacement, type SourceMesh } from './props';
@@ -453,7 +454,9 @@ export class SkyGimmicks {
         const t = resolvePlacement({ onRail: { railId: g.railId, at: g.from, heightFromRail: 0 } }, this.stage.network, null);
         // v1.10 (4-2): look "ski": a ski jump, folded up on end until the whistle lays it down ("ばたん！").
         const ski = look === 'ski';
-        const pad = (await models.load(ski ? 'ski-ramp' : 'jump-pad')).clone(true);
+        // The ski jump's two models are baked (their flat colours in one draw call each).
+        const padModel = await models.load(ski ? 'ski-ramp' : 'jump-pad');
+        const pad = (ski ? (bakeModel(padModel) ?? padModel) : padModel).clone(true);
         pad.position.copy(t.position);
         pad.quaternion.copy(t.quaternion);
         pad.visible = false;
@@ -462,7 +465,8 @@ export class SkyGimmicks {
         sparkle.quaternion.copy(t.quaternion);
         let folded: Object3D | null = null;
         if (ski) {
-          folded = (await models.load('ski-ramp-folded')).clone(true);
+          const foldedModel = await models.load('ski-ramp-folded');
+          folded = (bakeModel(foldedModel) ?? foldedModel).clone(true);
           folded.position.copy(t.position);
           folded.quaternion.copy(t.quaternion);
           this.group.add(folded);

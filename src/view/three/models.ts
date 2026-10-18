@@ -2,9 +2,9 @@ import { Box3, BoxGeometry, BufferAttribute, Group, Mesh, MeshLambertMaterial, Q
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { placeholderSize } from '../placeholder-sizes';
 import { buildIcePlaceholder } from './ice-placeholders';
-import { buildVillagePlaceholder } from './village-placeholders';
 import { addHandLantern, buildNightPlaceholder } from './night-placeholders';
 import { prepareSeaModel } from './sea-models';
+import { prepareVillageModel } from './village-models';
 import { buildSkyPlaceholder } from './sky-placeholders';
 import { buildSnowPlaceholder } from './snow-placeholders';
 import { buildToyPlaceholder } from './toy-placeholders';
@@ -99,7 +99,6 @@ export class ModelLibrary {
       const drawn =
         buildSkyPlaceholder(name) ??
         buildIcePlaceholder(name) ??
-        buildVillagePlaceholder(name) ??
         buildSnowPlaceholder(name) ??
         buildNightPlaceholder(name) ??
         buildToyPlaceholder(name) ??
@@ -116,8 +115,9 @@ export class ModelLibrary {
     }
 
     const url = `${import.meta.env.BASE_URL}models/${name}.glb`;
-    // v1.10 (3-1): the kelp sways in its shader, the whale glows a little (ticket 0011).
-    const loading = this.loader.loadAsync(url).then((gltf) => prepareSeaModel(name, gltf.scene));
+    // v1.10 (3-1): the kelp sways in its shader, the whale glows a little (ticket 0011). v1.10 (4-2): the lanterns'
+    // paper and the swirl on the upside-down fences take the materials the game lights (ticket 0016).
+    const loading = this.loader.loadAsync(url).then((gltf) => prepareVillageModel(name, prepareSeaModel(name, gltf.scene)));
     this.cache.set(name, loading);
     return loading;
   }
