@@ -170,7 +170,7 @@
   "ice-pillar": { "script": "snow.py", "triangles": 150, "kb": 250 },
   "fake-exit": { "script": "snow.py", "triangles": 300, "kb": 250 },
   "exit-glow": { "script": "snow.py", "triangles": 20, "kb": 250 },
-  "snow-fence": { "script": "snow.py", "triangles": 600, "kb": 250 },
+  "snow-fence": { "script": "snow.py", "triangles": 1000, "kb": 250, "origin": "joint" },
   "lodge": { "script": "snow.py", "triangles": 800, "kb": 250 },
   "snow-hare": { "script": "snow.py", "triangles": 300, "kb": 250 },
   "ice-flower": { "script": "snow.py", "triangles": 300, "kb": 250 },

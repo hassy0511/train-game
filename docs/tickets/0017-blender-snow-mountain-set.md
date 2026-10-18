@@ -1,6 +1,6 @@
 # 0017 Blender: 4-3 ゆきやまのトンネル の モデル一式
 
-- 状態: **完了**（2026-10-18、つくりこみ `assets/blender/snow.py`。下の 18 こ（`snow-pile` も）。`amanojaku-blush` は できて いる `amanojaku` に ほっぺを つけて ゲームが 作る まま。仮の 形 `src/view/three/snow-placeholders.ts` は けした。にせの でぐちの 光と ぐるぐる・出口の 光は `src/view/three/snow-models.ts`。せんろの ゆきだるまは 電車の ほうを 向く よう `scripts/layout-4-3.mjs` で 180° まわした）
+- 状態: **完了**（2026-10-18、つくりこみ `assets/blender/snow.py`。下の 18 こ（`snow-pile` も）。`amanojaku-blush` は できて いる `amanojaku` に ほっぺを つけて ゲームが 作る まま。仮の 形 `src/view/three/snow-placeholders.ts` は けした。にせの でぐちの 光と ぐるぐる・出口の 光は `src/view/three/snow-models.ts`。せんろの ゆきだるまは 電車の ほうを 向く よう `scripts/layout-4-3.mjs` で 180° まわした。2026-10-18 に 宙に 浮いて いた 3 つを 直した: ゆきよけの さく（main 2740、線路が 地面の 8.35 m 上）は 左右の さくが 雪の 吹きだまりに のって 地面まで 下りる 形に（三角形 1,000 まで）、記録③ すずは 土手の 肩（左 2.4 m）に 半分 うまる 所へ、記録① うさぎは 地面の 上へ（どちらも `layout-4-3.mjs` の `snowY` が 土手・尾根・地面の 高い ほうで 決める））
 - 担当: Claude Code
 - 依存: なし（作り方は `docs/ASSET_PIPELINE.md`）
 - 関連: `docs/PHASE8_CHAPTER3_4.md` 第 8 部 §8 見た目・§5.4 配置・§19 実装メモ、`src/view/three/snow.ts`（トンネルの 筒・口・出口の 光・くらさ・ゆきの なみの うごき・にせの でぐちの しるしは ゲームが する）、`scripts/layout-4-3.mjs`（置き場所）

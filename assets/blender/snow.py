@@ -30,8 +30,10 @@ change; origin at the bottom centre, +Z forward, the model's own left is +X):
 - ice-pillar 3 x 18 x 3, fake-exit 10 x 8 x 1.1 (picture +Z; materials "fake-exit-light" and "fake-exit-swirl", which
   the game swaps for a light the fog does not hide and the swirl it lights when the light sees through it,
   src/view/three/snow-models.ts), exit-glow 8 x 7 (both sides, material "exit-glow", made a fog-free light by the game).
-- snow-fence 70.3 x 5.8 x 0.8: a gate over the track (6.3 m clear between the posts, 5 m under the beam) and a wooden
-  fence 30 m each side along X.
+- snow-fence 70.6 x 14.5 x 9.8: a gate over the track (6.3 m clear between the posts, 5 m under the beam) and a wooden
+  fence 30 m each side along X, each wing on a snowdrift down the track's snowy bank to the ground. Its origin stays at
+  the gate's foot (y 0, as the stand-in's); the drifts reach the ground below it (8.35 m at 4-3's main 2740, read from
+  the stage JSON), so models.json marks it "origin": "joint".
 - lodge 14 x 10 x 10: a log cabin, door +Z.
 - Records snow-hare 0.6 x 0.55 x 0.8, ice-flower 1.2 x 0.72 x 1.04, sleigh-bell 0.5 x 0.49 x 0.45 (the flower and the
   bells scaled evenly to their width).
@@ -1025,34 +1027,92 @@ def fake_exit():
 
 # ---------------------------------------------------------------- the way down
 
+# The snowy bank rail-mesh.ts builds under a track with a `toGround` base: the ballast's foot 2.2 m out from the rail,
+# 0.6 m under it, then down 2 m for every 1 m out to the ground.
+BANK_FOOT_OUT, BANK_FOOT_DOWN, BANK_SLOPE = 2.2, 0.6, 2.0
+
+
+def fence_site():
+    """Where 4-3 puts the snow fence (its prop on main at the chase's fence): how far the ground lies under the model's
+    origin, and how far under it the bank's ballast foot is (both from src/stages/4-3.json)."""
+    data = stage_json()
+    on = prop_of("snow-fence")["onRail"]
+    (_, rail_y, _), _ = rail_at(on["railId"], on["at"])
+    origin = rail_y + on.get("heightFromRail", 0.0)
+    ground = data["environment"]["ground"]["y"]
+    return origin - ground, origin - (rail_y - BANK_FOOT_DOWN)
+
+
 def snow_fence():
     """ゆきよけの さく: where the snow wave runs into it and stops. A wooden gate over the track (posts 6.3 m apart, a
-    beam 5 m over the rail with a little roof of snow on it) and a fence 30 m each side along X: posts with snowy tops,
-    two rails, a long soft roll of snow along the top rail."""
+    beam 5 m over the rail with a soft roof of snow) and a fence 30 m each side along X. 4-3 stands it where the track
+    runs on its snowy bank 8.75 m over the ground, so each wing stands on a long smooth snowdrift (part of the model) that
+    starts at the bank's shoulder by the gate, runs down the bank and on along the ground (its foot buried a little):
+    the fence's posts, rails and the roll of snow on them follow the drift's top down. The drift is one smooth ridge of
+    snow piled against the fence, nothing like the wave's round balls."""
     paint = snow_paint(0.85)
     parts: list = []
     wood, dark = paint(FENCE), paint(FENCE_DARK)
+    drop, foot = fence_site()
+    ground = -drop
+    shoulder_x, shoulder_y = BANK_FOOT_OUT + 0.1, -foot - 0.12
+    level_x, run = 4.4, drop * 1.6
+    end_x, rest = 35.3, 1.0
+
+    def top(x):
+        """The drift's top (model y) `x` m out from the track: level by the gate, smoothly down to the ground's drift."""
+        t = max(0.0, min(1.0, (x - level_x) / run))
+        t = t * t * (3 - 2 * t)
+        wobble = 0.12 * math.sin(x * 0.7) * t
+        return shoulder_y + (ground + rest - shoulder_y) * t + wobble
+
+    stations = [shoulder_x, level_x, 5.5, 7.5, 10.0, 12.5, 15.0, 18.0, 22.0, 28.5, end_x]
+    posts = [5.5, 10.0, 15.0, 22.0, 28.5, end_x - 0.3]
     for side in (-1, 1):
-        k.add_box(parts, f"gate-post-{side}", (0.55, 5.0, 0.55), (side * 3.45, 2.5, 0.0), wood)
-        bobble(parts, f"gate-post-snow-{side}", (side * 3.45, 5.55, 0.0), (0.42, 0.18, 0.4), paint(SNOW), 50 + side, rough=0.08)
-        # Posts every 3.75 m (each with a little cap of snow), two rails along them.
-        for p in range(9):
-            x = side * (5.0 + p * 3.75)
-            k.add_box(parts, f"post-{side}-{p}", (0.28, 2.45, 0.28), (x, 1.225, 0.0), wood if p % 2 else dark)
-        for y in (0.95, 2.05):
-            k.add_box(parts, f"rail-{side}-{y}", (30.2, 0.3, 0.14), (side * 20.0, y, 0.18), dark if y < 1 else wood)
-        roll = []
-        for i in range(9):
-            x = side * (4.85 + 30.3 * i / 8)
-            roll.append((x, 2.36 + 0.06 * math.sin(i * 2.1), 0.08 + 0.05 * math.cos(i * 1.3)))
+        # The drift: a loft along X of smooth cross-sections (z, y) round its ridge at z = 0, wider the taller it is.
+        rings = []
+        bottom = ground - 0.3
+        for x in stations:
+            y_top = top(x)
+            height = y_top - bottom
+            half = 1.4 + 0.42 * height
+            lean = 0.15 * math.sin(x * 0.45)
+            section = [(-half, bottom), (-0.74 * half, bottom + 0.45 * height), (-0.48 * half + lean, bottom + 0.8 * height),
+                       (-0.2 * half + lean, bottom + 0.97 * height), (lean, y_top), (0.2 * half + lean, bottom + 0.97 * height),
+                       (0.48 * half + lean, bottom + 0.8 * height), (0.74 * half, bottom + 0.45 * height), (half, bottom)]
+            rings.append([(side * x, y, z) for z, y in section])
+        n = len(rings[0])
+        verts = [p for ring in rings for p in ring]
+        faces = [tuple(range(n - 1, -1, -1))]
+        for i in range(len(rings) - 1):
+            faces += s.ring_faces(i * n, (i + 1) * n, n)
+        last = (len(rings) - 1) * n
+        faces.append(tuple(range(last, last + n)))
+
+        def drift_colour(c, nm, bottom=bottom):
+            rise = c.y - bottom
+            return SNOW if nm.y > 0.55 else (SNOW_SOFT if rise > 1.2 else SNOW_SHADE)
+        v.painted(parts, f"drift-{side}", verts, faces, paint, drift_colour, smooth=lambda c, nm: True)
+        # Posts standing in the drift's top, the two rails and the roll of snow on the top rail following it down.
+        for p, x in enumerate(posts):
+            y0 = top(x)
+            k.add_box(parts, f"post-{side}-{p}", (0.28, 2.7, 0.28), (side * x, y0 + 1.1, 0.0), wood if p % 2 else dark)
+        for name, rise, material in (("low", 0.85, dark), ("high", 1.95, wood)):
+            line = [(side * x, top(x) + rise, 0.18) for x in posts]
+            strip(parts, f"rail-{name}-{side}", line, 0.3, 0.14, (0, 0, 1), paint, lambda i, m=material: m.name.replace("Flat ", ""))
+        roll = [(side * x, top(x) + 2.3 + 0.05 * math.sin(x), 0.08) for x in posts]
         strip(parts, f"snow-roll-{side}", roll, 0.56, 0.4, (0, 1, 0), paint, lambda i: SNOW)
+    # The gate: its posts stand on the drift by the track.
+    for side in (-1, 1):
+        y0 = top(3.45) - 0.25
+        k.add_box(parts, f"gate-post-{side}", (0.55, 5.0 - y0, 0.55), (side * 3.45, (5.0 + y0) / 2, 0.0), wood)
+        bobble(parts, f"gate-post-snow-{side}", (side * 3.45, 5.55, 0.0), (0.42, 0.18, 0.4), paint(SNOW), 50 + side, rough=0.08)
     k.add_box(parts, "beam", (7.6, 0.45, 0.6), (0.0, 5.22, 0.0), wood)
-    # The snow on the beam, a soft roof with a drip each end.
     roll = [(-3.9, 5.58, 0.0), (-2.0, 5.66, 0.02), (0.0, 5.7, 0.0), (2.0, 5.66, -0.02), (3.9, 5.58, 0.0)]
     strip(parts, "beam-snow", roll, 0.72, 0.28, (0, 1, 0), paint, lambda i: SNOW)
     for side in (-1, 1):
         k.add_box(parts, f"brace-{side}", (0.22, 1.3, 0.22), (side * 2.85, 4.62, 0.0), dark).rotation_euler = (0.0, -side * 0.7, 0.0)
-    return parts, 600
+    return parts, 1000
 
 
 def lodge():
@@ -1245,7 +1305,7 @@ def export_glb(model, name, budget, max_kb=250):
     tris, lo, hi = k.model_metrics(model)
     if tris > budget:
         raise RuntimeError(f"{name}: {tris} triangles exceeds budget {budget}")
-    if abs(lo[1]) > 0.012:
+    if abs(lo[1]) > 0.012 and name not in BELOW_ORIGIN:
         raise RuntimeError(f"{name}: lowest point y={lo[1]:.3f}, not on the floor")
     k.MODEL_DIR.mkdir(parents=True, exist_ok=True)
     k.active(model)
@@ -1360,6 +1420,9 @@ BUILDERS = {"snow-wave": snow_wave, "snow-wave-small": lambda: snow_wave(0.5, "s
 # the hall and the fence are modelled about their middle).
 KEEP_XZ = {"tunnel-portal", "snowman", "snowman-big", "snowman-upside", "snow-ridge", "snow-knoll", "ice-hall", "fake-exit",
            "exit-glow", "snow-fence", "lodge"}
+# Origins not on the model's lowest point: the fence's origin is the gate's foot by the rail (the stage places it
+# 0.4 m under the rail); its drifts reach down to the ground below the bank ("origin": "joint" in assets/models.json).
+BELOW_ORIGIN = {"snow-fence"}
 # Exact sizes (w, h, d) the round hand-made shapes are trimmed to (the stand-ins' or the ticket's).
 EXACT = {"ice-pillar": (3.0, 18.0, 3.0), "snow-hare": (0.6, 0.55, 0.8), "snow-wave": (36.0, 9.0, 16.0),
          "snow-wave-small": (18.0, 4.5, 8.0)}
@@ -1388,7 +1451,8 @@ if __name__ == "__main__":
             v.scale_to(model, tuple((hi[i] - lo[i]) * f for i in range(3)))
         if name not in KEEP_XZ:
             r.centre_xz(model)
-        r.floor_to_zero(model)
+        if name not in BELOW_ORIGIN:
+            r.floor_to_zero(model)
         if name in ("snow-wave", "snow-wave-small"):
             soft_snow(model)
         export_glb(model, name, budget)
