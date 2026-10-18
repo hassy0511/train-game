@@ -192,11 +192,11 @@
     {
       "model": "birdhouse-upside",
       "onRail": { "railId": "main", "at": 300, "lateral": -6, "heightFromRail": 3 },
-      "rotationY": 90,
+      "rotationY": -90,
       "trace": true,
       "traceLine": "さかさまの すばこ… サカサかな？"
     },
-    { "model": "night-tree-a", "onRail": { "railId": "main", "at": 300, "lateral": -7.6, "heightFromRail": -0.6 }, "rotationY": 40 },
+    { "model": "night-tree-a", "onRail": { "railId": "main", "at": 300, "lateral": -6.6, "heightFromRail": -0.6 }, "rotationY": 40 },
     { "model": "bunny-sleep", "onRail": { "railId": "main", "at": 520, "lateral": -8, "heightFromRail": -0.6 }, "rotationY": 209, "sleeper": true },
     { "model": "bunny-sleep", "onRail": { "railId": "main", "at": 545, "lateral": 9, "heightFromRail": -0.6 }, "rotationY": 229, "sleeper": true },
     { "model": "bunny-sleep", "onRail": { "railId": "main", "at": 600, "lateral": -10, "heightFromRail": -0.6 }, "rotationY": 333, "sleeper": true },
@@ -207,8 +207,8 @@
     { "model": "fake-lantern", "onRail": { "railId": "kurai3", "at": 15, "lateral": -3, "heightFromRail": 0 }, "reveal": "hotaru-3" },
     { "model": "fake-lantern", "onRail": { "railId": "kurai3", "at": 35, "lateral": 3, "heightFromRail": 0 }, "rotationY": 180, "reveal": "hotaru-3" },
     { "model": "fake-lantern", "onRail": { "railId": "kurai3", "at": 55, "lateral": -3, "heightFromRail": 0 }, "reveal": "hotaru-3" },
-    { "model": "bell-branch", "onRail": { "railId": "main", "at": 2600, "lateral": 11, "heightFromRail": 9.8 }, "rotationY": 90 },
-    { "model": "night-tree-b", "onRail": { "railId": "main", "at": 2600, "lateral": 15.5, "heightFromRail": -0.6 }, "scale": 1.1 },
+    { "model": "bell-branch", "onRail": { "railId": "main", "at": 2600, "lateral": 11, "heightFromRail": 9.6 }, "rotationY": 180 },
+    { "model": "night-tree-b", "onRail": { "railId": "main", "at": 2600, "lateral": 14.4, "heightFromRail": -0.6 }, "scale": 1.1 },
     { "model": "great-tree", "position": [-906.9, 14.8, 2820.7], "rotationY": 120 },
     { "model": "plaza-deck", "onRail": { "railId": "main", "at": 3090, "lateral": -18, "heightFromRail": -0.9 } },
     { "model": "plaza-deck", "onRail": { "railId": "main", "at": 3130, "lateral": -18, "heightFromRail": -0.9 } },
@@ -876,7 +876,7 @@
       "requires": null,
       "hush": true,
       "model": "bunny-family",
-      "onRail": { "railId": "main", "at": 580, "lateral": 7, "heightFromRail": -0.6 },
+      "onRail": { "railId": "main", "at": 580, "lateral": 7, "heightFromRail": -0.52 },
       "hint": "しーっ… うさぎの おやこが ねてる"
     },
     {

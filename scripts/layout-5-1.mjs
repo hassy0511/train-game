@@ -256,7 +256,8 @@ const RECORDS = [
     requires: null,
     hush: true,
     model: 'bunny-family',
-    onRail: { railId: 'main', at: 580, lateral: 7, heightFromRail: GROUND_Y },
+    // On the moonlit meadow's grass (its board's top is 0.08 m over the ground).
+    onRail: { railId: 'main', at: 580, lateral: 7, heightFromRail: round(GROUND_Y + 0.08, 2) },
     hint: 'しーっ… うさぎの おやこが ねてる',
   },
   {
@@ -459,18 +460,21 @@ const clearOfPlaced = (x, z, d) => placed.every((p) => Math.hypot(p.x - x, p.z -
 const inPond = (x, z, grow = 0) => inArea(POND.area, x, z, grow);
 
 // §5.4 the special pieces.
-onRail('birdhouse-upside', 'main', 300, { lateral: -6, height: 3, rotationY: 90, trace: true, traceLine: 'さかさまの すばこ… サカサかな？' });
-// The tree the birdhouse hangs on, just behind it.
-onRail('night-tree-a', 'main', 300, { lateral: -7.6, rotationY: 40, r: 3 });
+// Its hole (+Z) faces the track; its back against the trunk of the tree it hangs on, just behind it (night.py's tree
+// is about 0.37 m round there).
+onRail('birdhouse-upside', 'main', 300, { lateral: -6, height: 3, rotationY: -90, trace: true, traceLine: 'さかさまの すばこ… サカサかな？' });
+onRail('night-tree-a', 'main', 300, { lateral: -6.6, rotationY: 40, r: 3 });
 for (const [at, lateral] of [[520, -8], [545, 9], [600, -10], [630, 8], [2710, -8], [2740, 9], [2765, -9]]) {
   onRail('bunny-sleep', 'main', at, { lateral, rotationY: round(between(0, 360), 0), sleeper: true });
 }
 for (const [at, lateral, rotationY] of [[15, -3, 0], [35, 3, 180], [55, -3, 0]]) {
   onRail('fake-lantern', 'kurai3', at, { lateral, height: 0, rotationY, reveal: 'hotaru-3' });
 }
-onRail('bell-branch', 'main', 2600, { lateral: 11, height: 9.8, rotationY: 90 });
-// The branch comes out of a big tree beyond the record.
-onRail('night-tree-b', 'main', 2600, { lateral: 15.5, scale: 1.1, r: 4 });
+// The branch (6 m along its X) reaches out across the track's side from a big tree beyond the record: its thick end
+// (+X) in the tree at lateral 14, its hook (x −1) over the bell at lateral 10, the hook's foot (the model's origin)
+// through the bell's ring.
+onRail('bell-branch', 'main', 2600, { lateral: 11, height: 9.6, rotationY: 180 });
+onRail('night-tree-b', 'main', 2600, { lateral: 14.4, scale: 1.1, r: 4 });
 world('great-tree', GREAT_TREE.x, GREAT_TREE.z, { y: HIROBA_Y + GROUND_Y, rotationY: 120, r: 26 });
 // The square's deck left of the station and on past it (main 3080–3210).
 for (const at of [3090, 3130, 3170, 3209]) onRail('plaza-deck', 'main', at, { lateral: -18, height: -0.9, r: 0 });
