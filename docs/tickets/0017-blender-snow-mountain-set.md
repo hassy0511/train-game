@@ -1,6 +1,6 @@
 # 0017 Blender: 4-3 ゆきやまのトンネル の モデル一式
 
-- 状態: **未着手（後回し）**。4-3 は コードで 作った 仮の形（`src/view/three/snow-placeholders.ts`）で 遊べる。0006〜0009・0015・0016 と 同じく 後回し
+- 状態: **完了**（2026-10-18、つくりこみ `assets/blender/snow.py`。下の 18 こ（`snow-pile` も）。`amanojaku-blush` は できて いる `amanojaku` に ほっぺを つけて ゲームが 作る まま。仮の 形 `src/view/three/snow-placeholders.ts` は けした。にせの でぐちの 光と ぐるぐる・出口の 光は `src/view/three/snow-models.ts`。せんろの ゆきだるまは 電車の ほうを 向く よう `scripts/layout-4-3.mjs` で 180° まわした）
 - 担当: Claude Code
 - 依存: なし（作り方は `docs/ASSET_PIPELINE.md`）
 - 関連: `docs/PHASE8_CHAPTER3_4.md` 第 8 部 §8 見た目・§5.4 配置・§19 実装メモ、`src/view/three/snow.ts`（トンネルの 筒・口・出口の 光・くらさ・ゆきの なみの うごき・にせの でぐちの しるしは ゲームが する）、`scripts/layout-4-3.mjs`（置き場所）
@@ -11,7 +11,7 @@
 仮の形と **同じ 名前・寸法・原点** で 作る。できたら `assets/models.json` の `_pending` から 外し、`node scripts/render-map.mjs 4-3` で 地図の 島の 絵、`node scripts/render-zukan.mjs snow-hare ice-flower sleigh-bell` で 図鑑の 絵を 描き直す。
 
 ## 共通仕様
-- ファイル: `public/models/<名前>.glb`、生成スクリプトは `assets/blender/snow-mountain.py`（1 本に まとめる）
+- ファイル: `public/models/<名前>.glb`、生成スクリプトは `assets/blender/snow.py`（1 本に まとめた。はじめは `snow-mountain.py` の 予定だった）
 - 1 モデル 1 マテリアル（頂点カラー）。もみの木・土手を たくさん 置くので 1 セル × 1 モデルで ドローコール 1 回に したい
 - 2 つめの マテリアルが 要る もの: `fake-exit`（ぐるぐるの しるし。ゲームが 放射の 強さを 0 → 1 に する）、`exit-glow`（霧に かくれない 白、`fog: false`）、`ice-hall`（ドームの 内がわを 見る。両面）
 - 原点: 底面の 中心、前は +Z、モデル自身の 左は +X。例外は 表に 書く

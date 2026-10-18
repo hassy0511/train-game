@@ -420,6 +420,7 @@
       "type": "cat",
       "reactsTo": "whistle",
       "onRail": { "railId": "main", "at": 250, "heightFromRail": 0 },
+      "rotationY": 180,
       "params": { "look": "snowman", "wakeDistance": 60, "dangerDistance": 8, "fleeLateral": 6, "fleeSeconds": 2 }
     },
     {

@@ -148,7 +148,7 @@ check(SPANS.ike.surfaces.length === 1 && SPANS.ike.surfaces[0].from <= 60 && SPA
 // ---------------------------------------------------------------------------------------------------------------
 
 const RIDGE = { x: -817, z: -174 };
-/** Height of the ridge model at world (x, z) (src/view/three/snow-placeholders.ts snowRidge). */
+/** Height of the ridge model at world (x, z) (assets/blender/snow.py snow_ridge: the same surface). */
 function ridgeY(x, z) {
   const a = Math.abs(z - RIDGE.z);
   let h = 0;
@@ -253,6 +253,8 @@ const ACTORS = [
     type: 'cat',
     reactsTo: 'whistle',
     onRail: { railId: 'main', at: 250, heightFromRail: 0 },
+    // Turned round so the snowman (its face +Z) looks at the train coming (the whistle's roll aside goes by the rail).
+    rotationY: 180,
     params: { look: 'snowman', wakeDistance: 60, dangerDistance: 8, fleeLateral: 6, fleeSeconds: 2 },
   },
   {
