@@ -146,6 +146,20 @@ const VIEWS = {
     ['main', 2700, 'chase'], // the snow fence ahead
     ['main', 2930, 'chase'], // やまごやえき and the lodge
   ],
+  '5-1': [
+    ['main', 60, 'chase'], // もりぐちえき at the forest's edge
+    ['main', 280, 'cab'], // dark forest A: glowing mushrooms, Sakasa's upside-down birdhouse ahead on the left
+    ['main', 545, 'cab'], // the moonlit meadow: sleeping rabbits, the rabbits' nest (record ①) ahead on the right
+    ['main', 800, 'chase'], // the broken log bridge ahead
+    ['main', 990, 'side'], // つきみえき
+    ['main', 1250, 'chase'], // the pond: lily pads, reeds
+    ['main', 1515, 'cab'], // the dancing tanukis' wood: their bushes ahead
+    ['main', 1990, 'chase'], // きりかぶえき (platform on the right) and the big stump
+    ['kurai1', 70, 'cab'], // a dark dead end: the thicket and the fireflies waiting
+    ['main', 2575, 'cab'], // the bell on its branch (record ③) ahead on the right
+    ['main', 2900, 'chase'], // the root slope, the great tree ahead
+    ['main', 3140, 'side'], // ひろばえき: the deck and the great tree
+  ],
 };
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
