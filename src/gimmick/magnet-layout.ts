@@ -11,7 +11,7 @@ import { IRON_PROPS, MAGNET } from '../train/params';
 const text = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
 const num = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 
-/** The model drawn for each look (stand-ins drawn in code until built: src/view/three/magnet-placeholders.ts). */
+/** The model drawn for each look (built: assets/blender/magnet-set.py; 6-1's drawbridge and 5-2's blocks are other tickets'). */
 export const MAGNET_LOOK_MODELS: Record<MagnetLook, string> = {
   star: 'iron-star-small',
   bell: 'iron-bell-small',

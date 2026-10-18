@@ -26,11 +26,13 @@ import type { Rail } from '../../rail/types';
 import { resolvePlacement } from '../../stage/loader';
 import type { LetterSignParams, StageData } from '../../stage/types';
 import { MIRROR_WORLD, TRAIN } from '../../train/params';
+import { bakeModel } from './bake';
 import type { ModelLibrary } from './models';
 import { buildTrack, type TrackSkip } from './rail-mesh';
 
 /**
- * v1.11 (5-3) the mirror world in the scene (PHASE9_CHAPTER5_6 第 6 部 §8, ticket 0020's 5-3 section; drawn in code):
+ * v1.11 (5-3) the mirror world in the scene (PHASE9_CHAPTER5_6 第 6 部 §8, ticket 0020's 5-3 section; drawn in code but
+ * the cushion, a built model):
  * the mirror gates (a silver and lavender arch over the rail with rippling glass; a shut whistle gate is frosted),
  * Sakasa's phantoms (a false way's pink rail and a false bridge over a gap, pink sparkles rising off them; they pop into
  * pink bubbles, "ぽわん", and come back after a rewind), the glass stretches (see-through rails with sparkles running
@@ -147,7 +149,9 @@ export class MirrorWorldGimmicks {
   async init(models: ModelLibrary): Promise<void> {
     const rails = MirrorWorldGimmicks.cushionRails(this.stage);
     if (rails.length === 0) return;
-    const cushion = await models.load('mirror-cushion');
+    // Baked: the built cushion's flat colours in one draw call.
+    const built = await models.load('mirror-cushion');
+    const cushion = bakeModel(built) ?? built;
     for (const id of rails) {
       const rail = this.stage.network.getRail(id);
       const f = rail.frameAt(rail.length);

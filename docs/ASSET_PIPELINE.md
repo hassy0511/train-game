@@ -1,6 +1,6 @@
 # 3D モデルの作り方（Claude Code）
 
-最終更新: 2026-10-16
+最終更新: 2026-10-18
 状態: 運用中。モデルはすべて Claude Code が作る（Codex 製は `archive/codex/` に移動済み）
 
 ---
@@ -35,7 +35,7 @@
 - 街と乗り物はおもちゃの街: 台座、厚い屋根と軒、枠付きのへこんだ窓、玄関のひさし。色はクリーム・コーラル・深い青・紫・金を基調にする
 - ワンダー号は青い車体、クリームの屋根、黄色の帯。先頭車の屋根にピコと同じランプ
 
-## 5. モデル一覧（2026-10-16 時点）
+## 5. モデル一覧（2026-10-18 時点）
 | 種類 | モデル | スクリプト |
 |---|---|---|
 | キャラクター | partner（ピコ）、amanojaku（サカサ）、cat-stand / cat-sleep（猫）、passenger（なかま） | 各名前の `.py`（猫は `cat_cc.py` を共有） |
@@ -56,5 +56,7 @@
 | こおりのみずうみ（4-1） | snow-pine（雪の 松。4-2・4-3・6-2 でも。150 三角形 以下）、snow-bank（雪の もりあがり。車止めの「ゆきの クッション」にも）、snow-island（こじま。上面は 0.15 m 以下）、snow-mountain（ゆきやま。頂点は ぜんぶ 仮の 形の 断面 半径 190／150／110／70／35／8 m・高さ 0／35／80／122／155／170 m の 上、頂上 176 m。4-3 の 小さな 丘 `hillY` に 立つ 役者が ずれない）、tunnel-mouth（4-3 への トンネルの 口。中は やわらかい 青灰）、ice-hut / ice-hut-b / ice-hut-c（つり小屋。原点は 小屋の 軸、ドアが +Z）、ice-hole、ice-wall（かがみの たにの かべ。広い 面 ±Z は z ±1.8）、seal-sleep / seal（あざらし。顔は 目だけ）、snowbird（ゆきどり。行列は `ice.ts` が 焼いて 1 回で 描く）、sign-ice / sign-thin-ice（2-3 の 札と 同じ 作り、上に 雪）、記録 frost-flower・glow-shell（真珠が 光る）・ice-bell（記録は +X が 線路の ほう なので たなの −X を かべに つける）。雪・こおり・白い 鳥は 色の 6 わり ほどを 自分で 光らせる（ゲームの 物理どおりの 光では 日かげの 白が 灰色に なる） | `ice.py`（`sky.py`・`volcano.py`・`river.py` の 道具を 使う） |
 | ゆきやまのトンネル（4-3） | snow-ridge（尾根。面は 仮の 形と 同じ 式で、`scripts/layout-4-3.mjs` の もみの木・トンネルの 屋根の たしかめと そろう。トンネルの 口の ところだけ 雪を 床の 下まで けずり、tunnel-portal の 暗い 板で かくす）、snow-knoll（いけの 小山。いけの 水・かべ・そこは ゲームが 描く）、tunnel-portal（z −2.4〜8.4、+Z が 外。口は 筒と 同じ はば 9・高さ 8。4.3 m 外に 暗い 板（内がわは 明るい））、ice-hall（とじた 殻なので 内がわから 見える。main の 筒が 通る 所に 戸口を あける。ステージは 1.25 倍）、ice-pillar、fake-exit（マテリアル `fake-exit-light`・`fake-exit-swirl` を ゲームが 霧に かくれない 光と ぐるぐるに かえる `src/view/three/snow-models.ts`）、exit-glow（マテリアル `exit-glow`。両面）、snow-fence（ゆきよけの さく。4-3 では 線路が 雪の 土手の 上 8.35 m なので、左右の さくは モデルの 一部の 雪の 吹きだまりに 立って 地面まで 下りる。下りる 高さは ステージ JSON から。原点は 門の 足もとの まま＝`"origin": "joint"`）、lodge、snow-wave / snow-wave-small（まるい 玉 9 ＋ 5、頂点カラーで 下が うすい 水色。顔なし）、snowman / snowman-big / snowman-upside（顔は 目と 小さな はなだけ）、snow-pile、記録 snow-hare・ice-flower・sleigh-bell。てれる サカサ amanojaku-blush は できて いる amanojaku に ほっぺを つけて ゲームが 作る | `snow.py`（`sky.py`・`volcano.py`・`river.py`・`meadow.py` の 道具を 使う） |
 | おおゆきの むら（4-2）と ゆきかき | plow-blade（ゆきかき。原点は スコップの 下の まんなか、くぼみが +Z、うでは −Z。`plow.ts` が 先頭車の 鼻に つけて 1 回の 描画に 焼き、たたむ ときは 鼻の 下に しまう）、snow-wall（ゆきの かべ。面は z 2。頂点カラー 1 マテリアル。`plow.ts` が 自分の マテリアルで 描く）、sign-plow、snow-house / snow-house-b（かべ 茶・青灰、まどが 光る）、kamakura（入口が だいだいに 光る）、amanojaku-kamakura、lantern（紙は 頂点カラーの "lantern-paper"。ゲームが 光る ものに かえて まつりで いっせいに ともす `src/view/three/village-models.ts`）、snow-fence-small、snow-fence-trace（さかさまの さく。ぐるぐるは "trace-swirl"。ライトが 見つけると 光る）、snow-shed（ゆきよけ トンネル 10 m ぶん。柱は 5 m おきで、ならべると つながる）、ski-ramp / ski-ramp-folded（ジャンプだい。原点は ふち、台は −Z。たたんだ 板は +X 4 m）、ski-lift-tower（頭の 雪の 上が 12.48 m。記録③が そこに ささる）、snow-ravine、記録 frozen-fall・spiral-mitten・tin-shovel | `village.py`（`sky.py`・`volcano.py`・`meadow.py`・`river.py` の 道具を 使う） |
+| かがみのせかい（5-3） | crystal-tree-a / crystal-tree-b（ガラスの 木。ラベンダー と ミント。白っぽい みきに 宝石の ように 切った かんむり、となりあう 面は 2 色。200 本 ほど まとめて 描く）、crystal-rock（きらきらの 岩。y 0 で たいらに 切る）、mirror-pillar（かがみの 柱。写さない）、mirror-shelf（かがみの たな。板の 上が y 3.2、`scale` で 高く する。板は +Z の ほうへ 長い）、mirror-cushion（まぼろしの いきどまりの クッション。原点は レールの おわりで、クッションは z 0.2〜2.18、白い ふちの ある 前が −Z）、mirror-frame / turn-mirror（わくの ある かがみ。5-3 の かがみは ゲームが 好きな 大きさで 写しごと 描く `ice.ts` ので、これは 6-2・ムービー・地図・モデル確認ページ 用。うらに サカサの ぐるぐる、turn-mirror は 回る 軸つき）、mirror-stand-small、note-pink（16 三角形）、記録 mirror-board（面の マテリアル "mirror-board-face" に ゲームが かがみ文字の「ようこそ」を 描く）・hand-mirror・sakasa-doodle（紙 "sakasa-doodle-paper" に ゲームが クレヨンの えを 描く。`src/view/three/mirror-models.ts`）。うすい 色は 自分の 色の 3 わり ほどを 光らせる（4 章の 雪の 6 わりでは ラベンダーが 白く とぶ）。かがみの サカサ amanojaku-wave / amanojaku-shy は できて いる amanojaku を ゲームが 動かして 作る | `mirror.py`（`sky.py`・`volcano.py` の 道具を 使う） |
+| じしゃくライトの しかけ（0-0・0-4・5-3・6-1・6-2、おぼえた あとは どこでも） | magnet-mark（屋根の U の 字。口が 上）、rail-piece（モデル確認ページ 用。ゲームは すきまの 長さに あわせて 線路と 同じ 作りで 描く）、iron-door（−Z が 電車の 来る 側で、まるい クッション。びょうは ふちに そって 列に）、crossing-bar-iron（柱は x −3.2、ぼうは x 3.3 まで）、iron-star-small、iron-bell-small、turn-mirror-small、どこでも の 小物 iron-can・iron-bucket・sign-bell（`iron-props.ts` が しゅるいごとに 焼いて 1 回で 描く `InstancedMesh`。かんばんの ベルは ノード "bell" で、原点は ひもの 上 (0, 1.53, 0.38)。ゲームが べつに 描いて 電車の ほうへ のばす。`src/view/three/magnet-models.ts`）。じしゃくの まとと 屋根の じしゃくも 焼いて 1 回で 描く。字・ロゴ・顔・光線の 形は ない | `magnet-set.py`（`sky.py`・`volcano.py`・`mirror.py` の 道具を 使う） |
 
 名前の `-proto` は、ゲームのコードが参照している名前なので残している（中身は本番用）。

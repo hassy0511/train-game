@@ -23,9 +23,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import manifest from '../../assets/models.json';
 import { ModelLibrary } from '../view/three/models';
 import { buildNightPlaceholder } from '../view/three/night-placeholders';
-import { buildMirrorPlaceholder } from '../view/three/mirror-placeholders';
+import { prepareMirrorModel } from '../view/three/mirror-models';
 import { buildSkyPlaceholder } from '../view/three/sky-placeholders';
-import { buildMagnetPlaceholder } from '../view/three/magnet-placeholders';
 import { buildReversePlaceholder } from '../view/three/reverse-placeholders';
 import { buildCastlePlaceholder } from '../view/three/castle-placeholders';
 import { buildEndingPlaceholder } from '../view/three/ending-placeholders';
@@ -86,8 +85,6 @@ const built = new Set<string>(__MODEL_MANIFEST__);
 const drawn = (name: string): Group | null =>
   buildSkyPlaceholder(name) ??
   buildNightPlaceholder(name) ??
-  buildMagnetPlaceholder(name) ??
-  buildMirrorPlaceholder(name) ??
   buildReversePlaceholder(name) ??
   buildCastlePlaceholder(name) ??
   // v1.12: the movies' islands and the opening's notice board.
@@ -103,7 +100,8 @@ const load = async (name: string): Promise<Group> =>
   name.includes('/')
     ? (await loader.loadAsync(`${base}looks/${name}.glb`)).scene
     : built.has(name)
-      ? (await loader.loadAsync(`${base}models/${name}.glb`)).scene
+      ? // v1.11 (5-3): two records show their canvas pictures, as the game paints them (mirror-models.ts).
+        prepareMirrorModel(name, (await loader.loadAsync(`${base}models/${name}.glb`)).scene)
       : COMPOSED.has(name)
         ? (await library.load(name)).clone(true)
         : drawn(name)!;

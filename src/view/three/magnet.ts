@@ -25,6 +25,7 @@ import type { StageEvent } from '../../core/stage-events';
 import type { MagnetTarget, StageData } from '../../stage/types';
 import { MAGNET, TRAIN } from '../../train/params';
 import type { ActorLayer } from './actors';
+import { bakeModel } from './bake';
 import type { ModelLibrary } from './models';
 
 /**
@@ -142,7 +143,10 @@ export class MagnetGimmicks {
       this.stage.magnets.map(async (t) => {
         const rail = network.getRail(t.railId);
         const frame = rail.frameAt(t.at);
-        const basis = new Matrix4().makeBasis(frame.right, frame.up, frame.tangent);
+        // +X to the left of the way (as resolvePlacement): frame.right, up and tangent make a mirror image, which no
+        // rotation is (its quaternion came out squashed: a pick flat as a line, a gate never turned with the way).
+        const left = new Vector3().crossVectors(frame.up, frame.tangent).normalize();
+        const basis = new Matrix4().makeBasis(left, frame.up, frame.tangent);
         const railQuat = new Quaternion().setFromRotationMatrix(basis);
         const v: TargetVisual = {
           target: t,
@@ -191,13 +195,15 @@ export class MagnetGimmicks {
           // 5-3: the stage's own framed mirror (drawn and turned by the mirrors, "mirror:turn"); only the glint here.
           v.glintAt.copy(v.home).y += 4.5;
         } else {
-          const model = (await models.load(t.model)).clone(true);
+          // Baked: the built model's flat colours in one draw call (it only ever moves as a whole).
+          const template = await models.load(t.model);
+          const model = (bakeModel(template) ?? template).clone(true);
           model.name = `magnet:${t.id}`;
           model.position.copy(v.home);
           // A pick faces the coming train; a gate stands across the line; the mirror looks away (its back to the rail).
           model.quaternion.copy(railQuat);
           if (t.kind === 'pick') model.quaternion.multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI));
-          if (t.kind === 'turn') model.quaternion.multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.sign(t.offset.lateral || 1) * (Math.PI / 2)));
+          if (t.kind === 'turn') model.quaternion.multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -Math.sign(t.offset.lateral || 1) * (Math.PI / 2)));
           v.homeQuat.copy(model.quaternion);
           if (t.kind === 'gate') v.goal.copy(frame.right).multiplyScalar(7.5);
           v.object = model;
@@ -312,7 +318,8 @@ export class MagnetGimmicks {
   private async addTrainParts(): Promise<void> {
     if (this.roofMark || !this.models) return;
     this.roofMark = new Object3D();
-    const mark = (await this.models.load('magnet-mark')).clone(true);
+    const markModel = await this.models.load('magnet-mark');
+    const mark = (bakeModel(markModel) ?? markModel).clone(true);
     mark.name = 'magnet-mark';
     mark.position.set(0, TRAIN.height + 0.02, TRAIN.length / 2 - 2.2);
     this.roofMark = mark;
