@@ -49,6 +49,7 @@ import type { RailNetwork } from '../../rail/types';
 import type { StageData } from '../../stage/types';
 import { areaOutline, holeArea } from '../../stage/water';
 import { MIRROR, MIRROR_WORLD, ROCK_ROLL, THIN_ICE, TRAIN } from '../../train/params';
+import { bakeModel } from './bake';
 import type { ModelLibrary } from './models';
 import { buildTrack } from './rail-mesh';
 
@@ -338,7 +339,9 @@ export class IceGimmicks {
   async init(models: ModelLibrary): Promise<void> {
     const rows = this.stage.actors.filter((a) => a.type === 'rock-roll' && a.onRail && (a.params as { look?: string }).look === 'snowbird');
     if (rows.length > 0) {
-      const bird = await models.load('snowbird');
+      // Baked: the bird's few flat colours in one mesh, so one instanced mesh draws the whole row.
+      const template = await models.load('snowbird');
+      const bird = bakeModel(template) ?? template;
       const mesh = bird.getObjectByProperty('isMesh', true) as Mesh | undefined;
       if (mesh) {
         this.birds = new InstancedMesh(mesh.geometry, mesh.material as Material, rows.length * BIRDS_PER_ROW);
@@ -353,7 +356,8 @@ export class IceGimmicks {
       }
     }
     if (this.thin.length > 0) {
-      const seal = (await models.load('seal')).clone(true);
+      const template = await models.load('seal');
+      const seal = (bakeModel(template) ?? template).clone(true);
       seal.name = 'crack-seal';
       seal.visible = false;
       this.seal = seal;
