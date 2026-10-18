@@ -259,6 +259,19 @@ const GIMMICKS = [
   { type: 'flock', params: { model: 'snowbird', count: 8, center: [-450, 30, 1300], radius: 150, speed: 0.05 } },
 ];
 
+// The ski hill's lift towers (main 1480, 1600, 1720, 14 m right): the model (assets/blender/village.py) is TOWER_HEIGHT
+// tall, scaled so its top stands about 10.3 m over the rail. Record ③ sticks in the snow on the middle one's head, a
+// quarter of its length (0.9 m) buried: its height is worked out from the tower's own scaled top.
+const TOWER_HEIGHT = 12.48;
+const TOWERS = [1480, 1600, 1720];
+const TOWER_LATERAL = 14;
+const towerScale = (at) => round((main.point(at, TOWER_LATERAL).y + 11.5) / 13, 2);
+const SHOVEL_BURIED = 0.9 / 4;
+const shovelHeight = round(TOWER_HEIGHT * towerScale(1600) - SHOVEL_BURIED - main.point(1600, TOWER_LATERAL).y, 2);
+// Record ① is the frozen waterfall itself (its cliff, ice and pool), standing in the snow 12 m right of main 760 (5 cm
+// down), turned to face the track and the train coming to it (rotationY 115).
+const FALL = { at: 760, lateral: 12, rotationY: 115, sink: 0.05 };
+
 const RECORDS = [
   {
     id: 'frozen-fall',
@@ -267,7 +280,8 @@ const RECORDS = [
     requires: null,
     model: 'frozen-fall',
     hint: 'みぎの たき… こおってる！',
-    onRail: { railId: 'main', at: 760, lateral: 12, heightFromRail: 1 },
+    onRail: { railId: 'main', at: FALL.at, lateral: FALL.lateral, heightFromRail: round(-main.point(FALL.at, FALL.lateral).y - FALL.sink, 2) },
+    rotationY: FALL.rotationY,
   },
   {
     id: 'spiral-mitten',
@@ -285,7 +299,7 @@ const RECORDS = [
     model: 'tin-shovel',
     // v1.11 (PR6b, PHASE9_CHAPTER5_6 第 2 部 M7.2): fetched with the magnet light now: its hint, the note as the answer.
     hint: 'てっぺんに スコップ！ ひっぱろう！',
-    onRail: { railId: 'main', at: 1600, lateral: 14, heightFromRail: 11 },
+    onRail: { railId: 'main', at: 1600, lateral: TOWER_LATERAL, heightFromRail: shovelHeight },
   },
 ];
 
@@ -529,19 +543,16 @@ for (let at = 2890; at <= 3050 && lanterns < 40; at += 7) {
   }
 }
 
-// The frozen waterfall of record ① (its cliff and ice right of main 760).
+// Record ① (the frozen waterfall right of main 760) keeps the scenery clear of it.
 {
-  const p = main.point(760, 16);
-  world('frozen-fall', p.x, p.z, 0, facing(main, 760, 16), 1.4);
+  const p = main.point(FALL.at, FALL.lateral);
   placed.push({ x: p.x, z: p.z, r: 6 });
 }
 
-// The ski hill: three lift towers right of the line, standing on the ground, tall enough to reach 11.5 m over the rail
-// (the middle one holds record ③ on its top).
-for (const at of [1480, 1600, 1720]) {
-  const p = main.point(at, 14);
-  const scale = (p.y + 11.5) / 13;
-  world('ski-lift-tower', p.x, p.z, 0, 90 - p.phi / RAD, round(scale, 2));
+// The ski hill: three lift towers right of the line, standing on the ground (the middle one holds record ③ on its head).
+for (const at of TOWERS) {
+  const p = main.point(at, TOWER_LATERAL);
+  world('ski-lift-tower', p.x, p.z, 0, 90 - p.phi / RAD, towerScale(at));
   placed.push({ x: p.x, z: p.z, r: 4 });
 }
 // The snowy valley under the ski jump.
@@ -550,14 +561,15 @@ for (const at of [1480, 1600, 1720]) {
   world('snow-ravine', p.x, p.z, 0, 90 - p.phi / RAD);
 }
 
-// The snow shed (the dim wooden tunnel), one piece every 10 m, and its fences: upside down, Sakasa's swirl on them.
+// The snow shed (the dim wooden tunnel), one piece every 10 m, and its fences: upside down, Sakasa's swirl on them
+// (turned -90: the model's front, +Z, with the swirl, faces the track; +90 put it toward the shed's wall).
 let traces = 0;
 for (let at = SHED.from + 5; at < SHED.to; at += 10) {
   const prop = { model: 'snow-shed', onRail: on('main', at, 0, -0.5) };
   props.push(prop);
 }
 for (let at = SHED.from + 12; at < SHED.to - 5; at += 20) {
-  const prop = { model: 'snow-fence-trace', onRail: on('main', at, -3.6, -0.5), rotationY: 90, trace: true };
+  const prop = { model: 'snow-fence-trace', onRail: on('main', at, -3.6, -0.5), rotationY: -90, trace: true };
   if (traces === 0) prop.traceLine = 'ぐるぐるの しるし… サカサだ！';
   props.push(prop);
   traces += 1;

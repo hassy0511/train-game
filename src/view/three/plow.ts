@@ -24,6 +24,7 @@ import { plowSpans } from '../../gimmick/plow';
 import { resolvePlacement } from '../../stage/loader';
 import type { PlowSpan, StageData } from '../../stage/types';
 import { PLOW } from '../../train/params';
+import { bakeModel } from './bake';
 import type { ModelLibrary } from './models';
 
 /**
@@ -56,9 +57,13 @@ const BITS_COUNT = 160;
 const PETAL_COLORS = ['#F7A8C8', '#FFD86B', '#FFFFFF', '#8CCB6A', '#F28FB0'].map((c) => new Color(c));
 const EARTH_COLORS = ['#9C7A55', '#B8936A', '#7E6446', '#8CCB6A'].map((c) => new Color(c));
 const BALLS = 40;
-/** Where the scoop sits on the lead car (m, car frame: +Z forward): down, and folded up under the headlight. */
+/**
+ * Where the scoop sits on the lead car (m, car frame: +Z forward): down, and folded up under the headlight. Folded, the
+ * built scoop (assets/blender/village.py, 1.3 m tall) tips back far enough to tuck its lips in under the nose: no curve
+ * of white rim shows under the windscreen (that would read as a mouth).
+ */
 const BLADE_DOWN = { y: 0.08, z: 6.45, tilt: 0, scale: 1 };
-const BLADE_UP = { y: 0.95, z: 6.1, tilt: -1.15, scale: 0.8 };
+const BLADE_UP = { y: 1.0, z: 5.7, tilt: -1.4, scale: 0.75 };
 
 interface WallVisual {
   span: PlowSpan;
@@ -449,7 +454,8 @@ export class PlowGimmicks {
     if (this.blade || this.bladeLoading || !this.models) return;
     this.bladeLoading = true;
     void this.models.load('plow-blade').then((model) => {
-      const blade = model.clone(true);
+      // Baked: its flat colours in one draw call (it only ever moves with the train).
+      const blade = (bakeModel(model) ?? model).clone(true);
       blade.name = 'plow-blade';
       this.blade = blade;
       this.train.add(blade);

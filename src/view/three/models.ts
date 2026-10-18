@@ -1,12 +1,11 @@
 import { Box3, BoxGeometry, BufferAttribute, Group, Mesh, MeshLambertMaterial, Quaternion, Raycaster, SphereGeometry, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { placeholderSize } from '../placeholder-sizes';
-import { buildIcePlaceholder } from './ice-placeholders';
-import { buildVillagePlaceholder } from './village-placeholders';
 import { addHandLantern, buildNightPlaceholder } from './night-placeholders';
 import { prepareSeaModel } from './sea-models';
+import { prepareVillageModel } from './village-models';
 import { buildSkyPlaceholder } from './sky-placeholders';
-import { buildSnowPlaceholder } from './snow-placeholders';
+import { prepareSnowModel } from './snow-models';
 import { buildToyPlaceholder } from './toy-placeholders';
 import { buildMagnetPlaceholder } from './magnet-placeholders';
 import { buildMirrorPlaceholder } from './mirror-placeholders';
@@ -60,7 +59,7 @@ export class ModelLibrary {
       return other;
     }
 
-    // v1.10 (4-3): Sakasa blushing (pink cheeks on the built model), until ticket 0017 builds one of its own.
+    // v1.10 (4-3): Sakasa blushing (pink cheeks on the built model; ticket 0017 keeps it so).
     if (name === 'amanojaku-blush' && !this.available.has(name)) {
       const blush = this.load('amanojaku').then(addBlush);
       this.cache.set(name, blush);
@@ -98,9 +97,6 @@ export class ModelLibrary {
     if (!this.available.has(name)) {
       const drawn =
         buildSkyPlaceholder(name) ??
-        buildIcePlaceholder(name) ??
-        buildVillagePlaceholder(name) ??
-        buildSnowPlaceholder(name) ??
         buildNightPlaceholder(name) ??
         buildToyPlaceholder(name) ??
         buildMagnetPlaceholder(name) ??
@@ -116,8 +112,12 @@ export class ModelLibrary {
     }
 
     const url = `${import.meta.env.BASE_URL}models/${name}.glb`;
-    // v1.10 (3-1): the kelp sways in its shader, the whale glows a little (ticket 0011).
-    const loading = this.loader.loadAsync(url).then((gltf) => prepareSeaModel(name, gltf.scene));
+    // v1.10 (3-1): the kelp sways in its shader, the whale glows a little (ticket 0011). v1.10 (4-2): the lanterns'
+    // paper and the swirl on the upside-down fences take the materials the game lights (ticket 0016). v1.10 (4-3): the
+    // exits' light and the false exit's swirl (ticket 0017).
+    const loading = this.loader
+      .loadAsync(url)
+      .then((gltf) => prepareSnowModel(name, prepareVillageModel(name, prepareSeaModel(name, gltf.scene))));
     this.cache.set(name, loading);
     return loading;
   }

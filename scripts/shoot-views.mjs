@@ -121,6 +121,31 @@ const VIEWS = {
     ['kagami1', 75, 'cab'], // face to face with the mirror
     ['main', 3200, 'chase'], // きしべえき, the big mirror
   ],
+  '4-2': [
+    ['main', 60, 'chase'], // ゆきのはらえき and its village
+    ['main', 240, 'chase'], // the first snow wall ahead
+    ['main', 740, 'side'], // the frozen waterfall (record ①)
+    ['main', 990, 'chase'], // かまくらえき, buried
+    ['miharashi', 100, 'chase'], // the side way's buried stretch
+    ['main', 1600, 'side'], // the ski hill: lift towers, the folded ski jump
+    ['main', 2070, 'side'], // スキーじょうえき (platform on the right)
+    ['main', 2460, 'cab'], // inside the snow shed, the upside-down fences
+    ['main', 2990, 'chase'], // ひろばえき: the festival plaza, its lanterns
+  ],
+  '4-3': [
+    ['main', 60, 'chase'], // ふもとえき, the snowy ridge ahead
+    ['main', 215, 'chase'], // the snowman on the rail ahead
+    ['main', 620, 'side'], // the snowmen's way: Sakasa's upside-down snowmen on the bank
+    ['main', 980, 'chase'], // もみのきえき (right platform)
+    ['ike', 30, 'chase'], // the melting pond on its knoll
+    ['main', 1200, 'cab'], // the south mouth ahead: the snow wall, the portal and its icicles
+    ['main', 1450, 'cab'], // the ice hall and its pillars, the two exits ahead
+    ['nise', 40, 'cab'], // face to face with the false exit
+    ['main', 1680, 'cab'], // the north mouth's daylight
+    ['main', 1790, 'side'], // とうげえき
+    ['main', 2700, 'chase'], // the snow fence ahead
+    ['main', 2930, 'chase'], // やまごやえき and the lodge
+  ],
 };
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');

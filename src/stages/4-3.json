@@ -420,6 +420,7 @@
       "type": "cat",
       "reactsTo": "whistle",
       "onRail": { "railId": "main", "at": 250, "heightFromRail": 0 },
+      "rotationY": 180,
       "params": { "look": "snowman", "wakeDistance": 60, "dangerDistance": 8, "fleeLateral": 6, "fleeSeconds": 2 }
     },
     {
@@ -475,7 +476,7 @@
       "requires": null,
       "model": "snow-hare",
       "hint": "あっ、ゆきの なかに なにか いる！",
-      "onRail": { "railId": "main", "at": 170, "lateral": 9, "heightFromRail": 0 }
+      "onRail": { "railId": "main", "at": 170, "lateral": 9, "heightFromRail": -1.05 }
     },
     {
       "id": "ice-flower",
@@ -492,7 +493,7 @@
       "requires": "magnetLight",
       "model": "sleigh-bell",
       "hint": "ゆきの なかに すず！ ひっぱろう！",
-      "onRail": { "railId": "main", "at": 1830, "lateral": -10, "heightFromRail": -0.4 }
+      "onRail": { "railId": "main", "at": 1830, "lateral": -2.4, "heightFromRail": -1.22 }
     }
   ],
   "missions": [

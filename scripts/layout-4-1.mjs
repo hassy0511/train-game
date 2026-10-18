@@ -535,25 +535,65 @@ for (let i = 0; i < 6; i++) {
   world('ice-hole', h.x, h.z, ICE_Y);
 }
 
-// The canyon: ice walls on both sides every 18 m, ±16 m from the line, ±45 m in the two mirror halls; not in front of
-// the mirrors nor on the mirror ways.
+// The canyon: ice walls on both sides every 18 m, lining the track: the wall's length (its model x, 20.4 m) runs along
+// the line and its broad face (±z, 1.8 m out times its scale) faces the track. Right of the line 16 m out (record ③'s
+// side), left of it 27 m out, so the side view's camera (22 m to the train's left, src/view/camera-rig.ts) stays inside
+// the canyon and looks across the train at the right-hand wall; 45 m out on both sides in the two mirror halls. A wall stays out of the way: its footprint at least WALL_CLEAR m from every rail, clear of the mirrors'
+// glass and of the space in front of them. Right of record ③ (main 2760) the canyon's wall gives way to the record's own
+// (below), whose face is just behind the bell's shelf.
 const HALLS = [[J_K1 - 40, J_K1 + 90], [J_K2 - 35, J_K2 + 95]];
+const WALL = { halfLength: 10.2, halfDepth: 1.8 };
+const WALL_CLEAR = 10;
+const BELL_AT = 2760;
+/** Distance (m) from (x, z) to a wall's footprint (centre, heading rotation in degrees, scale). */
+function toWall(w, x, z) {
+  const t = w.rot * RAD;
+  // three.js rotation.y: model +x → (cos t, −sin t), model +z → (sin t, cos t).
+  const dx = x - w.x;
+  const dz = z - w.z;
+  const lx = dx * Math.cos(t) - dz * Math.sin(t);
+  const lz = dx * Math.sin(t) + dz * Math.cos(t);
+  return Math.hypot(Math.max(0, Math.abs(lx) - WALL.halfLength * w.scale), Math.max(0, Math.abs(lz) - WALL.halfDepth * w.scale));
+}
+/** Points of a mirror's glass and of the 20 m in front of it, every metre or so. */
+const MIRROR_ZONES = MIRRORS.map((m) => {
+  const n = [Math.sin(m.rotationY * RAD), Math.cos(m.rotationY * RAD)];
+  const u = [n[1], -n[0]];
+  const pts = [];
+  for (let a = -m.width / 2; a <= m.width / 2; a += 1) {
+    for (let f = 0; f <= 20; f += 1) pts.push([m.position[0] + u[0] * a + n[0] * f, m.position[2] + u[1] * a + n[1] * f]);
+  }
+  return pts;
+});
+const wallFits = (w) =>
+  TRACK.every((p) => toWall(w, p.x, p.z) >= WALL_CLEAR) && MIRROR_ZONES.every((zone) => zone.every(([x, z]) => toWall(w, x, z) >= 2));
 let walls = 0;
+const skipped = [];
 for (let at = CANYON.from + 6; at <= CANYON.to - 6; at += 18) {
   const hall = HALLS.some(([a, b]) => at >= a && at <= b);
   for (const side of [-1, 1]) {
-    const lateral = side * (hall ? 45 : 16);
+    const lateral = hall ? side * 45 : side > 0 ? 16 : -27;
     const p = main.point(at, lateral);
     if (!clearOfMirrors(p.x, p.z, 16) || !clearOfTrack(p.x, p.z, 12.5)) continue;
-    world('ice-wall', p.x, p.z, 0, 90 - p.phi / RAD, 0.9 + rand() * 0.3);
+    // (The scale is drawn here, as before, so the pines and banks scattered after the walls stay where they were.)
+    const w = { x: p.x, z: p.z, rot: -p.phi / RAD, scale: 0.9 + rand() * 0.3 };
+    const bell = side > 0 && Math.abs(at - BELL_AT) < WALL.halfLength * w.scale + 1;
+    if (bell || !wallFits(w)) {
+      skipped.push(`${side > 0 ? 'right' : 'left'} of main ${round(at, 0)}${bell ? ' (record ③)' : ''}`);
+      continue;
+    }
+    world('ice-wall', p.x, p.z, 0, w.rot, w.scale);
     walls += 1;
   }
 }
-// The wall that holds record ③'s shelf (right of main 2760, its face just behind the bell).
+// The wall that holds record ③'s shelf (right of main 2760, its face 16.4 m out, just behind the bell at 16 m).
 {
-  const p = main.point(2760, 18.2);
-  world('ice-wall', p.x, p.z, 0, 90 - p.phi / RAD, 1);
+  const p = main.point(BELL_AT, 18.2);
+  const w = { x: p.x, z: p.z, rot: -p.phi / RAD, scale: 1 };
+  check(wallFits(w), "record ③'s wall is clear of the rails and the mirrors");
+  world('ice-wall', p.x, p.z, 0, w.rot, 1);
 }
+report.push(`ice walls: ${walls} along the canyon, skipped ${skipped.length ? skipped.join(', ') : 'none'}`);
 
 // The big snowy mountain and the tunnel's mouth (4-3 lies beyond).
 world('snow-mountain', -720, 1080);
