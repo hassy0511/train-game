@@ -131,6 +131,8 @@ export class ToyGimmicks {
       // The loop turns off to the other side: the stand goes on the good side's shoulder, 11 m out.
       const side = j.spin.good === 'left' ? -1 : 1;
       const base = f.position.clone().addScaledVector(f.right, side * 11);
+      // On the play mat beside the rail's block base (ticket 0019: it stood 1 m up in the air, at the rail's height).
+      base.y = this.groundY(base.y);
       const flat = f.tangent.clone().setY(0).normalize();
       const q = new Quaternion().setFromUnitVectors(Z, flat);
       const stand = (bakeModel(table) ?? table).clone(true);
@@ -178,6 +180,11 @@ export class ToyGimmicks {
     this.balls = this.makePoints(BALLS, 0.9, false);
     for (let i = 0; i < BALLS; i++) this.ballVel.push(new Vector3());
     this.placeBands();
+  }
+
+  /** The ground's height (the play mat), or `fallback` on a stage without a ground. */
+  private groundY(fallback: number): number {
+    return this.stage.file.environment.ground?.y ?? fallback;
   }
 
   /** The flag's turn (about the stand's up) that points it at `side` (the rail's left or right). */
@@ -326,7 +333,8 @@ export class ToyGimmicks {
         const s = b.setup.exit - 8 + i * 3;
         const f = rail.frameAt(Math.min(rail.length, s));
         m.position.copy(f.position).addScaledVector(f.right, exitSide * 16);
-        m.position.y += Math.abs(Math.sin(this.clock * 4 + i)) * 0.12;
+        // On the square's play mat (the rail runs on blocks above it).
+        m.position.y = this.groundY(m.position.y) + Math.abs(Math.sin(this.clock * 4 + i)) * 0.12;
         m.quaternion.setFromUnitVectors(Z, f.right.clone().setY(0).normalize().multiplyScalar(-exitSide));
         return;
       }
@@ -349,6 +357,9 @@ export class ToyGimmicks {
         // One by one, the drum first, stepping off the rail into the square.
         const k = Math.min(1, Math.max(0, (b.t - (i / Math.max(1, n)) * PARADE.exitSeconds * 0.5) / (PARADE.exitSeconds * 0.5)));
         m.position.addScaledVector(f.right, exitSide * 16 * k * k);
+        // Down off the rail's blocks onto the square as they go (a little hop on the way).
+        const ground = this.groundY(f.position.y);
+        m.position.y += (ground - f.position.y) * Math.min(1, k * 2.5) + Math.sin(Math.min(1, k * 2.5) * Math.PI) * 0.4;
       }
     });
     void dt;

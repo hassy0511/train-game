@@ -68,7 +68,7 @@ export const PLACEHOLDER_SIZES: Record<string, [number, number, number]> = {
   'firefly-wait': [2, 1.5, 0.6],
   'firefly-swarm': [6, 6, 6],
   'firefly-swarm-big': [12, 12, 12],
-  // v1.11 (5-2, ticket 0019): the toy town (drawn in code: toy-placeholders.ts).
+  // v1.11 (5-2, ticket 0019): the toy town (built: assets/blender/toy.py).
   'block-house-a': [8, 10, 8],
   'block-house-b': [6, 12, 6],
   'block-house-c': [12, 8, 4],
