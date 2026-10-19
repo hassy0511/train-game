@@ -415,8 +415,8 @@
     { "model": "mirror-pillar", "onRail": { "railId": "main", "at": 2150, "lateral": 12, "heightFromRail": -0.6 } },
     { "model": "mirror-pillar", "onRail": { "railId": "main", "at": 2900, "lateral": 12, "heightFromRail": -0.6 } },
     { "model": "mirror-pillar", "onRail": { "railId": "main", "at": 3350, "lateral": -12, "heightFromRail": -0.6 } },
-    { "model": "mirror-shelf", "onRail": { "railId": "main", "at": 85, "lateral": 7, "heightFromRail": -0.6 }, "rotationY": -90 },
-    { "model": "mirror-shelf", "onRail": { "railId": "main", "at": 1830, "lateral": 14, "heightFromRail": -0.6 }, "rotationY": -90, "scale": 3.05 },
+    { "model": "mirror-shelf", "onRail": { "railId": "main", "at": 85, "lateral": 7, "heightFromRail": -0.6 }, "rotationY": 90 },
+    { "model": "mirror-shelf", "onRail": { "railId": "main", "at": 1830, "lateral": 14, "heightFromRail": -0.6 }, "rotationY": 90, "scale": 3.05 },
     { "model": "cloud-a", "onRail": { "railId": "main", "at": 2803, "heightFromRail": -7 } },
     { "model": "cloud-b", "onRail": { "railId": "main", "at": 2792, "lateral": 6, "heightFromRail": -9 } },
     { "model": "mirror-stand-small", "onRail": { "railId": "main", "at": 3478, "lateral": -6.5, "heightFromRail": 1.1 } }
@@ -440,7 +440,8 @@
       "requires": "magnetLight",
       "model": "hand-mirror",
       "hint": "たなに てかがみ！ ひっぱろう！",
-      "onRail": { "railId": "main", "at": 1830, "lateral": 14, "heightFromRail": 9.3 }
+      "onRail": { "railId": "main", "at": 1830, "lateral": 14, "heightFromRail": 9.16 },
+      "rotationY": 180
     },
     {
       "id": "sakasa-doodle",
@@ -449,7 +450,7 @@
       "requires": "reverse",
       "model": "sakasa-doodle",
       "hint": "うしろに らくがき！",
-      "onRail": { "railId": "ura", "at": 12, "lateral": -2, "heightFromRail": 0.8 }
+      "onRail": { "railId": "ura", "at": 12, "lateral": -2, "heightFromRail": -0.6 }
     }
   ],
   "missions": [
@@ -685,7 +686,7 @@
       { "camera": "cab" },
       { "say": "ライトに じしゃくを つけた！", "emote": "jump" },
       { "unlock": "magnetLight" },
-      { "spawn": "tut-star", "model": "iron-star-small", "onRail": { "railId": "main", "at": 85, "lateral": 7, "heightFromRail": 3.4 } },
+      { "spawn": "tut-star", "model": "iron-star-small", "onRail": { "railId": "main", "at": 85, "lateral": 7, "heightFromRail": 2.6 } },
       { "say": "おす たびに ライト、じしゃく、けす" },
       { "press": "magnet", "target": "tut-star", "say": "もう いちど おすと じしゃく！" },
       { "say": "くっついた！ じしゃくライト！", "emote": "cheer" },

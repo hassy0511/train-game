@@ -120,6 +120,13 @@ const at = (s, lateral = 0, up = 0, line = main) => {
 };
 const onMain = (s, lateral = 0, heightFromRail) => ({ railId: 'main', at: s, ...(lateral ? { lateral } : {}), ...(heightFromRail !== undefined ? { heightFromRail } : {}) });
 
+/**
+ * The mirror shelf's board top (assets/blender/mirror.py "mirror-shelf": 3.2 m, `scale` makes it taller): the opening's
+ * star sits on the first shelf, record ② on the tall one (scale TALL_SHELF).
+ */
+const SHELF_TOP = 3.2;
+const TALL_SHELF = 3.05;
+
 const STATIONS = [
   { id: 'kagamiguchi', name: 'かがみぐちえき', railId: 'main', at: 45, platformSide: 'left' },
   { id: 'kirakira', name: 'きらきらえき', railId: 'main', at: 1250, platformSide: 'right' },
@@ -265,7 +272,9 @@ const RECORDS = [
     requires: 'magnetLight',
     model: 'hand-mirror',
     hint: 'たなに てかがみ！ ひっぱろう！',
-    onRail: { railId: 'main', at: 1830, lateral: 14, heightFromRail: 9.3 },
+    // On the tall shelf's board, the glass turned to the coming train.
+    onRail: { railId: 'main', at: 1830, lateral: 14, heightFromRail: round(GROUND_Y + SHELF_TOP * TALL_SHELF, 2) },
+    rotationY: 180,
   },
   {
     id: 'sakasa-doodle',
@@ -274,7 +283,8 @@ const RECORDS = [
     requires: 'reverse',
     model: 'sakasa-doodle',
     hint: 'うしろに らくがき！',
-    onRail: { railId: 'ura', at: 12, lateral: -2, heightFromRail: 0.8 },
+    // On the ground beside the glass way (its easel stands on its feet).
+    onRail: { railId: 'ura', at: 12, lateral: -2, heightFromRail: GROUND_Y },
   },
 ];
 
@@ -356,7 +366,7 @@ const opening = [
   { say: 'ライトに じしゃくを つけた！', emote: 'jump' },
   { unlock: 'magnetLight' },
   // On the mirror shelf 40 m ahead (right 7, on its board).
-  { spawn: 'tut-star', model: 'iron-star-small', onRail: onMain(85, 7, 3.4) },
+  { spawn: 'tut-star', model: 'iron-star-small', onRail: onMain(85, 7, round(GROUND_Y + SHELF_TOP, 2)) },
   { say: 'おす たびに ライト、じしゃく、けす' },
   { press: 'magnet', target: 'tut-star', say: 'もう いちど おすと じしゃく！' },
   { say: 'くっついた！ じしゃくライト！', emote: 'cheer' },
@@ -515,9 +525,10 @@ for (const [s, lat] of [
   [2900, 12],
   [3350, -12],
 ]) addOnRail('mirror-pillar', 'main', s, { lateral: lat, height: GROUND_Y });
-// The mirror shelves: the opening's star waits on the first; record ② on the tall one (9 m).
-addOnRail('mirror-shelf', 'main', 85, { lateral: 7, height: GROUND_Y, rotationY: -90 });
-addOnRail('mirror-shelf', 'main', 1830, { lateral: 14, height: GROUND_Y, rotationY: -90, scale: 3.05 });
+// The mirror shelves: the opening's star waits on the first; record ② on the tall one (9 m). Their boards' front (+Z)
+// turned to the rail (left of them: rotationY 90).
+addOnRail('mirror-shelf', 'main', 85, { lateral: 7, height: GROUND_Y, rotationY: 90 });
+addOnRail('mirror-shelf', 'main', 1830, { lateral: 14, height: GROUND_Y, rotationY: 90, scale: TALL_SHELF });
 // Clouds under the phantom bridge (1-3's).
 addOnRail('cloud-a', 'main', (GAP.from + GAP.to) / 2, { height: -7 });
 addOnRail('cloud-b', 'main', GAP.from - 8, { lateral: 6, height: -9 });

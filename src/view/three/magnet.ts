@@ -1,6 +1,7 @@
 import {
   AdditiveBlending,
   BufferGeometry,
+  CanvasTexture,
   CircleGeometry,
   Color,
   DoubleSide,
@@ -25,6 +26,8 @@ import type { StageEvent } from '../../core/stage-events';
 import type { MagnetTarget, StageData } from '../../stage/types';
 import { MAGNET, TRAIN } from '../../train/params';
 import type { ActorLayer } from './actors';
+import { bakeModel } from './bake';
+import { dotTexture } from './environment';
 import type { ModelLibrary } from './models';
 
 /**
@@ -56,6 +59,49 @@ const FILM_HEIGHT = 3;
 const SHAKE = 0.3;
 const TURN_SECONDS = 0.6;
 const GATE_SECONDS = 0.6;
+/** A glint's size (m): its little four-pointed star, tip to tip. */
+const GLINT_SIZE = 1.6;
+
+let glintMap: CanvasTexture | null | undefined;
+/**
+ * The glint's picture, drawn once: a small white four-pointed star in a soft round glow (white, so the glint's own colour,
+ * white or the hint's green, tints it). Without a picture every point is a hard square.
+ */
+function glintTexture(): CanvasTexture | null {
+  if (glintMap !== undefined) return glintMap;
+  glintMap = null;
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  const glow = g.createRadialGradient(32, 32, 0, 32, 32, 20);
+  glow.addColorStop(0, 'rgba(255,255,255,1)');
+  glow.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, 64, 64);
+  // The four points: thin diamonds out to the edge, soft at their tips.
+  const arm = g.createRadialGradient(32, 32, 0, 32, 32, 31);
+  arm.addColorStop(0, 'rgba(255,255,255,1)');
+  arm.addColorStop(0.6, 'rgba(255,255,255,0.7)');
+  arm.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = arm;
+  for (const [dx, dy] of [
+    [1, 0],
+    [0, 1],
+  ]) {
+    g.beginPath();
+    g.moveTo(32 - dx * 31, 32 - dy * 31);
+    g.lineTo(32 + dy * 3.5, 32 + dx * 3.5);
+    g.lineTo(32 + dx * 31, 32 + dy * 31);
+    g.lineTo(32 - dy * 3.5, 32 - dx * 3.5);
+    g.closePath();
+    g.fill();
+  }
+  glintMap = new CanvasTexture(c);
+  return glintMap;
+}
 
 interface TargetVisual {
   target: MagnetTarget;
@@ -142,8 +188,14 @@ export class MagnetGimmicks {
       this.stage.magnets.map(async (t) => {
         const rail = network.getRail(t.railId);
         const frame = rail.frameAt(t.at);
-        const basis = new Matrix4().makeBasis(frame.right, frame.up, frame.tangent);
+        // +X to the left of the way (as resolvePlacement): frame.right, up and tangent make a mirror image, which no
+        // rotation is (its quaternion came out squashed: a pick flat as a line, a gate never turned with the way).
+        const left = new Vector3().crossVectors(frame.up, frame.tangent).normalize();
+        const basis = new Matrix4().makeBasis(left, frame.up, frame.tangent);
         const railQuat = new Quaternion().setFromRotationMatrix(basis);
+        // The way the train comes from, and from a target beside the line toward it (where a glint shows in front).
+        const toTrain = frame.tangent.clone().negate();
+        const toRail = frame.right.clone().multiplyScalar(-Math.sign(t.offset.lateral || 1));
         const v: TargetVisual = {
           target: t,
           object: null,
@@ -165,7 +217,8 @@ export class MagnetGimmicks {
             v.home.copy(v.object.position);
             v.homeQuat.copy(v.object.quaternion);
           }
-          v.glintAt.copy(v.home).y += 0.6;
+          // Over its top, a little toward the coming train (in front of it, not inside it).
+          v.glintAt.copy(v.home).addScaledVector(toTrain, 0.35).y += 0.6;
         } else if (t.kind === 'bridge') {
           const mid = (t.at + t.end) / 2;
           const midFrame = rail.frameAt(mid);
@@ -184,25 +237,35 @@ export class MagnetGimmicks {
             v.object = piece;
             this.group.add(piece);
           }
-          v.glintAt.copy(v.home).y += 0.8;
+          // Just over the piece lying by the line.
+          v.glintAt.copy(v.home).y += 0.5;
           v.film = this.makeFilm(frame.position, frame.tangent, frame.up);
           this.group.add(v.film);
         } else if (t.kind === 'turn' && t.mirror) {
           // 5-3: the stage's own framed mirror (drawn and turned by the mirrors, "mirror:turn"); only the glint here.
-          v.glintAt.copy(v.home).y += 4.5;
+          v.glintAt.copy(v.home).addScaledVector(toRail, 0.8).y += 4.5;
         } else {
-          const model = (await models.load(t.model)).clone(true);
+          // Baked: the built model's flat colours in one draw call (it only ever moves as a whole).
+          const template = await models.load(t.model);
+          const model = (bakeModel(template) ?? template).clone(true);
           model.name = `magnet:${t.id}`;
           model.position.copy(v.home);
           // A pick faces the coming train; a gate stands across the line; the mirror looks away (its back to the rail).
           model.quaternion.copy(railQuat);
           if (t.kind === 'pick') model.quaternion.multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI));
-          if (t.kind === 'turn') model.quaternion.multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.sign(t.offset.lateral || 1) * (Math.PI / 2)));
+          if (t.kind === 'turn') model.quaternion.multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -Math.sign(t.offset.lateral || 1) * (Math.PI / 2)));
           v.homeQuat.copy(model.quaternion);
           if (t.kind === 'gate') v.goal.copy(frame.right).multiplyScalar(7.5);
           v.object = model;
           this.group.add(model);
-          v.glintAt.copy(v.home).y += t.kind === 'gate' ? 5.5 : t.kind === 'turn' ? 4.5 : 0.4;
+          // Where it shows on the thing itself, in front of its face (the glint would be cut by it): a star's or bell's
+          // upper middle, toward the train; a door's top, before its face; a crossing's bar over the line (its post is
+          // 3.2 m off to the side, its lamp 3 m up: a glint high over the track read as no part of it); the turned-away
+          // mirror's top, on the rail's side.
+          if (t.kind === 'pick') v.glintAt.copy(v.home).addScaledVector(toTrain, 0.35).y += 0.35;
+          else if (t.kind === 'gate' && t.look === 'crossing') v.glintAt.copy(v.home).addScaledVector(toTrain, 0.5).y += 1.45;
+          else if (t.kind === 'gate') v.glintAt.copy(v.home).addScaledVector(toTrain, 1.0).y += 5.0;
+          else v.glintAt.copy(v.home).addScaledVector(toRail, 0.5).y += 4.3;
         }
         this.visuals.set(t.id, v);
       }),
@@ -254,7 +317,7 @@ export class MagnetGimmicks {
     geometry.setAttribute('color', new Float32BufferAttribute(new Float32Array(ids.length * 3), 3).setUsage(DynamicDrawUsage));
     this.glints = new Points(
       geometry,
-      new PointsMaterial({ size: 1.4, vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, sizeAttenuation: true }),
+      new PointsMaterial({ size: GLINT_SIZE, map: glintTexture(), vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, sizeAttenuation: true }),
     );
     this.glints.name = 'magnet-glints';
     this.glints.frustumCulled = false;
@@ -284,7 +347,8 @@ export class MagnetGimmicks {
   private buildSparks(): void {
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new Float32BufferAttribute(this.sparkPos, 3).setUsage(DynamicDrawUsage));
-    this.sparks = new Points(geometry, new PointsMaterial({ size: 0.35, color: '#e9fff6', transparent: true, blending: AdditiveBlending, depthWrite: false }));
+    // Soft round dots (without a picture they were hard squares).
+    this.sparks = new Points(geometry, new PointsMaterial({ size: 0.45, map: dotTexture(), color: '#e9fff6', transparent: true, blending: AdditiveBlending, depthWrite: false }));
     this.sparks.name = 'magnet-sparks';
     this.sparks.frustumCulled = false;
     this.sparks.visible = false;
@@ -312,7 +376,8 @@ export class MagnetGimmicks {
   private async addTrainParts(): Promise<void> {
     if (this.roofMark || !this.models) return;
     this.roofMark = new Object3D();
-    const mark = (await this.models.load('magnet-mark')).clone(true);
+    const markModel = await this.models.load('magnet-mark');
+    const mark = (bakeModel(markModel) ?? markModel).clone(true);
     mark.name = 'magnet-mark';
     mark.position.set(0, TRAIN.height + 0.02, TRAIN.length / 2 - 2.2);
     this.roofMark = mark;

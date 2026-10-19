@@ -62,7 +62,8 @@ const OWARI = 1330;
 const STAR = 420;
 const GAP = { from: 600, to: 608 };
 const GATE = 780;
-const MIRROR = { at: 980, lateral: -12, height: 4 };
+// The turned-away mirror (turn-mirror-small) stands on the ground (at 4 m up it hovered over it).
+const MIRROR = { at: 980, lateral: -12, height: GROUND_Y };
 const RECORD = { at: 110, lateral: 8, height: 4 };
 
 // ---- scenery: a few trees, well off the line, the side ways and the targets ----
